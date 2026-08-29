@@ -3,7 +3,9 @@ import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
+import { PixelSurfaceReveal } from '@/components/motion/PixelSurfaceReveal'
 import { cn } from '@/lib/utils'
+import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -28,10 +30,7 @@ function SheetOverlay({
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
-        className,
-      )}
+      className={cn('fixed inset-0 z-50', className)}
       {...props}
     />
   )
@@ -42,31 +41,37 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: 'top' | 'right' | 'bottom' | 'left'
   showCloseButton?: boolean
 }) {
   const { t } = useTranslation()
+  const { handleCloseAutoFocus, handleOpenAutoFocus } = useLayerFocusReturn(
+    onOpenAutoFocus,
+    onCloseAutoFocus,
+  )
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        data-side={side}
         className={cn(
-          'fixed z-50 flex flex-col gap-4 bg-background shadow-lg data-[state=closed]:animate-out data-[state=open]:animate-in',
-          side === 'right' &&
-            'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
-          side === 'left' &&
-            'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
-          side === 'top' &&
-            'inset-x-0 top-0 h-auto border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
-          side === 'bottom' &&
-            'inset-x-0 bottom-0 h-auto border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
+          'fixed z-50 flex flex-col gap-4 bg-background shadow-lg',
+          side === 'right' && 'inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm',
+          side === 'left' && 'inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm',
+          side === 'top' && 'inset-x-0 top-0 h-auto border-b',
+          side === 'bottom' && 'inset-x-0 bottom-0 h-auto border-t',
           className,
         )}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
+        <PixelSurfaceReveal />
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close

@@ -6,7 +6,7 @@
 import { motion, useReducedMotion } from 'motion/react'
 import type { ReactNode } from 'react'
 
-import { motionSequence, motionTransition } from '@/design/motion'
+import { motionGeometry, motionSequence, motionTransition } from '@/design/motion'
 import { useSettings } from '@/stores/settings'
 
 const sequenceVariants = {
@@ -20,8 +20,16 @@ const sequenceVariants = {
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 6 },
-  visible: { opacity: 1, y: 0, transition: motionTransition.enter },
+  hidden: { opacity: 0, scale: 0.96, y: motionGeometry.sequenceOffset },
+  visible: {
+    opacity: [0, 1, 1],
+    scale: [0.96, 1.015, 1],
+    y: [motionGeometry.sequenceOffset, motionGeometry.sequenceOvershoot, 0],
+    transition: {
+      ...motionTransition.contentEnter,
+      times: [0, 0.68, 1],
+    },
+  },
 }
 
 export function MotionSequence({

@@ -3,8 +3,10 @@ import { XIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
+import { PixelSurfaceReveal } from '@/components/motion/PixelSurfaceReveal'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -29,10 +31,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
-        className,
-      )}
+      className={cn('fixed inset-0 z-50', className)}
       {...props}
     />
   )
@@ -41,23 +40,35 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  depth = 'root',
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  depth?: 'root' | 'nested'
   showCloseButton?: boolean
 }) {
   const { t } = useTranslation()
+  const { handleCloseAutoFocus, handleOpenAutoFocus } = useLayerFocusReturn(
+    onOpenAutoFocus,
+    onCloseAutoFocus,
+  )
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay data-depth={depth} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-depth={depth}
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
+          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-lg',
           className,
         )}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
+        <PixelSurfaceReveal />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close

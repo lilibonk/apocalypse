@@ -35,6 +35,8 @@
   --brand-foreground: oklch(0.21 0.02 190);
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
+  --overlay-backdrop: oklch(0.12 0 0 / 0.52);
+  --overlay-backdrop-nested: oklch(0.12 0 0 / 0.24);
 
   /* 圆角与排版。--radius-brand 供品牌表面（登录/空态/像素进度），数据表面仍走 --radius */
   --radius: 0.625rem;
@@ -44,15 +46,18 @@
     'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
-  /* 通用管理台动效节拍：退出快于进入，面板慢于局部反馈。 */
-  --motion-duration-feedback: 120ms;
+  /* 青春像素动效节拍：短时、高帧率，连续几何承载手感，离散像素帧承载风格。 */
+  --motion-duration-feedback: 100ms;
   --motion-duration-exit: 120ms;
-  --motion-duration-enter: 160ms;
+  --motion-duration-enter: 200ms;
+  --motion-duration-layer: 180ms;
+  --motion-duration-content: 240ms;
   --motion-duration-standard: 180ms;
   --motion-duration-panel-exit: 160ms;
-  --motion-duration-panel: 220ms;
-  --motion-delay-sequence: 30ms;
-  --motion-stagger-sequence: 35ms;
+  --motion-duration-panel: 300ms;
+  --motion-duration-surface-reveal: 800ms;
+  --motion-delay-sequence: 460ms;
+  --motion-stagger-sequence: 70ms;
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
@@ -80,6 +85,8 @@
 
   --brand: oklch(0.855 0.138 181.1);
   --brand-foreground: oklch(0.21 0.02 190);
+  --overlay-backdrop: oklch(0.08 0 0 / 0.56);
+  --overlay-backdrop-nested: oklch(0.08 0 0 / 0.28);
 
   color-scheme: dark;
 }
@@ -235,56 +242,307 @@ html[data-gray='on'] {
   animation-delay: calc(var(--pixel-scale-index) * var(--pixel-scale-stagger));
 }
 
-/* ---- 通用 UI 动效节拍（页面由 design/motion.ts 投影同一组数值） ---- */
+/* ---- 青春像素 UI 动效（页面由 design/motion.ts 投影同一组数值） ---- */
 
-[data-slot='dialog-content'],
-[data-slot='alert-dialog-content'] {
-  --tw-enter-scale: 0.98;
-  --tw-exit-scale: 0.98;
+@keyframes pixel-overlay-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pixel-overlay-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pixel-layer-enter {
+  0% {
+    opacity: 0;
+    scale: 0.98;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes pixel-layer-exit {
+  0% {
+    opacity: 1;
+    scale: 1;
+  }
+  24% {
+    scale: 1.008;
+  }
+  100% {
+    opacity: 0;
+    scale: 0.88;
+  }
+}
+
+@keyframes pixel-surface-release {
+  0% {
+    opacity: 1;
+  }
+  58% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pixel-float-enter {
+  0% {
+    opacity: 0;
+    scale: 0.82;
+  }
+  56% {
+    opacity: 1;
+    scale: 1.04;
+  }
+  78% {
+    scale: 0.98;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes pixel-float-exit {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.88;
+  }
+}
+
+@keyframes pixel-sheet-enter-right {
+  0% {
+    opacity: 0.6;
+    translate: 104% 0;
+  }
+  62% {
+    opacity: 1;
+    translate: -2% 0;
+  }
+  82% {
+    translate: 1% 0;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pixel-sheet-enter-left {
+  0% {
+    opacity: 0.6;
+    translate: -104% 0;
+  }
+  62% {
+    opacity: 1;
+    translate: 2% 0;
+  }
+  82% {
+    translate: -1% 0;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pixel-sheet-enter-top {
+  0% {
+    opacity: 0.6;
+    translate: 0 -104%;
+  }
+  62% {
+    opacity: 1;
+    translate: 0 2%;
+  }
+  82% {
+    translate: 0 -1%;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pixel-sheet-enter-bottom {
+  0% {
+    opacity: 0.6;
+    translate: 0 104%;
+  }
+  62% {
+    opacity: 1;
+    translate: 0 -2%;
+  }
+  82% {
+    translate: 0 1%;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pixel-sheet-exit-right {
+  to {
+    opacity: 0;
+    translate: 104% 0;
+  }
+}
+
+@keyframes pixel-sheet-exit-left {
+  to {
+    opacity: 0;
+    translate: -104% 0;
+  }
+}
+
+@keyframes pixel-sheet-exit-top {
+  to {
+    opacity: 0;
+    translate: 0 -104%;
+  }
+}
+
+@keyframes pixel-sheet-exit-bottom {
+  to {
+    opacity: 0;
+    translate: 0 104%;
+  }
+}
+
+[data-slot='dialog-overlay'],
+[data-slot='alert-dialog-overlay'],
+[data-slot='sheet-overlay'] {
+  background: var(--overlay-backdrop);
+}
+
+[data-slot='dialog-overlay'][data-depth='nested'] {
+  background: var(--overlay-backdrop-nested);
 }
 
 [data-slot='dialog-overlay'][data-state='open'],
 [data-slot='alert-dialog-overlay'][data-state='open'],
-[data-slot='sheet-overlay'][data-state='open'],
-[data-slot='dialog-content'][data-state='open'],
-[data-slot='alert-dialog-content'][data-state='open'] {
-  animation-duration: var(--motion-duration-enter);
-  animation-timing-function: var(--motion-ease-enter);
+[data-slot='sheet-overlay'][data-state='open'] {
+  animation: pixel-overlay-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
 }
 
 [data-slot='dialog-overlay'][data-state='closed'],
 [data-slot='alert-dialog-overlay'][data-state='closed'],
-[data-slot='sheet-overlay'][data-state='closed'],
+[data-slot='sheet-overlay'][data-state='closed'] {
+  animation: pixel-overlay-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
+}
+
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-content'],
+[data-slot='sheet-content'] {
+  isolation: isolate;
+}
+
+[data-slot='dialog-content'][data-state='open'],
+[data-slot='alert-dialog-content'][data-state='open'] {
+  animation: pixel-layer-enter var(--motion-duration-layer) var(--motion-ease-enter) both;
+}
+
 [data-slot='dialog-content'][data-state='closed'],
 [data-slot='alert-dialog-content'][data-state='closed'] {
-  animation-duration: var(--motion-duration-exit);
-  animation-timing-function: var(--motion-ease-exit);
+  animation: pixel-layer-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
+}
+
+[data-slot='pixel-surface-reveal'] {
+  border-radius: inherit;
+  animation: pixel-surface-release var(--motion-duration-surface-reveal) var(--motion-ease-enter)
+    both;
+}
+
+[data-slot='pixel-surface-reveal'][data-tone='destructive'] {
+  --brand: var(--destructive);
+}
+
+body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
+  [data-slot='dialog-content'][data-depth='root'][data-state='open'] {
+  /* 覆盖根弹框 enter 动画的 `both` 填充态，确保二级弹层出现时真的后退。 */
+  opacity: 0.72 !important;
+  scale: 0.97 !important;
+  transition-duration: var(--motion-duration-feedback);
+  transition-property: opacity, scale;
+  transition-timing-function: var(--motion-ease-enter);
 }
 
 [data-slot='sheet-content'][data-state='open'] {
   animation-duration: var(--motion-duration-panel);
+  animation-fill-mode: both;
   animation-timing-function: var(--motion-ease-enter);
 }
 
 [data-slot='sheet-content'][data-state='closed'] {
   animation-duration: var(--motion-duration-panel-exit);
+  animation-fill-mode: both;
   animation-timing-function: var(--motion-ease-exit);
 }
 
+[data-slot='sheet-content'][data-side='right'][data-state='open'] {
+  animation-name: pixel-sheet-enter-right;
+}
+
+[data-slot='sheet-content'][data-side='right'][data-state='closed'] {
+  animation-name: pixel-sheet-exit-right;
+}
+
+[data-slot='sheet-content'][data-side='left'][data-state='open'] {
+  animation-name: pixel-sheet-enter-left;
+}
+
+[data-slot='sheet-content'][data-side='left'][data-state='closed'] {
+  animation-name: pixel-sheet-exit-left;
+}
+
+[data-slot='sheet-content'][data-side='top'][data-state='open'] {
+  animation-name: pixel-sheet-enter-top;
+}
+
+[data-slot='sheet-content'][data-side='top'][data-state='closed'] {
+  animation-name: pixel-sheet-exit-top;
+}
+
+[data-slot='sheet-content'][data-side='bottom'][data-state='open'] {
+  animation-name: pixel-sheet-enter-bottom;
+}
+
+[data-slot='sheet-content'][data-side='bottom'][data-state='closed'] {
+  animation-name: pixel-sheet-exit-bottom;
+}
+
 [data-slot='tooltip-content'][data-state='delayed-open'],
+[data-slot='tooltip-content'][data-state='instant-open'],
 [data-slot='select-content'][data-state='open'],
 [data-slot='dropdown-menu-content'][data-state='open'],
 [data-slot='dropdown-menu-sub-content'][data-state='open'] {
-  animation-duration: var(--motion-duration-enter);
-  animation-timing-function: var(--motion-ease-enter);
+  animation: pixel-float-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
 }
 
 [data-slot='tooltip-content'][data-state='closed'],
 [data-slot='select-content'][data-state='closed'],
 [data-slot='dropdown-menu-content'][data-state='closed'],
 [data-slot='dropdown-menu-sub-content'][data-state='closed'] {
-  animation-duration: var(--motion-duration-exit);
-  animation-timing-function: var(--motion-ease-exit);
+  animation: pixel-float-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
 [data-slot='app-sidebar'] {
@@ -356,7 +614,9 @@ html[data-gray='on'] {
   }
 }
 
-html[data-motion='off'] * {
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

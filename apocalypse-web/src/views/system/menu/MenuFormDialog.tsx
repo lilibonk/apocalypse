@@ -35,10 +35,12 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import type { SnowflakeId } from '@/lib/api/types'
 
 import { createMenu, updateMenu } from './menu.api'
+import { MenuIconPicker } from './MenuIconPicker'
 import {
   ROOT_PARENT_ID,
   collectSubtreeIds,
@@ -221,24 +223,26 @@ export function MenuFormDialog({
               </DialogDescription>
             </DialogHeader>
           </MotionSequenceItem>
-          <MotionSequenceItem>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
-                className="grid grid-cols-2 gap-4"
-              >
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
+              className="grid grid-cols-2 gap-4"
+            >
+              <MotionSequenceItem className="col-span-2 grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="parentId"
                   render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel>{t('common.上级菜单', { defaultValue: '上级菜单' })}</FormLabel>
-                      <MenuTreeSelect
-                        tree={tree}
-                        value={field.value}
-                        onChange={field.onChange}
-                        excluded={excluded}
-                      />
+                      <FormControl>
+                        <MenuTreeSelect
+                          tree={tree}
+                          value={field.value}
+                          onChange={field.onChange}
+                          excluded={excluded}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -350,11 +354,11 @@ export function MenuFormDialog({
                       <FormItem>
                         <FormLabel>{t('common.图标', { defaultValue: '图标' })}</FormLabel>
                         <FormControl>
-                          <Input placeholder="menu" {...field} />
+                          <MenuIconPicker value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormDescription>
-                          {t('common.lucide 图标名（小写短横线），可用映射见 MenuIcon 组件', {
-                            defaultValue: 'lucide 图标名（小写短横线），可用映射见 MenuIcon.tsx',
+                          {t('common.选择侧栏及顶部导航使用的图标', {
+                            defaultValue: '选择侧栏及顶部导航使用的图标',
                           })}
                         </FormDescription>
                         <FormMessage />
@@ -399,19 +403,22 @@ export function MenuFormDialog({
                     </FormItem>
                   )}
                 />
-                <DialogFooter className="col-span-2">
+              </MotionSequenceItem>
+              <MotionSequenceItem className="col-span-2">
+                <DialogFooter>
                   <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                     {t('common.取消', { defaultValue: '取消' })}
                   </Button>
                   <Button type="submit" disabled={saveMutation.isPending}>
+                    {saveMutation.isPending && <PixelScale variant="inline" tone="current" />}
                     {saveMutation.isPending
                       ? t('common.保存中…', { defaultValue: '保存中…' })
                       : t('common.保存', { defaultValue: '保存' })}
                   </Button>
                 </DialogFooter>
-              </form>
-            </Form>
-          </MotionSequenceItem>
+              </MotionSequenceItem>
+            </form>
+          </Form>
         </MotionSequence>
       </DialogContent>
     </Dialog>

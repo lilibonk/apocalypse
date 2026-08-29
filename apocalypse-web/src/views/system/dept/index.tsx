@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { PixelScale } from '@/effects/PixelWave'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -306,7 +307,10 @@ export default function DeptPage() {
       />
 
       {/* 删除确认 */}
-      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+      <AlertDialog
+        open={!!deleting}
+        onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -328,12 +332,21 @@ export default function DeptPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.取消', { defaultValue: '取消' })}</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              {t('common.取消', { defaultValue: '取消' })}
+            </AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               disabled={deleteMutation.isPending}
-              onClick={() => deleting && deleteMutation.mutate(deleting.id)}
+              onClick={(event) => {
+                event.preventDefault()
+                if (deleting) deleteMutation.mutate(deleting.id)
+              }}
             >
-              {t('common.确认删除', { defaultValue: '确认删除' })}
+              {deleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
+              {deleteMutation.isPending
+                ? t('common.删除中…', { defaultValue: '删除中…' })
+                : t('common.确认删除', { defaultValue: '确认删除' })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

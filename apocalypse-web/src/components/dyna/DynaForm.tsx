@@ -283,18 +283,17 @@ export function DynaForm({
               )}
               className="grid grid-cols-2 gap-4"
             >
-              {fields.map((field) => (
-                <MotionSequenceItem
-                  key={field.name}
-                  className={field.span === 1 ? '' : 'col-span-2'}
-                >
-                  <FieldControl
-                    field={field}
-                    control={form.control}
-                    disabled={mode === 'edit' && !!field.disabledInEdit}
-                  />
-                </MotionSequenceItem>
-              ))}
+              <MotionSequenceItem className="col-span-2 grid grid-cols-2 gap-4">
+                {fields.map((field) => (
+                  <div key={field.name} className={field.span === 1 ? '' : 'col-span-2'}>
+                    <FieldControl
+                      field={field}
+                      control={form.control}
+                      disabled={mode === 'edit' && !!field.disabledInEdit}
+                    />
+                  </div>
+                ))}
+              </MotionSequenceItem>
               <MotionSequenceItem className="col-span-2">
                 <DialogFooter>
                   <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

@@ -22,7 +22,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 集成测试基类：Testcontainers 提供 PostgreSQL 17 与 Redis 7（{@code @ServiceConnection} 自动接管连接配置，不依赖本地
+ * 集成测试基类：Testcontainers 提供 PostgreSQL 18.6 与 Redis 8.10.1（{@code @ServiceConnection} 自动接管连接配置，不依赖本地
  * docker-compose）。提供 admin 登录取 token 与 R 结构断言工具方法。
  *
  * <p>容器采用单例模式（静态块启动、JVM 退出时由 Ryuk 回收）：不能用 {@code @Testcontainers + @Container} 生命周期——它会在每个测试类结束后停掉
@@ -33,11 +33,11 @@ import tools.jackson.databind.ObjectMapper;
 public abstract class AbstractIntegrationTest {
 
   @ServiceConnection
-  static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
+  static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.6-alpine");
 
   @ServiceConnection(name = "redis")
   static final GenericContainer<?> REDIS =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+      new GenericContainer<>(DockerImageName.parse("redis:8.10.1-alpine")).withExposedPorts(6379);
 
   static {
     POSTGRES.start();

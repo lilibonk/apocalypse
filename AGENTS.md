@@ -24,7 +24,7 @@ export JAVA_HOME='/d/IDE/JDK/jdk-25.0.4.1+1'
 ./mvnw verify               # 全量门禁：测试 + Spotless + Checkstyle + Enforcer
 ./mvnw spotless:apply       # 格式化修复（提交前必跑）
 ./mvnw spring-boot:run      # 本地启动（先 docker compose up -d）
-docker compose up -d        # 启动 PostgreSQL 17 + Redis 7
+docker compose up -d        # 启动 PostgreSQL 18.6 + Redis 8.10.1
 ```
 
 环境配置切分：`application.yml`（公共 + `spring.profiles.active`，默认 dev）+ `application-dev.yml`（本地）+ `application-test.yml`（部署态测试环境）+ `application-prod.yml`（生产，纯环境变量、关 swagger）。自动化集成测试用 Testcontainers，不占用 test profile。

@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { PixelScale } from '@/effects/PixelWave'
 import { ApiError, request } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
 
@@ -390,50 +392,80 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
         record={viewing}
       />
 
-      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleting(null)}
+      >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('确认删除')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('deleteHint', { entity, name: deletingDisplay })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('取消')}</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={deleteMutation.isPending}
-              onClick={() => deleting && deleteMutation.mutate(rowIdOf(deleting, rowKey))}
-            >
-              {t('确认删除')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <MotionSequence className="contents">
+            <MotionSequenceItem>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('确认删除')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('deleteHint', { entity, name: deletingDisplay })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </MotionSequenceItem>
+            <MotionSequenceItem>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteMutation.isPending}>
+                  {t('取消')}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={deleteMutation.isPending}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    if (deleting) deleteMutation.mutate(rowIdOf(deleting, rowKey))
+                  }}
+                >
+                  {deleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
+                  {deleteMutation.isPending ? t('删除中…') : t('确认删除')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </MotionSequenceItem>
+          </MotionSequence>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={toggling !== null} onOpenChange={(open) => !open && setToggling(null)}>
+      <AlertDialog
+        open={toggling !== null}
+        onOpenChange={(open) => !open && !toggleMutation.isPending && setToggling(null)}
+      >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('confirmToggle', { action: toggling ? t(toggling.label) : '' })}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('toggleHint', {
-                action: toggling ? t(toggling.label) : '',
-                entity,
-                name: togglingDisplay,
-              })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('取消')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={toggleMutation.isPending}
-              onClick={() => toggling && handleToggle(toggling.row, toggling.action)}
-            >
-              {toggling ? t(toggling.label) : ''}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <MotionSequence className="contents">
+            <MotionSequenceItem>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('confirmToggle', { action: toggling ? t(toggling.label) : '' })}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('toggleHint', {
+                    action: toggling ? t(toggling.label) : '',
+                    entity,
+                    name: togglingDisplay,
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </MotionSequenceItem>
+            <MotionSequenceItem>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={toggleMutation.isPending}>
+                  {t('取消')}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={toggleMutation.isPending}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    if (toggling) handleToggle(toggling.row, toggling.action)
+                  }}
+                >
+                  {toggleMutation.isPending && <PixelScale variant="inline" tone="current" />}
+                  {toggleMutation.isPending ? t('处理中…') : toggling ? t(toggling.label) : ''}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </MotionSequenceItem>
+          </MotionSequence>
         </AlertDialogContent>
       </AlertDialog>
     </div>

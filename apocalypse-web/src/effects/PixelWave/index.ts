@@ -3,6 +3,16 @@ export type { PixelWaveProps } from './PixelWave'
 export { PixelScale } from './PixelScale'
 export type { PixelScaleProps, PixelScaleTone, PixelScaleVariant } from './PixelScale'
 export {
+  circuitTraceLength,
+  createCircuitTraces,
+  renderCircuitTraces,
+  CIRCUIT_FADE_SECONDS,
+  CIRCUIT_HOLD_SECONDS,
+  CIRCUIT_INITIAL_DELAY_SECONDS,
+  CIRCUIT_TRAVEL_SECONDS,
+} from './circuit'
+export type { CircuitPoint, CircuitTrace } from './circuit'
+export {
   cellHash,
   cellLit,
   computeLetterpressField,

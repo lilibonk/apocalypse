@@ -10,6 +10,8 @@
  * （hue = --brand 基准 hue + hueSeed × 120° + 时间慢漂 ±10°，明暗两档 L/C，
  * CSS.supports 失败时整组回退 --brand）。letterpress 跟随 rAF 连续更新；其它
  * flowlight 表面仍按 ~10fps 离散步进。
+ * CRUD 揭幕使用 circuit：在纯背景上缩放唯一一套固定 PCB 主路与不对称分支，
+ * 品牌色脉冲在焊点处分流，不绘制规则网格、浮雕位移或灰阶侧壁。
  *
  * 网格布局：登录 letterpress fill 模式固定 32px 节距（28px 面 + 4px 缝）；
  * 默认 flowlight fill 模式仍按容器宽 48 等分；显式 cols/rows 维持原契约。
@@ -28,6 +30,8 @@ import { cn } from '@/lib/utils'
 import { useSettings } from '@/stores/settings'
 
 import { createFpsSampler } from '../perf'
+import { createCircuitTraces, renderCircuitTraces } from './circuit'
+import type { CircuitTrace } from './circuit'
 import {
   oklchLaneColors,
   renderLetterpressField,
@@ -56,8 +60,8 @@ import {
 import type { LetterpressCache, TypeCache } from './wave'
 
 export interface PixelWaveProps {
-  /** flowlight = 原有淡彩块；letterpress = 同底色顶面 + 灰阶侧壁 + 彩色剪影流光。 */
-  appearance?: 'flowlight' | 'letterpress'
+  /** flowlight = 淡彩块；letterpress = 登录浮雕；circuit = CRUD 平面电路传导。 */
+  appearance?: 'flowlight' | 'letterpress' | 'circuit'
   /** 网格列数；与 rows 同时缺省进入 fill 模式（按容器宽 48 等分切割方形大铅字块） */
   cols?: number
   /** 网格行数；与 cols 同时缺省进入 fill 模式 */
@@ -104,9 +108,10 @@ export function PixelWave({
     const wrap = wrapRef.current
     const canvas = canvasRef.current
     if (!wrap || !canvas) return
+    const continuousAppearance = appearance === 'letterpress' || appearance === 'circuit'
     const ctx = canvas.getContext('2d', {
-      alpha: appearance !== 'letterpress',
-      desynchronized: appearance === 'letterpress',
+      alpha: !continuousAppearance,
+      desynchronized: continuousAppearance,
     })
     if (!ctx) return
 
@@ -136,6 +141,7 @@ export function PixelWave({
     let field = new Uint8Array(1)
     let lanes = new Uint8Array(1)
     let lifts = new Float32Array(1)
+    let circuitTraces: CircuitTrace[] = []
     let lastStepped = Number.NaN // 上个已绘制的步进帧（NaN 强制首帧绘制）
 
     const measure = () => {
@@ -148,8 +154,9 @@ export function PixelWave({
       canvas.height = Math.round(cssH * dpr)
       if (fillMode) {
         // 登录忠实还原研究演示的固定 32px 铅字节距；其它表面保留 48 列等分。
-        const div =
-          appearance === 'letterpress' ? letterpressDivision(cssW, cssH) : equalDivision(cssW, cssH)
+        const div = continuousAppearance
+          ? letterpressDivision(cssW, cssH)
+          : equalDivision(cssW, cssH)
         gridW = div.gridW
         gridH = div.gridH
         blockEff = div.block
@@ -171,6 +178,7 @@ export function PixelWave({
       field = new Uint8Array(gridW * gridH)
       lanes = new Uint8Array(gridW * gridH)
       lifts = new Float32Array(gridW * gridH)
+      circuitTraces = createCircuitTraces(cssW, cssH)
       // 网格在画布内整格居中（超出为负小量 → 对称裁切，视觉铺满）
       offsetX = Math.floor((cssW - gridW * pitch) / 2)
       offsetY = Math.floor((cssH - gridH * pitch) / 2)
@@ -180,6 +188,7 @@ export function PixelWave({
     // —— 五彩道色（程序化 oklch；accent / 明暗切换时经 MutationObserver 重解析）——
     let baseHue = DEFAULT_BASE_HUE
     let colors: readonly string[] = []
+    let circuitColor = resolveBrandColor(wrap)
     let letterpressPalette = resolveLetterpressPalette(wrap)
     const refreshColors = () => {
       baseHue = resolveBrandHue(wrap) ?? DEFAULT_BASE_HUE
@@ -187,6 +196,7 @@ export function PixelWave({
         ? oklchLaneColors(document.documentElement.classList.contains('dark'))
         : // oklch 不支持：整组回退 --brand，五彩退化为单色块（语言不塌）
           Array.from({ length: HUE_LANES }, () => resolveBrandColor(wrap))
+      circuitColor = resolveBrandColor(wrap)
       letterpressPalette = resolveLetterpressPalette(wrap)
       lastStepped = Number.NaN // 道色变化 → 下一步进帧强制重绘
     }
@@ -213,7 +223,7 @@ export function PixelWave({
 
     const t0 = performance.now()
 
-    // letterpress 每个 rAF 连续计算；flowlight 仍只在 10fps 步进边界计算。
+    // letterpress / circuit 每个 rAF 连续计算；flowlight 仍只在 10fps 步进边界计算。
     const paint = (frameTime: number) => {
       if (appearance === 'letterpress') {
         const index = letterpressWaveIndexAt(frameTime)
@@ -233,7 +243,7 @@ export function PixelWave({
           lanes,
           lifts,
         )
-      } else {
+      } else if (appearance === 'flowlight') {
         const seed = waveSeed(sessionSeed, waveIndexAt(frameTime))
         if (cache.seed !== seed) cache = createTypeCache(gridW, gridH, seed)
         computeTypeField(
@@ -246,14 +256,18 @@ export function PixelWave({
         )
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      if (appearance === 'letterpress') {
+      if (continuousAppearance) {
         ctx.globalAlpha = 1
         ctx.fillStyle = letterpressPalette.face
         ctx.fillRect(0, 0, cssW, cssH)
       } else {
         ctx.clearRect(0, 0, cssW, cssH)
       }
-      ctx.translate(offsetX, offsetY)
+      if (appearance === 'circuit') {
+        renderCircuitTraces(ctx, circuitTraces, frameTime, circuitColor)
+      } else {
+        ctx.translate(offsetX, offsetY)
+      }
       if (appearance === 'letterpress') {
         renderLetterpressField(
           ctx,
@@ -267,7 +281,7 @@ export function PixelWave({
           colors,
           letterpressPalette,
         )
-      } else {
+      } else if (appearance === 'flowlight') {
         renderTypeField(ctx, field, lanes, gridW, gridH, blockEff, gapEff, colors)
       }
     }
@@ -295,7 +309,7 @@ export function PixelWave({
         return
       }
       const timeline = ((now - t0) / 1000) * waveSpeed
-      if (appearance === 'letterpress') {
+      if (continuousAppearance) {
         // 参考实现逐 rAF 推进高度包络，避免 100ms 量化造成的台阶式跳动。
         paint(timeline)
       } else {

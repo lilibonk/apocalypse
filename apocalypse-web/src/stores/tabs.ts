@@ -21,8 +21,21 @@ interface TabsState {
   open: (tab: TabItem) => void
   close: (key: string) => string | null
   closeOthers: (key: string) => void
+  closeLeft: (key: string) => void
+  closeRight: (key: string) => void
+  closeAll: () => void
   activate: (key: string) => void
   reset: () => void
+}
+
+export const DASHBOARD_TAB: TabItem = { key: '/dashboard', title: '工作台' }
+
+export function isPinnedTab(key: string) {
+  return key === DASHBOARD_TAB.key
+}
+
+function ensureDashboard(tabs: TabItem[]) {
+  return tabs.some((item) => isPinnedTab(item.key)) ? tabs : [DASHBOARD_TAB, ...tabs]
 }
 
 export const useTabsStore = create<TabsState>()((set, get) => ({
@@ -31,28 +44,54 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
 
   open(tab) {
     const { tabs } = get()
-    if (!tabs.some((item) => item.key === tab.key)) {
-      set({ tabs: [...tabs, tab], activeKey: tab.key })
+    const tabsWithDashboard = isPinnedTab(tab.key) ? tabs : ensureDashboard(tabs)
+    if (!tabsWithDashboard.some((item) => item.key === tab.key)) {
+      set({ tabs: [...tabsWithDashboard, tab], activeKey: tab.key })
     } else {
-      set({ activeKey: tab.key })
+      set({ tabs: tabsWithDashboard, activeKey: tab.key })
     }
   },
 
-  /** 关闭页签，返回需要跳转的相邻页签 key（无则 null）。 */
+  /** 关闭页签；当前页签关闭后统一回工作台，非当前页签不触发跳转。 */
   close(key) {
+    if (isPinnedTab(key)) return null
     const { tabs, activeKey } = get()
-    const index = tabs.findIndex((item) => item.key === key)
     const next = tabs.filter((item) => item.key !== key)
-    set({ tabs: next })
-    if (activeKey !== key) return null
-    const neighbor = next[Math.min(index, next.length - 1)]
-    set({ activeKey: neighbor?.key ?? null })
-    return neighbor?.key ?? null
+    if (activeKey !== key) {
+      set({ tabs: next })
+      return null
+    }
+    set({ tabs: ensureDashboard(next), activeKey: DASHBOARD_TAB.key })
+    return DASHBOARD_TAB.key
   },
 
   closeOthers(key) {
-    const kept = get().tabs.filter((item) => item.key === key)
+    if (!get().tabs.some((item) => item.key === key)) return
+    const kept = ensureDashboard(
+      get().tabs.filter((item) => isPinnedTab(item.key) || item.key === key),
+    )
     set({ tabs: kept, activeKey: key })
+  },
+
+  closeLeft(key) {
+    const { tabs } = get()
+    const index = tabs.findIndex((item) => item.key === key)
+    if (index < 0) return
+    const kept = tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex >= index)
+    set({ tabs: ensureDashboard(kept) })
+  },
+
+  closeRight(key) {
+    const { tabs } = get()
+    const index = tabs.findIndex((item) => item.key === key)
+    if (index < 0) return
+    const kept = tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex <= index)
+    set({ tabs: ensureDashboard(kept) })
+  },
+
+  closeAll() {
+    const dashboard = get().tabs.find((item) => isPinnedTab(item.key)) ?? DASHBOARD_TAB
+    set({ tabs: [dashboard], activeKey: dashboard.key })
   },
 
   activate(key) {

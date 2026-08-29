@@ -30,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import { summarizeUserAgent } from '@/lib/user-agent'
 
@@ -166,7 +167,10 @@ export default function OnlineUserPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={kicking !== null} onOpenChange={(open) => !open && setKicking(null)}>
+      <AlertDialog
+        open={kicking !== null}
+        onOpenChange={(open) => !open && !kickMutation.isPending && setKicking(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -182,13 +186,21 @@ export default function OnlineUserPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.取消', { defaultValue: '取消' })}</AlertDialogCancel>
+            <AlertDialogCancel disabled={kickMutation.isPending}>
+              {t('common.取消', { defaultValue: '取消' })}
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={kickMutation.isPending}
-              onClick={() => kicking && kickMutation.mutate(kicking.jti)}
+              onClick={(event) => {
+                event.preventDefault()
+                if (kicking) kickMutation.mutate(kicking.jti)
+              }}
             >
-              {t('common.确认强退', { defaultValue: '确认强退' })}
+              {kickMutation.isPending && <PixelScale variant="inline" tone="current" />}
+              {kickMutation.isPending
+                ? t('common.强退中…', { defaultValue: '强退中…' })
+                : t('common.确认强退', { defaultValue: '确认强退' })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -7,7 +7,7 @@ Java 25 + Spring Boot 4.1 模块化单体通用脚手架。单 Maven 模块 + Sp
 
 - **模块化单体**：包即模块（`common`/`framework`/`system`/`order`），Modulith `verify()` 测试期强制边界，跨模块只走 facade 与共享事件契约
 - **安全**：Spring Security 7 + OAuth2 Resource Server（JWT/HS256）、RBAC + `sys_menu` 统一权限树（目录/菜单/按钮）、登录失败锁定 + `@RateLimit` 限流 + 强密码策略 + 登录日志审计四件套、在线用户注册表 + jti 黑名单强退、`/auth/token` 服务账号通道（2 期 Agent 接入预留）
-- **数据**：PostgreSQL 17 + MyBatis-Plus 3.5.17（分页/防全表删改/乐观锁/审计填充/逻辑删除）+ Flyway 迁移
+- **数据**：PostgreSQL 18.6 + MyBatis-Plus 3.5.17（分页/防全表删改/乐观锁/审计填充/逻辑删除）+ Flyway 迁移
 - **缓存**：自研两级缓存（Caffeine L1 + Redis L2），Redis Pub/Sub 失效广播、空值缓存防穿透、互斥重建防击穿、TTL 抖动防雪崩；Redisson 分布式锁/限流就绪
 - **系统管理**：用户/角色/菜单 RBAC、部门树（PG 递归 CTE，无 ancestors 冗余列）、字典与参数配置（缓存）、登录/操作日志（事件驱动落库 + 参数脱敏）、在线用户与强退
 - **规范**：统一 `R<T>` 响应（自动包装）、全局异常、TraceId 全链贯通、springdoc OpenAPI 3.1
@@ -22,7 +22,7 @@ Java 25 + Spring Boot 4.1 模块化单体通用脚手架。单 Maven 模块 + Sp
 # Windows Git Bash：指定 JDK（按实际路径调整；IDEA 用户在 Project SDK 选择即可）
 export JAVA_HOME='/d/IDE/JDK/jdk-25.0.4.1+1'
 
-docker compose up -d        # 启动 PostgreSQL 17 + Redis 7
+docker compose up -d        # 启动 PostgreSQL 18.6 + Redis 8.10.1
 ./mvnw spring-boot:run      # 启动应用（默认 dev profile）
 ```
 

@@ -11,7 +11,7 @@
 - **JDK**：`D:\IDE\JDK\jdk-25.0.4.1+1`（Temurin 25.0.4.1 绿色版，不做系统级安装/修改）。
   命令行构建一律前置 `JAVA_HOME` 指向该目录；IDEA 在 Project SDK 中选择此目录。
 - **Maven**：项目内置 **Maven Wrapper（3.9.16）**，版本由项目托管，与机器安装的 Maven 无关。
-- **Docker**：已安装；`postgres:17-alpine`、`redis:7-alpine` 镜像已拉取本地（Testcontainers 复用）。
+- **Docker**：已安装；`postgres:18.6-alpine`、`redis:8.10.1-alpine` 镜像已拉取本地（Testcontainers 复用）。
 
 ## 1. 目标
 
@@ -27,9 +27,9 @@ Spring Modulith 强制模块边界、ArchUnit 强制模块内分层、**完整�
 | Maven | 3.9.16（Wrapper） | Enforcer 锁 `[3.9.0,4.0.0)`（Maven 4 未 GA） |
 | Spring Boot | 4.1.1 | Framework 7 / Jakarta EE 11 |
 | Spring Modulith | 2.1.0 | 显式 import BOM；JDBC 事件登记表（自动建表） |
-| PostgreSQL | 17 | Flyway 12.4（BOM）+ **spring-boot-flyway**（Boot 4 拆分，必需） |
+| PostgreSQL | 18.6 | Flyway 12.4（BOM）+ **spring-boot-flyway**（Boot 4 拆分，必需） |
 | MyBatis-Plus | 3.5.17 | `mybatis-plus-spring-boot4-starter` + **mybatis-plus-jsqlparser**（3.5.9+ 拆分，必需） |
-| Redis | 7.x | Spring Data Redis + Redisson 4.7.0（自带 redisson-spring-data-41） |
+| Redis | 8.10.1 | Spring Data Redis + Redisson 4.7.0（自带 redisson-spring-data-41） |
 | Caffeine | 3.2.4（BOM） / springdoc | 3.1.0 |
 | MapStruct | 1.6.3 / ArchUnit 1.5.0 / Testcontainers 2.0.5（显式 BOM，`testcontainers-*` 前缀构件） |
 | Spotless 3.10.0 / Checkstyle 14.0.0（插件 3.6.0） / Enforcer 3.6.3 / JaCoCo 0.8.15（排除 jsqlparser） | | 绑定 `verify` |

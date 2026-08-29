@@ -1,11 +1,11 @@
 version: "3.9"
 
-# 本地开发环境：PostgreSQL 17 + Redis 7
+# 本地开发环境：PostgreSQL 18.6 + Redis 8.10.1
 # 用法：docker compose up -d
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.6-alpine
     container_name: apocalypse-postgres
     environment:
       POSTGRES_DB: apocalypse
@@ -14,7 +14,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18+ 使用主版本专属数据子目录，卷需挂载到父目录以支持原地升级。
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d apocalypse"]
       interval: 5s
@@ -22,7 +23,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:8.10.1-alpine
     container_name: apocalypse-redis
     command: redis-server --appendonly yes
     ports:
