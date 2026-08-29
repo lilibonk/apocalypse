@@ -1,0 +1,9 @@
+{
+  "name": "pixel-surge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "像素浪潮 · Pixel Surge — 像素大战式暗色立方阵列，相等间隔自随机角点发波，单向扫过全屏",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

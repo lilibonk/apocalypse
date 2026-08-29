@@ -1,0 +1,59 @@
+/*
+ * @deprecated 已弃用（历史兼容保留），新代码禁止引用，见 docs/pixel-wave-spec.md。
+ *
+ * Retro Grid 的平面几何与滚动 keyframes（几何常量沿用 Magic UI 原版）。
+ *
+ * 线色单变量 --retro-grid-line：默认由 --brand 派生（token-only），
+ * --brand 本身明暗双写（design/tokens.css），故暗色主题自动成立。
+ * 降级由组件侧 JS 双开关控制（不挂 --scroll 类），另有 tokens.css 全局兜底。
+ */
+
+.retro-grid-stage {
+  position: absolute;
+  inset: 0;
+  perspective: 200px;
+}
+
+.retro-grid-tilt {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(var(--retro-grid-angle, 65deg));
+}
+
+.retro-grid-plane {
+  position: absolute;
+  inset: 0% 0px;
+  margin-left: -200%;
+  height: 300vh;
+  width: 600vw;
+  transform-origin: 100% 0 0;
+  /* 静态帧与滚动动画首帧一致（网格按 cell-size 平铺，视觉无缝） */
+  transform: translateY(-50%);
+  background-image:
+    linear-gradient(
+      to right,
+      var(--retro-grid-line, color-mix(in oklab, var(--brand) 26%, transparent)) 1px,
+      transparent 0
+    ),
+    linear-gradient(
+      to bottom,
+      var(--retro-grid-line, color-mix(in oklab, var(--brand) 26%, transparent)) 1px,
+      transparent 0
+    );
+  background-repeat: repeat;
+  background-size: var(--retro-grid-cell-size, 60px) var(--retro-grid-cell-size, 60px);
+}
+
+.retro-grid-plane--scroll {
+  animation: retro-grid-scroll 15s linear infinite;
+}
+
+@keyframes retro-grid-scroll {
+  from {
+    transform: translateY(-50%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}

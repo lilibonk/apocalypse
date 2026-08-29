@@ -1,0 +1,73 @@
+/**
+ * zh 词条（默认语言）。
+ *
+ * 约定：原文键（如 dyna.查询、common.搜索）走 defaultValue 兜底，无需登记；
+ * 此处只登记**语义键**（带插值模板或不便用原文作 key 的词条）。
+ */
+export const zh = {
+  translation: {
+    login: {
+      title: 'Apocalypse',
+      edition: '管理控制平面',
+      signal: '系统在线',
+      stageIndex: '系统 / AP-01',
+      accessIndex: '安全访问 / 01',
+      welcome: '欢迎回来',
+      subtitle: '验证身份后进入管理控制台',
+      tagline: '为复杂系统，保留秩序',
+      stageDesc: '清晰的模块边界、可追溯的操作路径与一致的页面协议，共同构成可持续演进的管理界面。',
+      stageMeta: 'SPRING BOOT 4 · REACT 19 · MODULITH',
+      architectureLabel: '架构',
+      architectureValue: '模块化单体',
+      runtimeLabel: '运行时',
+      runtimeValue: 'JDK 25',
+      interfaceLabel: '界面协议',
+      interfaceValue: 'DynaLayer',
+      accessNote: '认证会话与访问权限由服务端统一管理。',
+      username: '用户名',
+      password: '密码',
+      usernameRequired: '请输入用户名',
+      passwordRequired: '请输入密码',
+      submit: '登录',
+      submitting: '登录中…',
+      failed: '登录失败，请稍后重试',
+    },
+    // 菜单名 key 为后端原文（menu.系统管理 …），zh 下兜底原文即可，无需词条
+    menu: {},
+    common: {
+      welcomeBack: '{{name}}，欢迎回来',
+      capabilitySummary: '能力全集演示（{{count}} 项）。下游可按需在 stores/settings.ts 裁剪。',
+      accentAria: '强调色 {{accent}}',
+      skinAria: '吉祥物皮肤 {{label}}',
+      closeTab: '关闭 {{title}}',
+      pageLoading: '页面加载中',
+    },
+    dyna: {
+      created: '{{entity}}已创建',
+      updated: '{{entity}}已更新',
+      deleted: '{{entity}}已删除',
+      create: '新增{{entity}}',
+      total: '共 {{total}} 条',
+      range: '第 {{start}}-{{end}} 条，共 {{total}} 条',
+      allRows: '共 {{total}} 条，实时全量',
+      deleteHint: '将删除{{entity}}「{{name}}」，该操作为逻辑删除。',
+      unknownField: '未识别的字段类型：{{type}}，请扩展 DynaLayer 或走逃逸舱手写页面',
+      msgInputRequired: '请输入{{label}}',
+      msgSelectRequired: '请选择{{label}}',
+      msgNumber: '{{label}}必须是数字',
+      msgMin: '{{label}}不能小于 {{min}}',
+      msgMax: '{{label}}不能大于 {{max}}',
+      msgMaxLen: '{{label}}最长 {{max}} 字符',
+      msgMinLen: '{{label}}至少 {{min}} 字符',
+      每页: '每页',
+      每页条数: '每页条数',
+      条: '条',
+      required: '（必填）',
+      lengthRange: '长度 {{min}}–{{max}} 个字符',
+      lengthMin: '至少 {{min}} 个字符',
+      lengthMax: '最多 {{max}} 个字符',
+      confirmToggle: '确认{{action}}',
+      toggleHint: '将{{action}}{{entity}}「{{name}}」，保存后立即生效。',
+    },
+  },
+}

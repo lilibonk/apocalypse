@@ -1,0 +1,363 @@
+/*
+ * 设计 token 层 —— DEFINITION.md 的 CSS 投影（颜色/密度/半径）。
+ *
+ * 规则（见 AGENTS.md 与 src/design/DEFINITION.md）：
+ * - 组件禁止写死颜色与间距像素值，一律引用本文件的 CSS 变量或 Tailwind 语义类
+ *   （bg-background / text-muted-foreground / border-border / bg-primary ...）。
+ * - 中性灰阶为骨架，品牌色单点 accent：--brand 驱动 --primary / --ring，
+ *   切 accent 预设即切换 --brand 变量组（html[data-accent="..."]）。
+ * - 暗色为一等公民：.dark 组必须同步维护。
+ * - 密度通过 --spacing 缩放实现（Tailwind v4 间距工具全部派生自该变量）。
+ */
+
+:root {
+  /* 中性灰阶（骨架色，明暗共用命名，值分主题） */
+  --background: oklch(0.985 0.003 95);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.998 0.001 95);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(0.998 0.001 95);
+  --popover-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.955 0.004 95);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.958 0.004 95);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.955 0.004 95); /* shadcn 语义：弱强调悬停面，不是品牌色 */
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.89 0.005 95);
+  --input: oklch(0.89 0.005 95);
+  --ring: var(--brand);
+
+  /* 正式产品固定 mint；其余预设只供开发态外观实验室验证。 */
+  --brand: oklch(0.777 0.152 181.9);
+  --brand-foreground: oklch(0.21 0.02 190);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+
+  /* 圆角与排版。--radius-brand 供品牌表面（登录/空态/像素进度），数据表面仍走 --radius */
+  --radius: 0.625rem;
+  --radius-brand: 0px;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  /* 通用管理台动效节拍：退出快于进入，面板慢于局部反馈。 */
+  --motion-duration-feedback: 120ms;
+  --motion-duration-exit: 120ms;
+  --motion-duration-enter: 160ms;
+  --motion-duration-standard: 180ms;
+  --motion-duration-panel-exit: 160ms;
+  --motion-duration-panel: 220ms;
+  --motion-delay-sequence: 30ms;
+  --motion-stagger-sequence: 35ms;
+  --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.18 0.004 260);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.215 0.004 260);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.235 0.004 260);
+  --popover-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.27 0.004 260);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.255 0.004 260);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.28 0.004 260);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.34 0.004 260);
+  --input: oklch(0.32 0.004 260);
+  --ring: var(--brand);
+
+  --brand: oklch(0.855 0.138 181.1);
+  --brand-foreground: oklch(0.21 0.02 190);
+
+  color-scheme: dark;
+}
+
+/* ---- accent 预设组（切换 html[data-accent]，只改 --brand 一组变量） ---- */
+
+/* 品牌色：periwinkle 长春花蓝（v4 默认，对齐 skins/v4.ts fill #8d92e6） */
+:root[data-accent='periwinkle'] {
+  --brand: oklch(0.69 0.123 280.1);
+  --brand-foreground: oklch(0.21 0.04 280);
+}
+.dark[data-accent='periwinkle'] {
+  --brand: oklch(0.8 0.097 281.2);
+  --brand-foreground: oklch(0.21 0.04 280);
+}
+
+/* 品牌色：mint-teal #2DD4BF 系（与 v3 皮肤联动；浅色底需深前景保证对比度） */
+:root[data-accent='mint'] {
+  --brand: oklch(0.777 0.152 181.9);
+  --brand-foreground: oklch(0.21 0.02 190);
+}
+.dark[data-accent='mint'] {
+  --brand: oklch(0.855 0.138 181.1);
+  --brand-foreground: oklch(0.21 0.02 190);
+}
+
+:root[data-accent='violet'] {
+  --brand: oklch(0.541 0.281 293.009);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='violet'] {
+  --brand: oklch(0.606 0.25 292.717);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='blue'] {
+  --brand: oklch(0.546 0.245 262.881);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='blue'] {
+  --brand: oklch(0.623 0.214 259.815);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='green'] {
+  --brand: oklch(0.648 0.18 155);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='green'] {
+  --brand: oklch(0.696 0.17 162);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='orange'] {
+  --brand: oklch(0.646 0.222 41.116);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='orange'] {
+  --brand: oklch(0.705 0.213 47.604);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='rose'] {
+  --brand: oklch(0.586 0.253 17.585);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='rose'] {
+  --brand: oklch(0.645 0.246 16.439);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='cyan'] {
+  --brand: oklch(0.609 0.126 221.723);
+  --brand-foreground: oklch(0.98 0 0);
+}
+.dark[data-accent='cyan'] {
+  --brand: oklch(0.715 0.143 215.221);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+:root[data-accent='mono'] {
+  --brand: oklch(0.205 0 0);
+  --brand-foreground: oklch(0.985 0 0);
+}
+.dark[data-accent='mono'] {
+  --brand: oklch(0.922 0 0);
+  --brand-foreground: oklch(0.205 0 0);
+}
+
+/* ---- 密度（Tailwind v4 全部间距工具派生自 --spacing，运行时缩放即全局密度） ---- */
+
+html[data-density='compact'] {
+  --spacing: 0.21875rem; /* 0.25rem 的 87.5% */
+  font-size: 13.5px;
+}
+
+html[data-density='comfortable'] {
+  --spacing: 0.25rem;
+  font-size: 14px;
+}
+
+/* ---- 灰度模式（开发态外观实验室） ---- */
+
+html[data-gray='on'] {
+  filter: grayscale(1);
+}
+
+/* ---- PixelWave 家族：一维像素音阶（路由 / 按钮 / 进度反馈） ---- */
+
+@keyframes pixel-scale-pulse {
+  0%,
+  100% {
+    transform: scaleY(var(--pixel-scale-level));
+    opacity: 0.32;
+  }
+  24% {
+    transform: scaleY(0.5);
+    opacity: 0.56;
+  }
+  48% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  72% {
+    transform: scaleY(0.66);
+    opacity: 0.68;
+  }
+}
+
+[data-effect='pixel-wave'][data-appearance='scale'] {
+  --pixel-scale-duration: 780ms;
+  --pixel-scale-stagger: -48ms;
+}
+
+[data-effect='pixel-wave'][data-appearance='scale'][data-variant='inline'] {
+  --pixel-scale-duration: 640ms;
+  --pixel-scale-stagger: -40ms;
+}
+
+[data-effect='pixel-wave'][data-appearance='scale'][data-variant='page'] {
+  --pixel-scale-duration: 880ms;
+  --pixel-scale-stagger: -52ms;
+}
+
+[data-effect='pixel-wave'][data-appearance='scale'] [data-slot='pixel-scale-bar'] {
+  transform: scaleY(var(--pixel-scale-level));
+  opacity: 0.32;
+}
+
+[data-effect='pixel-wave'][data-appearance='scale'][data-active='true']
+  [data-slot='pixel-scale-bar'] {
+  animation: pixel-scale-pulse var(--pixel-scale-duration) steps(4, end) infinite;
+  animation-delay: calc(var(--pixel-scale-index) * var(--pixel-scale-stagger));
+}
+
+/* ---- 通用 UI 动效节拍（页面由 design/motion.ts 投影同一组数值） ---- */
+
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-content'] {
+  --tw-enter-scale: 0.98;
+  --tw-exit-scale: 0.98;
+}
+
+[data-slot='dialog-overlay'][data-state='open'],
+[data-slot='alert-dialog-overlay'][data-state='open'],
+[data-slot='sheet-overlay'][data-state='open'],
+[data-slot='dialog-content'][data-state='open'],
+[data-slot='alert-dialog-content'][data-state='open'] {
+  animation-duration: var(--motion-duration-enter);
+  animation-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='dialog-overlay'][data-state='closed'],
+[data-slot='alert-dialog-overlay'][data-state='closed'],
+[data-slot='sheet-overlay'][data-state='closed'],
+[data-slot='dialog-content'][data-state='closed'],
+[data-slot='alert-dialog-content'][data-state='closed'] {
+  animation-duration: var(--motion-duration-exit);
+  animation-timing-function: var(--motion-ease-exit);
+}
+
+[data-slot='sheet-content'][data-state='open'] {
+  animation-duration: var(--motion-duration-panel);
+  animation-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='sheet-content'][data-state='closed'] {
+  animation-duration: var(--motion-duration-panel-exit);
+  animation-timing-function: var(--motion-ease-exit);
+}
+
+[data-slot='tooltip-content'][data-state='delayed-open'],
+[data-slot='select-content'][data-state='open'],
+[data-slot='dropdown-menu-content'][data-state='open'],
+[data-slot='dropdown-menu-sub-content'][data-state='open'] {
+  animation-duration: var(--motion-duration-enter);
+  animation-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='tooltip-content'][data-state='closed'],
+[data-slot='select-content'][data-state='closed'],
+[data-slot='dropdown-menu-content'][data-state='closed'],
+[data-slot='dropdown-menu-sub-content'][data-state='closed'] {
+  animation-duration: var(--motion-duration-exit);
+  animation-timing-function: var(--motion-ease-exit);
+}
+
+[data-slot='app-sidebar'] {
+  transition-duration: var(--motion-duration-standard);
+  transition-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='button'],
+[data-slot='tabs-trigger'],
+[data-slot='switch'],
+[data-slot='command-item'],
+[data-slot='dialog-close'],
+[data-slot='sheet-close'] {
+  transition-duration: var(--motion-duration-feedback);
+  transition-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='command-list'] {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+[data-slot='command-list']::-webkit-scrollbar {
+  width: calc(var(--spacing) * 1.5);
+}
+
+[data-slot='command-list']::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not([data-motion='off']) [data-slot='button']:not(:disabled):active {
+    transform: translateY(calc(var(--spacing) * 0.25));
+  }
+}
+
+[data-slot='motion-disclosure-indicator'] {
+  transition-duration: var(--motion-duration-standard);
+  transition-property: transform;
+  transition-timing-function: var(--motion-ease-enter);
+}
+
+[data-slot='interactive-card'] {
+  transition-duration: var(--motion-duration-feedback);
+  transition-property: background-color, transform;
+  transition-timing-function: var(--motion-ease-enter);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not([data-motion='off']) [data-slot='interactive-card']:hover {
+    transform: translateY(calc(var(--spacing) * -0.5));
+  }
+
+  html:not([data-motion='off']) [data-slot='interactive-card']:active {
+    transform: translateY(0);
+  }
+}
+
+/* ---- 动效治理：全局兜底降级（白名单场景见 AGENTS.md「动效治理」） ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-motion='off'] * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

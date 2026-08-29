@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+  "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+  "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Apocalypse 脚手架 Checkstyle 规则集（精简版）
+  定位：抓"结构性坏味道"，格式问题归 Spotless 管，不重复执法。
+-->
+<module name="Checker">
+
+  <module name="TreeWalker">
+    <!-- 包名与结构 -->
+    <module name="OuterTypeFilename"/>
+    <module name="PackageDeclaration"/>
+
+    <!-- 导入 -->
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+    <!-- 禁用 Hutool 的第二道防线（第一道：Enforcer bannedDependencies） -->
+    <module name="IllegalImport">
+      <property name="illegalPkgs" value="cn.hutool"/>
+      <property name="illegalClasses" value=""/>
+    </module>
+
+    <!-- 代码结构 -->
+    <module name="NeedBraces"/>
+    <module name="EmptyStatement"/>
+    <module name="EqualsHashCode"/>
+    <module name="MissingOverride"/>
+    <module name="HideUtilityClassConstructor"/>
+    <module name="ModifierOrder"/>
+    <module name="EmptyLineSeparator">
+      <property name="allowMultipleEmptyLines" value="false"/>
+      <property name="allowMultipleEmptyLinesInsideClassMembers" value="false"/>
+    </module>
+
+    <!-- 命名 -->
+    <module name="TypeName"/>
+    <module name="MethodName"/>
+    <module name="MemberName"/>
+    <module name="ParameterName"/>
+    <module name="ConstantName"/>
+  </module>
+</module>

@@ -1,0 +1,28 @@
+# 部署态测试环境：部署到测试服务器时使用（SPRING_PROFILES_ACTIVE=test）。
+# 注意：自动化集成测试使用 Testcontainers，不使用本 profile。
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/apocalypse}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5s
+
+# springdoc 开启（沿用 application.yml 的路径配置）
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+apocalypse:
+  security:
+    jwt:
+      # 密钥由环境变量注入，不落库不落仓
+      secret: ${JWT_SECRET}
