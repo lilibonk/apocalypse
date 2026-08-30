@@ -5,11 +5,10 @@
  */
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useForm, type Control, type Resolver } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import {
   Dialog,
   DialogContent,
@@ -233,6 +232,7 @@ export function DynaForm({
   onSubmit,
 }: DynaFormProps) {
   const t = useDynaText()
+  const dialogRef = useRef<HTMLDivElement>(null)
   const fields = useMemo(() => visibleFields(config.fields, mode), [config.fields, mode])
   // 校验消息走 dyna.msg* 插值模板；label 先翻译再进模板（切语言时随 t 重建校验器）
   const validator = useMemo(
@@ -262,52 +262,59 @@ export function DynaForm({
     )
   }, [open, mode, initialRow, fields, form])
 
+  // Radix 默认会对首个可聚焦 input 执行 select()。编辑态已有回填值时，
+  // 这会造成整段文本被选中并增加误覆盖风险；改为聚焦 Dialog 容器。
+  const handleOpenAutoFocus = useCallback(
+    (event: Event) => {
+      if (mode !== 'edit') return
+      event.preventDefault()
+      dialogRef.current?.focus({ preventScroll: true })
+    },
+    [mode],
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>
-                {mode === 'edit' ? t(config.editTitle ?? '编辑') : t(config.createTitle ?? '新增')}
-              </DialogTitle>
-              <DialogDescription>
-                {mode === 'edit' ? t('修改后点击保存生效') : t('填写以下信息完成创建')}
-              </DialogDescription>
-            </DialogHeader>
-          </MotionSequenceItem>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit((values) =>
-                onSubmit(formValuesToBody(fields, values, mode)),
-              )}
-              className="grid grid-cols-2 gap-4"
-            >
-              <MotionSequenceItem className="col-span-2 grid grid-cols-2 gap-4">
-                {fields.map((field) => (
-                  <div key={field.name} className={field.span === 1 ? '' : 'col-span-2'}>
-                    <FieldControl
-                      field={field}
-                      control={form.control}
-                      disabled={mode === 'edit' && !!field.disabledInEdit}
-                    />
-                  </div>
-                ))}
-              </MotionSequenceItem>
-              <MotionSequenceItem className="col-span-2">
-                <DialogFooter>
-                  <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                    {t('取消')}
-                  </Button>
-                  <Button type="submit" disabled={submitting}>
-                    {submitting && <PixelScale variant="inline" tone="current" />}
-                    {submitting ? t('保存中…') : t('保存')}
-                  </Button>
-                </DialogFooter>
-              </MotionSequenceItem>
-            </form>
-          </Form>
-        </MotionSequence>
+      <DialogContent ref={dialogRef} onOpenAutoFocus={handleOpenAutoFocus}>
+        <DialogHeader data-pixel-dialog-stage="header">
+          <DialogTitle>
+            {mode === 'edit' ? t(config.editTitle ?? '编辑') : t(config.createTitle ?? '新增')}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === 'edit' ? t('修改后点击保存生效') : t('填写以下信息完成创建')}
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit((values) =>
+              onSubmit(formValuesToBody(fields, values, mode)),
+            )}
+            className="grid grid-cols-2 gap-4"
+          >
+            <div data-pixel-dialog-stage="body" className="col-span-2 grid grid-cols-2 gap-4">
+              {fields.map((field) => (
+                <div key={field.name} className={field.span === 1 ? '' : 'col-span-2'}>
+                  <FieldControl
+                    field={field}
+                    control={form.control}
+                    disabled={mode === 'edit' && !!field.disabledInEdit}
+                  />
+                </div>
+              ))}
+            </div>
+            <div data-pixel-dialog-stage="footer" className="col-span-2">
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  {t('取消')}
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <PixelScale variant="inline" tone="current" />}
+                  {submitting ? t('保存中…') : t('保存')}
+                </Button>
+              </DialogFooter>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )

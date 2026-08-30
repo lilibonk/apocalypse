@@ -11,6 +11,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -19,16 +21,19 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -51,14 +56,15 @@ public class SecurityConfig {
 
   private final JwtBlacklistFilter jwtBlacklistFilter;
 
-  /** 登录/文档/监控白名单，其余请求一律要求认证。 */
-  private static final String[] WHITE_LIST = {
-    "/auth/**",
+  /** 匿名认证入口、文档与健康检查白名单；logout 和管理端点另行授权。 */
+  private static final String[] PUBLIC_ENDPOINTS = {
+    "/auth/login",
+    "/auth/refresh",
+    "/auth/token",
     "/v3/api-docs/**",
     "/swagger-ui/**",
     "/swagger-ui.html",
-    "/actuator/health",
-    "/actuator/prometheus"
+    "/actuator/health"
   };
 
   @Bean
@@ -70,7 +76,15 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             authorize ->
-                authorize.requestMatchers(WHITE_LIST).permitAll().anyRequest().authenticated())
+                authorize
+                    .requestMatchers(PUBLIC_ENDPOINTS)
+                    .permitAll()
+                    .requestMatchers("/actuator/prometheus")
+                    .access(clientScope("SCOPE_management:read"))
+                    .requestMatchers("/actuator/**")
+                    .denyAll()
+                    .anyRequest()
+                    .authenticated())
         .exceptionHandling(
             handling ->
                 handling
@@ -93,13 +107,21 @@ public class SecurityConfig {
     JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
     Converter<Jwt, Collection<GrantedAuthority>> combinedConverter =
         jwt -> {
-          Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
-          List<String> extra = jwt.getClaimAsStringList("authorities");
-          if (extra != null) {
-            extra.stream()
-                .filter(StringUtils::hasText)
-                .map(SimpleGrantedAuthority::new)
-                .forEach(authorities::add);
+          Collection<GrantedAuthority> authorities = new ArrayList<>();
+          String type = jwt.getClaimAsString("type");
+          if ("client".equals(type)) {
+            Collection<GrantedAuthority> scopes = scopeConverter.convert(jwt);
+            if (scopes != null) {
+              authorities.addAll(scopes);
+            }
+          } else if ("access".equals(type)) {
+            List<String> extra = jwt.getClaimAsStringList("authorities");
+            if (extra != null) {
+              extra.stream()
+                  .filter(StringUtils::hasText)
+                  .map(SimpleGrantedAuthority::new)
+                  .forEach(authorities::add);
+            }
           }
           return authorities;
         };
@@ -135,9 +157,15 @@ public class SecurityConfig {
   /** HS256 验签器。 */
   @Bean
   public JwtDecoder jwtDecoder(SecurityProperties properties) {
-    return NimbusJwtDecoder.withSecretKey(secretKey(properties))
-        .macAlgorithm(MacAlgorithm.HS256)
-        .build();
+    NimbusJwtDecoder decoder =
+        NimbusJwtDecoder.withSecretKey(secretKey(properties))
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build();
+    decoder.setJwtValidator(
+        new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefaultWithIssuer(properties.getJwt().getIssuer()),
+            new JwtContractValidator(properties.getJwt().getAudience())));
+    return decoder;
   }
 
   @Bean
@@ -147,10 +175,28 @@ public class SecurityConfig {
 
   /** HS256 要求密钥 ≥ 32 字节（256 bit），启动期即校验，避免运行期签名失败。 */
   private static SecretKey secretKey(SecurityProperties properties) {
+    if (!StringUtils.hasText(properties.getJwt().getSecret())) {
+      throw new IllegalStateException("apocalypse.security.jwt.secret 必须显式配置");
+    }
     byte[] bytes = properties.getJwt().getSecret().getBytes(StandardCharsets.UTF_8);
     if (bytes.length < 32) {
       throw new IllegalStateException("apocalypse.security.jwt.secret 必须不少于 32 字节（HS256 要求）");
     }
     return new SecretKeySpec(bytes, "HmacSHA256");
+  }
+
+  /** 管理面只接受 type=client 且具备专用 scope 的令牌，普通用户 token 即使同名 authority 也不能进入。 */
+  private static AuthorizationManager<RequestAuthorizationContext> clientScope(String authority) {
+    return (authenticationSupplier, context) -> {
+      var authentication = authenticationSupplier.get();
+      boolean granted =
+          authentication != null
+              && authentication.isAuthenticated()
+              && authentication.getPrincipal() instanceof Jwt jwt
+              && "client".equals(jwt.getClaimAsString("type"))
+              && authentication.getAuthorities().stream()
+                  .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
+      return new AuthorizationDecision(granted);
+    };
   }
 }

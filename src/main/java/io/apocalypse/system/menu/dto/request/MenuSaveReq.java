@@ -1,5 +1,7 @@
 package io.apocalypse.system.menu.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -7,7 +9,7 @@ import jakarta.validation.constraints.Size;
 
 /** 菜单保存请求（创建/更新共用）。 */
 public record MenuSaveReq(
-    @NotNull(message = "父菜单不能为空") Long parentId,
+    @NotNull(message = "父菜单不能为空") @Min(value = 0, message = "父菜单不能为负数") Long parentId,
     @NotBlank(message = "菜单名称不能为空") @Size(max = 64, message = "菜单名称最长 64 字符") String menuName,
     @NotBlank(message = "菜单类型不能为空") @Pattern(regexp = "[CMF]", message = "菜单类型仅支持 C/M/F")
         String menuType,
@@ -16,6 +18,7 @@ public record MenuSaveReq(
     @Size(max = 128, message = "权限标识最长 128 字符") String perms,
     @Size(max = 64, message = "图标最长 64 字符") String icon,
     Integer sort,
-    Integer visible,
-    Integer status,
+    @Min(value = 0, message = "显示状态仅支持 0/1") @Max(value = 1, message = "显示状态仅支持 0/1")
+        Integer visible,
+    @Min(value = 0, message = "状态仅支持 0/1") @Max(value = 1, message = "状态仅支持 0/1") Integer status,
     @Size(max = 500, message = "备注最长 500 字符") String remark) {}

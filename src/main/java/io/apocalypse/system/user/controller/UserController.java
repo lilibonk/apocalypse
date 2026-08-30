@@ -12,6 +12,9 @@ import io.apocalypse.system.user.dto.response.CurrentUserResp;
 import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.service.UserService;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 用户管理端点。 写操作按 V1 种子 perms 鉴权（{@code system:user:add/edit/remove}），读操作 {@code system:user:list}。
  */
+@Validated
 @RestController
 @RequestMapping("/system/users")
 @RequiredArgsConstructor
@@ -50,8 +54,11 @@ public class UserController {
   @GetMapping("/page")
   @PreAuthorize("hasAuthority('system:user:list')")
   public PageResult<UserResp> page(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size,
       @RequestParam(required = false) String keyword) {
     return userService.page(page, size, keyword);
   }

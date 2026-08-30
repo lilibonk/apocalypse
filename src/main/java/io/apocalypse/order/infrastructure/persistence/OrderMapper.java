@@ -16,4 +16,14 @@ public interface OrderMapper extends BaseMapper<OrderDo> {
             new Page<>(page, size),
             new LambdaQueryWrapper<OrderDo>().orderByDesc(OrderDo::getCreateTime)));
   }
+
+  /** 按买家分页（按创建时间倒序）。 */
+  default PageResult<OrderDo> pageByUserId(Long userId, int page, int size) {
+    return PageResult.of(
+        selectPage(
+            new Page<>(page, size),
+            new LambdaQueryWrapper<OrderDo>()
+                .eq(OrderDo::getUserId, userId)
+                .orderByDesc(OrderDo::getCreateTime)));
+  }
 }

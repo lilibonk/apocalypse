@@ -131,7 +131,7 @@ COMMENT ON COLUMN sys_role_menu.menu_id IS '菜单 ID';
 CREATE INDEX idx_sys_role_menu_menu ON sys_role_menu (menu_id);
 
 -- ========== 种子数据 ==========
--- admin / admin123（BCrypt 哈希，由 BCryptPasswordEncoder 生成）
+-- 历史 bootstrap 管理员；V7 会在应用对外就绪前识别原始哈希并禁用，改由显式一次性密码启用。
 INSERT INTO sys_user (id, username, password, nickname, status, create_by, update_by)
 VALUES (1, 'admin', '$2a$10$nmw6yWuMnO40cxRPPAl9cOms0eubpHOjB5QyEfs/6LFEr/Y03yEgS',
         '超级管理员', 1, 'system', 'system');

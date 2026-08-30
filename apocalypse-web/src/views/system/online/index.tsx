@@ -11,7 +11,6 @@ import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
 import { DynaTable, type DynaColumn } from '@/components/dyna'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -136,34 +135,28 @@ export default function OnlineUserPage() {
 
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent>
-          <MotionSequence className="contents">
-            <MotionSequenceItem>
-              <DialogHeader>
-                <DialogTitle>会话详情</DialogTitle>
-                <DialogDescription>
-                  {detail ? `${detail.username} · ${detail.ip ?? '未知 IP'}` : ''}
-                </DialogDescription>
-              </DialogHeader>
-            </MotionSequenceItem>
-            {detail && (
-              <MotionSequenceItem>
-                <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                  <div className="rounded-md border border-border p-3">
-                    <dt className="text-muted-foreground">登录时间</dt>
-                    <dd className="mt-1 font-medium">{detail.loginTime.replace('T', ' ')}</dd>
-                  </div>
-                  <div className="rounded-md border border-border p-3">
-                    <dt className="text-muted-foreground">设备摘要</dt>
-                    <dd className="mt-1 font-medium">{summarizeUserAgent(detail.userAgent)}</dd>
-                  </div>
-                  <div className="rounded-md border border-border p-3 sm:col-span-2">
-                    <dt className="text-muted-foreground">原始 User Agent</dt>
-                    <dd className="mt-1 break-all font-mono text-xs">{detail.userAgent ?? '-'}</dd>
-                  </div>
-                </dl>
-              </MotionSequenceItem>
-            )}
-          </MotionSequence>
+          <DialogHeader>
+            <DialogTitle>会话详情</DialogTitle>
+            <DialogDescription>
+              {detail ? `${detail.username} · ${detail.ip ?? '未知 IP'}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="rounded-md border border-border p-3">
+                <dt className="text-muted-foreground">登录时间</dt>
+                <dd className="mt-1 font-medium">{detail.loginTime.replace('T', ' ')}</dd>
+              </div>
+              <div className="rounded-md border border-border p-3">
+                <dt className="text-muted-foreground">设备摘要</dt>
+                <dd className="mt-1 font-medium">{summarizeUserAgent(detail.userAgent)}</dd>
+              </div>
+              <div className="rounded-md border border-border p-3 sm:col-span-2">
+                <dt className="text-muted-foreground">原始 User Agent</dt>
+                <dd className="mt-1 break-all font-mono text-xs">{detail.userAgent ?? '-'}</dd>
+              </div>
+            </dl>
+          )}
         </DialogContent>
       </Dialog>
 

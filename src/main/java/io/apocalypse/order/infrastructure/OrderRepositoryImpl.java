@@ -1,5 +1,6 @@
 package io.apocalypse.order.infrastructure;
 
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.order.domain.Order;
 import io.apocalypse.order.domain.OrderRepository;
@@ -28,7 +29,7 @@ public class OrderRepositoryImpl implements OrderRepository {
       orderMapper.insert(orderDo);
       order.assignId(orderDo.getId());
     } else {
-      orderMapper.updateById(orderDo);
+      ConcurrencyGuard.requireSingleRow(orderMapper.updateById(orderDo));
     }
     return order;
   }
@@ -41,5 +42,10 @@ public class OrderRepositoryImpl implements OrderRepository {
   @Override
   public PageResult<Order> page(int page, int size) {
     return orderMapper.pageAll(page, size).map(orderConvert::toDomain);
+  }
+
+  @Override
+  public PageResult<Order> pageByUserId(Long userId, int page, int size) {
+    return orderMapper.pageByUserId(userId, page, size).map(orderConvert::toDomain);
   }
 }

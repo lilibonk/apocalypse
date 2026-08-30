@@ -4,8 +4,10 @@
  */
 
 import { ChevronsLeft, LogOut, Menu, Moon, Search, Settings2, Sun } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
 
 import { MenuIcon } from '@/components/layout/MenuIcon'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -51,11 +53,24 @@ export function Header({
   const { theme } = useSettings()
   const setTheme = useSettingsStore((state) => state.setTheme)
   const menuTitle = useMenuTitle()
+  const [loggingOut, setLoggingOut] = useState(false)
 
-  const handleLogout = () => {
-    logout()
-    resetTabs()
-    navigate('/login', { replace: true })
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await logout()
+      resetTabs()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('common.注销失败', { defaultValue: '注销失败，请重试' }),
+      )
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
@@ -158,7 +173,7 @@ export function Header({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleLogout}>
+          <DropdownMenuItem onClick={() => void handleLogout()} disabled={loggingOut}>
             <LogOut className="size-4" />
             {t('common.退出登录', { defaultValue: '退出登录' })}
           </DropdownMenuItem>

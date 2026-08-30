@@ -1,7 +1,6 @@
 package io.apocalypse.system.user.service;
 
 import io.apocalypse.system.api.UserSummary;
-import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.entity.SysUserEntity;
 
@@ -18,6 +17,4 @@ public interface UserConvert {
   UserResp toResp(SysUserEntity entity);
 
   UserSummary toSummary(SysUserEntity entity);
-
-  RoleUserResp toRoleUserResp(SysUserEntity entity);
 }

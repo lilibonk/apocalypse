@@ -10,7 +10,6 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -147,51 +146,65 @@ export function DeptFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>
-                {editing
-                  ? t('common.编辑部门', { defaultValue: '编辑部门' })
-                  : t('common.新增部门', { defaultValue: '新增部门' })}
-              </DialogTitle>
-              <DialogDescription>
-                {editing
-                  ? t('common.修改「{{name}}」的信息', {
-                      name: editing.deptName,
-                      defaultValue: '修改「{{name}}」的信息',
-                    })
-                  : t('common.创建新的部门', { defaultValue: '创建新的部门' })}
-              </DialogDescription>
-            </DialogHeader>
-          </MotionSequenceItem>
-          <MotionSequenceItem>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <DialogHeader data-pixel-dialog-stage="header">
+          <DialogTitle>
+            {editing
+              ? t('common.编辑部门', { defaultValue: '编辑部门' })
+              : t('common.新增部门', { defaultValue: '新增部门' })}
+          </DialogTitle>
+          <DialogDescription>
+            {editing
+              ? t('common.修改「{{name}}」的信息', {
+                  name: editing.deptName,
+                  defaultValue: '修改「{{name}}」的信息',
+                })
+              : t('common.创建新的部门', { defaultValue: '创建新的部门' })}
+          </DialogDescription>
+        </DialogHeader>
+        <div data-pixel-dialog-stage="body">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="parentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.上级部门', { defaultValue: '上级部门' })}</FormLabel>
+                    <FormControl>
+                      <DeptTreeSelect
+                        tree={tree}
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabledIds={disabledParentIds}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="deptName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.部门名称', { defaultValue: '部门名称' })}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t('common.最长 64 字符', { defaultValue: '最长 64 字符' })}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="parentId"
+                  name="leader"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('common.上级部门', { defaultValue: '上级部门' })}</FormLabel>
-                      <FormControl>
-                        <DeptTreeSelect
-                          tree={tree}
-                          value={field.value}
-                          onChange={field.onChange}
-                          disabledIds={disabledParentIds}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="deptName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('common.部门名称', { defaultValue: '部门名称' })}</FormLabel>
+                      <FormLabel>{t('common.负责人', { defaultValue: '负责人' })}</FormLabel>
                       <FormControl>
                         <Input
                           placeholder={t('common.最长 64 字符', { defaultValue: '最长 64 字符' })}
@@ -202,52 +215,15 @@ export function DeptFormDialog({
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="leader"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.负责人', { defaultValue: '负责人' })}</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder={t('common.最长 64 字符', { defaultValue: '最长 64 字符' })}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.联系电话', { defaultValue: '联系电话' })}</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder={t('common.最长 32 字符', { defaultValue: '最长 32 字符' })}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
                 <FormField
                   control={form.control}
-                  name="sort"
+                  name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('common.显示顺序', { defaultValue: '显示顺序' })}</FormLabel>
+                      <FormLabel>{t('common.联系电话', { defaultValue: '联系电话' })}</FormLabel>
                       <FormControl>
                         <Input
-                          inputMode="numeric"
-                          placeholder={t('common.非负整数，越小越靠前', {
-                            defaultValue: '非负整数，越小越靠前',
-                          })}
+                          placeholder={t('common.最长 32 字符', { defaultValue: '最长 32 字符' })}
                           {...field}
                         />
                       </FormControl>
@@ -255,42 +231,63 @@ export function DeptFormDialog({
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>{t('common.状态', { defaultValue: '状态' })}</FormLabel>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {field.value
-                            ? t('common.正常', { defaultValue: '正常' })
-                            : t('common.停用', { defaultValue: '停用' })}
-                        </span>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="remark"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('common.备注', { defaultValue: '备注' })}</FormLabel>
+              </div>
+              <FormField
+                control={form.control}
+                name="sort"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.显示顺序', { defaultValue: '显示顺序' })}</FormLabel>
+                    <FormControl>
+                      <Input
+                        inputMode="numeric"
+                        placeholder={t('common.非负整数，越小越靠前', {
+                          defaultValue: '非负整数，越小越靠前',
+                        })}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between">
+                    <FormLabel>{t('common.状态', { defaultValue: '状态' })}</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {field.value
+                          ? t('common.正常', { defaultValue: '正常' })
+                          : t('common.停用', { defaultValue: '停用' })}
+                      </span>
                       <FormControl>
-                        <Textarea
-                          placeholder={t('common.最长 500 字符', { defaultValue: '最长 500 字符' })}
-                          {...field}
-                        />
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="remark"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.备注', { defaultValue: '备注' })}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder={t('common.最长 500 字符', { defaultValue: '最长 500 字符' })}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div data-pixel-dialog-stage="footer">
                 <DialogFooter>
                   <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                     {t('common.取消', { defaultValue: '取消' })}
@@ -302,10 +299,10 @@ export function DeptFormDialog({
                       : t('common.保存', { defaultValue: '保存' })}
                   </Button>
                 </DialogFooter>
-              </form>
-            </Form>
-          </MotionSequenceItem>
-        </MotionSequence>
+              </div>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   )

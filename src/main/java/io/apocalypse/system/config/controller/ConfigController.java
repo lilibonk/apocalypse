@@ -6,6 +6,9 @@ import io.apocalypse.system.config.dto.request.ConfigSaveReq;
 import io.apocalypse.system.config.dto.response.ConfigResp;
 import io.apocalypse.system.config.service.ConfigService;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 /** 参数设置端点。按 V3 菜单种子 perms 鉴权（{@code system:config:*}），写操作落操作日志。 */
+@Validated
 @RestController
 @RequestMapping("/system/configs")
 @RequiredArgsConstructor
@@ -32,8 +36,11 @@ public class ConfigController {
   @GetMapping("/page")
   @PreAuthorize("hasAuthority('system:config:list')")
   public PageResult<ConfigResp> page(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size,
       @RequestParam(required = false) String keyword) {
     return configService.page(page, size, keyword);
   }

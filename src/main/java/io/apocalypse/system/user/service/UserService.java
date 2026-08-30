@@ -1,18 +1,18 @@
 package io.apocalypse.system.user.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.security.LoginUser;
 import io.apocalypse.framework.security.LoginUserQuery;
 import io.apocalypse.framework.security.PasswordPolicy;
+import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.api.UserApi;
 import io.apocalypse.system.api.UserSummary;
-import io.apocalypse.system.dept.entity.SysDeptEntity;
-import io.apocalypse.system.dept.mapper.SysDeptMapper;
+import io.apocalypse.system.dept.service.DeptService;
 import io.apocalypse.system.menu.service.MenuService;
-import io.apocalypse.system.role.entity.SysRoleEntity;
-import io.apocalypse.system.role.mapper.SysRoleMapper;
+import io.apocalypse.system.role.service.RoleService;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
 import io.apocalypse.system.user.dto.response.CurrentUserResp;
@@ -21,6 +21,7 @@ import io.apocalypse.system.user.entity.SysUserEntity;
 import io.apocalypse.system.user.mapper.SysUserMapper;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -28,6 +29,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -41,17 +43,21 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class UserService implements UserApi, LoginUserQuery {
 
+  private static final String BOOTSTRAP_DISABLED_PASSWORD = "{bootstrap-disabled}";
+
   private final SysUserMapper sysUserMapper;
 
-  private final SysRoleMapper sysRoleMapper;
+  private final RoleService roleService;
 
-  private final SysDeptMapper sysDeptMapper;
+  private final DeptService deptService;
 
   private final MenuService menuService;
 
   private final UserConvert userConvert;
 
   private final PasswordEncoder passwordEncoder;
+
+  private final TokenVersionStore tokenVersionStore;
 
   /** 自代理引用：让 {@link #getById(Long)} 复用 {@link #getDetail(Long)} 的缓存（直接 this 调用会绕过 AOP 代理）。 */
   private final ObjectProvider<UserService> self;
@@ -68,8 +74,9 @@ public class UserService implements UserApi, LoginUserQuery {
     return sysUserMapper.findByUsername(username).map(userConvert::toSummary);
   }
 
-  /** 登录查询端口：填充密码密文、角色标识与权限串，供 framework 认证与签发令牌。 */
+  /** 登录查询端口：以同一 PostgreSQL 快照装配密码、状态、角色、未缓存权限和撤销版本，防止签出旧权限 + 新版本的撕裂 JWT。 */
   @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<LoginUser> findLoginUserByUsername(String username) {
     return sysUserMapper
         .findByUsername(username)
@@ -80,10 +87,9 @@ public class UserService implements UserApi, LoginUserQuery {
                     entity.getUsername(),
                     entity.getPassword(),
                     entity.isEnabled(),
-                    sysRoleMapper.selectByUserId(entity.getId()).stream()
-                        .map(SysRoleEntity::getRoleKey)
-                        .toList(),
-                    menuService.permsByUserId(entity.getId())));
+                    roleService.roleKeysByUserId(entity.getId()),
+                    menuService.freshPermsByUserId(entity.getId()),
+                    tokenVersionStore.current(entity.getUsername())));
   }
 
   /** 用户详情（缓存示例：两级缓存 user；更新/删除/重置密码时 evict）。 */
@@ -122,6 +128,8 @@ public class UserService implements UserApi, LoginUserQuery {
   @CacheEvict(cacheNames = "user", key = "#id")
   public UserResp update(Long id, UserUpdateReq req) {
     SysUserEntity entity = requireById(id);
+    boolean credentialChanged =
+        req.status() != null && !Objects.equals(req.status(), entity.getStatus());
     if (StringUtils.hasText(req.nickname())) {
       entity.setNickname(req.nickname());
     }
@@ -131,7 +139,10 @@ public class UserService implements UserApi, LoginUserQuery {
     if (req.deptId() != null) {
       entity.setDeptId(requireDept(req.deptId()));
     }
-    sysUserMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysUserMapper.updateById(entity));
+    if (credentialChanged) {
+      tokenVersionStore.invalidateCredential(entity.getUsername());
+    }
     return withDeptName(userConvert.toResp(sysUserMapper.selectById(id)));
   }
 
@@ -139,9 +150,10 @@ public class UserService implements UserApi, LoginUserQuery {
   @Transactional
   @CacheEvict(cacheNames = "user", key = "#id")
   public void delete(Long id) {
-    requireById(id);
+    SysUserEntity entity = requireById(id);
     sysUserMapper.deleteRolesByUserId(id);
-    sysUserMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysUserMapper.deleteById(id));
+    tokenVersionStore.invalidateCredential(entity.getUsername());
   }
 
   /** 重置密码：按 {@link PasswordPolicy} 校验强度后重置（admin 种子弱口令是历史妥协，仅登录放行）。 */
@@ -151,26 +163,42 @@ public class UserService implements UserApi, LoginUserQuery {
     SysUserEntity entity = requireById(id);
     PasswordPolicy.validate(newPassword);
     entity.setPassword(passwordEncoder.encode(newPassword));
-    sysUserMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysUserMapper.updateById(entity));
+    tokenVersionStore.invalidateCredential(entity.getUsername());
   }
 
   /** 重置用户角色。角色变化影响权限串，evict 该用户的 userPerms 缓存。 */
   @Transactional
   @CacheEvict(cacheNames = "userPerms", key = "#userId")
   public void assignRoles(Long userId, List<Long> roleIds) {
-    requireById(userId);
+    SysUserEntity user = requireById(userId);
     List<Long> ids = roleIds == null ? List.of() : roleIds;
-    if (!ids.isEmpty() && sysRoleMapper.selectBatchIds(ids).size() != ids.size()) {
-      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的角色");
-    }
+    roleService.requireValidRoleIds(ids);
     sysUserMapper.replaceRoles(userId, ids);
+    tokenVersionStore.invalidateUserAuthorization(user.getUsername());
+  }
+
+  /** 用显式部署密码一次性启用 V1 的禁用 bootstrap 管理员。仅哨兵密码状态可执行，已启用或已改密账号绝不被覆盖。 */
+  @Transactional
+  public boolean initializeBootstrapAdmin(String username, String password) {
+    SysUserEntity entity = sysUserMapper.findByUsername(username).orElse(null);
+    if (entity == null
+        || entity.isEnabled()
+        || !BOOTSTRAP_DISABLED_PASSWORD.equals(entity.getPassword())) {
+      return false;
+    }
+    PasswordPolicy.validate(password);
+    if (sysUserMapper.enableBootstrapAdmin(username, passwordEncoder.encode(password)) == 0) {
+      return false;
+    }
+    tokenVersionStore.invalidateCredential(entity.getUsername());
+    return true;
   }
 
   /** 当前登录用户视图（{@code /system/users/me}）。 */
   public CurrentUserResp currentUser(Long userId) {
     UserResp user = self.getObject().getDetail(userId);
-    List<String> roles =
-        sysRoleMapper.selectByUserId(userId).stream().map(SysRoleEntity::getRoleKey).toList();
+    List<String> roles = roleService.roleKeysByUserId(userId);
     return new CurrentUserResp(
         user, roles, menuService.permsByUserId(userId), menuService.treeByUserId(userId));
   }
@@ -185,9 +213,7 @@ public class UserService implements UserApi, LoginUserQuery {
 
   /** 部门存在性校验：null 表示不挂接部门。 */
   private Long requireDept(Long deptId) {
-    if (deptId != null && sysDeptMapper.selectById(deptId) == null) {
-      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "部门不存在");
-    }
+    deptService.requireExistingId(deptId);
     return deptId;
   }
 
@@ -196,14 +222,13 @@ public class UserService implements UserApi, LoginUserQuery {
     if (resp.deptId() == null) {
       return resp;
     }
-    SysDeptEntity dept = sysDeptMapper.selectById(resp.deptId());
     return new UserResp(
         resp.id(),
         resp.username(),
         resp.nickname(),
         resp.status(),
         resp.deptId(),
-        dept == null ? null : dept.getDeptName(),
+        deptService.nameOf(resp.deptId()),
         resp.createTime());
   }
 }

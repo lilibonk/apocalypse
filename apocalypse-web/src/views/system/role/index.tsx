@@ -9,12 +9,12 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { DynaPage } from '@/components/dyna'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -110,13 +110,19 @@ function MenuChecklist({
   node,
   depth,
   selected,
+  expanded,
+  forceExpanded,
   onToggle,
+  onToggleExpanded,
   nodeById,
 }: {
   node: MenuNode
   depth: number
   selected: ReadonlySet<string>
+  expanded: ReadonlySet<string>
+  forceExpanded: boolean
   onToggle: (node: MenuNode, checked: boolean) => void
+  onToggleExpanded: (id: string) => void
   nodeById: ReadonlyMap<string, MenuNode>
 }) {
   const { t } = useTranslation()
@@ -126,30 +132,58 @@ function MenuChecklist({
   const selectedCount = subtreeIds.filter((id) => selected.has(id)).length
   const checked = selectedCount === subtreeIds.length
   const indeterminate = selectedCount > 0 && !checked
+  const hasChildren = node.children.length > 0
+  const isExpanded = forceExpanded || expanded.has(node.id)
   return (
     <div className={depth > 0 ? 'ml-4 space-y-1 border-l border-border pl-3' : 'space-y-1'}>
-      <label className="flex min-h-8 items-center gap-2 rounded-md px-1 text-sm hover:bg-muted/60">
-        <TreeCheckbox
-          checked={checked}
-          indeterminate={indeterminate}
-          label={node.menuName}
-          onChange={(nextChecked) => onToggle(canonicalNode, nextChecked)}
-        />
-        <span>{node.menuName}</span>
-        <span className="text-xs text-muted-foreground">
-          {t(`dyna.${typeLabel}`, { defaultValue: typeLabel })}
-        </span>
-      </label>
-      {node.children.map((child) => (
-        <MenuChecklist
-          key={child.id}
-          node={child}
-          depth={depth + 1}
-          selected={selected}
-          onToggle={onToggle}
-          nodeById={nodeById}
-        />
-      ))}
+      <div className="flex min-h-8 items-center rounded-md hover:bg-muted/60">
+        {hasChildren ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={
+              isExpanded
+                ? t('common.折叠', { defaultValue: '折叠' })
+                : t('common.展开', { defaultValue: '展开' })
+            }
+            aria-expanded={isExpanded}
+            disabled={forceExpanded}
+            onClick={() => onToggleExpanded(node.id)}
+          >
+            {isExpanded ? <ChevronDown /> : <ChevronRight />}
+          </Button>
+        ) : (
+          <span className="size-8 shrink-0" aria-hidden />
+        )}
+        <label className="flex min-w-0 flex-1 items-center gap-2 py-1 pr-2 text-sm">
+          <TreeCheckbox
+            checked={checked}
+            indeterminate={indeterminate}
+            label={node.menuName}
+            onChange={(nextChecked) => onToggle(canonicalNode, nextChecked)}
+          />
+          <span className="truncate">{node.menuName}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t(`dyna.${typeLabel}`, { defaultValue: typeLabel })}
+          </span>
+        </label>
+      </div>
+      {hasChildren &&
+        isExpanded &&
+        node.children.map((child) => (
+          <MenuChecklist
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            selected={selected}
+            expanded={expanded}
+            forceExpanded={forceExpanded}
+            onToggle={onToggle}
+            onToggleExpanded={onToggleExpanded}
+            nodeById={nodeById}
+          />
+        ))}
     </div>
   )
 }
@@ -164,6 +198,7 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
   const [initialSelected, setInitialSelected] = useState<ReadonlySet<string>>(new Set())
   const [echoedRoleId, setEchoedRoleId] = useState<string | null>(null)
   const [keyword, setKeyword] = useState('')
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [confirming, setConfirming] = useState(false)
 
   const treeQuery = useQuery({
@@ -184,6 +219,7 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
     setEchoedRoleId(null)
     setConfirming(false)
     setKeyword('')
+    setExpanded(new Set())
   }
   if (open && currentQuery.data && echoedRoleId !== roleId) {
     const current = new Set(currentQuery.data.map(String))
@@ -216,6 +252,10 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
     walk(tree)
     return map
   }, [tree])
+  const expandableIds = useMemo(
+    () => [...nodeById.values()].filter((node) => node.children.length > 0).map((node) => node.id),
+    [nodeById],
+  )
 
   const handleClose = () => {
     setSelected(new Set())
@@ -223,7 +263,17 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
     setEchoedRoleId(null)
     setConfirming(false)
     setKeyword('')
+    setExpanded(new Set())
     onClose()
+  }
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const toggle = (node: MenuNode, checked: boolean) => {
@@ -276,121 +326,134 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
       <DialogContent className="max-w-2xl">
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>{t('common.菜单授权', { defaultValue: '菜单授权' })}</DialogTitle>
-              <DialogDescription>
-                {t('common.正在调整角色「{{name}}」的访问范围，保存前将显示完整变更。', {
-                  name: role?.roleName ?? '',
-                  defaultValue: '正在调整角色「{{name}}」的访问范围，保存前将显示完整变更。',
-                })}
-              </DialogDescription>
-            </DialogHeader>
-          </MotionSequenceItem>
-          <MotionSequenceItem key={confirming ? 'confirm' : 'select'}>
-            {confirming ? (
-              <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
-                <div>
-                  <h3 className="text-sm font-semibold">确认权限变更</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    保存后将立即影响该角色下用户可访问的菜单与操作。
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-md border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">新增授权</p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">{addedIds.length}</p>
-                  </div>
-                  <div className="rounded-md border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">移除授权</p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-destructive">
-                      {removedIds.length}
-                    </p>
-                  </div>
-                </div>
-                {selected.size === 0 && (
-                  <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                    本次保存会清空该角色的全部菜单权限。
-                  </p>
-                )}
+        <DialogHeader>
+          <DialogTitle>{t('common.菜单授权', { defaultValue: '菜单授权' })}</DialogTitle>
+          <DialogDescription>
+            {t('common.正在调整角色「{{name}}」的访问范围，保存前将显示完整变更。', {
+              name: role?.roleName ?? '',
+              defaultValue: '正在调整角色「{{name}}」的访问范围，保存前将显示完整变更。',
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        {confirming ? (
+          <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
+            <div>
+              <h3 className="text-sm font-semibold">确认权限变更</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                保存后将立即影响该角色下用户可访问的菜单与操作。
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">新增授权</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{addedIds.length}</p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <Input
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    placeholder="搜索菜单名称或权限标识"
-                    className="sm:max-w-xs"
-                  />
-                  <div className="flex gap-2">
-                    <Badge variant="outline">当前 {initialSelected.size}</Badge>
-                    <Badge variant="outline">已选 {selected.size}</Badge>
-                  </div>
-                </div>
-                <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border border-border p-3">
-                  {(treeQuery.isLoading || currentQuery.isLoading) &&
-                    Array.from({ length: 4 }).map((_, index) => (
-                      <Skeleton key={index} className="h-7 w-full" />
-                    ))}
-                  {(treeQuery.isError || currentQuery.isError) && (
-                    <p className="text-sm text-destructive">
-                      {errorText(
-                        treeQuery.error ?? currentQuery.error,
-                        t('common.权限数据加载失败', { defaultValue: '权限数据加载失败' }),
-                      )}
-                    </p>
-                  )}
-                  {visibleTree.map((node) => (
-                    <MenuChecklist
-                      key={node.id}
-                      node={node}
-                      depth={0}
-                      selected={selected}
-                      onToggle={toggle}
-                      nodeById={nodeById}
-                    />
-                  ))}
-                  {!treeQuery.isLoading && visibleTree.length === 0 && (
-                    <p className="py-6 text-center text-sm text-muted-foreground">没有匹配的菜单</p>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">权限树全量加载，不分页</p>
+              <div className="rounded-md border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">移除授权</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-destructive">
+                  {removedIds.length}
+                </p>
               </div>
+            </div>
+            {selected.size === 0 && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                本次保存会清空该角色的全部菜单权限。
+              </p>
             )}
-          </MotionSequenceItem>
-          <MotionSequenceItem>
-            <DialogFooter>
-              {confirming ? (
-                <>
-                  <Button variant="ghost" onClick={() => setConfirming(false)}>
-                    返回修改
-                  </Button>
-                  <Button
-                    variant={removedIds.length > 0 ? 'destructive' : 'default'}
-                    disabled={saveMutation.isPending}
-                    onClick={() => saveMutation.mutate([...selected])}
-                  >
-                    {saveMutation.isPending ? '保存中…' : '确认并保存'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="ghost" onClick={handleClose}>
-                    {t('common.取消', { defaultValue: '取消' })}
-                  </Button>
-                  <Button
-                    disabled={!changed || treeQuery.isLoading || currentQuery.isLoading}
-                    onClick={() => setConfirming(true)}
-                  >
-                    查看变更并继续
-                  </Button>
-                </>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="搜索菜单名称或权限标识"
+                className="sm:max-w-xs"
+              />
+              <div className="flex gap-2">
+                <Badge variant="outline">当前 {initialSelected.size}</Badge>
+                <Badge variant="outline">已选 {selected.size}</Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={keyword.trim().length > 0}
+                  onClick={() => setExpanded(new Set(expandableIds))}
+                >
+                  {t('common.全部展开', { defaultValue: '全部展开' })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={keyword.trim().length > 0}
+                  onClick={() => setExpanded(new Set())}
+                >
+                  {t('common.全部折叠', { defaultValue: '全部折叠' })}
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border border-border p-3">
+              {(treeQuery.isLoading || currentQuery.isLoading) &&
+                Array.from({ length: 4 }).map((_, index) => (
+                  <Skeleton key={index} className="h-7 w-full" />
+                ))}
+              {(treeQuery.isError || currentQuery.isError) && (
+                <p className="text-sm text-destructive">
+                  {errorText(
+                    treeQuery.error ?? currentQuery.error,
+                    t('common.权限数据加载失败', { defaultValue: '权限数据加载失败' }),
+                  )}
+                </p>
               )}
-            </DialogFooter>
-          </MotionSequenceItem>
-        </MotionSequence>
+              {visibleTree.map((node) => (
+                <MenuChecklist
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  selected={selected}
+                  expanded={expanded}
+                  forceExpanded={keyword.trim().length > 0}
+                  onToggle={toggle}
+                  onToggleExpanded={toggleExpanded}
+                  nodeById={nodeById}
+                />
+              ))}
+              {!treeQuery.isLoading && visibleTree.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">没有匹配的菜单</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">权限树全量加载，不分页</p>
+          </div>
+        )}
+        <DialogFooter>
+          {confirming ? (
+            <>
+              <Button variant="ghost" onClick={() => setConfirming(false)}>
+                返回修改
+              </Button>
+              <Button
+                variant={removedIds.length > 0 ? 'destructive' : 'default'}
+                disabled={saveMutation.isPending}
+                onClick={() => saveMutation.mutate([...selected])}
+              >
+                {saveMutation.isPending ? '保存中…' : '确认并保存'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={handleClose}>
+                {t('common.取消', { defaultValue: '取消' })}
+              </Button>
+              <Button
+                disabled={!changed || treeQuery.isLoading || currentQuery.isLoading}
+                onClick={() => setConfirming(true)}
+              >
+                查看变更并继续
+              </Button>
+            </>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -459,77 +522,64 @@ function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>{t('common.分配用户', { defaultValue: '分配用户' })}</DialogTitle>
-              <DialogDescription>
-                {t(
-                  'common.为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。',
-                  {
-                    name: role?.roleName ?? '',
-                    defaultValue:
-                      '为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。',
-                  },
-                )}
-              </DialogDescription>
-            </DialogHeader>
-          </MotionSequenceItem>
-          <MotionSequenceItem>
-            <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border border-border p-3">
-              {usersQuery.isLoading &&
-                Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton key={index} className="h-5 w-full" />
-                ))}
-              {usersQuery.isError && (
-                <p className="text-sm text-destructive">
-                  {errorText(
-                    usersQuery.error,
-                    t('common.用户列表加载失败', { defaultValue: '用户列表加载失败' }),
-                  )}
-                </p>
+        <DialogHeader>
+          <DialogTitle>{t('common.分配用户', { defaultValue: '分配用户' })}</DialogTitle>
+          <DialogDescription>
+            {t('common.为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。', {
+              name: role?.roleName ?? '',
+              defaultValue:
+                '为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。',
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border border-border p-3">
+          {usersQuery.isLoading &&
+            Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-5 w-full" />
+            ))}
+          {usersQuery.isError && (
+            <p className="text-sm text-destructive">
+              {errorText(
+                usersQuery.error,
+                t('common.用户列表加载失败', { defaultValue: '用户列表加载失败' }),
               )}
-              {usersQuery.data?.list.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {t('common.暂无用户', { defaultValue: '暂无用户' })}
-                </p>
-              )}
-              {usersQuery.data?.list.map((user) => (
-                <label key={user.id} className="flex items-center gap-2 py-0.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
-                    checked={selected.has(user.id)}
-                    onChange={(event) => toggle(user.id, event.target.checked)}
-                  />
-                  <span>{user.username}</span>
-                  <span className="text-xs text-muted-foreground">{user.nickname ?? ''}</span>
-                </label>
-              ))}
-            </div>
-          </MotionSequenceItem>
-          <MotionSequenceItem>
-            <p className="text-xs text-muted-foreground">
-              已加载 {usersQuery.data?.list.length ?? 0} / {usersQuery.data?.total ?? 0}
-              名候选用户，单次上限 1000 条
             </p>
-          </MotionSequenceItem>
-          <MotionSequenceItem>
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('common.取消', { defaultValue: '取消' })}
-              </Button>
-              <Button
-                disabled={saveMutation.isPending}
-                onClick={() => saveMutation.mutate([...selected])}
-              >
-                {saveMutation.isPending
-                  ? t('common.保存中…', { defaultValue: '保存中…' })
-                  : t('common.保存', { defaultValue: '保存' })}
-              </Button>
-            </DialogFooter>
-          </MotionSequenceItem>
-        </MotionSequence>
+          )}
+          {usersQuery.data?.list.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t('common.暂无用户', { defaultValue: '暂无用户' })}
+            </p>
+          )}
+          {usersQuery.data?.list.map((user) => (
+            <label key={user.id} className="flex items-center gap-2 py-0.5 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={selected.has(user.id)}
+                onChange={(event) => toggle(user.id, event.target.checked)}
+              />
+              <span>{user.username}</span>
+              <span className="text-xs text-muted-foreground">{user.nickname ?? ''}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          已加载 {usersQuery.data?.list.length ?? 0} / {usersQuery.data?.total ?? 0}
+          名候选用户，单次上限 1000 条
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.取消', { defaultValue: '取消' })}
+          </Button>
+          <Button
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate([...selected])}
+          >
+            {saveMutation.isPending
+              ? t('common.保存中…', { defaultValue: '保存中…' })
+              : t('common.保存', { defaultValue: '保存' })}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

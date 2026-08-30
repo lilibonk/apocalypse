@@ -8,7 +8,7 @@ import java.util.Set;
 
 import org.springframework.util.StringUtils;
 
-/** 强密码策略（登录安全四件套之一）：仅用于<b>新建/重置密码</b>；登录不校验强度—— admin 种子的弱口令 admin123 属历史妥协，登录放行、改密时才按本策略拦截。 */
+/** 强密码策略（登录安全四件套之一）：用于新建、重置和首次 bootstrap 密码；登录只做密码匹配。 */
 public final class PasswordPolicy {
 
   /** 常见弱口令小表（ lowercase 比对）。 */

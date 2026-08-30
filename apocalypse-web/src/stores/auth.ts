@@ -25,7 +25,9 @@ interface AuthState {
   meLoaded: boolean
 
   login: (username: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
+  /** 仅清理本地状态：供 401/刷新失败兜底，禁止作为产品主动注销动作。 */
+  clearSession: () => void
   ensureMe: () => Promise<void>
   hasPerm: (perm: string) => boolean
   tryRefresh: () => Promise<boolean>
@@ -47,8 +49,17 @@ export const useAuthStore = create<AuthState>()(
         await get().ensureMe()
       },
 
-      logout() {
+      clearSession() {
         set({ tokens: null, user: null, roles: [], perms: [], menus: [], meLoaded: false })
+      },
+
+      async logout() {
+        if (!get().tokens) {
+          get().clearSession()
+          return
+        }
+        await authApi.logout()
+        get().clearSession()
       },
 
       async ensureMe() {
@@ -91,7 +102,7 @@ configureClient({
   getAccessToken: () => useAuthStore.getState().tokens?.accessToken ?? null,
   tryRefresh: () => useAuthStore.getState().tryRefresh(),
   onUnauthorized: () => {
-    useAuthStore.getState().logout()
+    useAuthStore.getState().clearSession()
     if (!window.location.pathname.startsWith('/login')) {
       window.location.assign('/login')
     }

@@ -26,7 +26,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: health,prometheus
 
 logging:
   level:
@@ -35,15 +35,13 @@ logging:
 apocalypse:
   security:
     jwt:
-      # 默认密钥仅本地开发使用，生产必须通过环境变量 JWT_SECRET 注入（HS256 需 ≥ 32 字节）
-      secret: ${JWT_SECRET:apocalypse-local-dev-secret-key-0123456789abcdef}
+      # 本地开发也必须显式注入，禁止所有可部署 profile 共享仓库内固定签名密钥。
+      secret: ${JWT_SECRET}
+    bootstrap:
+      # 仅首次启用 V7 禁用的 admin；成功后移除此环境变量，后续启动不会重置密码。
+      admin-password: ${APOCALYPSE_BOOTSTRAP_ADMIN_PASSWORD:}
     cors:
       # 本地前端 Vite 开发服务器（5173 端口）
       allowed-origins:
         - http://localhost:5173
         - http://127.0.0.1:5173
-    # 服务账号（2 期外部 Agent 接入；demo-client 仅为本地示例，生产走环境变量）
-    clients:
-      - client-id: demo-client
-        client-secret: ${DEMO_CLIENT_SECRET:demo-client-secret-change-me}
-        scopes: [read, write]

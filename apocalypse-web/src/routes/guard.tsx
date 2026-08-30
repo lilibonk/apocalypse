@@ -20,7 +20,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     if (tokens && !meLoaded) {
       void ensureMe().catch(() => {
         // token 失效等：client 层 40100 已负责登出跳转；此处兜底清理
-        useAuthStore.getState().logout()
+        useAuthStore.getState().clearSession()
       })
     }
   }, [tokens, meLoaded, ensureMe])

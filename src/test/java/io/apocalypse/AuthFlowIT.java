@@ -2,6 +2,7 @@ package io.apocalypse;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpEntity;
@@ -22,7 +23,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
   @Test
   void adminLoginThenMeReturnsRolesPermsMenus() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     JsonNode me = getForData("/system/users/me", token);
 
@@ -58,6 +59,50 @@ class AuthFlowIT extends AbstractIntegrationTest {
     awaitLoginLog("admin", 0);
   }
 
+  @Test
+  void oversizedUsernameIsRejectedBeforeAuditPublication() {
+    String username = "u".repeat(65);
+    JsonNode body =
+        exchangeRaw(
+            "/auth/login",
+            HttpMethod.POST,
+            Map.of("username", username, "password", "WrongPassword2026"),
+            null);
+
+    assertThat(body.get("code").asInt()).isNotZero();
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM sys_login_log WHERE username = ?", Integer.class, username);
+    assertThat(count).isZero();
+  }
+
+  @Test
+  void oversizedUserAgentIsSanitizedBeforeAuditPersistence() {
+    String username = "audit_ua_" + UUID.randomUUID().toString().replace("-", "");
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("User-Agent", "agent-browser-".repeat(40));
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            "/auth/login",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("username", username, "password", "WrongPassword2026"), headers),
+            String.class);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
+
+    await()
+        .atMost(Duration.ofSeconds(15))
+        .untilAsserted(
+            () -> {
+              Integer length =
+                  jdbcTemplate.queryForObject(
+                      "SELECT char_length(user_agent) FROM sys_login_log WHERE username = ? ORDER BY login_time DESC LIMIT 1",
+                      Integer.class,
+                      username);
+              assertThat(length).isNotNull().isLessThanOrEqualTo(255);
+            });
+  }
+
   /** refresh 旋转：登录得双令牌 → 换新对 → 新 access token 可用 → 旧 refresh 再用命中黑名单（40100）。 */
   @Test
   void loginIssuesTokenPairAndRefreshRotates() {
@@ -65,7 +110,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
         exchangeRaw(
             "/auth/login",
             HttpMethod.POST,
-            Map.of("username", "admin", "password", "admin123"),
+            Map.of("username", "admin", "password", ADMIN_PASSWORD),
             null);
     assertThat(login.get("code").asInt()).as("登录应成功: %s", login).isEqualTo(0);
     String accessToken = login.at("/data/accessToken").asText();

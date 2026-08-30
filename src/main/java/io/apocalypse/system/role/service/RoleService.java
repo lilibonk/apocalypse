@@ -1,16 +1,16 @@
 package io.apocalypse.system.role.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
-import io.apocalypse.system.menu.mapper.SysMenuMapper;
+import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.menu.service.MenuService;
 import io.apocalypse.system.role.dto.request.RoleSaveReq;
 import io.apocalypse.system.role.dto.response.RoleResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 import io.apocalypse.system.role.mapper.SysRoleMapper;
-import io.apocalypse.system.user.mapper.SysUserMapper;
-import io.apocalypse.system.user.service.UserConvert;
 
 import java.util.List;
 
@@ -27,13 +27,11 @@ public class RoleService {
 
   private final SysRoleMapper sysRoleMapper;
 
-  private final SysMenuMapper sysMenuMapper;
-
-  private final SysUserMapper sysUserMapper;
+  private final MenuService menuService;
 
   private final RoleConvert roleConvert;
 
-  private final UserConvert userConvert;
+  private final TokenVersionStore tokenVersionStore;
 
   /** 分页查询角色。 */
   public PageResult<RoleResp> page(int page, int size, String keyword) {
@@ -54,6 +52,7 @@ public class RoleService {
 
   /** 更新角色。 */
   @Transactional
+  @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, RoleSaveReq req) {
     SysRoleEntity entity = requireById(id);
     if (!entity.getRoleKey().equals(req.roleKey())
@@ -61,7 +60,8 @@ public class RoleService {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "角色标识已存在");
     }
     applyReq(entity, req);
-    sysRoleMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysRoleMapper.updateById(entity));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   /** 删除角色（逻辑删，同时清空角色-菜单关联）。 */
@@ -70,7 +70,9 @@ public class RoleService {
   public void delete(Long id) {
     requireById(id);
     sysRoleMapper.deleteMenusByRoleId(id);
-    sysRoleMapper.deleteById(id);
+    sysRoleMapper.deleteUsersByRoleId(id);
+    ConcurrencyGuard.requireSingleRow(sysRoleMapper.deleteById(id));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   /** 重置角色菜单（授权）。 */
@@ -79,10 +81,9 @@ public class RoleService {
   public void assignMenus(Long roleId, List<Long> menuIds) {
     requireById(roleId);
     List<Long> ids = menuIds == null ? List.of() : menuIds;
-    if (!ids.isEmpty() && sysMenuMapper.selectBatchIds(ids).size() != ids.size()) {
-      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的菜单");
-    }
+    menuService.requireValidMenuIds(ids);
     sysRoleMapper.replaceMenus(roleId, ids);
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   /** 查询角色当前菜单授权，用于授权修改前的安全回显。 */
@@ -94,7 +95,7 @@ public class RoleService {
   /** 分页查询角色下的用户。 */
   public PageResult<RoleUserResp> pageUsers(Long roleId, int page, int size) {
     requireById(roleId);
-    return sysUserMapper.pageByRoleId(roleId, page, size).map(userConvert::toRoleUserResp);
+    return sysRoleMapper.pageUsers(roleId, page, size);
   }
 
   /** 整体替换角色下的用户。用户角色变化影响权限串，清空 userPerms 缓存。 */
@@ -103,11 +104,24 @@ public class RoleService {
   public void assignUsers(Long roleId, List<Long> userIds) {
     requireById(roleId);
     List<Long> ids = userIds == null ? List.of() : userIds;
-    if (!ids.isEmpty() && sysUserMapper.selectBatchIds(ids).size() != ids.size()) {
+    if (!ids.isEmpty() && sysRoleMapper.countExistingUsers(ids) != ids.size()) {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的用户");
     }
     sysRoleMapper.deleteUsersByRoleId(roleId);
-    ids.forEach(userId -> sysUserMapper.insertUserRole(userId, roleId));
+    ids.forEach(userId -> sysRoleMapper.insertUserRole(userId, roleId));
+    tokenVersionStore.invalidateGlobalAuthorization();
+  }
+
+  /** 认证/当前用户视图所需的有效角色标识。 */
+  public List<String> roleKeysByUserId(Long userId) {
+    return sysRoleMapper.selectByUserId(userId).stream().map(SysRoleEntity::getRoleKey).toList();
+  }
+
+  /** 用户授权前批量校验角色主键。 */
+  public void requireValidRoleIds(List<Long> roleIds) {
+    if (!roleIds.isEmpty() && sysRoleMapper.selectBatchIds(roleIds).size() != roleIds.size()) {
+      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的角色");
+    }
   }
 
   private SysRoleEntity requireById(Long id) {

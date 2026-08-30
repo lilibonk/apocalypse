@@ -1,6 +1,7 @@
 package io.apocalypse.system.role.mapper;
 
 import io.apocalypse.common.response.PageResult;
+import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 
 import java.util.List;
@@ -69,4 +70,35 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
   /** 清空角色下的全部用户关联（角色-用户整体替换前调用）。 */
   @Delete("DELETE FROM sys_user_role WHERE role_id = #{roleId}")
   int deleteUsersByRoleId(@Param("roleId") Long roleId);
+
+  /** 联表分页查询某角色下的用户；直接投影为角色域视图，避免依赖用户域实体/转换器。 */
+  @Select(
+      """
+      SELECT u.id, u.username, u.nickname, u.status FROM sys_user u
+      JOIN sys_user_role ur ON u.id = ur.user_id
+      WHERE ur.role_id = #{roleId} AND u.deleted = 0
+      ORDER BY u.create_time DESC
+      """)
+  Page<RoleUserResp> selectUserPage(Page<RoleUserResp> page, @Param("roleId") Long roleId);
+
+  default PageResult<RoleUserResp> pageUsers(Long roleId, int page, int size) {
+    return PageResult.of(selectUserPage(new Page<>(page, size), roleId));
+  }
+
+  /** 批量统计有效用户，用于整体替换前防止脏关联。 */
+  @Select(
+      """
+      <script>
+      SELECT COUNT(*) FROM sys_user
+      WHERE deleted = 0 AND id IN
+      <foreach collection="userIds" item="id" open="(" separator="," close=")">
+        #{id}
+      </foreach>
+      </script>
+      """)
+  long countExistingUsers(@Param("userIds") List<Long> userIds);
+
+  /** 写入用户-角色关联。 */
+  @Insert("INSERT INTO sys_user_role (user_id, role_id) VALUES (#{userId}, #{roleId})")
+  int insertUserRole(@Param("userId") Long userId, @Param("roleId") Long roleId);
 }

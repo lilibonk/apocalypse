@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.http.HttpMethod;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -27,7 +28,7 @@ class SystemBaseIT extends AbstractIntegrationTest {
 
   @Test
   void deptTreeReturnsSeedStructure() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     JsonNode tree = getForData("/system/depts/tree", token);
 
@@ -42,18 +43,31 @@ class SystemBaseIT extends AbstractIntegrationTest {
 
   @Test
   void roleMenusReturnsCurrentAssignmentsForSafeEditing() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     JsonNode menuIds = getForData("/system/roles/1/menus", token);
 
     assertThat(menuIds.isArray()).isTrue();
-    assertThat(menuIds).hasSize(30);
-    assertThat(menuIds.toString()).contains("\"100\"").contains("\"144\"");
+    assertThat(menuIds).hasSize(36);
+    assertThat(menuIds.toString()).contains("\"100\"").contains("\"144\"").contains("\"165\"");
+  }
+
+  @Test
+  void hiddenOrderPermissionStaysAuthorizedButDoesNotBecomeNavigation() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+
+    JsonNode currentUser = getForData("/system/users/me", token);
+
+    assertThat(currentUser.get("perms").toString())
+        .contains("\"order:create\"")
+        .contains("\"order:read:any\"")
+        .contains("\"order:list:any\"");
+    assertThat(currentUser.get("menus").toString()).doesNotContain("订单权限");
   }
 
   @Test
   void dictGetByTypeCachedAndEvictedAfterUpdate() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     // 下拉查询：返回种子数据，并写入 dict 缓存
     JsonNode data = getForData("/system/dict/data/type/sys_user_status", token);
@@ -82,7 +96,7 @@ class SystemBaseIT extends AbstractIntegrationTest {
 
   @Test
   void configGetByKeyAndTypedGetters() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     JsonNode config = getForData("/system/configs/key/demo.site.name", token);
     assertThat(config.get("configValue").asText()).isEqualTo("Apocalypse");
@@ -95,7 +109,7 @@ class SystemBaseIT extends AbstractIntegrationTest {
 
   @Test
   void userCreateOperLogPersistedWithMaskedPassword() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     // 创建用户（@OperLog 生效）：请求体含密码，落库的 oper_param 中密码必须脱敏为 ***
     JsonNode created =
@@ -124,5 +138,46 @@ class SystemBaseIT extends AbstractIntegrationTest {
 
     // 清理：删除测试用户（逻辑删，不影响其他用例）
     deleteForData("/system/users/" + created.get("id").asText(), token);
+  }
+
+  @Test
+  void menuRejectsMissingParentAndCycles() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    Map<String, Object> missingParent = menuRequest(999_999_999L, "无效父节点");
+    JsonNode missing = exchangeRaw("/system/menus", HttpMethod.POST, missingParent, token);
+    assertThat(missing.get("code").asInt()).isEqualTo(40400);
+
+    Long parentId = postForData("/system/menus", menuRequest(0L, "环检测父节点"), token).asLong();
+    // 新增菜单会使旧 access token 授权版本失效，重新登录后继续。
+    token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    Long childId = postForData("/system/menus", menuRequest(parentId, "环检测子节点"), token).asLong();
+    token = loginAndGetToken("admin", ADMIN_PASSWORD);
+
+    JsonNode cycle =
+        exchangeRaw(
+            "/system/menus/" + parentId, HttpMethod.PUT, menuRequest(childId, "环检测父节点"), token);
+    assertThat(cycle.get("code").asInt()).isEqualTo(10000);
+
+    // 按子到父顺序清理；每次菜单变更后令牌版本都会变化。
+    token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    deleteForData("/system/menus/" + childId, token);
+    token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    deleteForData("/system/menus/" + parentId, token);
+  }
+
+  private static Map<String, Object> menuRequest(long parentId, String name) {
+    return Map.of(
+        "parentId",
+        parentId,
+        "menuName",
+        name,
+        "menuType",
+        "C",
+        "sort",
+        99,
+        "visible",
+        1,
+        "status",
+        1);
   }
 }

@@ -50,4 +50,8 @@ public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
             new LambdaQueryWrapper<SysDeptEntity>().eq(SysDeptEntity::getParentId, parentId))
         > 0;
   }
+
+  /** 挂接本部门的有效用户数（部门删除不变量的一部分）。 */
+  @Select("SELECT COUNT(*) FROM sys_user WHERE dept_id = #{deptId} AND deleted = 0")
+  long countAssignedUsers(@Param("deptId") Long deptId);
 }

@@ -34,6 +34,26 @@ export function isPinnedTab(key: string) {
   return key === DASHBOARD_TAB.key
 }
 
+/**
+ * 认证区根路径会立即重定向到工作台；在重定向前 AppLayout 也可能先同步一次 location。
+ * 统一规范化路由 key，避免 `/` / `/dashboard/` 被当成额外页签。
+ */
+export function normalizeTabKey(key: string) {
+  if (key === '/' || key === '/dashboard/') return DASHBOARD_TAB.key
+  return key.length > 1 ? key.replace(/\/+$/, '') : key
+}
+
+function normalizeTabs(tabs: TabItem[]) {
+  const unique = new Map<string, TabItem>()
+  for (const tab of tabs) {
+    const key = normalizeTabKey(tab.key)
+    if (!unique.has(key)) unique.set(key, isPinnedTab(key) ? DASHBOARD_TAB : { ...tab, key })
+  }
+  const dashboard = unique.get(DASHBOARD_TAB.key)
+  const others = [...unique.values()].filter((item) => !isPinnedTab(item.key))
+  return dashboard ? [dashboard, ...others] : others
+}
+
 function ensureDashboard(tabs: TabItem[]) {
   return tabs.some((item) => isPinnedTab(item.key)) ? tabs : [DASHBOARD_TAB, ...tabs]
 }
@@ -43,12 +63,14 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
   activeKey: null,
 
   open(tab) {
-    const { tabs } = get()
-    const tabsWithDashboard = isPinnedTab(tab.key) ? tabs : ensureDashboard(tabs)
-    if (!tabsWithDashboard.some((item) => item.key === tab.key)) {
-      set({ tabs: [...tabsWithDashboard, tab], activeKey: tab.key })
+    const key = normalizeTabKey(tab.key)
+    const normalizedTab = isPinnedTab(key) ? DASHBOARD_TAB : { ...tab, key }
+    const tabs = normalizeTabs(get().tabs)
+    const tabsWithDashboard = isPinnedTab(key) ? tabs : ensureDashboard(tabs)
+    if (!tabsWithDashboard.some((item) => item.key === key)) {
+      set({ tabs: [...tabsWithDashboard, normalizedTab], activeKey: key })
     } else {
-      set({ tabs: tabsWithDashboard, activeKey: tab.key })
+      set({ tabs: tabsWithDashboard, activeKey: key })
     }
   },
 

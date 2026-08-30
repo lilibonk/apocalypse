@@ -6,17 +6,19 @@ import io.apocalypse.framework.ratelimit.RateLimit;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-/** 认证端点。 {@code /auth/**} 在 {@link SecurityConfig} 白名单中，无需令牌即可访问。 */
+/** 认证端点。登录、刷新与客户端令牌端点公开；注销端点需要有效访问令牌。 */
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -26,7 +28,7 @@ public class AuthController {
 
   /** 账密登录请求。 */
   public record LoginRequest(
-      @NotBlank(message = "用户名不能为空") String username,
+      @NotBlank(message = "用户名不能为空") @Size(max = 64, message = "用户名长度不能超过 64 个字符") String username,
       @NotBlank(message = "密码不能为空") String password) {}
 
   /**
@@ -48,11 +50,14 @@ public class AuthController {
   }
 
   /** client_credentials 风格服务账号令牌（2 期外部 Agent 使用）。 */
+  public record ClientTokenRequest(
+      @NotBlank(message = "client_id 不能为空") String clientId,
+      @NotBlank(message = "client_secret 不能为空") String clientSecret) {}
+
   @PostMapping("/token")
-  public R<AuthService.TokenResponse> token(
-      @RequestParam("client_id") String clientId,
-      @RequestParam("client_secret") String clientSecret) {
-    return R.ok(authService.issueClientToken(clientId, clientSecret));
+  @RateLimit(limit = 20, windowSeconds = 60, key = "client-token")
+  public R<AuthService.TokenResponse> token(@Validated @RequestBody ClientTokenRequest request) {
+    return R.ok(authService.issueClientToken(request.clientId(), request.clientSecret()));
   }
 
   /** 刷新请求。 */
@@ -71,5 +76,12 @@ public class AuthController {
             request.refreshToken(),
             httpRequest.getRemoteAddr(),
             httpRequest.getHeader("User-Agent")));
+  }
+
+  /** 当前用户主动注销：持久化递增凭证代次，并清理其全部在线会话。 */
+  @PostMapping("/logout")
+  public R<Void> logout(@AuthenticationPrincipal Jwt accessToken) {
+    authService.logout(accessToken);
+    return R.ok(null);
   }
 }

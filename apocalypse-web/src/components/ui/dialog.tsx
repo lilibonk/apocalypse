@@ -3,7 +3,7 @@ import { XIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
-import { PixelSurfaceReveal } from '@/components/motion/PixelSurfaceReveal'
+import { PixelDialogMotion } from '@/components/motion/PixelDialogMotion'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
@@ -54,12 +54,29 @@ function DialogContent({
     onOpenAutoFocus,
     onCloseAutoFocus,
   )
+  const surfaceChildren = (
+    <>
+      {children}
+      {showCloseButton && (
+        <DialogPrimitive.Close
+          data-slot="dialog-close"
+          data-pixel-dialog-stage="header"
+          className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+        >
+          <XIcon />
+          <span className="sr-only">{t('common.关闭', { defaultValue: '关闭' })}</span>
+        </DialogPrimitive.Close>
+      )}
+    </>
+  )
+
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay data-depth={depth} />
+      <DialogOverlay data-depth={depth} data-motion-preset="orchestrated" />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-depth={depth}
+        data-motion-preset="orchestrated"
         className={cn(
           'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-lg',
           className,
@@ -68,17 +85,7 @@ function DialogContent({
         onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
-        <PixelSurfaceReveal />
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">{t('common.关闭', { defaultValue: '关闭' })}</span>
-          </DialogPrimitive.Close>
-        )}
+        <PixelDialogMotion>{surfaceChildren}</PixelDialogMotion>
       </DialogPrimitive.Content>
     </DialogPortal>
   )
@@ -88,6 +95,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-header"
+      data-pixel-dialog-stage="header"
       className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
       {...props}
     />
@@ -106,6 +114,7 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
+      data-pixel-dialog-stage="footer"
       className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
       {...props}
     >

@@ -15,4 +15,7 @@ public interface OrderRepository {
 
   /** 分页（按创建时间倒序）。 */
   PageResult<Order> page(int page, int size);
+
+  /** 按买家分页（对象级授权查询）。 */
+  PageResult<Order> pageByUserId(Long userId, int page, int size);
 }

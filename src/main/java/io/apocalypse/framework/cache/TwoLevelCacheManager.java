@@ -4,9 +4,11 @@ import java.util.Collection;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import org.redisson.api.RedissonClient;
 import org.springframework.cache.Cache;
 import org.springframework.cache.support.AbstractCacheManager;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,6 +20,10 @@ public class TwoLevelCacheManager extends AbstractCacheManager {
 
   private final RedisTemplate<String, Object> redisTemplate;
 
+  private final StringRedisTemplate stringRedisTemplate;
+
+  private final RedissonClient redissonClient;
+
   private final Consumer<CacheInvalidateMessage> invalidationPublisher;
 
   private final String instanceId;
@@ -25,9 +31,13 @@ public class TwoLevelCacheManager extends AbstractCacheManager {
   public TwoLevelCacheManager(
       CacheProperties properties,
       RedisTemplate<String, Object> redisTemplate,
+      StringRedisTemplate stringRedisTemplate,
+      RedissonClient redissonClient,
       Consumer<CacheInvalidateMessage> invalidationPublisher) {
     this.properties = properties;
     this.redisTemplate = redisTemplate;
+    this.stringRedisTemplate = stringRedisTemplate;
+    this.redissonClient = redissonClient;
     this.invalidationPublisher = invalidationPublisher;
     // 实例 ID：启动时生成，供失效广播去重（跳过本实例消息）
     this.instanceId = UUID.randomUUID().toString();
@@ -40,7 +50,14 @@ public class TwoLevelCacheManager extends AbstractCacheManager {
 
   @Override
   protected Cache getMissingCache(String name) {
-    return new TwoLevelCache(name, properties, redisTemplate, invalidationPublisher, instanceId);
+    return new TwoLevelCache(
+        name,
+        properties,
+        redisTemplate,
+        stringRedisTemplate,
+        redissonClient,
+        invalidationPublisher,
+        instanceId);
   }
 
   /** 处理远端实例的失效广播：仅清本地 L1（最终一致语义，不保证强一致）。 */
@@ -50,11 +67,7 @@ public class TwoLevelCacheManager extends AbstractCacheManager {
     }
     Cache cache = getCache(message.cacheName());
     if (cache instanceof TwoLevelCache twoLevelCache) {
-      if (message.key() == null) {
-        twoLevelCache.clearLocal();
-      } else {
-        twoLevelCache.evictLocal(message.key());
-      }
+      twoLevelCache.applyRemoteInvalidation(message);
     }
   }
 }

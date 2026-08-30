@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { AlertDialog as AlertDialogPrimitive } from 'radix-ui'
 
-import { PixelSurfaceReveal } from '@/components/motion/PixelSurfaceReveal'
+import { PixelDialogMotion } from '@/components/motion/PixelDialogMotion'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
@@ -49,10 +49,11 @@ function AlertDialogContent({
   )
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay data-motion-preset="orchestrated" />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}
+        data-motion-preset="orchestrated"
         className={cn(
           'group/alert-dialog-content fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg',
           className,
@@ -61,8 +62,7 @@ function AlertDialogContent({
         onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
-        <PixelSurfaceReveal tone="destructive" />
-        {children}
+        <PixelDialogMotion>{children}</PixelDialogMotion>
       </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
   )
@@ -72,6 +72,7 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<'div'>)
   return (
     <div
       data-slot="alert-dialog-header"
+      data-pixel-dialog-stage="header"
       className={cn(
         'grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] has-data-[slot=alert-dialog-media]:gap-x-6 sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]',
         className,
@@ -85,6 +86,7 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<'div'>)
   return (
     <div
       data-slot="alert-dialog-footer"
+      data-pixel-dialog-stage="footer"
       className={cn(
         'flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end',
         className,

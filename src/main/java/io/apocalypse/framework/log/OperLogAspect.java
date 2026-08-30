@@ -1,12 +1,15 @@
 package io.apocalypse.framework.log;
 
+import io.apocalypse.common.event.AuditTextSanitizer;
 import io.apocalypse.common.event.OperLoggedEvent;
 import io.apocalypse.framework.security.SecurityUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -77,15 +80,26 @@ public class OperLogAspect {
       String method = signature.getDeclaringTypeName() + "." + signature.getName();
       operLogEventPublisher.publish(
           new OperLoggedEvent(
-              operLog.title(),
-              operLog.businessType(),
-              method,
-              SecurityUtils.currentUsername().orElse("anonymous"),
-              currentIp(),
-              serializeArgs(signature, joinPoint.getArgs()),
-              serializeResult(result),
+              UUID.randomUUID(),
+              LocalDateTime.now(),
+              AuditTextSanitizer.fit(operLog.title(), AuditTextSanitizer.OPER_TITLE_MAX_LENGTH),
+              AuditTextSanitizer.fit(
+                  operLog.businessType(), AuditTextSanitizer.BUSINESS_TYPE_MAX_LENGTH),
+              AuditTextSanitizer.fit(method, AuditTextSanitizer.METHOD_MAX_LENGTH),
+              AuditTextSanitizer.fit(
+                  SecurityUtils.currentUsername().orElse("anonymous"),
+                  AuditTextSanitizer.OPER_NAME_MAX_LENGTH),
+              AuditTextSanitizer.fit(currentIp(), AuditTextSanitizer.IP_MAX_LENGTH),
+              AuditTextSanitizer.fit(
+                  serializeArgs(signature, joinPoint.getArgs()),
+                  AuditTextSanitizer.OPER_PAYLOAD_MAX_LENGTH),
+              AuditTextSanitizer.fit(
+                  serializeResult(result), AuditTextSanitizer.OPER_PAYLOAD_MAX_LENGTH),
               error == null ? 1 : 0,
-              error == null ? null : truncate(error.getMessage()),
+              error == null
+                  ? null
+                  : AuditTextSanitizer.fit(
+                      error.getMessage(), AuditTextSanitizer.ERROR_MESSAGE_MAX_LENGTH),
               costMs));
     } catch (Exception e) {
       log.warn("操作日志采集失败，已忽略: {}", e.getMessage());

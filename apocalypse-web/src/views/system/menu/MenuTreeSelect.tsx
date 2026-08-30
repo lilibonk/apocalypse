@@ -8,7 +8,6 @@ import { useDeferredValue, useMemo, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MenuIcon } from '@/components/layout/MenuIcon'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -218,142 +217,125 @@ export function MenuTreeSelect({
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent depth="nested" className="gap-0 overflow-hidden p-0 sm:max-w-xl">
-          <MotionSequence className="contents">
-            <MotionSequenceItem>
-              <DialogHeader className="p-6 pb-4">
-                <DialogTitle>
-                  {t('common.选择上级菜单', { defaultValue: '选择上级菜单' })}
-                </DialogTitle>
-                <DialogDescription>
-                  {t('common.按需展开节点，或搜索后直接选择', {
-                    defaultValue: '按需展开节点，或搜索后直接选择',
-                  })}
-                </DialogDescription>
-              </DialogHeader>
-            </MotionSequenceItem>
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle>{t('common.选择上级菜单', { defaultValue: '选择上级菜单' })}</DialogTitle>
+            <DialogDescription>
+              {t('common.按需展开节点，或搜索后直接选择', {
+                defaultValue: '按需展开节点，或搜索后直接选择',
+              })}
+            </DialogDescription>
+          </DialogHeader>
 
-            <MotionSequenceItem>
-              <div className="relative px-6 pb-4">
-                <Search className="pointer-events-none absolute top-2.5 left-9 size-4 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('common.搜索菜单名称、路由或层级路径…', {
-                    defaultValue: '搜索菜单名称、路由或层级路径…',
-                  })}
-                  className="pl-9"
-                  autoFocus
-                />
-              </div>
-            </MotionSequenceItem>
+          <div className="relative px-6 pb-4">
+            <Search className="pointer-events-none absolute top-2.5 left-9 size-4 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('common.搜索菜单名称、路由或层级路径…', {
+                defaultValue: '搜索菜单名称、路由或层级路径…',
+              })}
+              className="pl-9"
+              autoFocus
+            />
+          </div>
 
-            <MotionSequenceItem>
-              <div className="border-t border-border">
-                <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
-                  <span>
-                    {isSearching
-                      ? t('common.parentMenuSearchCount', {
-                          count: searchResult.total,
-                          defaultValue: '找到 {{count}} 个节点',
-                        })
-                      : t('common.parentMenuNodeCount', {
-                          count: optionCount,
-                          defaultValue: '{{count}} 个可选节点',
-                        })}
+          <div className="border-t border-border">
+            <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
+              <span>
+                {isSearching
+                  ? t('common.parentMenuSearchCount', {
+                      count: searchResult.total,
+                      defaultValue: '找到 {{count}} 个节点',
+                    })
+                  : t('common.parentMenuNodeCount', {
+                      count: optionCount,
+                      defaultValue: '{{count}} 个可选节点',
+                    })}
+              </span>
+              {selectedOption && (
+                <span className="max-w-1/2 truncate" title={selectedOption.breadcrumb}>
+                  {t('common.当前选择', { defaultValue: '当前选择' })}：{selectedOption.menuName}
+                </span>
+              )}
+            </div>
+
+            <div className="max-h-80 overflow-y-auto p-2">
+              {!isSearching && (
+                <Button
+                  type="button"
+                  variant={value === ROOT_PARENT_ID ? 'secondary' : 'ghost'}
+                  className="mb-1 w-full justify-start font-normal"
+                  onClick={() => selectNode(ROOT_PARENT_ID)}
+                >
+                  <FolderRoot />
+                  <span className="flex-1 text-left">
+                    {t('common.根节点', { defaultValue: '根节点' })}
                   </span>
-                  {selectedOption && (
-                    <span className="max-w-1/2 truncate" title={selectedOption.breadcrumb}>
-                      {t('common.当前选择', { defaultValue: '当前选择' })}：
-                      {selectedOption.menuName}
-                    </span>
-                  )}
-                </div>
+                  <Check
+                    className={cn('size-4 text-primary', value !== ROOT_PARENT_ID && 'opacity-0')}
+                  />
+                </Button>
+              )}
 
-                <div className="max-h-80 overflow-y-auto p-2">
-                  {!isSearching && (
-                    <Button
-                      type="button"
-                      variant={value === ROOT_PARENT_ID ? 'secondary' : 'ghost'}
-                      className="mb-1 w-full justify-start font-normal"
-                      onClick={() => selectNode(ROOT_PARENT_ID)}
-                    >
-                      <FolderRoot />
-                      <span className="flex-1 text-left">
-                        {t('common.根节点', { defaultValue: '根节点' })}
-                      </span>
-                      <Check
-                        className={cn(
-                          'size-4 text-primary',
-                          value !== ROOT_PARENT_ID && 'opacity-0',
-                        )}
-                      />
-                    </Button>
-                  )}
-
-                  {isSearching ? (
-                    <div role="list" className="space-y-1">
-                      {searchResult.matches.length === 0 ? (
-                        <p className="py-8 text-center text-sm text-muted-foreground">
-                          {t('common.没有匹配结果', { defaultValue: '没有匹配结果' })}
-                        </p>
-                      ) : (
-                        searchResult.matches.map((node) => (
-                          <Button
-                            key={node.id}
-                            type="button"
-                            variant={value === node.id ? 'secondary' : 'ghost'}
-                            className="h-auto w-full justify-start px-3 py-2 font-normal"
-                            onClick={() => selectNode(node.id)}
-                          >
-                            <MenuIcon name={node.icon} />
-                            <span className="min-w-0 flex-1 text-left">
-                              <span className="flex items-center gap-2">
-                                <span className="truncate font-medium">{node.menuName}</span>
-                                <Badge variant="outline">
-                                  {node.menuType === 'C' ? labels.directory : labels.menu}
-                                </Badge>
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                {node.breadcrumb}
-                                {node.path ? ` · ${node.path}` : ''}
-                              </span>
-                            </span>
-                            <Check
-                              className={cn(
-                                'size-4 text-primary',
-                                value !== node.id && 'opacity-0',
-                              )}
-                            />
-                          </Button>
-                        ))
-                      )}
-                      {searchResult.total > MAX_PARENT_MENU_SEARCH_RESULTS && (
-                        <p className="px-3 py-2 text-xs text-muted-foreground">
-                          {t('common.parentMenuSearchLimited', {
-                            count: MAX_PARENT_MENU_SEARCH_RESULTS,
-                            defaultValue: '仅显示前 {{count}} 个结果，请继续输入关键词缩小范围',
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  ) : options.length > 0 ? (
-                    <MenuTreeBranch
-                      nodes={options}
-                      value={value}
-                      expanded={expanded}
-                      labels={labels}
-                      onToggle={toggleNode}
-                      onSelect={selectNode}
-                    />
-                  ) : (
+              {isSearching ? (
+                <div role="list" className="space-y-1">
+                  {searchResult.matches.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      {t('common.暂无可选菜单', { defaultValue: '暂无可选菜单' })}
+                      {t('common.没有匹配结果', { defaultValue: '没有匹配结果' })}
+                    </p>
+                  ) : (
+                    searchResult.matches.map((node) => (
+                      <Button
+                        key={node.id}
+                        type="button"
+                        variant={value === node.id ? 'secondary' : 'ghost'}
+                        className="h-auto w-full justify-start px-3 py-2 font-normal"
+                        onClick={() => selectNode(node.id)}
+                      >
+                        <MenuIcon name={node.icon} />
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate font-medium">{node.menuName}</span>
+                            <Badge variant="outline">
+                              {node.menuType === 'C' ? labels.directory : labels.menu}
+                            </Badge>
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {node.breadcrumb}
+                            {node.path ? ` · ${node.path}` : ''}
+                          </span>
+                        </span>
+                        <Check
+                          className={cn('size-4 text-primary', value !== node.id && 'opacity-0')}
+                        />
+                      </Button>
+                    ))
+                  )}
+                  {searchResult.total > MAX_PARENT_MENU_SEARCH_RESULTS && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      {t('common.parentMenuSearchLimited', {
+                        count: MAX_PARENT_MENU_SEARCH_RESULTS,
+                        defaultValue: '仅显示前 {{count}} 个结果，请继续输入关键词缩小范围',
+                      })}
                     </p>
                   )}
                 </div>
-              </div>
-            </MotionSequenceItem>
-          </MotionSequence>
+              ) : options.length > 0 ? (
+                <MenuTreeBranch
+                  nodes={options}
+                  value={value}
+                  expanded={expanded}
+                  labels={labels}
+                  onToggle={toggleNode}
+                  onSelect={selectNode}
+                />
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {t('common.暂无可选菜单', { defaultValue: '暂无可选菜单' })}
+                </p>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

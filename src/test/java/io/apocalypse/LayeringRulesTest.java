@@ -1,15 +1,24 @@
 package io.apocalypse;
 
+import io.apocalypse.system.user.service.UserService;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** 分层规则测试（AGENTS.md 红线 3/5 的执法者）。只分析主代码，不依赖容器，可独立运行。 */
 @AnalyzeClasses(
@@ -20,6 +29,19 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
       ImportOption.DoNotIncludePackageInfos.class
     })
 class LayeringRulesTest {
+
+  /** 登录签发必须在可重复读快照中一次性装配身份、权限与撤销版本，防止并发授权变更造成撕裂 JWT。 */
+  @Test
+  void loginQueryMustUseRepeatableReadSnapshot() throws NoSuchMethodException {
+    Transactional transactional =
+        UserService.class
+            .getMethod("findLoginUserByUsername", String.class)
+            .getAnnotation(Transactional.class);
+
+    assertThat(transactional).isNotNull();
+    assertThat(transactional.readOnly()).isTrue();
+    assertThat(transactional.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
+  }
 
   /**
    * R1：MyBatis-Plus 类型只允许出现在 common（PageResult/BaseEntity 豁免）、framework.mybatis、mapper 与
@@ -105,4 +127,61 @@ class LayeringRulesTest {
           .resideOutsideOfPackage("io.apocalypse.framework..")
           .should()
           .resideInAnyPackage("..controller..", "..interfaces..");
+
+  /** R8a：用户 Service 不得穿透角色/部门/菜单持久化层。 */
+  @ArchTest
+  static final ArchRule R8A_USER_SERVICE_NO_FOREIGN_PERSISTENCE =
+      noClasses()
+          .that()
+          .resideInAPackage("io.apocalypse.system.user.service..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "io.apocalypse.system.role.mapper..",
+              "io.apocalypse.system.role.entity..",
+              "io.apocalypse.system.dept.mapper..",
+              "io.apocalypse.system.dept.entity..",
+              "io.apocalypse.system.menu.mapper..",
+              "io.apocalypse.system.menu.entity..");
+
+  /** R8b：角色 Service 不得穿透用户/菜单持久化层。 */
+  @ArchTest
+  static final ArchRule R8B_ROLE_SERVICE_NO_FOREIGN_PERSISTENCE =
+      noClasses()
+          .that()
+          .resideInAPackage("io.apocalypse.system.role.service..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "io.apocalypse.system.user.mapper..",
+              "io.apocalypse.system.user.entity..",
+              "io.apocalypse.system.menu.mapper..",
+              "io.apocalypse.system.menu.entity..");
+
+  /** R8c：部门 Service 不得穿透用户持久化层。 */
+  @ArchTest
+  static final ArchRule R8C_DEPT_SERVICE_NO_FOREIGN_PERSISTENCE =
+      noClasses()
+          .that()
+          .resideInAPackage("io.apocalypse.system.dept.service..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "io.apocalypse.system.user.mapper..", "io.apocalypse.system.user.entity..");
+
+  /** R9：dto.request / dto.response 中的数据契约必须是 record。 */
+  @ArchTest
+  static final ArchRule R9_DTOS_ARE_RECORDS =
+      classes()
+          .that()
+          .resideInAnyPackage("..dto.request..", "..dto.response..")
+          .should(
+              new ArchCondition<>("be records") {
+                @Override
+                public void check(JavaClass item, ConditionEvents events) {
+                  events.add(
+                      new SimpleConditionEvent(
+                          item, item.reflect().isRecord(), item.getName() + " 必须声明为 record"));
+                }
+              });
 }

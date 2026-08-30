@@ -4,7 +4,7 @@
 
 ## 1. 项目定位
 
-Apocalypse 管理台前端。后端仓库为 `D:\IDE\KimiProject\apocalypse`（独立仓库，勿跨界提交）。本阶段按契约编程，axios 实例 `baseURL=/api`，vite dev proxy 将 `/api` 转发 `http://localhost:8080` 并 rewrite 剥掉前缀（后端无 context-path）。
+Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录；上层 `AGENTS.md` 同时生效。本阶段按契约编程，axios 实例 `baseURL=/api`，vite dev proxy 将 `/api` 转发 `http://localhost:8080` 并 rewrite 剥掉前缀（后端无 context-path）。
 
 ## 2. 技术栈锁定清单（禁止替换核心选型）
 
@@ -24,16 +24,16 @@ Apocalypse 管理台前端。后端仓库为 `D:\IDE\KimiProject\apocalypse`（�
 
 - 组件内**禁止写死颜色与间距像素值**（hex/rgb/oklch 字面量、`px-3.5` 之外的随意值、`style={{color:...}}`），一律走 `src/design/tokens.css` 的 CSS 变量或 Tailwind 语义类（`bg-background` `text-muted-foreground` `border-border` `bg-primary` …）。
 - 品牌色单点：只许通过 `--brand`（映射到 `primary`/`ring`）表达；accent 预设组定义在 tokens.css，新增预设只加 `[data-accent]` 组。
-- **皮肤 ↔ 品牌主色联动**（DEFINITION §2）：v4 ↔ `periwinkle`，v3 ↔ `mint`。切皮肤必切对应 accent；切这两个 accent 必切对应皮肤。其它 accent 只改数据表面，不改皮肤。默认 v4 + periwinkle，禁止默认态豆/钮分色。
-- 品牌表面（登录舞台、logo、空态、PageLoading、像素进度）尺寸与位移必须落在吉祥物原生宽度的整数倍上，见 DEFINITION §1；`PixelOrb` 合法 size 为 256/128/64/32（32 为图标态），非法值开发环境 throw。
+- 正式产品品牌主色固定为 `mint`；accent 预设只作为开发态“外观实验室”能力，不得对批准的 Mint Bonk 角色稿运行时换色。正式品牌签名与 PixelOrb 吉祥物严格分离，侧栏、页首与 favicon 使用静态签名，不把吉祥物当 logo。
+- 品牌表面（登录舞台、空态、PageLoading、像素进度）尺寸与位移必须落在 4px 整数格上，见 DEFINITION §1；`PixelOrb` 必须直接裁切 `public/brand/mint-bonk-design-sprites-v1.png` 批准状态母版，不得用 Canvas / SVG / CSS / 代码栅格重绘近似角色。只允许显示为 256/128/64/32 四档，非法值开发环境 throw。
 - 暗色是一等公民：任何视觉改动必须同时验证 `.dark`；新增颜色变量必须明暗双写。
 - 密度走 `--spacing` 缩放（`[data-density]`），禁止为密度单独写覆盖样式。
 
-## 4. 标准页面 DynaLayer 优先（下一波落地，schema 先行）
+## 4. 标准页面 DynaLayer 优先（已落地，schema 先行）
 
-- 标准 CRUD/表单/详情页**优先走 DynaLayer schema 渲染器**（下一波交付）；写新页面前先判断能否用 schema 描述，能则不手写页面组件。
+- 标准 CRUD/表单/详情页**优先走 `src/components/dyna/` 的 DynaLayer schema 渲染器**；写新页面前先判断能否用 schema 描述，能则不手写页面组件。
 - schema 先行约定：页面结构（搜索区/表格列/表单字段/操作）以 schema 为事实来源，手写页面仅保留给越出标准模式的场景。
-- `src/views/system/user/index.tsx` 是 golden sample：DynaLayer 落地时以此为视觉/交互回归对照。
+- `src/views/system/user/index.tsx` 是 DynaLayer golden sample；树形、组合页等越出标准模式的页面必须在文件头说明逃逸原因。
 
 ## 5. 动效治理
 
@@ -57,11 +57,11 @@ Apocalypse 管理台前端。后端仓库为 `D:\IDE\KimiProject\apocalypse`（�
 
 - `prefers-reduced-motion: reduce` 必须降级（tokens.css 有全局兜底；JS 侧用 motion 的 `useReducedMotion` 或等价判断）。
 - 设置面板「动画」开关（`html[data-motion='off']`）必须全局生效；任何引擎的动效组件都必须同时尊重这两个开关，参考 `components/PageTransition.tsx` 与 `effects/PixelBean/`。
-- 白名单场景：页面过渡、列表 stagger、命令面板/抽屉进出、**品牌表面**（登录舞台、空态、PageLoading、像素进度、一次性成功反馈）、**PixelOrb 吉祥物 / PixelWave 氛围**。其余场景默认不加动效；数据密集页（表格/表单正文区）禁止装饰性动效。
-- 品牌视觉体系双轨（规格事实来源 `docs/pixel-wave-spec.md`）：焦点层 **PixelOrb**（像素球体吉祥物，`src/effects/PixelOrb/`，全局唯一：正圆 SDF + 法线光照色阶量化 + 极简几何眼 + gaze 视线跟随）+ 氛围层 **PixelWave**（方形涟漪·淡流光，`src/effects/PixelWave/`，品牌背景/Loading 条带/像素进度的唯一语言：基态零渲染纯底 + 左下角方形环沿对角线走廊传导 + 方块本体随背景色（白底白块/黑底黑块）+ 固定参与率（~35%，不是每个方块）的彩色淡流光（半透软填充 + 淡彩边框）+ 程序化五彩 hue，~10fps 步进、无交互，v2.7），共享 4px 像素网格语言。禁止另起第三套品牌视觉。
+- 产品面向年轻企业团队，动效目标是鲜明、轻快、可感知；“稳重、克制、内敛”不是默认方向。性能仍要求快速：Dialog / AlertDialog / Sheet 统一由 `PixelDialogMotion` 让真实标题、正文与操作区从 100ms / 150ms / 220ms 起穿过固定八段像素波前，最晚约 720ms 完成；禁止独立轨道、端点、全表面实色遮罩或空白等待。数据密集正文不常驻装饰动画。
+- 品牌视觉体系双轨（规格事实来源 `docs/pixel-wave-spec.md`）：焦点层 **PixelOrb** 直接使用批准的 3×2 透明 Mint Bonk 状态母版（`src/effects/PixelOrb/`），固定识别特征是长软左触角、短圆右触角、梨豆形薄荷身体、白色腹斑、腮红与短手脚；氛围层 **PixelWave** 只保留默认 `flowlight` 稀疏淡流光与登录 `letterpress` 同底色连续铅字浪潮。CRUD 浮层不挂 PixelWave，也不得另建视觉 DOM；其 `PixelDialogMotion` 属于通用 UI 动效，直接裁切真实内容并同时遵守双动效开关。禁止另起第三套品牌视觉。
 - PixelOrb 状态词汇表固定为 `idle / waiting / success / error / sleeping`（loading 语义并入 waiting；`thinking` 为 2 期 Agent 界面预留、当前不实现），全站状态语义共用同一组件。
 - **PixelBean / PixelTide / RetroGrid 已弃用**：`src/effects/PixelBean/` 与 `src/effects/registry/RetroGrid/` 仅保留历史兼容，禁止新代码引用。
-- 皮肤机制：吉祥物 = 球体渲染器 + 皮肤调色板（`effects/PixelOrb/skins/`，v4 长春花蓝 / v3 薄荷青），切换走设置面板「吉祥物」能力项（store 字段 `mascotSkin`，persist；皮肤 ↔ accent 联动见 §3）。新增皮肤只允许新增 skins/ 数据文件，不动组件。
+- 角色素材机制：`public/brand/mint-bonk-design-sprites-v1.png` 是运行时唯一角色事实来源，3×2 等分、每格 512×512；上排依次 `idle / waiting / success`，下排前两格依次 `error / sleeping`，右下背面仅作设定参考。idle 的 `gaze` 只允许移动从原稿裁出的两枚眼部高光，并以原稿黑色裁片覆盖静态高光；不得代码重画眼睛或身体。历史 `skin` 与 store 字段只保留兼容，设置面板不再提供吉祥物换肤入口。
 - 颜色例外：像素调色板的颜色字面量只允许出现在 `effects/*/skins/*.ts` 数据文件中；组件其余样式仍 token-only。PixelWave 波纹允许**程序化 oklch 取色**（hue 随波相位旋转形成五彩纹路、明度随明暗主题适配，禁写死 hex 色板）；其余像素光效一律走 `--brand` 明度阶梯。
 
 ## 6. 后端契约（适配层在 `src/lib/api/`，页面不直接感知后端细节）
@@ -81,6 +81,14 @@ Apocalypse 管理台前端。后端仓库为 `D:\IDE\KimiProject\apocalypse`（�
 - 服务端数据缓存用 react-query；跨组件 UI 状态用 zustand；局部状态用 useState。禁止把服务端数据搬进 zustand。
 - **NavLink 的函数式 `className` 禁止与 `asChild`/Slot 组合**（TooltipTrigger 等）：Slot 克隆合并 props 时会把函数字符串化成源码文本注入 class，样式全废。被 Slot 包裹的 NavLink 一律用 `useLocation` 手动算 `isActive` 传静态字符串 className（范例：`components/layout/Sidebar.tsx`）。
 
+### 路由页签与菜单树
+
+- 工作台 `/dashboard` 是固定页签，不渲染关闭按钮，任何批量关闭都必须保留它。
+- 关闭当前页签必须同步路由回工作台；关闭非当前页签不得改变当前路由。批量组件统一提供关闭左侧、右侧、其他、全部，并对不可执行项禁用。
+- 页签 store 的关闭动作返回目标路由，由组件负责 `navigate`；不得只删状态而让页面停留在已关闭路由。
+- 菜单图标只能通过 `MenuIconPicker` 与 `components/layout/menu-icons.ts` 的受控映射选择，禁止自由文本造成图标丢失。
+- 父菜单使用 `MenuTreeSelect`：排除当前节点及其子树，支持搜索、展开/折叠、结果上限提示与滚动容器；禁止把膨胀后的整棵树一次性铺成普通 Select。
+
 ## 8. 设置面板：能力全集 + 下游可裁剪
 
 - 能力项登记在 `stores/settings.ts` 的 `CAPABILITY_META`，每项带 `exposed` 布尔。
@@ -94,6 +102,8 @@ pnpm install        # 安装（已含 esbuild build 许可与 shadcn CLI 的 zod
 pnpm dev            # 开发（:5173，代理 /api → :8080 并剥前缀）
 pnpm build          # tsc -b + vite build（提交前必过）
 pnpm lint           # oxlint + eslint（串行）
+pnpm test           # Vitest 一次性运行
+pnpm check          # format:check + lint + test + build（前端全量门禁）
 pnpm format         # prettier --write .（提交前必跑）
 ```
 

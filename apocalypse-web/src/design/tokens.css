@@ -51,15 +51,17 @@
   --motion-duration-exit: 120ms;
   --motion-duration-enter: 200ms;
   --motion-duration-layer: 180ms;
-  --motion-duration-content: 240ms;
   --motion-duration-standard: 180ms;
   --motion-duration-panel-exit: 160ms;
   --motion-duration-panel: 300ms;
-  --motion-duration-surface-reveal: 800ms;
-  --motion-delay-sequence: 460ms;
-  --motion-stagger-sequence: 70ms;
+  --motion-duration-dialog-reveal: 500ms;
+  --motion-dialog-surface-at: 20ms;
+  --motion-dialog-header-at: 100ms;
+  --motion-dialog-body-at: 150ms;
+  --motion-dialog-footer-at: 220ms;
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-reveal: linear;
 
   color-scheme: light;
 }
@@ -194,6 +196,93 @@ html[data-gray='on'] {
   filter: grayscale(1);
 }
 
+/* ---- Mint Bonk：批准设计稿状态帧的轻量整像素位移 ---- */
+
+@keyframes mint-bonk-idle {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes mint-bonk-waiting {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    transform: translate3d(0, -2px, 0);
+  }
+  55% {
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+@keyframes mint-bonk-success {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  42% {
+    transform: translate3d(0, -4px, 0);
+  }
+  68% {
+    transform: translate3d(0, 1px, 0);
+  }
+}
+
+@keyframes mint-bonk-error {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  28% {
+    transform: translate3d(-2px, 0, 0);
+  }
+  56% {
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+@keyframes mint-bonk-sleeping {
+  0%,
+  100% {
+    transform: translate3d(0, 1px, 0);
+  }
+  50% {
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+[data-mascot='mint-bonk'][data-motion='on'][data-state='idle'] [data-slot='mint-bonk-frame'] {
+  animation: mint-bonk-idle 2200ms ease-in-out infinite;
+}
+
+[data-mascot='mint-bonk'][data-motion='on'][data-state='waiting'] [data-slot='mint-bonk-frame'] {
+  animation: mint-bonk-waiting 920ms steps(3, end) infinite;
+}
+
+[data-mascot='mint-bonk'][data-motion='on'][data-state='success'] [data-slot='mint-bonk-frame'] {
+  animation: mint-bonk-success 760ms var(--motion-ease-enter) infinite;
+}
+
+[data-mascot='mint-bonk'][data-motion='on'][data-state='error'] [data-slot='mint-bonk-frame'] {
+  animation: mint-bonk-error 420ms steps(2, end) 2;
+}
+
+[data-mascot='mint-bonk'][data-motion='on'][data-state='sleeping'] [data-slot='mint-bonk-frame'] {
+  animation: mint-bonk-sleeping 2800ms ease-in-out infinite;
+}
+
+[data-mascot='mint-bonk'] [data-slot='mint-bonk-gaze-glint'] {
+  transform: translate3d(var(--mint-bonk-gaze-x, 0), var(--mint-bonk-gaze-y, 0), 0);
+  transition: transform 80ms linear;
+  will-change: transform;
+}
+
 /* ---- PixelWave 家族：一维像素音阶（路由 / 按钮 / 进度反馈） ---- */
 
 @keyframes pixel-scale-pulse {
@@ -262,17 +351,6 @@ html[data-gray='on'] {
   }
 }
 
-@keyframes pixel-layer-enter {
-  0% {
-    opacity: 0;
-    scale: 0.98;
-  }
-  100% {
-    opacity: 1;
-    scale: 1;
-  }
-}
-
 @keyframes pixel-layer-exit {
   0% {
     opacity: 1;
@@ -284,18 +362,6 @@ html[data-gray='on'] {
   100% {
     opacity: 0;
     scale: 0.88;
-  }
-}
-
-@keyframes pixel-surface-release {
-  0% {
-    opacity: 1;
-  }
-  58% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }
 
@@ -456,24 +522,61 @@ html[data-gray='on'] {
   isolation: isolate;
 }
 
-[data-slot='dialog-content'][data-state='open'],
-[data-slot='alert-dialog-content'][data-state='open'] {
-  animation: pixel-layer-enter var(--motion-duration-layer) var(--motion-ease-enter) both;
+[data-slot='dialog-overlay'][data-motion-preset='orchestrated'][data-state='open'],
+[data-slot='alert-dialog-overlay'][data-motion-preset='orchestrated'][data-state='open'],
+[data-slot='dialog-content'][data-motion-preset='orchestrated'][data-state='open'],
+[data-slot='alert-dialog-content'][data-motion-preset='orchestrated'][data-state='open'] {
+  animation: none;
+  opacity: 0;
+}
+
+:is(
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content']
+  )[data-motion-preset='orchestrated'][data-state='open'] {
+  transform: translateY(calc(var(--spacing) * 2)) scale(0.965);
+}
+
+:is(
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content']
+  )[data-motion-preset='orchestrated'][data-state='open']
+  [data-pixel-dialog-stage],
+:is(
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content']
+  )[data-motion-preset='orchestrated'][data-state='open']
+  [data-slot='pixel-dialog-motion']
+  > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
+  clip-path: polygon(
+    0% 0%,
+    0% 0%,
+    0% 12.5%,
+    0% 12.5%,
+    0% 25%,
+    0% 25%,
+    0% 37.5%,
+    0% 37.5%,
+    0% 50%,
+    0% 50%,
+    0% 62.5%,
+    0% 62.5%,
+    0% 75%,
+    0% 75%,
+    0% 87.5%,
+    0% 87.5%,
+    0% 100%,
+    0% 100%,
+    0% 100%
+  );
+  opacity: 0;
 }
 
 [data-slot='dialog-content'][data-state='closed'],
 [data-slot='alert-dialog-content'][data-state='closed'] {
   animation: pixel-layer-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
-}
-
-[data-slot='pixel-surface-reveal'] {
-  border-radius: inherit;
-  animation: pixel-surface-release var(--motion-duration-surface-reveal) var(--motion-ease-enter)
-    both;
-}
-
-[data-slot='pixel-surface-reveal'][data-tone='destructive'] {
-  --brand: var(--destructive);
 }
 
 body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
@@ -612,6 +715,31 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  :is(
+      [data-slot='dialog-overlay'],
+      [data-slot='alert-dialog-overlay'],
+      [data-slot='dialog-content'],
+      [data-slot='alert-dialog-content'],
+      [data-slot='sheet-content']
+    )[data-motion-preset='orchestrated'][data-state='open'],
+  :is(
+      [data-slot='dialog-content'],
+      [data-slot='alert-dialog-content'],
+      [data-slot='sheet-content']
+    )[data-motion-preset='orchestrated'][data-state='open']
+    [data-pixel-dialog-stage],
+  :is(
+      [data-slot='dialog-content'],
+      [data-slot='alert-dialog-content'],
+      [data-slot='sheet-content']
+    )[data-motion-preset='orchestrated'][data-state='open']
+    [data-slot='pixel-dialog-motion']
+    > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
+    clip-path: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
 }
 
 html[data-motion='off'] *,
@@ -620,4 +748,32 @@ html[data-motion='off'] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+}
+
+html[data-motion='off']
+  :is(
+    [data-slot='dialog-overlay'],
+    [data-slot='alert-dialog-overlay'],
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content']
+  )[data-motion-preset='orchestrated'][data-state='open'],
+html[data-motion='off']
+  :is(
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content']
+  )[data-motion-preset='orchestrated'][data-state='open']
+  [data-pixel-dialog-stage],
+html[data-motion='off']
+  :is(
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content']
+  )[data-motion-preset='orchestrated'][data-state='open']
+  [data-slot='pixel-dialog-motion']
+  > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
+  clip-path: none !important;
+  transform: none !important;
+  opacity: 1 !important;
 }

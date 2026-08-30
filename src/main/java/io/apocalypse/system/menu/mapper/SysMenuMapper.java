@@ -29,8 +29,11 @@ public interface SysMenuMapper extends BaseMapper<SysMenuEntity> {
       """
       SELECT DISTINCT m.* FROM sys_menu m
       JOIN sys_role_menu rm ON m.id = rm.menu_id
+      JOIN sys_role r ON rm.role_id = r.id
       JOIN sys_user_role ur ON rm.role_id = ur.role_id
-      WHERE ur.user_id = #{userId} AND m.deleted = 0 AND m.status = 1
+      WHERE ur.user_id = #{userId}
+        AND r.deleted = 0 AND r.status = 1
+        AND m.deleted = 0 AND m.status = 1 AND m.visible = 1
       ORDER BY m.sort
       """)
   List<SysMenuEntity> selectByUserId(@Param("userId") Long userId);
@@ -40,8 +43,11 @@ public interface SysMenuMapper extends BaseMapper<SysMenuEntity> {
       """
       SELECT DISTINCT m.perms FROM sys_menu m
       JOIN sys_role_menu rm ON m.id = rm.menu_id
+      JOIN sys_role r ON rm.role_id = r.id
       JOIN sys_user_role ur ON rm.role_id = ur.role_id
-      WHERE ur.user_id = #{userId} AND m.deleted = 0 AND m.status = 1
+      WHERE ur.user_id = #{userId}
+        AND r.deleted = 0 AND r.status = 1
+        AND m.deleted = 0 AND m.status = 1
         AND m.perms IS NOT NULL AND m.perms <> ''
       """)
   List<String> selectPermsByUserId(@Param("userId") Long userId);

@@ -1,5 +1,10 @@
 package io.apocalypse;
 
+import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
+import io.apocalypse.system.user.entity.SysUserEntity;
+import io.apocalypse.system.user.mapper.SysUserMapper;
+
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -9,6 +14,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpMethod;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import tools.jackson.databind.JsonNode;
 
@@ -17,9 +23,11 @@ class UserCrudIT extends AbstractIntegrationTest {
 
   @Autowired private CacheManager cacheManager;
 
+  @Autowired private SysUserMapper sysUserMapper;
+
   @Test
   void userCrudAndCacheLifecycle() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     // 创建：响应中装箱 Long 主键应序列化为 String（JacksonConfig 生效验证）
     JsonNode created =
@@ -52,5 +60,64 @@ class UserCrudIT extends AbstractIntegrationTest {
     deleteForData("/system/users/" + userId, token);
     JsonNode afterDelete = exchangeRaw("/system/users/" + userId, HttpMethod.GET, null, token);
     assertThat(afterDelete.get("code").asInt()).isEqualTo(40400);
+  }
+
+  @Test
+  void sameUsernameCanBeDeletedAndRecreatedRepeatedly() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    String username = "repeat_delete_user";
+
+    for (int round = 0; round < 3; round++) {
+      JsonNode created =
+          postForData(
+              "/system/users",
+              Map.of("username", username, "password", "Repeat12345", "nickname", "重复重建"),
+              token);
+      deleteForData("/system/users/" + created.get("id").asText(), token);
+    }
+
+    Integer tombstones =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM sys_user WHERE username = ? AND deleted = 1",
+            Integer.class,
+            username);
+    assertThat(tombstones).isEqualTo(3);
+  }
+
+  @Test
+  void pageSizeAboveGlobalLimitReturnsParameterError() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+
+    JsonNode body = exchangeRaw("/system/users/page?page=1&size=201", HttpMethod.GET, null, token);
+
+    assertThat(body.get("code").asInt()).isEqualTo(40000);
+  }
+
+  @Test
+  void staleOptimisticLockUpdateReturnsConflictInsteadOfFalseSuccess() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    JsonNode created =
+        postForData(
+            "/system/users",
+            Map.of(
+                "username", "optimistic_lock_user",
+                "password", "Optimistic12345",
+                "nickname", "乐观锁测试"),
+            token);
+    long userId = created.get("id").asLong();
+
+    SysUserEntity winner = sysUserMapper.selectById(userId);
+    SysUserEntity stale = sysUserMapper.selectById(userId);
+    winner.setNickname("先提交的更新");
+    stale.setNickname("过期的更新");
+
+    assertThat(sysUserMapper.updateById(winner)).isEqualTo(1);
+    int staleAffectedRows = sysUserMapper.updateById(stale);
+    assertThat(staleAffectedRows).isZero();
+    assertThatThrownBy(() -> ConcurrencyGuard.requireSingleRow(staleAffectedRows))
+        .isInstanceOfSatisfying(
+            BizException.class, exception -> assertThat(exception.getCode()).isEqualTo(40900));
+
+    deleteForData("/system/users/" + userId, token);
   }
 }

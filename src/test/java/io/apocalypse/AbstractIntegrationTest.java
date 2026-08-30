@@ -32,6 +32,8 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureTestRestTemplate
 public abstract class AbstractIntegrationTest {
 
+  protected static final String ADMIN_PASSWORD = "TestBootstrap2026";
+
   @ServiceConnection
   static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.6-alpine");
 
@@ -50,7 +52,7 @@ public abstract class AbstractIntegrationTest {
 
   @Autowired protected ObjectMapper objectMapper;
 
-  /** 登录取 token（种子账号：admin/admin123）。 */
+  /** 登录取 token（测试 profile 通过一次性 bootstrap 密码启用 admin）。 */
   protected String loginAndGetToken(String username, String password) {
     JsonNode body =
         exchangeRaw(

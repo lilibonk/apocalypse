@@ -8,6 +8,9 @@ import io.apocalypse.system.dict.dto.response.DictDataResp;
 import io.apocalypse.system.dict.dto.response.DictTypeResp;
 import io.apocalypse.system.dict.service.DictService;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 /** 字典管理端点。按 V3 菜单种子 perms 鉴权（{@code system:dict:*}），写操作落操作日志。 */
+@Validated
 @RestController
 @RequestMapping("/system/dict")
 @RequiredArgsConstructor
@@ -36,8 +40,11 @@ public class DictController {
   @GetMapping("/types/page")
   @PreAuthorize("hasAuthority('system:dict:list')")
   public PageResult<DictTypeResp> pageTypes(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size,
       @RequestParam(required = false) String keyword) {
     return dictService.pageTypes(page, size, keyword);
   }
@@ -70,8 +77,11 @@ public class DictController {
   @GetMapping("/data/page")
   @PreAuthorize("hasAuthority('system:dict:list')")
   public PageResult<DictDataResp> pageData(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size,
       @RequestParam(required = false) String dictType) {
     return dictService.pageData(page, size, dictType);
   }

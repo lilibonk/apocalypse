@@ -28,6 +28,15 @@ public final class SecurityUtils {
     return Optional.ofNullable(authentication.getName());
   }
 
+  /** 当前身份是否拥有指定权限。 */
+  public static boolean hasAuthority(String authority) {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null
+        && authentication.isAuthenticated()
+        && authentication.getAuthorities().stream()
+            .anyMatch(granted -> authority.equals(granted.getAuthority()));
+  }
+
   private static Optional<Jwt> currentJwt() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {

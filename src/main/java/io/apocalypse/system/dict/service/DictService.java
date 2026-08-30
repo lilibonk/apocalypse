@@ -1,6 +1,7 @@
 package io.apocalypse.system.dict.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.system.dict.dto.request.DictDataSaveReq;
@@ -70,7 +71,7 @@ public class DictService {
       sysDictDataMapper.updateTypeByType(entity.getDictType(), req.dictType());
     }
     applyTypeReq(entity, req);
-    sysDictTypeMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysDictTypeMapper.updateById(entity));
   }
 
   /** 删除字典类型（逻辑删，级联逻辑删数据行；缓存 key 不可枚举，整体失效）。 */
@@ -79,7 +80,7 @@ public class DictService {
   public void deleteType(Long id) {
     SysDictTypeEntity entity = requireTypeById(id);
     sysDictDataMapper.deleteByType(entity.getDictType());
-    sysDictTypeMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysDictTypeMapper.deleteById(id));
   }
 
   /** 字典数据分页。 */
@@ -104,7 +105,7 @@ public class DictService {
   public void updateData(Long id, DictDataSaveReq req) {
     SysDictDataEntity entity = requireDataById(id);
     applyDataReq(entity, req);
-    sysDictDataMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysDictDataMapper.updateById(entity));
   }
 
   /** 删除字典数据（逻辑删）；行的类型不在入参中，简单起见整体失效。 */
@@ -112,7 +113,7 @@ public class DictService {
   @CacheEvict(cacheNames = "dict", allEntries = true)
   public void deleteData(Long id) {
     requireDataById(id);
-    sysDictDataMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysDictDataMapper.deleteById(id));
   }
 
   private SysDictTypeEntity requireTypeById(Long id) {

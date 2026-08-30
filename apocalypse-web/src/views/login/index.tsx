@@ -6,16 +6,16 @@
  *   固定 32px 完整网格 + 随机角点欧氏波前 + rAF 连续指数长尾高度场；顶面与背景同色
  *   （白底白块 / 黑底黑块），灰阶侧壁与彩色剪影流光只表达抬升深度；
  *   组件恒 pointer-events-none、无任何鼠标涟漪 / 点击脉冲（v2.3 移除交互）；
- * - PixelOrb 256 主视觉（左舞台 z-10）：高密度像素蝾螈，双瞳实时跟随鼠标；
- *   身体使用固定母版避免轮廓跳帧，状态随登录生命周期联动：
+ * - PixelOrb 256 主视觉（左舞台 z-10）：直接裁切批准设计稿的透明状态母版；idle 只移动原稿眼部高光跟随指针，不以代码重绘角色；
+ *   五张角色稿随登录生命周期联动：
  *   idle → waiting → success（短暂停留后跳转）/ error（稍后回 idle）；
- * - 彩蛋：聚焦密码框时蝾螈进入 sleeping（闭眼回避），失焦恢复；
+ * - 彩蛋：聚焦密码框时 Mint Bonk 进入 sleeping（闭眼回避），失焦恢复；
  * - BlurText 逐字揭示 tagline；底部等宽字体技术栈 meta 行。
  *
  * 表单面板（右，z-10）：排版驱动层级，无卡片套卡片；底部内嵌语言切换（与设置面板同源）。
  *
  * 降级（prefers-reduced-motion 或设置「动画」关闭）：PixelWave 零渲染纯背景、
- * BlurText 直出、PixelOrb 静态帧零视线，布局与功能不变（宪法 §5 双开关）。
+ * BlurText 直出、PixelOrb 保持所选设计稿静态帧且视线回中，布局与功能不变（宪法 §5 双开关）。
  */
 
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -57,7 +57,7 @@ export default function LoginPage() {
   const reducedMotion = useReducedMotion()
   const [submitting, setSubmitting] = useState(false)
   const [orbState, setOrbState] = useState<OrbState>('idle')
-  /** 密码框聚焦 → 球体闭眼回避（peek-a-boo）；仅覆盖 idle 态，不盖 waiting/success/error。 */
+  /** 密码框聚焦 → 向导闭眼回避（peek-a-boo）；仅覆盖 idle 态，不盖 waiting/success/error。 */
   const [passwordFocused, setPasswordFocused] = useState(false)
   const displayState: OrbState = passwordFocused && orbState === 'idle' ? 'sleeping' : orbState
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative grid min-h-svh bg-background lg:grid-cols-[3fr_2fr]">
-      {/* 品牌舞台（≥lg）：信号视窗球体 + 编辑式品牌排版 */}
+      {/* 品牌舞台（≥lg）：Mint Bonk 像素向导 + 编辑式品牌排版 */}
       <section className="relative hidden overflow-hidden border-r border-border bg-background lg:flex lg:flex-col lg:justify-between lg:p-12">
         <PixelWave
           appearance="letterpress"

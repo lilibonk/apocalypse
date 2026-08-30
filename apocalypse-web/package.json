@@ -2,11 +2,14 @@
   "name": "apocalypse-web",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@11.19.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint && eslint .",
+    "test": "vitest run",
+    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview"

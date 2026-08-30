@@ -13,6 +13,7 @@ import io.apocalypse.system.api.UserSummary;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,7 +44,12 @@ public class OrderApplicationService implements OrderApi {
     // 事务内发布：Modulith 将事件写入 event_publication，提交后由 user 模块异步消费
     eventPublisher.publishEvent(
         new OrderCreatedEvent(
-            saved.getId(), saved.getOrderNo(), saved.getUserId(), saved.getAmount()));
+            UUID.randomUUID(),
+            LocalDateTime.now(),
+            saved.getId(),
+            saved.getOrderNo(),
+            saved.getUserId(),
+            saved.getAmount()));
     log.info("订单创建成功: orderNo={}, userId={}", saved.getOrderNo(), buyer.id());
     return toView(saved);
   }
@@ -56,9 +62,34 @@ public class OrderApplicationService implements OrderApi {
         .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "订单不存在"));
   }
 
+  /** HTTP 入口读取：无全局读取权限时强制校验订单所有权。 */
+  public OrderView getByIdForUser(Long id, Long userId, boolean readAny) {
+    Order order = requireById(id);
+    if (!readAny && !order.getUserId().equals(userId)) {
+      // 不泄漏订单是否存在，跨用户访问统一按资源不存在处理。
+      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "订单不存在");
+    }
+    return toView(order);
+  }
+
   /** 分页查询。 */
   public PageResult<OrderView> page(int page, int size) {
     return orderRepository.page(page, size).map(OrderApplicationService::toView);
+  }
+
+  /** HTTP 入口分页：管理员查全部，普通用户只查自己的订单。 */
+  public PageResult<OrderView> pageForUser(int page, int size, Long userId, boolean readAny) {
+    PageResult<Order> result =
+        readAny
+            ? orderRepository.page(page, size)
+            : orderRepository.pageByUserId(userId, page, size);
+    return result.map(OrderApplicationService::toView);
+  }
+
+  private Order requireById(Long id) {
+    return orderRepository
+        .findById(id)
+        .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "订单不存在"));
   }
 
   private static OrderView toView(Order order) {

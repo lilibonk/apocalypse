@@ -56,8 +56,8 @@ export default function MenuPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  // 折叠集合（默认全部展开）；formPayload 非空即打开新增/编辑对话框
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // 展开集合（默认空 = 只显示根节点）；formPayload 非空即打开新增/编辑对话框
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [formPayload, setFormPayload] = useState<MenuFormPayload | null>(null)
   const [deleting, setDeleting] = useState<MenuNode | null>(null)
   const [query, setQuery] = useState('')
@@ -69,6 +69,14 @@ export default function MenuPage() {
   })
   const tree = useMemo(() => (data ?? []).map(normalizeMenuTreeNode), [data])
   const allNodes = useMemo(() => flattenTree(tree), [tree])
+  const expandableIds = useMemo(
+    () => allNodes.filter((node) => node.children.length > 0).map((node) => node.id),
+    [allNodes],
+  )
+  const collapsed = useMemo(
+    () => new Set(expandableIds.filter((id) => !expanded.has(id))),
+    [expandableIds, expanded],
+  )
   const filteredTree = useMemo(() => filterTree(tree, query, typeFilter), [tree, query, typeFilter])
   const filteredNodes = useMemo(() => flattenTree(filteredTree), [filteredTree])
   const filtering = query.trim().length > 0 || typeFilter !== 'ALL'
@@ -85,7 +93,7 @@ export default function MenuPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'menus'] })
 
   const toggle = (id: string) =>
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
@@ -95,10 +103,7 @@ export default function MenuPage() {
       return next
     })
 
-  const collapseAll = () =>
-    setCollapsed(
-      new Set(allNodes.filter((node) => node.children.length > 0).map((node) => node.id)),
-    )
+  const collapseAll = () => setExpanded(new Set())
 
   return (
     <div className="w-full space-y-4 p-4 sm:p-6">
@@ -178,7 +183,7 @@ export default function MenuPage() {
               variant="ghost"
               size="sm"
               disabled={filtering}
-              onClick={() => setCollapsed(new Set())}
+              onClick={() => setExpanded(new Set(expandableIds))}
             >
               <ChevronsUpDown className="size-4" />
               {t('common.全部展开', { defaultValue: '全部展开' })}

@@ -1,0 +1,21 @@
+# 自动化测试专用 dev 覆盖；仅进入 test classpath，不是可部署配置。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+apocalypse:
+  security:
+    jwt:
+      secret: apocalypse-test-only-jwt-secret-0123456789abcdef
+    bootstrap:
+      admin-password: TestBootstrap2026
+    cors:
+      allowed-origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+    clients:
+      - client-id: management-test-client
+        client-secret: management-test-secret
+        scopes: [management:read]

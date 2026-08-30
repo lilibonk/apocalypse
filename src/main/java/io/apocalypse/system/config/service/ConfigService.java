@@ -1,6 +1,7 @@
 package io.apocalypse.system.config.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.system.config.dto.request.ConfigSaveReq;
@@ -98,7 +99,7 @@ public class ConfigService {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "参数键已存在");
     }
     applyReq(entity, req);
-    sysConfigMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysConfigMapper.updateById(entity));
   }
 
   /** 删除参数（逻辑删）；key 不在入参中，简单起见整体失效。 */
@@ -106,7 +107,7 @@ public class ConfigService {
   @CacheEvict(cacheNames = "config", allEntries = true)
   public void delete(Long id) {
     requireById(id);
-    sysConfigMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysConfigMapper.deleteById(id));
   }
 
   private SysConfigEntity requireById(Long id) {

@@ -9,6 +9,11 @@
 <module name="Checker">
 
   <module name="TreeWalker">
+    <!-- Lombok 白名单：只允许 Getter/Setter/RequiredArgsConstructor/Slf4j。 -->
+    <module name="RegexpSinglelineJava">
+      <property name="format" value="^import lombok\.(?!Getter;|Setter;|RequiredArgsConstructor;|extern\.slf4j\.Slf4j;).+"/>
+      <property name="message" value="Lombok 仅允许 @Getter、@Setter、@RequiredArgsConstructor、@Slf4j"/>
+    </module>
     <!-- 包名与结构 -->
     <module name="OuterTypeFilename"/>
     <module name="PackageDeclaration"/>

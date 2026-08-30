@@ -19,6 +19,9 @@ public class SecurityProperties {
 
   private Jwt jwt = new Jwt();
 
+  /** 首次启动管理员初始化。 */
+  private Bootstrap bootstrap = new Bootstrap();
+
   /** 服务账号（client_credentials 风格，2 期外部 Agent 接入使用）。 */
   private List<Client> clients = new ArrayList<>();
 
@@ -35,11 +38,25 @@ public class SecurityProperties {
     /** 签发方。 */
     private String issuer = "apocalypse";
 
+    /** 目标 API audience。 */
+    private String audience = "apocalypse-api";
+
     /** 访问令牌有效期（分钟）。 */
     private long ttlMinutes = 120;
 
     /** 刷新令牌有效期（天），默认 7 天。 */
     private long refreshTtlDays = 7;
+  }
+
+  @Getter
+  @Setter
+  public static class Bootstrap {
+
+    /** V1 预置但默认禁用的管理员用户名。 */
+    private String adminUsername = "admin";
+
+    /** 仅首次启用 bootstrap 管理员时使用；空值表示不启用。 */
+    private String adminPassword;
   }
 
   @Getter

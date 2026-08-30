@@ -1,7 +1,7 @@
 /**
  * 用户设置只暴露主题、密度与语言。
  *
- * 布局、强调色、吉祥物皮肤等脚手架验证能力仅在开发环境的“外观实验室”出现，
+ * 布局、强调色等脚手架验证能力仅在开发环境的“外观实验室”出现，
  * 不再把实现细节暴露给正式产品用户。错误的全局反色色弱模式已移除。
  */
 
@@ -20,7 +20,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { ORB_SKINS, PixelOrb } from '@/effects/PixelOrb'
 import { PixelScale } from '@/effects/PixelWave'
 import { cn } from '@/lib/utils'
 import {
@@ -201,28 +200,6 @@ export function SettingsDrawer({
                                   'ring-2 ring-ring ring-offset-2 ring-offset-background',
                               )}
                             />
-                          ))}
-                        </div>
-                      </Section>
-
-                      <Section title={ct('吉祥物')}>
-                        <div className="flex flex-wrap gap-2">
-                          {Object.values(ORB_SKINS).map((skin) => (
-                            <button
-                              key={skin.id}
-                              type="button"
-                              aria-label={t('common.skinAria', { label: ct(skin.label) })}
-                              onClick={() => store.setMascotSkin(skin.id)}
-                              className={cn(
-                                'flex flex-col items-center gap-1 rounded-md px-3 py-2 text-xs transition-colors',
-                                settings.mascotSkin === skin.id
-                                  ? 'ring-2 ring-ring ring-offset-2 ring-offset-background'
-                                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                              )}
-                            >
-                              <PixelOrb skin={skin.id} size={64} state="idle" />
-                              {ct(skin.label)}
-                            </button>
                           ))}
                         </div>
                       </Section>

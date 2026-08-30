@@ -7,6 +7,9 @@ import io.apocalypse.system.role.dto.response.RoleResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.service.RoleService;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +30,7 @@ import lombok.RequiredArgsConstructor;
  * 角色管理端点。 写操作按 V4 种子 perms 鉴权（{@code system:role:add/edit/remove}，授权动作归 edit），读操作 {@code
  * system:role:list}。
  */
+@Validated
 @RestController
 @RequestMapping("/system/roles")
 @RequiredArgsConstructor
@@ -38,8 +42,11 @@ public class RoleController {
   @GetMapping("/page")
   @PreAuthorize("hasAuthority('system:role:list')")
   public PageResult<RoleResp> page(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size,
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size,
       @RequestParam(required = false) String keyword) {
     return roleService.page(page, size, keyword);
   }
@@ -88,8 +95,11 @@ public class RoleController {
   @PreAuthorize("hasAuthority('system:role:list')")
   public PageResult<RoleUserResp> pageUsers(
       @PathVariable Long id,
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(defaultValue = "10") int size) {
+      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") int page,
+      @RequestParam(defaultValue = "10")
+          @Min(value = 1, message = "每页条数必须大于 0")
+          @Max(value = 200, message = "每页条数不能超过 200")
+          int size) {
     return roleService.pageUsers(id, page, size);
   }
 

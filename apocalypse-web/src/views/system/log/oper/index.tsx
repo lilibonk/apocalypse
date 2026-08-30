@@ -10,7 +10,6 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -134,38 +133,32 @@ export default function OperLogPage() {
 
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent className="max-w-2xl">
-          <MotionSequence className="contents">
-            <MotionSequenceItem>
-              <DialogHeader>
-                <DialogTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</DialogTitle>
-                <DialogDescription>
-                  {detail ? `${detail.title ?? '-'} · ${detail.operName ?? '-'}` : ''}
-                </DialogDescription>
-              </DialogHeader>
-            </MotionSequenceItem>
-            {detail && (
-              <MotionSequenceItem>
-                <div className="space-y-3">
-                  <DetailBlock
-                    label={t('common.请求方法', { defaultValue: '请求方法' })}
-                    value={detail.method}
-                  />
-                  <DetailBlock
-                    label={t('common.请求参数', { defaultValue: '请求参数' })}
-                    value={detail.operParam}
-                  />
-                  <DetailBlock
-                    label={t('common.返回结果', { defaultValue: '返回结果' })}
-                    value={detail.operResult}
-                  />
-                  <DetailBlock
-                    label={t('common.异常信息', { defaultValue: '异常信息' })}
-                    value={detail.errorMsg}
-                  />
-                </div>
-              </MotionSequenceItem>
-            )}
-          </MotionSequence>
+          <DialogHeader>
+            <DialogTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</DialogTitle>
+            <DialogDescription>
+              {detail ? `${detail.title ?? '-'} · ${detail.operName ?? '-'}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3">
+              <DetailBlock
+                label={t('common.请求方法', { defaultValue: '请求方法' })}
+                value={detail.method}
+              />
+              <DetailBlock
+                label={t('common.请求参数', { defaultValue: '请求参数' })}
+                value={detail.operParam}
+              />
+              <DetailBlock
+                label={t('common.返回结果', { defaultValue: '返回结果' })}
+                value={detail.operResult}
+              />
+              <DetailBlock
+                label={t('common.异常信息', { defaultValue: '异常信息' })}
+                value={detail.errorMsg}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

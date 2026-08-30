@@ -46,6 +46,11 @@ export function refreshToken(refreshTokenValue: string): Promise<TokenPair> {
   }).then(normalizeTokenPair)
 }
 
+/** 主动注销：服务端持久化撤销当前用户全部会话。 */
+export function logout(): Promise<void> {
+  return request<void>('/auth/logout', { method: 'POST' })
+}
+
 /** 当前登录用户视图（用户/角色/权限/菜单树）。 */
 export function fetchCurrentUser(): Promise<CurrentUser> {
   return request<CurrentUser>('/system/users/me')

@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -200,226 +199,222 @@ export function MenuFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>
-                {isEdit
-                  ? t('common.编辑菜单', { defaultValue: '编辑菜单' })
-                  : t('common.新增菜单', { defaultValue: '新增菜单' })}
-              </DialogTitle>
-              <DialogDescription>
-                {isEdit
-                  ? t('common.修改「{{name}}」的配置，保存后立即影响全站路由与权限', {
-                      name: payload.node?.menuName ?? '',
-                      defaultValue: '修改「{{name}}」的配置，保存后立即影响全站路由与权限',
-                    })
-                  : parentName
-                    ? t('common.在「{{name}}」下新增菜单', {
-                        name: parentName,
-                        defaultValue: '在「{{name}}」下新增菜单',
-                      })
-                    : t('common.创建新的系统菜单', { defaultValue: '创建新的系统菜单' })}
-              </DialogDescription>
-            </DialogHeader>
-          </MotionSequenceItem>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
-              className="grid grid-cols-2 gap-4"
-            >
-              <MotionSequenceItem className="col-span-2 grid grid-cols-2 gap-4">
+        <DialogHeader data-pixel-dialog-stage="header">
+          <DialogTitle>
+            {isEdit
+              ? t('common.编辑菜单', { defaultValue: '编辑菜单' })
+              : t('common.新增菜单', { defaultValue: '新增菜单' })}
+          </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? t('common.修改「{{name}}」的配置，保存后立即影响全站路由与权限', {
+                  name: payload.node?.menuName ?? '',
+                  defaultValue: '修改「{{name}}」的配置，保存后立即影响全站路由与权限',
+                })
+              : parentName
+                ? t('common.在「{{name}}」下新增菜单', {
+                    name: parentName,
+                    defaultValue: '在「{{name}}」下新增菜单',
+                  })
+                : t('common.创建新的系统菜单', { defaultValue: '创建新的系统菜单' })}
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
+            className="grid grid-cols-2 gap-4"
+          >
+            <div data-pixel-dialog-stage="body" className="col-span-2 grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="parentId"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>{t('common.上级菜单', { defaultValue: '上级菜单' })}</FormLabel>
+                    <FormControl>
+                      <MenuTreeSelect
+                        tree={tree}
+                        value={field.value}
+                        onChange={field.onChange}
+                        excluded={excluded}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="menuName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.菜单名称', { defaultValue: '菜单名称' })}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sort"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('common.排序', { defaultValue: '排序' })}</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={0} max={99999} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="menuType"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>{t('common.菜单类型', { defaultValue: '菜单类型' })}</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        className="flex items-center gap-4"
+                      >
+                        {MENU_TYPE_OPTIONS.map((option) => (
+                          <FormItem key={option.value} className="flex items-center gap-1.5">
+                            <FormControl>
+                              <RadioGroupItem value={option.value} />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {t(`dyna.${option.label}`, { defaultValue: option.label })}
+                            </FormLabel>
+                          </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {menuType !== 'F' && (
                 <FormField
                   control={form.control}
-                  name="parentId"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel>{t('common.上级菜单', { defaultValue: '上级菜单' })}</FormLabel>
-                      <FormControl>
-                        <MenuTreeSelect
-                          tree={tree}
-                          value={field.value}
-                          onChange={field.onChange}
-                          excluded={excluded}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="menuName"
+                  name="path"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('common.菜单名称', { defaultValue: '菜单名称' })}</FormLabel>
+                      <FormLabel>{t('common.路由地址', { defaultValue: '路由地址' })}</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input placeholder="system" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+              )}
+              {menuType === 'M' && (
                 <FormField
                   control={form.control}
-                  name="sort"
+                  name="component"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('common.排序', { defaultValue: '排序' })}</FormLabel>
+                      <FormLabel>{t('common.组件路径', { defaultValue: '组件路径' })}</FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} max={99999} {...field} />
+                        <Input placeholder="system/menu/index" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+              )}
+              {menuType !== 'C' && (
                 <FormField
                   control={form.control}
-                  name="menuType"
+                  name="perms"
                   render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel>{t('common.菜单类型', { defaultValue: '菜单类型' })}</FormLabel>
+                    <FormItem>
+                      <FormLabel>{t('common.权限标识', { defaultValue: '权限标识' })}</FormLabel>
                       <FormControl>
-                        <RadioGroup
-                          value={field.value}
-                          onValueChange={field.onChange}
-                          className="flex items-center gap-4"
-                        >
-                          {MENU_TYPE_OPTIONS.map((option) => (
-                            <FormItem key={option.value} className="flex items-center gap-1.5">
-                              <FormControl>
-                                <RadioGroupItem value={option.value} />
-                              </FormControl>
-                              <FormLabel className="font-normal">
-                                {t(`dyna.${option.label}`, { defaultValue: option.label })}
-                              </FormLabel>
-                            </FormItem>
-                          ))}
-                        </RadioGroup>
+                        <Input placeholder="system:menu:list" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                {menuType !== 'F' && (
-                  <FormField
-                    control={form.control}
-                    name="path"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.路由地址', { defaultValue: '路由地址' })}</FormLabel>
-                        <FormControl>
-                          <Input placeholder="system" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {menuType === 'M' && (
-                  <FormField
-                    control={form.control}
-                    name="component"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.组件路径', { defaultValue: '组件路径' })}</FormLabel>
-                        <FormControl>
-                          <Input placeholder="system/menu/index" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {menuType !== 'C' && (
-                  <FormField
-                    control={form.control}
-                    name="perms"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.权限标识', { defaultValue: '权限标识' })}</FormLabel>
-                        <FormControl>
-                          <Input placeholder="system:menu:list" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {menuType !== 'F' && (
-                  <FormField
-                    control={form.control}
-                    name="icon"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common.图标', { defaultValue: '图标' })}</FormLabel>
-                        <FormControl>
-                          <MenuIconPicker value={field.value} onChange={field.onChange} />
-                        </FormControl>
-                        <FormDescription>
-                          {t('common.选择侧栏及顶部导航使用的图标', {
-                            defaultValue: '选择侧栏及顶部导航使用的图标',
-                          })}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+              )}
+              {menuType !== 'F' && (
                 <FormField
                   control={form.control}
-                  name="visible"
+                  name="icon"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                      <FormLabel>{t('common.是否显示', { defaultValue: '是否显示' })}</FormLabel>
+                    <FormItem>
+                      <FormLabel>{t('common.图标', { defaultValue: '图标' })}</FormLabel>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <MenuIconPicker value={field.value} onChange={field.onChange} />
                       </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                      <FormLabel>{t('common.状态', { defaultValue: '状态' })}</FormLabel>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="remark"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel>{t('common.备注', { defaultValue: '备注' })}</FormLabel>
-                      <FormControl>
-                        <Textarea rows={2} {...field} />
-                      </FormControl>
+                      <FormDescription>
+                        {t('common.选择侧栏及顶部导航使用的图标', {
+                          defaultValue: '选择侧栏及顶部导航使用的图标',
+                        })}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </MotionSequenceItem>
-              <MotionSequenceItem className="col-span-2">
-                <DialogFooter>
-                  <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                    {t('common.取消', { defaultValue: '取消' })}
-                  </Button>
-                  <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending && <PixelScale variant="inline" tone="current" />}
-                    {saveMutation.isPending
-                      ? t('common.保存中…', { defaultValue: '保存中…' })
-                      : t('common.保存', { defaultValue: '保存' })}
-                  </Button>
-                </DialogFooter>
-              </MotionSequenceItem>
-            </form>
-          </Form>
-        </MotionSequence>
+              )}
+              <FormField
+                control={form.control}
+                name="visible"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                    <FormLabel>{t('common.是否显示', { defaultValue: '是否显示' })}</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                    <FormLabel>{t('common.状态', { defaultValue: '状态' })}</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="remark"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>{t('common.备注', { defaultValue: '备注' })}</FormLabel>
+                    <FormControl>
+                      <Textarea rows={2} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div data-pixel-dialog-stage="footer" className="col-span-2">
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  {t('common.取消', { defaultValue: '取消' })}
+                </Button>
+                <Button type="submit" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending && <PixelScale variant="inline" tone="current" />}
+                  {saveMutation.isPending
+                    ? t('common.保存中…', { defaultValue: '保存中…' })
+                    : t('common.保存', { defaultValue: '保存' })}
+                </Button>
+              </DialogFooter>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )

@@ -20,6 +20,7 @@ public enum ErrorCode {
   UNAUTHORIZED(40100, "未认证或凭证无效"),
   FORBIDDEN(40300, "无访问权限"),
   NOT_FOUND(40400, "资源不存在"),
+  CONFLICT(40900, "数据已被其他操作修改，请刷新后重试"),
   TOO_MANY_REQUESTS(42900, "请求过于频繁"),
   ACCOUNT_LOCKED(42901, "失败次数过多，账号已临时锁定"),
   SYSTEM_ERROR(50000, "系统内部错误");

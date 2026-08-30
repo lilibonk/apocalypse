@@ -52,7 +52,7 @@ class RateLimitIT extends AbstractIntegrationTest {
 
   @Test
   void thirdLoginWithinWindowReturns42900() {
-    Map<String, String> loginBody = Map.of("username", "admin", "password", "admin123");
+    Map<String, String> loginBody = Map.of("username", "admin", "password", ADMIN_PASSWORD);
     assertThat(exchangeRaw("/auth/login", HttpMethod.POST, loginBody, null).get("code").asInt())
         .isEqualTo(0);
     assertThat(exchangeRaw("/auth/login", HttpMethod.POST, loginBody, null).get("code").asInt())

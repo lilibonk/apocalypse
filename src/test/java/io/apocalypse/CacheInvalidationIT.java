@@ -36,19 +36,37 @@ class CacheInvalidationIT extends AbstractIntegrationTest {
   void remoteInvalidateMessageEvictsLocalL1() {
     Cache cache = cacheManager.getCache("it-cache");
     assertThat(cache).isNotNull();
-    // L1/L2 都写入 v1
+    // L1/L2 都写入 v2
     cache.put("k1", "v1");
     // 模拟另一实例把 L2 直接改成 v2（绕过本实例 L1）
-    redisTemplate.opsForValue().set("apoc:v1:it-cache:k1", "v2");
+    redisTemplate.opsForValue().set("apoc:v2:it-cache:k1", "v2");
     // 本实例读到的是 L1 旧值
     assertThat(cache.get("k1", String.class)).isEqualTo("v1");
     // 通过真实频道发布一条来自其他实例的失效消息
+    stringRedisTemplate.opsForValue().set("apoc:cache:generation:it-cache", "1");
     stringRedisTemplate.convertAndSend(
         CacheInvalidateMessage.CHANNEL,
         objectMapper.writeValueAsString(
-            new CacheInvalidateMessage("it-cache", "k1", "other-instance")));
+            new CacheInvalidateMessage("it-cache", "k1", "other-instance", 1)));
     // L1 被清后，读取落到 L2 的 v2
     await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(() -> assertThat(cache.get("k1", String.class)).isEqualTo("v2"));
+  }
+
+  @Test
+  void generationCheckRepairsMissedPubSubInvalidation() {
+    Cache cache = cacheManager.getCache("it-cache-missed-message");
+    assertThat(cache).isNotNull();
+    cache.put("k1", "v1");
+    assertThat(cache.get("k1", String.class)).isEqualTo("v1");
+
+    // 模拟实例离线期间错过 Pub/Sub：只更新 L2 与代数，不发送消息。
+    redisTemplate.opsForValue().set("apoc:v2:it-cache-missed-message:k1", "v2");
+    stringRedisTemplate.opsForValue().increment("apoc:cache:generation:it-cache-missed-message");
+
+    await()
+        .pollDelay(Duration.ofSeconds(1))
         .atMost(Duration.ofSeconds(5))
         .untilAsserted(() -> assertThat(cache.get("k1", String.class)).isEqualTo("v2"));
   }

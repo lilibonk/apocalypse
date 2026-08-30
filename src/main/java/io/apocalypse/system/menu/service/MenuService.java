@@ -1,13 +1,16 @@
 package io.apocalypse.system.menu.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
+import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.menu.dto.request.MenuSaveReq;
 import io.apocalypse.system.menu.dto.response.MenuTreeNode;
 import io.apocalypse.system.menu.entity.SysMenuEntity;
 import io.apocalypse.system.menu.mapper.SysMenuMapper;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +30,8 @@ public class MenuService {
 
   private final SysMenuMapper sysMenuMapper;
 
+  private final TokenVersionStore tokenVersionStore;
+
   /** 全量菜单树（管理端）。 */
   public List<MenuTreeNode> tree() {
     return buildTree(sysMenuMapper.selectAll());
@@ -43,14 +48,28 @@ public class MenuService {
     return sysMenuMapper.selectPermsByUserId(userId);
   }
 
+  /** 认证签发专用：始终从数据库读取，禁止把可能滞后的缓存权限写入新 JWT。 */
+  public List<String> freshPermsByUserId(Long userId) {
+    return sysMenuMapper.selectPermsByUserId(userId);
+  }
+
+  /** 角色授权前批量校验菜单主键。 */
+  public void requireValidMenuIds(List<Long> menuIds) {
+    if (!menuIds.isEmpty() && sysMenuMapper.selectBatchIds(menuIds).size() != menuIds.size()) {
+      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的菜单");
+    }
+  }
+
   /** 新增菜单，返回主键。菜单影响权限串，清空 userPerms 缓存。 */
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public Long create(MenuSaveReq req) {
+    validateParent(null, req.parentId());
     SysMenuEntity entity = new SysMenuEntity();
     applyReq(entity, req);
     entity.setId(null);
     sysMenuMapper.insert(entity);
+    tokenVersionStore.invalidateGlobalAuthorization();
     return entity.getId();
   }
 
@@ -59,8 +78,10 @@ public class MenuService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, MenuSaveReq req) {
     SysMenuEntity entity = requireById(id);
+    validateParent(id, req.parentId());
     applyReq(entity, req);
-    sysMenuMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysMenuMapper.updateById(entity));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   /** 删除菜单（逻辑删）。存在子菜单时不允许删除。 */
@@ -71,7 +92,8 @@ public class MenuService {
     if (!sysMenuMapper.selectByParentId(id).isEmpty()) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "存在子菜单，不允许删除");
     }
-    sysMenuMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysMenuMapper.deleteById(id));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   private SysMenuEntity requireById(Long id) {
@@ -80,6 +102,30 @@ public class MenuService {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "菜单不存在");
     }
     return entity;
+  }
+
+  /** 父链必须存在、不能以按钮为父，并且不能回到当前节点或已有环。 */
+  private void validateParent(Long currentId, Long parentId) {
+    if (parentId == null || parentId == 0) {
+      return;
+    }
+    Set<Long> visited = new HashSet<>();
+    Long cursor = parentId;
+    boolean directParent = true;
+    while (cursor != null && cursor != 0) {
+      if (currentId != null && currentId.equals(cursor)) {
+        throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "父菜单不能是自身或其下级菜单");
+      }
+      if (!visited.add(cursor)) {
+        throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "菜单父链存在循环");
+      }
+      SysMenuEntity parent = requireById(cursor);
+      if (directParent && "F".equals(parent.getMenuType())) {
+        throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "按钮节点不能作为父菜单");
+      }
+      directParent = false;
+      cursor = parent.getParentId();
+    }
   }
 
   private static void applyReq(SysMenuEntity entity, MenuSaveReq req) {

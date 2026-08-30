@@ -16,6 +16,8 @@ pnpm dev        # http://localhost:5173
 ```bash
 pnpm build      # tsc -b + vite build
 pnpm lint       # oxlint + eslint
+pnpm test       # Vitest
+pnpm check      # format:check + lint + test + build
 pnpm format     # prettier --write .
 pnpm exec shadcn add --yes <component>   # 添加 shadcn 组件
 ```
@@ -25,10 +27,10 @@ pnpm exec shadcn add --yes <component>   # 添加 shadcn 组件
 - `src/lib/api/` —— 后端契约适配层（axios 实例、R 解包、401/40100 刷新重放、类型）
 - `src/stores/` —— auth / settings / tabs（zustand，localStorage 唯一入口）
 - `src/routes/` —— 菜单树 → 动态路由、守卫、component 映射（页面组件在 `src/views/**`）
-- `src/views/` —— 页面组件（login / dashboard / system/user 样板页；动态路由 glob 来源）
+- `src/views/` —— 页面组件与 DynaLayer schema（动态路由 glob 来源）
 - `src/components/layout/` —— AppLayout（侧栏/顶栏/页签/cmdk/设置抽屉）
 - `src/design/DEFINITION.md` —— 设计定义（视觉唯一事实来源）；`tokens.css` 是它的 CSS 投影
 - `src/i18n/` —— react-i18next 初始化与 zh/en 词条（菜单名 key 兜底原文）
-- `src/effects/` —— 品牌动效（BrandBlob）落地位，当前为占位（`components/BrandMascot` 为登录页/侧栏占位组件）
+- `src/effects/` —— PixelOrb 吉祥物与 PixelWave/PixelScale 品牌动效
 
 约定与红线见 [AGENTS.md](./AGENTS.md)。

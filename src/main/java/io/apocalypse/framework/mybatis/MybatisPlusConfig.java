@@ -19,7 +19,9 @@ public class MybatisPlusConfig {
   public MybatisPlusInterceptor mybatisPlusInterceptor() {
     MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
     // 分页（PostgreSQL 方言）
-    interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.POSTGRE_SQL));
+    PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.POSTGRE_SQL);
+    pagination.setMaxLimit(200L);
+    interceptor.addInnerInterceptor(pagination);
     // 禁止全表 update/delete
     interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
     // 乐观锁（配合 BaseEntity @Version）

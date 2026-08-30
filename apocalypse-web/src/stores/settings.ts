@@ -23,7 +23,7 @@ import type { SkinId } from '@/effects/PixelOrb/types'
 
 /**
  * accent 预设（色板定义在 design/tokens.css 的 [data-accent] 组）。
- * mint 为像素蝾螈品牌默认（v3）；periwinkle 与 v4 皮肤联动。见 DEFINITION.md §2。
+ * mint 为 Mint Bonk 品牌默认（v3）；periwinkle 与 v4 皮肤联动。见 DEFINITION.md §2。
  */
 export const ACCENTS = [
   'periwinkle',
@@ -160,7 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
       version: 4,
       // v2：默认皮肤 v3 → v4
       // v3：v4 默认 accent mint（历史分裂）→ periwinkle，与皮肤对齐（DEFINITION §2）
-      // v4：品牌主形象改为薄荷色像素蝾螈，默认重置为 v3 + mint。
+      // v4：品牌主形象改为薄荷色 Mint Bonk，默认重置为 v3 + mint。
       migrate: (persisted, version) => {
         if (!(persisted && typeof persisted === 'object')) {
           return persisted as SettingsState

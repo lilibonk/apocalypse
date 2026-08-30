@@ -36,6 +36,32 @@ describe('tabs store', () => {
     })
   })
 
+  it('首次登录的根路径重定向不会生成 Apocalypse 管理台别名页签', () => {
+    const store = useTabsStore.getState()
+    store.open({ key: '/', title: 'Apocalypse 管理台' })
+    store.open({ key: '/dashboard', title: '工作台' })
+    store.open({ key: '/dashboard/', title: 'Apocalypse 管理台' })
+
+    expect(useTabsStore.getState()).toMatchObject({
+      tabs: [DASHBOARD_TAB],
+      activeKey: DASHBOARD_TAB.key,
+    })
+  })
+
+  it('路由同步会清理热更新前残留的根路径别名页签', () => {
+    useTabsStore.setState({
+      tabs: [DASHBOARD_TAB, { key: '/', title: 'Apocalypse 管理台' }],
+      activeKey: '/',
+    })
+
+    useTabsStore.getState().open(DASHBOARD_TAB)
+
+    expect(useTabsStore.getState()).toMatchObject({
+      tabs: [DASHBOARD_TAB],
+      activeKey: DASHBOARD_TAB.key,
+    })
+  })
+
   it('关闭左侧或右侧页签时保留当前页和工作台', () => {
     const store = useTabsStore.getState()
     store.open(userTab)

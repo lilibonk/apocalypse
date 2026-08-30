@@ -14,8 +14,8 @@ export const V4_ORB_SKIN: OrbSkinDefinition = {
     light: '#b3b8f4', // 亮部
     mid: '#8d92e6', // 中间调（品牌长春花蓝）
     shadow: '#6e74d2', // 暗部
-    outline: '#123b43', // 瞳孔外圈（深青，贴合蝾螈母版）
-    eye: '#061b22', // 瞳孔核心（近黑深青）
-    eyeHi: '#ffffff', // 横向观测窗内的矩形高亮信号段
+    outline: '#123b43', // 深青轮廓
+    eye: '#061b22', // 表情核心（近黑深青）
+    eyeHi: '#ffffff', // 眼内单像素高光
   },
 }

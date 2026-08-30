@@ -9,7 +9,7 @@ import java.util.Optional;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 import org.springframework.util.StringUtils;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -57,30 +57,21 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
   @Delete("DELETE FROM sys_user_role WHERE user_id = #{userId}")
   int deleteRolesByUserId(@Param("userId") Long userId);
 
+  /** 仅当账号仍处于 bootstrap 哨兵状态时原子启用；并发启动只有一个调用方返回 1。 */
+  @Update(
+      """
+      UPDATE sys_user
+      SET password = #{encodedPassword}, status = 1, update_time = now(),
+          update_by = 'bootstrap', version = version + 1
+      WHERE username = #{username} AND deleted = 0 AND status = 0
+        AND password = '{bootstrap-disabled}'
+      """)
+  int enableBootstrapAdmin(
+      @Param("username") String username, @Param("encodedPassword") String encodedPassword);
+
   /** 重置用户角色：先清空再批量写入。 */
   default void replaceRoles(Long userId, List<Long> roleIds) {
     deleteRolesByUserId(userId);
     roleIds.forEach(roleId -> insertUserRole(userId, roleId));
-  }
-
-  /** 联表分页查询某角色下的用户（角色-用户管理）。 */
-  @Select(
-      """
-      SELECT u.* FROM sys_user u
-      JOIN sys_user_role ur ON u.id = ur.user_id
-      WHERE ur.role_id = #{roleId} AND u.deleted = 0
-      ORDER BY u.create_time DESC
-      """)
-  Page<SysUserEntity> selectPageByRoleId(Page<SysUserEntity> page, @Param("roleId") Long roleId);
-
-  /** 分页查询某角色下的用户。 */
-  default PageResult<SysUserEntity> pageByRoleId(Long roleId, int page, int size) {
-    return PageResult.of(selectPageByRoleId(new Page<>(page, size), roleId));
-  }
-
-  /** 挂接某部门的有效用户数（部门删除前校验）。 */
-  default long countByDeptId(@Param("deptId") Long deptId) {
-    return selectCount(
-        new LambdaQueryWrapper<SysUserEntity>().eq(SysUserEntity::getDeptId, deptId));
   }
 }

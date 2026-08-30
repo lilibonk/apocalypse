@@ -39,9 +39,6 @@ describe('PixelWave 渲染', () => {
     expect(renderToStaticMarkup(<PixelWave appearance="letterpress" />)).toContain(
       'data-appearance="letterpress"',
     )
-    expect(renderToStaticMarkup(<PixelWave appearance="circuit" />)).toContain(
-      'data-appearance="circuit"',
-    )
   })
 
   it('容器恒 pointer-events-none（canvas 永不挡交互）', () => {

@@ -6,7 +6,7 @@
  * 2. 约定兜底：component='system/user/index' → src/views/system/user/index.tsx，
  *    component='system/user' → src/views/system/user/index.tsx（import.meta.glob 静态分析）。
  *
- * 下一波 DynaLayer（schema 驱动）落地后，标准 CRUD 页面将不再登记物理组件，
+ * DynaLayer（schema 驱动）已落地；标准 CRUD 页面仍由薄页面组件承载 schema 并在此登记，
  * 由 schema 渲染器接管；本映射表仅保留越出标准模式的页面。
  */
 

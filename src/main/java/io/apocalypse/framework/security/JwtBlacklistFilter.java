@@ -36,6 +36,8 @@ public class JwtBlacklistFilter extends OncePerRequestFilter {
 
   private final OnlineUserRegistry onlineUserRegistry;
 
+  private final TokenVersionStore tokenVersionStore;
+
   private final ObjectMapper objectMapper;
 
   @Override
@@ -47,7 +49,8 @@ public class JwtBlacklistFilter extends OncePerRequestFilter {
       String jti = jwt.getId();
       boolean refreshToken = "refresh".equals(jwt.getClaimAsString("type"));
       boolean blacklisted = StringUtils.hasText(jti) && onlineUserRegistry.isBlacklisted(jti);
-      if (refreshToken || blacklisted) {
+      boolean staleUserToken = "access".equals(jwt.getClaimAsString("type")) && staleUserToken(jwt);
+      if (refreshToken || blacklisted || staleUserToken) {
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -56,5 +59,21 @@ public class JwtBlacklistFilter extends OncePerRequestFilter {
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  private boolean staleUserToken(Jwt jwt) {
+    Object userId = jwt.getClaim("uid");
+    if (!(userId instanceof Number)) {
+      return true;
+    }
+    TokenVersionStore.VersionSnapshot current = tokenVersionStore.current(jwt.getSubject());
+    return claimAsLong(jwt, "av") != current.globalAuthorization()
+        || claimAsLong(jwt, "uv") != current.userAuthorization()
+        || claimAsLong(jwt, "cv") != current.credential();
+  }
+
+  private static long claimAsLong(Jwt jwt, String name) {
+    Object value = jwt.getClaim(name);
+    return value instanceof Number number ? number.longValue() : -1L;
   }
 }

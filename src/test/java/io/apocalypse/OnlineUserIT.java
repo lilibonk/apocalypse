@@ -15,7 +15,7 @@ class OnlineUserIT extends AbstractIntegrationTest {
 
   @Test
   void loginThenKickThenTokenRejected() {
-    String token = loginAndGetToken("admin", "admin123");
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
     String jti = extractJti(token);
 
     // 在线列表应包含本次会话的 jti

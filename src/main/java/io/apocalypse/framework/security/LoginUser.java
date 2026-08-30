@@ -8,6 +8,7 @@ import java.util.List;
  *
  * @param roles 角色标识（role_key 原值，不含前缀，签发令牌时加 {@code ROLE_} 前缀）
  * @param permissions 接口权限串（如 {@code system:user:list}，签发令牌时原样放入 authorities claim）
+ * @param versions 与用户、角色、权限来自同一 PostgreSQL 一致性快照的撤销版本
  */
 public record LoginUser(
     Long id,
@@ -15,4 +16,5 @@ public record LoginUser(
     String password,
     boolean enabled,
     List<String> roles,
-    List<String> permissions) {}
+    List<String> permissions,
+    TokenVersionStore.VersionSnapshot versions) {}

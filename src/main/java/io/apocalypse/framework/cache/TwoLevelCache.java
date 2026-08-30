@@ -1,19 +1,23 @@
 package io.apocalypse.framework.cache;
 
+import io.apocalypse.framework.redis.RedisKeyScanner;
+
 import java.time.Duration;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.cache.Cache;
 import org.springframework.cache.support.NullValue;
 import org.springframework.cache.support.SimpleValueWrapper;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.util.Assert;
 
@@ -27,11 +31,11 @@ import lombok.extern.slf4j.Slf4j;
  * <p>关键设计：
  *
  * <ul>
- *   <li>读路径：L1 → L2 → 回源（{@link #get(Object, Callable)} 按 key 分段加锁 + 双重检查，防击穿）
+ *   <li>读路径：L1 → L2 → 回源（{@link #get(Object, Callable)} 使用 Redis 分布式锁 + 双重检查，防跨实例击穿）
  *   <li>空值以 Spring {@link NullValue} 哨兵写入两级（防穿透），由 allowNullValues 控制
  *   <li>L2 TTL = 基础值 × (1±jitter)，随机抖动防雪崩
- *   <li>evict/clear 除本地两级外，通过 {@code invalidationPublisher} 广播失效消息； 其他实例收到后仅清本地 L1——最终一致语义，不保证强一致
- *   <li>L2 key 带结构版本号（{@code apoc:v1:}），序列化不兼容变更时递增；L2 读取反序列化失败 （旧格式/损坏条目）按失效自愈：清毒条目 + 视为未命中回源，不再抛出
+ *   <li>evict/clear 递增 Redis 代数并广播失效；即使 Pub/Sub 消息丢失，实例也会主动比对代数并清理陈旧 L1
+ *   <li>L2 key 带结构版本号（{@code apoc:v2:}），序列化不兼容变更时递增；L2 读取反序列化失败 （旧格式/损坏条目）按失效自愈：清毒条目 + 视为未命中回源，不再抛出
  *       500
  * </ul>
  */
@@ -39,10 +43,16 @@ import lombok.extern.slf4j.Slf4j;
 public class TwoLevelCache implements Cache {
 
   /**
-   * L2 key 前缀：{@code apoc:v1:{cacheName}:{key}}。v1 为缓存结构版本号——value 序列化结构发生
-   * 不兼容变更时递增（v2、v3…），旧版本条目立即不可达并随 TTL 自然过期，避免重部署后读到旧格式缓存。
+   * L2 key 前缀：{@code apoc:v2:{cacheName}:{key}}。v2 启用显式类型 ID 信封；旧 v1 条目立即不可达并随 TTL
+   * 自然过期，避免重部署后解析不受限类型元数据。
    */
-  private static final String KEY_PREFIX = "apoc:v1:";
+  private static final String KEY_PREFIX = "apoc:v2:";
+
+  private static final String VERSION_KEY_PREFIX = "apoc:cache:generation:";
+
+  private static final String LOCK_KEY_PREFIX = "apoc:cache:rebuild:";
+
+  private static final long GENERATION_CHECK_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(1);
 
   private final String name;
 
@@ -52,22 +62,31 @@ public class TwoLevelCache implements Cache {
 
   private final RedisTemplate<String, Object> l2;
 
+  private final StringRedisTemplate redisStrings;
+
+  private final RedissonClient redissonClient;
+
   private final Consumer<CacheInvalidateMessage> invalidationPublisher;
 
   private final String instanceId;
 
-  /** 按 key 分段的互斥锁，用于回源重建的防击穿。 */
-  private final ConcurrentMap<String, ReentrantLock> rebuildLocks = new ConcurrentHashMap<>();
+  private volatile long localGeneration;
+
+  private final AtomicLong lastGenerationCheckNanos = new AtomicLong();
 
   public TwoLevelCache(
       String name,
       CacheProperties properties,
       RedisTemplate<String, Object> redisTemplate,
+      StringRedisTemplate stringRedisTemplate,
+      RedissonClient redissonClient,
       Consumer<CacheInvalidateMessage> invalidationPublisher,
       String instanceId) {
     this.name = name;
     this.properties = properties;
     this.l2 = redisTemplate;
+    this.redisStrings = stringRedisTemplate;
+    this.redissonClient = redissonClient;
     this.invalidationPublisher = invalidationPublisher;
     this.instanceId = instanceId;
     this.l1 =
@@ -75,6 +94,7 @@ public class TwoLevelCache implements Cache {
             .maximumSize(properties.getL1().getMaxSize())
             .expireAfterWrite(Duration.ofSeconds(properties.getL1().getExpireSeconds()))
             .build();
+    this.localGeneration = readGeneration();
   }
 
   @Override
@@ -89,6 +109,7 @@ public class TwoLevelCache implements Cache {
 
   @Override
   public ValueWrapper get(Object key) {
+    ensureFreshGeneration();
     // L1 命中直接返回（含空值哨兵）
     Object value = l1.getIfPresent(key);
     if (value != null) {
@@ -123,9 +144,8 @@ public class TwoLevelCache implements Cache {
     if (wrapper != null) {
       return (T) wrapper.get();
     }
-    // 按 key 分段加锁回源（防击穿），双重检查避免重复加载
-    String lockKey = String.valueOf(key);
-    ReentrantLock lock = rebuildLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+    // Redis 分布式锁覆盖全部应用实例，双重检查避免并发重复回源
+    RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + name + ':' + key);
     lock.lock();
     try {
       wrapper = get(key);
@@ -138,8 +158,9 @@ public class TwoLevelCache implements Cache {
     } catch (Exception e) {
       throw new ValueRetrievalException(key, valueLoader, e);
     } finally {
-      lock.unlock();
-      rebuildLocks.remove(lockKey, lock);
+      if (lock.isHeldByCurrentThread()) {
+        lock.unlock();
+      }
     }
   }
 
@@ -154,18 +175,17 @@ public class TwoLevelCache implements Cache {
   public void evict(Object key) {
     evictLocal(key);
     l2.delete(redisKey(key));
-    invalidationPublisher.accept(new CacheInvalidateMessage(name, String.valueOf(key), instanceId));
+    long generation = incrementGeneration();
+    invalidationPublisher.accept(
+        new CacheInvalidateMessage(name, String.valueOf(key), instanceId, generation));
   }
 
   @Override
   public void clear() {
     clearLocal();
-    // 脚手架用 keys 匹配删除，数据量大时生产环境应替换为 SCAN 分批
-    Set<String> keys = l2.keys(KEY_PREFIX + name + ":*");
-    if (keys != null && !keys.isEmpty()) {
-      l2.delete(keys);
-    }
-    invalidationPublisher.accept(new CacheInvalidateMessage(name, null, instanceId));
+    RedisKeyScanner.delete(l2, KEY_PREFIX + name + ":*");
+    long generation = incrementGeneration();
+    invalidationPublisher.accept(new CacheInvalidateMessage(name, null, instanceId, generation));
   }
 
   /** 仅失效本实例 L1（供失效广播订阅方调用）。 */
@@ -178,8 +198,55 @@ public class TwoLevelCache implements Cache {
     l1.invalidateAll();
   }
 
+  /** 接收远端失效后同步代数；key 失效可精准清理，clear 则清空本地缓存。 */
+  public void applyRemoteInvalidation(CacheInvalidateMessage message) {
+    if (message.key() == null) {
+      clearLocal();
+    } else {
+      evictLocal(message.key());
+    }
+    localGeneration = Math.max(localGeneration, message.generation());
+  }
+
   private String redisKey(Object key) {
     return KEY_PREFIX + name + ':' + key;
+  }
+
+  private String generationKey() {
+    return VERSION_KEY_PREFIX + name;
+  }
+
+  private long incrementGeneration() {
+    Long generation = redisStrings.opsForValue().increment(generationKey());
+    long resolved = generation == null ? readGeneration() : generation;
+    localGeneration = resolved;
+    return resolved;
+  }
+
+  private long readGeneration() {
+    String value = redisStrings.opsForValue().get(generationKey());
+    if (value == null) {
+      return 0;
+    }
+    try {
+      return Long.parseLong(value);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
+  private void ensureFreshGeneration() {
+    long now = System.nanoTime();
+    long previous = lastGenerationCheckNanos.get();
+    if (now - previous < GENERATION_CHECK_INTERVAL_NANOS
+        || !lastGenerationCheckNanos.compareAndSet(previous, now)) {
+      return;
+    }
+    long remoteGeneration = readGeneration();
+    if (remoteGeneration != localGeneration) {
+      clearLocal();
+      localGeneration = remoteGeneration;
+    }
   }
 
   private Object toStoreValue(Object value) {
@@ -188,6 +255,9 @@ public class TwoLevelCache implements Cache {
           properties.isAllowNullValues(),
           () -> "Cache '" + name + "' 不允许缓存 null 值（allowNullValues=false）");
       return NullValue.INSTANCE;
+    }
+    if (value instanceof List<?> list) {
+      return new ArrayList<>(list);
     }
     return value;
   }

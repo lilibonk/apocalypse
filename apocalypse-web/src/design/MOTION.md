@@ -7,25 +7,25 @@
 1. 动效只回答三件事：操作是否生效、内容从哪里出现、层级如何变化。
 2. 数据密集表面保持可读。表格行、审计日志和权限树不逐项播放；浮层可把标题、正文区和操作区分成最多三拍快速装配。
 3. 进入用于建立空间关系和年轻化品牌识别，退出更快以减少等待；允许短促关键帧超调，不使用持续回弹、果冻或低帧卡顿。
-4. Canvas PixelWave 禁止在管理正文常驻；CRUD 浮层允许短暂挂载加速的 `circuit` PixelWave，结束后卸载 Canvas 与 rAF。PixelOrb 只用于登录、空态和结果反馈。
+4. Canvas PixelWave 禁止在管理正文常驻；Dialog、AlertDialog 与 Sheet 全部由 `PixelDialogMotion` 用 Motion 时间轴让真实内容穿过固定的不规则像素波前，PixelOrb 只用于登录、空态和结果反馈。
 
 ## 2. 统一节拍
 
-| 语义        |  时长 | 缓动  | 适用组件                             |
-| ----------- | ----: | ----- | ------------------------------------ |
-| feedback    | 100ms | enter | hover、press、选中态、图标反馈       |
-| exit        | 120ms | exit  | Tooltip、菜单、Dialog、折叠退出      |
-| enter       | 200ms | enter | Tooltip、Select、Dropdown、遮罩进入  |
-| layer enter | 180ms | enter | Dialog、AlertDialog 空白外壳进入     |
-| content     | 240ms | enter | 浮层标题、正文区与操作区单拍进入     |
-| standard    | 180ms | enter | 页面进入、侧栏宽度、真实信息折叠展开 |
-| panel exit  | 160ms | exit  | Sheet / Drawer 退出                  |
-| panel enter | 300ms | enter | Sheet / Drawer 进入                  |
-| surface     | 800ms | enter | 空白表面、电路传导与内容浮现         |
+| 语义        |  时长 | 缓动   | 适用组件                             |
+| ----------- | ----: | ------ | ------------------------------------ |
+| feedback    | 100ms | enter  | hover、press、选中态、图标反馈       |
+| exit        | 120ms | exit   | Tooltip、菜单、Dialog、折叠退出      |
+| enter       | 200ms | enter  | Tooltip、Select、Dropdown、遮罩进入  |
+| overlay     | 180ms | enter  | Dialog、AlertDialog 遮罩建立         |
+| standard    | 180ms | enter  | 页面进入、侧栏宽度、真实信息折叠展开 |
+| panel exit  | 160ms | exit   | Sheet / Drawer 退出                  |
+| panel enter | 300ms | enter  | Sheet / Drawer 进入                  |
+| CRUD reveal | 500ms | linear | 全部浮层真实内容的像素波前揭示       |
 
 - enter：`cubic-bezier(0.16, 1, 0.3, 1)`
 - exit：`cubic-bezier(0.4, 0, 1, 1)`
-- 页面位移：6px → 0；Dialog 缩放：0.92 → 1.018 → 0.994 → 1。
+- reveal：`linear`，让传导前沿保持恒速，禁止复用前快后慢的 enter 曲线吞掉中间帧。
+- 页面位移：6px → 0；Dialog / AlertDialog 外壳缩放：0.965 → 1.008 → 1。
 
 ## 3. 组件契约
 
@@ -36,30 +36,29 @@
 
 ### 弹窗 `Dialog / AlertDialog`
 
-- 遮罩先在 200ms 内建立空间，空白外壳用 180ms 从 98% 归位，退出仍保持 120ms。
-- 外壳上方短暂覆盖同底色 `circuit` PixelWave；先显示纯亮色 / 暗色表面，再让一个品牌色脉冲沿固定 PCB 主路传导并在焊点处分流；分支长短与方向不对称，已通过线路仅保留低亮尾迹。每次打开拓扑与时序一致，不铺规则像素网格，不使用灰阶侧壁、立体位移或渐变。
-- 覆盖层在 800ms 内淡出，0.84s 后卸载 Canvas 与 rAF；稳定态只剩正常内容表面。
-- 标题延迟 460ms 再进入，正文区和操作区每拍间隔 70ms；内容从电路传导的中后段浮现。
-- 禁止锯齿裁切、棋盘扫描条、四角装饰框或稳定态像素边线。
+- 遮罩在 180ms 内建立空间，外壳在 300ms 内按 `96.5% → 100.8% → 100%` 快速装配，退出仍保持 120ms。
+- 禁止全表面实色遮罩、PCB 折线、散点粒子、锯齿裁切、棋盘扫描条、四角装饰框或稳定态像素边线。
+- 基础 `DialogContent` 与 `AlertDialogContent` 强制挂载 `PixelDialogMotion`，不存在业务可选的旧动效分支。它保留 Radix 的焦点管理，以 `useAnimate` 同步遮罩、外壳、标题、正文和操作区；标题从 100ms、正文从 150ms、操作区从 220ms 起进入，最晚约 720ms 完成。
+- 八个水平分区共用一组固定波前关键帧，各行推进距离不同；波前通过 `clip-path` 直接揭开真实标题、字段和按钮，最后一帧完整显示内容。组件不生成独立轨道、端点或装饰层。
+- 波前的五帧必须保持完全相同的 polygon 顶点数，保证连续插值；初始样式由 CSS 隐藏真实内容，Motion 负责解锁，禁止用延时卸载装饰来伪装内容进入。
 - 嵌套 Dialog 使用较轻遮罩；父层在 100ms 内后退到 97% 并降低透明度，子层关闭后立即恢复。
 - 危险操作必须在确认层明确动作对象；启停与删除不可共享同一种危险色语义。
 
 ### 抽屉 `Sheet`
 
 - 沿真实停靠边进入；进入 300ms、退出 160ms。
-- 抽屉内部字段不做逐项 stagger，焦点由 Radix 接管。
+- `SheetContent` 同样强制挂载 `PixelDialogMotion`，只让内容运行同一波前，不覆盖既有的停靠边位移；焦点由 Radix 接管。
 
 ### 展开 `MotionCollapse`
 
 - 只用于确有父子信息关系的区域，例如侧栏目录、开发态外观实验室和卡片详情。
 - 展开 180ms，收起 120ms；高度与透明度同步。普通统计卡片不得为了动效伪装成 disclosure。
 
-### 浮层内容 `MotionSequence`
+### 浮层内容分区
 
-- 用于查看、编辑、授权等浮层内部的标题、字段和操作区，按阅读顺序依次进入。
-- 序列延迟 460ms，元素间隔 70ms，单项使用 content 240ms 与 16px → -3px → 0 位移。
-- 浮层只编排标题、正文区、操作区三个阶段；表格行、字段、菜单长树和分页结果禁止逐项 stagger。
-- reduced-motion 或动画关闭时保持相同 DOM 顺序并直接显示。
+- `DialogHeader` / `AlertDialogHeader` / `SheetHeader` 自动登记为 header，Footer 同理登记为 footer；其余未标记的直属内容由 `PixelDialogMotion` 自动登记为 body。
+- 特殊表单可以显式使用 `data-pixel-dialog-stage="header|body|footer"`，但不得再嵌套第二套时间轴。
+- 表格行、字段、菜单长树和分页结果禁止逐项 stagger；reduced-motion 或动画关闭时保持相同 DOM 顺序并直接显示。
 
 ### 反馈与微交互
 
@@ -71,12 +70,13 @@
 
 - `PixelScale` 是唯一的一维加载音阶；按钮、局部、页面分别使用既有 inline/card/page 变体。
 - 保存、删除、启停、强退等异步写操作在原按钮内显示 inline PixelScale，成功前不提前关闭确认层。
-- 登录 PixelWave 的每波噪声与形状独立随机；CRUD 浮层以 `circuit` 缩放固定 PCB 网络，只运行一次主路进入、焊点分流的加速传导并在 0.84s 后卸载。
+- 登录 PixelWave 的每波噪声与形状独立随机；全部浮层只运行固定像素波前并直接裁切真实内容，不挂载额外视觉 DOM。
+- Mint Bonk 只切换批准的五张状态稿；状态帧容器允许 1–4px 整像素呼吸、踮脚、短跳或微震。登录 idle 可让原稿眼部高光以 80ms 线性响应指针，最大偏移随尺寸限制为 1–4px；不运行时重绘身体、五官和颜色。
 
 ## 4. 降级与性能
 
-- `prefers-reduced-motion: reduce` 或 `html[data-motion='off']` 时，通用动画直接完成；PixelWave 停止渲染，PixelOrb 停止视线监听与 rAF。
-- 优先只动 `transform` 与 `opacity`；`MotionCollapse` 的高度动画是信息展开场景的唯一常规例外。
+- `prefers-reduced-motion: reduce` 或 `html[data-motion='off']` 时，通用动画直接完成；PixelWave 停止渲染，PixelOrb 保持当前批准状态静态帧。
+- 优先只动 `transform` 与 `opacity`；浮层的一次性 `clip-path` 揭示与 `MotionCollapse` 的高度动画是明确例外。
 - 禁止用 `transition: all` 扩散昂贵属性；新增组件应明确列出 transition-property。
 - 禁止为动效引入 GSAP、Lottie、Rive 或第二套动画状态库。
 

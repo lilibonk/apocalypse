@@ -4,7 +4,6 @@
  */
 
 import { DictTag } from '@/components/DictTag'
-import { MotionSequence, MotionSequenceItem } from '@/components/motion/MotionSequence'
 import {
   Dialog,
   DialogContent,
@@ -53,29 +52,25 @@ export function DynaDetail({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
-        <MotionSequence className="contents">
-          <MotionSequenceItem>
-            <DialogHeader>
-              <DialogTitle>{t(title ?? '详情')}</DialogTitle>
-              {description && <DialogDescription>{t(description)}</DialogDescription>}
-            </DialogHeader>
-          </MotionSequenceItem>
-          {record && (
-            <dl className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-2">
-              {fields.map((field) => (
-                <MotionSequenceItem
-                  key={field.key}
-                  className="border-b border-border p-4 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(even)]:border-l"
-                >
-                  <dt className="text-xs text-muted-foreground">{t(field.title)}</dt>
-                  <dd className="mt-1.5 min-w-0 break-all text-sm font-medium">
-                    <DetailValue field={field} record={record} />
-                  </dd>
-                </MotionSequenceItem>
-              ))}
-            </dl>
-          )}
-        </MotionSequence>
+        <DialogHeader>
+          <DialogTitle>{t(title ?? '详情')}</DialogTitle>
+          {description && <DialogDescription>{t(description)}</DialogDescription>}
+        </DialogHeader>
+        {record && (
+          <dl className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-2">
+            {fields.map((field) => (
+              <div
+                key={field.key}
+                className="border-b border-border p-4 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(even)]:border-l"
+              >
+                <dt className="text-xs text-muted-foreground">{t(field.title)}</dt>
+                <dd className="mt-1.5 min-w-0 break-all text-sm font-medium">
+                  <DetailValue field={field} record={record} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </DialogContent>
     </Dialog>
   )

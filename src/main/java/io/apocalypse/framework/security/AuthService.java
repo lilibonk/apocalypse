@@ -1,12 +1,16 @@
 package io.apocalypse.framework.security;
 
+import io.apocalypse.common.event.AuditTextSanitizer;
 import io.apocalypse.common.event.LoginFailedEvent;
 import io.apocalypse.common.event.LoginSucceededEvent;
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.response.ErrorCode;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,9 +28,11 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 认证服务：账密登录（走 {@link LoginUserQuery} 防腐端口）与 client_credentials 服务账号令牌。
@@ -42,6 +48,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
   /** 失败计数 Redis key 前缀。 */
@@ -49,6 +56,12 @@ public class AuthService {
 
   /** refresh token 的 type claim 值。 */
   private static final String TOKEN_TYPE_REFRESH = "refresh";
+
+  /** access token 的 type claim 值。 */
+  private static final String TOKEN_TYPE_ACCESS = "access";
+
+  /** client token 的 type claim 值。 */
+  private static final String TOKEN_TYPE_CLIENT = "client";
 
   /** 锁定阈值：连续失败次数。 */
   private static final int MAX_FAIL_COUNT = 5;
@@ -71,6 +84,8 @@ public class AuthService {
   private final LoginEventPublisher loginEventPublisher;
 
   private final OnlineUserRegistry onlineUserRegistry;
+
+  private final TokenVersionStore tokenVersionStore;
 
   /** 登录响应（refreshToken 仅账密登录签发，client 令牌为 null）。 */
   public record TokenResponse(
@@ -95,11 +110,25 @@ public class AuthService {
               .filter(u -> passwordEncoder.matches(rawPassword, u.password()))
               .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED.getCode(), "用户名或密码错误"));
       stringRedisTemplate.delete(failKey);
-      loginEventPublisher.publish(new LoginSucceededEvent(username, ip, userAgent));
-      return Optional.of(issueToken(user, ip, userAgent));
+      String auditUsername =
+          AuditTextSanitizer.fit(username, AuditTextSanitizer.USERNAME_MAX_LENGTH);
+      String auditIp = AuditTextSanitizer.fit(ip, AuditTextSanitizer.IP_MAX_LENGTH);
+      String auditUserAgent =
+          AuditTextSanitizer.fit(userAgent, AuditTextSanitizer.USER_AGENT_MAX_LENGTH);
+      loginEventPublisher.publish(
+          new LoginSucceededEvent(
+              UUID.randomUUID(), LocalDateTime.now(), auditUsername, auditIp, auditUserAgent));
+      return Optional.of(issueToken(user, auditIp, auditUserAgent));
     } catch (BizException e) {
       recordFailure(failKey);
-      loginEventPublisher.publish(new LoginFailedEvent(username, ip, userAgent, e.getMessage()));
+      loginEventPublisher.publish(
+          new LoginFailedEvent(
+              UUID.randomUUID(),
+              LocalDateTime.now(),
+              AuditTextSanitizer.fit(username, AuditTextSanitizer.USERNAME_MAX_LENGTH),
+              AuditTextSanitizer.fit(ip, AuditTextSanitizer.IP_MAX_LENGTH),
+              AuditTextSanitizer.fit(userAgent, AuditTextSanitizer.USER_AGENT_MAX_LENGTH),
+              AuditTextSanitizer.fit(e.getMessage(), AuditTextSanitizer.MESSAGE_MAX_LENGTH)));
       throw e;
     }
   }
@@ -112,7 +141,7 @@ public class AuthService {
     SecurityProperties.Client client =
         securityProperties.getClients().stream()
             .filter(c -> c.getClientId().equals(clientId))
-            .filter(c -> c.getClientSecret().equals(clientSecret))
+            .filter(c -> secretsEqual(c.getClientSecret(), clientSecret))
             .findFirst()
             .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED.getCode(), "客户端凭证无效"));
     Instant now = Instant.now();
@@ -120,9 +149,12 @@ public class AuthService {
     JwtClaimsSet claims =
         JwtClaimsSet.builder()
             .issuer(securityProperties.getJwt().getIssuer())
+            .audience(List.of(securityProperties.getJwt().getAudience()))
             .subject(client.getClientId())
+            .id(UUID.randomUUID().toString())
             .issuedAt(now)
             .expiresAt(now.plusSeconds(ttlSeconds))
+            .claim("type", TOKEN_TYPE_CLIENT)
             .claim("scope", String.join(" ", client.getScopes()))
             .build();
     String token = encode(claims);
@@ -156,15 +188,38 @@ public class AuthService {
             .findLoginUserByUsername(jwt.getSubject())
             .filter(LoginUser::enabled)
             .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效"));
-    // 旋转生效点：先废旧（黑名单 + 在线条目注销），再签新
-    if (jwt.getExpiresAt() != null) {
-      onlineUserRegistry.blacklist(jti, Duration.between(Instant.now(), jwt.getExpiresAt()));
+    TokenVersionStore.VersionSnapshot versions = user.versions();
+    if (claimAsLong(jwt, "cv") != versions.credential()) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    // 旋转生效点：以 Redis SET NX 原子消费旧 refresh jti，只有一个并发请求能继续签发。
+    if (jwt.getExpiresAt() == null
+        || !onlineUserRegistry.tryBlacklist(
+            jti, Duration.between(Instant.now(), jwt.getExpiresAt()))) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
     }
     String oldAccessJti = jwt.getClaimAsString("atj");
     if (StringUtils.hasText(oldAccessJti)) {
       onlineUserRegistry.unregister(oldAccessJti);
     }
     return issueToken(user, ip, userAgent);
+  }
+
+  /** 主动注销采用持久化凭证代次，可靠撤销该用户全部 access/refresh token；Redis 在线条目同步清理，仅作为快速路径和在线视图。 */
+  @Transactional
+  public void logout(Jwt accessToken) {
+    if (accessToken == null
+        || !TOKEN_TYPE_ACCESS.equals(accessToken.getClaimAsString("type"))
+        || !StringUtils.hasText(accessToken.getSubject())) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    tokenVersionStore.invalidateCredential(accessToken.getSubject());
+    try {
+      onlineUserRegistry.kickAll(accessToken.getSubject());
+    } catch (RuntimeException e) {
+      // Redis 只是在线视图/快速清理路径；故障不能回滚 PostgreSQL 中已经递增的撤销代次。
+      log.warn("注销已持久化，但 Redis 在线会话清理失败: {}", e.getMessage());
+    }
   }
 
   /**
@@ -179,20 +234,27 @@ public class AuthService {
     String accessJti = UUID.randomUUID().toString();
     List<String> authorities = new ArrayList<>(user.permissions());
     user.roles().stream().map(role -> "ROLE_" + role).forEach(authorities::add);
+    TokenVersionStore.VersionSnapshot versions = user.versions();
     JwtClaimsSet accessClaims =
         JwtClaimsSet.builder()
             .issuer(securityProperties.getJwt().getIssuer())
+            .audience(List.of(securityProperties.getJwt().getAudience()))
             .subject(user.username())
             .id(accessJti)
             .issuedAt(now)
             .expiresAt(now.plusSeconds(ttlSeconds))
+            .claim("type", TOKEN_TYPE_ACCESS)
             .claim("uid", user.id())
             .claim("authorities", authorities)
+            .claim("av", versions.globalAuthorization())
+            .claim("uv", versions.userAuthorization())
+            .claim("cv", versions.credential())
             .build();
     String refreshJti = UUID.randomUUID().toString();
     JwtClaimsSet refreshClaims =
         JwtClaimsSet.builder()
             .issuer(securityProperties.getJwt().getIssuer())
+            .audience(List.of(securityProperties.getJwt().getAudience()))
             .subject(user.username())
             .id(refreshJti)
             .issuedAt(now)
@@ -200,6 +262,7 @@ public class AuthService {
             .claim("type", TOKEN_TYPE_REFRESH)
             .claim("uid", user.id())
             .claim("atj", accessJti)
+            .claim("cv", versions.credential())
             .build();
     onlineUserRegistry.register(accessJti, refreshJti, user.username(), ip, userAgent);
     return new TokenResponse(encode(accessClaims), encode(refreshClaims), "Bearer", ttlSeconds);
@@ -222,5 +285,18 @@ public class AuthService {
   private String encode(JwtClaimsSet claims) {
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+  }
+
+  private static long claimAsLong(Jwt jwt, String name) {
+    Object value = jwt.getClaim(name);
+    return value instanceof Number number ? number.longValue() : -1L;
+  }
+
+  private static boolean secretsEqual(String expected, String actual) {
+    if (expected == null || actual == null) {
+      return false;
+    }
+    return MessageDigest.isEqual(
+        expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8));
   }
 }

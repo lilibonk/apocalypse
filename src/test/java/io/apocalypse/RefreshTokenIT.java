@@ -2,7 +2,12 @@ package io.apocalypse;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -20,7 +25,7 @@ class RefreshTokenIT extends AbstractIntegrationTest {
 
   @Test
   void refreshRotatesPairAndNewAccessTokenWorks() {
-    JsonNode login = login("admin", "admin123");
+    JsonNode login = login("admin", ADMIN_PASSWORD);
     String accessToken = login.at("/data/accessToken").asText();
     String refreshToken = login.at("/data/refreshToken").asText();
     assertThat(accessToken).isNotBlank();
@@ -41,7 +46,7 @@ class RefreshTokenIT extends AbstractIntegrationTest {
 
   @Test
   void replayedOldRefreshTokenReturns40100() {
-    String refreshToken = login("admin", "admin123").at("/data/refreshToken").asText();
+    String refreshToken = login("admin", ADMIN_PASSWORD).at("/data/refreshToken").asText();
 
     assertThat(refresh(refreshToken).get("code").asInt()).as("首次 refresh 应成功").isEqualTo(0);
 
@@ -51,8 +56,46 @@ class RefreshTokenIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void concurrentRefreshOnlyOneRequestCanRotate() {
+    String refreshToken = login("admin", ADMIN_PASSWORD).at("/data/refreshToken").asText();
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      List<CompletableFuture<JsonNode>> calls =
+          java.util.stream.IntStream.range(0, 2)
+              .mapToObj(
+                  ignored ->
+                      CompletableFuture.supplyAsync(
+                          () -> {
+                            ready.countDown();
+                            try {
+                              start.await();
+                            } catch (InterruptedException e) {
+                              Thread.currentThread().interrupt();
+                              throw new IllegalStateException(e);
+                            }
+                            return refresh(refreshToken);
+                          },
+                          executor))
+              .toList();
+      try {
+        ready.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException(e);
+      }
+      start.countDown();
+
+      List<Integer> codes =
+          calls.stream().map(CompletableFuture::join).map(n -> n.get("code").asInt()).toList();
+      assertThat(codes).containsExactlyInAnyOrder(0, 40100);
+    }
+  }
+
+  @Test
   void refreshAfterKickReturns40100() {
-    JsonNode login = login("admin", "admin123");
+    JsonNode login = login("admin", ADMIN_PASSWORD);
     String accessToken = login.at("/data/accessToken").asText();
     String refreshToken = login.at("/data/refreshToken").asText();
 

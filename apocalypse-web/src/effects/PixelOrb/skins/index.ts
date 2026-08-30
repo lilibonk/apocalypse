@@ -12,5 +12,5 @@ export const ORB_SKINS: Record<SkinId, OrbSkinDefinition> = {
   v4: V4_ORB_SKIN,
 }
 
-/** 默认皮肤：v3 薄荷青（像素蝾螈品牌默认；DEFINITION §2）。 */
+/** 默认皮肤：v3 薄荷青（Mint Bonk 正式品牌默认；DEFINITION §2）。 */
 export const DEFAULT_ORB_SKIN: SkinId = 'v3'

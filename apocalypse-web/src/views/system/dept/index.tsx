@@ -12,7 +12,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -50,8 +50,8 @@ import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } f
 export default function DeptPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  /** 折叠的部门 id 集（默认空 = 全部展开）。 */
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  /** 展开的部门 id 集（默认空 = 只显示根节点）。 */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<DeptTreeNode | null>(null)
@@ -115,8 +115,8 @@ export default function DeptPage() {
     },
   })
 
-  const toggleCollapsed = (id: SnowflakeId) => {
-    setCollapsed((prev) => {
+  const toggleExpanded = (id: SnowflakeId) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
@@ -138,6 +138,19 @@ export default function DeptPage() {
     setDialogOpen(true)
   }
 
+  const expandableIds = useMemo(
+    () =>
+      tree
+        ? flattenDeptTree(tree, new Set())
+            .filter((row) => row.hasChildren)
+            .map((row) => row.node.id)
+        : [],
+    [tree],
+  )
+  const collapsed = useMemo<ReadonlySet<string>>(
+    () => new Set(expandableIds.filter((id) => !expanded.has(id))),
+    [expandableIds, expanded],
+  )
   const rows = tree ? flattenDeptTree(tree, collapsed) : []
   const totalDepartments = tree ? flattenDeptTree(tree, new Set()).length : 0
   const deletingChildCount = deleting?.children?.length ?? 0
@@ -215,7 +228,7 @@ export default function DeptPage() {
                               ? t('common.展开', { defaultValue: '展开' })
                               : t('common.折叠', { defaultValue: '折叠' })
                           }
-                          onClick={() => toggleCollapsed(node.id)}
+                          onClick={() => toggleExpanded(node.id)}
                         >
                           <ChevronRight
                             className={cn(

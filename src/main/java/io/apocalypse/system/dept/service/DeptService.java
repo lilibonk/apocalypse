@@ -1,12 +1,12 @@
 package io.apocalypse.system.dept.service;
 
 import io.apocalypse.common.exception.BizException;
+import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.system.dept.dto.request.DeptSaveReq;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.entity.SysDeptEntity;
 import io.apocalypse.system.dept.mapper.SysDeptMapper;
-import io.apocalypse.system.user.mapper.SysUserMapper;
 
 import java.util.Comparator;
 import java.util.List;
@@ -25,8 +25,6 @@ import lombok.RequiredArgsConstructor;
 public class DeptService {
 
   private final SysDeptMapper sysDeptMapper;
-
-  private final SysUserMapper sysUserMapper;
 
   /** 全量部门树。 */
   public List<DeptTreeNode> tree() {
@@ -58,7 +56,7 @@ public class DeptService {
       }
     }
     applyReq(entity, req);
-    sysDeptMapper.updateById(entity);
+    ConcurrencyGuard.requireSingleRow(sysDeptMapper.updateById(entity));
   }
 
   /** 删除部门（逻辑删）。存在子部门或挂接用户时不允许删除。 */
@@ -68,10 +66,10 @@ public class DeptService {
     if (sysDeptMapper.existsByParentId(id)) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "存在子部门，不允许删除");
     }
-    if (sysUserMapper.countByDeptId(id) > 0) {
+    if (sysDeptMapper.countAssignedUsers(id) > 0) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "部门下存在用户，不允许删除");
     }
-    sysDeptMapper.deleteById(id);
+    ConcurrencyGuard.requireSingleRow(sysDeptMapper.deleteById(id));
   }
 
   private SysDeptEntity requireById(Long id) {
@@ -80,6 +78,19 @@ public class DeptService {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "部门不存在");
     }
     return entity;
+  }
+
+  /** 用户域挂接部门前的稳定查询入口；null 表示不挂接部门。 */
+  public void requireExistingId(Long id) {
+    if (id != null) {
+      requireById(id);
+    }
+  }
+
+  /** 部门名称查询入口；已删除或不存在时返回 null，避免详情装配因历史关联失败。 */
+  public String nameOf(Long id) {
+    SysDeptEntity entity = id == null ? null : sysDeptMapper.selectById(id);
+    return entity == null ? null : entity.getDeptName();
   }
 
   /** 父部门存在性校验（parentId=0 为根，无需校验）。 */

@@ -11,6 +11,6 @@ import java.util.Optional;
  */
 public interface LoginUserQuery {
 
-  /** 按用户名查询登录用户，password 为密文（BCrypt）。 */
+  /** 按用户名查询登录用户；password 为密文（BCrypt），权限与撤销版本必须来自同一数据库一致性快照。 */
   Optional<LoginUser> findLoginUserByUsername(String username);
 }

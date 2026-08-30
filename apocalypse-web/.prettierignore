@@ -1,3 +1,5 @@
 dist
 node_modules
 pnpm-lock.yaml
+design-review-report.md
+design-style-audit-2026-08-28.md

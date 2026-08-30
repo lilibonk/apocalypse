@@ -2,6 +2,7 @@ package io.apocalypse.framework.cache;
 
 import java.nio.charset.StandardCharsets;
 
+import org.redisson.api.RedissonClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -29,6 +30,7 @@ public class CacheConfig {
   public TwoLevelCacheManager cacheManager(
       CacheProperties properties,
       RedisTemplate<String, Object> redisTemplate,
+      RedissonClient redissonClient,
       StringRedisTemplate stringRedisTemplate,
       ObjectMapper objectMapper) {
     // 失效广播走 StringRedisTemplate：频道载荷为纯 JSON 文本。
@@ -37,6 +39,8 @@ public class CacheConfig {
     return new TwoLevelCacheManager(
         properties,
         redisTemplate,
+        stringRedisTemplate,
+        redissonClient,
         message ->
             stringRedisTemplate.convertAndSend(
                 CacheInvalidateMessage.CHANNEL, objectMapper.writeValueAsString(message)));
