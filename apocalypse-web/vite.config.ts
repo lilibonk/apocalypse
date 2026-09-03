@@ -17,7 +17,7 @@ export default defineConfig({
     proxy: {
       // 前端统一走 /api 前缀（axios baseURL），转发到本地后端时剥掉前缀（后端无 context-path）
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.APOCALYPSE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

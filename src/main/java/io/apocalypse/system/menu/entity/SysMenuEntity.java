@@ -27,6 +27,8 @@ public class SysMenuEntity extends BaseEntity {
 
   private String icon;
 
+  private String moduleKey;
+
   private Integer sort;
 
   private Integer visible;

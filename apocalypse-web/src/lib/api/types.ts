@@ -47,6 +47,8 @@ export interface MenuNode {
   component: string | null
   perms: string | null
   icon: string | null
+  /** 编译期业务能力键；null 表示核心能力。 */
+  moduleKey: string | null
   sort: number
   children: MenuNode[]
 }
@@ -62,6 +64,7 @@ export interface RawMenuNode {
   component: string | null
   perms: string | null
   icon: string | null
+  moduleKey?: string | null
   sort: number | null
   children?: RawMenuNode[] | null
 }
@@ -128,6 +131,7 @@ export function normalizeMenuNode(raw: RawMenuNode): MenuNode {
     component: raw.component ?? null,
     perms: raw.perms ?? null,
     icon: raw.icon ?? null,
+    moduleKey: raw.moduleKey ?? null,
     sort: raw.sort ?? 0,
     children: (raw.children ?? []).map(normalizeMenuNode),
   }

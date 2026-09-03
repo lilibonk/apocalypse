@@ -31,7 +31,21 @@ docker compose up -d        # 启动 PostgreSQL 18.6 + Redis 8.10.1
 
 提交代码前必须通过 `./mvnw verify`。macOS/Colima 若 socket 不在 `/var/run/docker.sock`，按设备实际值设置 `DOCKER_HOST` 与 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`。GitHub Actions 后端门禁执行同一条 `./mvnw --batch-mode verify`。
 
-## 3. 架构红线（每条均有执法者）
+Python 只作辅助工具时，统一使用 `/Users/zile.zhou/workspace/github-projects/env/python`：先 `source /Users/zile.zhou/workspace/github-projects/env/python/activate.zsh`，再通过该环境的 `uv` 管理 Python 版本、缓存与隔离 CLI。禁止使用系统/Homebrew/user-site `pip install`。若本项目后续成为 Python 项目，依赖必须在本项目 `pyproject.toml` / `uv.lock` 声明，项目 `.venv` 不提交。
+
+## 3. Solution Fitness Gate（实现前置门禁）
+
+新增业务模块、跨切基础设施、可复用扩展机制、新依赖、公开 API/事件、Schema 或部署/运维模型前，必须在首次实现修改前完成方案适配性调研并留下可审阅证据：
+
+1. 先检查现有代码、已安装依赖、扩展点、测试/架构门禁和已批准 ADR，不得把首个可行写法默认成架构。
+2. 至少比较“复用/保持现状”与一个可行替代方案；按变更半径、耦合/内聚、依赖与许可、兼容/迁移/回滚、安全、性能、离线运行、可测性和自动化执法评估。
+3. “插件化”“最佳实践”或“业界通用”不构成选型证据；解耦是评估维度，不得用未证明的抽象换取表面上的灵活性。
+4. 变动的技术事实优先使用官方文档或上游源码核验；内网/断网时明确记录证据限制，不得猜测补齐。
+5. 结论必须记录选择、弃选理由、假设、重新评估触发条件以及保持结论成立的测试/规则/运维证据。
+
+调研未完成时，只能创建有边界的 discovery 任务，依赖该决策的实现保持阻塞。有限文案修正、纯机械迁移或仍完全落在有效已批准设计中的局部修改，可记录 `not-required` 理由后跳过完整比较。
+
+## 4. 架构红线（每条均有执法者）
 
 | # | 红线 | 执法者 |
 |---|---|---|
@@ -47,14 +61,15 @@ docker compose up -d        # 启动 PostgreSQL 18.6 + Redis 8.10.1
 | 10 | 日志禁止输出密码、令牌、身份证号等敏感字段；禁止提交任何密钥到仓库；操作日志参数必须经统一脱敏 | `OperLogAspect` 脱敏 + 评审 |
 | 11 | system 子域 Service 禁止穿透其他子域的 Mapper/Entity；跨子域编排走对方 Service/DTO 稳定入口 | ArchUnit R8 |
 
-## 4. 分层与分包约定
+## 5. 分层与分包约定
 
 ```
 io.apocalypse
 ├── common/       # OPEN：response(R/ErrorCode/PageResult)、exception(BizException)、entity(BaseEntity)、annotation(@AgentExposed)、event(跨模块集成事件契约)
 ├── framework/    # OPEN：security / cache / redis / mybatis / openapi / web / log / ratelimit / config 技术装配
 ├── system/       # 系统管理域：用户/角色/菜单/部门/字典/参数/日志/在线用户
-└── order/        # 核心域范本（api/application/domain/infrastructure 分层）
+├── order/        # 核心域范本（api/application/domain/infrastructure 分层）
+└── calendar/     # 可选万年历域（api/application/domain/infrastructure/interfaces）
 ```
 
 **模块内部结构（统一约定，ArchUnit R5/R6/R7 执法）**：
@@ -79,7 +94,7 @@ io.apocalypse
 - system 内部子域的 mapper/entity 仅归本子域使用；跨子域只允许依赖对方 service 与 response DTO，禁止把持久化对象当内部公共模型。
 - 跨模块异步动作用 Spring 事件 + `@ApplicationModuleListener`，禁止直接调对方 Service/Mapper。**事件契约统一放 `common.event`**：若事件放发布方 api 包，消费方对发布方的依赖与反向 facade 调用易形成模块循环（Modulith verify 拒绝）；沉淀到 OPEN 内核后依赖图保持无环。
 
-## 5. 统一约定
+## 6. 统一约定
 
 - 响应：一律 `R<T>`（由 `ResponseBodyAdvice` 自动包装，Controller 返回裸数据即可）。
 - 异常：业务错误 `throw new BizException(...)`；系统异常由全局处理器兜底，禁止裸抛栈到前端。
@@ -87,6 +102,8 @@ io.apocalypse
 - 通用字段：`BaseEntity` 统一承载 `id` / `createTime` / `createBy` / `updateTime` / `updateBy` / `version` / `deleted` / `remark`。其中 `createTime`/`createBy` 仅插入填充（`FieldFill.INSERT`），`updateTime`/`updateBy` 插入与更新均填充（`INSERT_UPDATE`），`version`/`deleted` 插入填充（默认 0），填充处理器见 framework-mybatis 的 `MetaObjectHandler`；`remark` 是用户输入的业务字段，**不加 fill 注解**、不参与自动填充，各实体禁止再自行声明。例外：`sys_login_log` / `sys_oper_log` 等 append-only 日志表不继承 `BaseEntity`（无 version/deleted/update 审计字段，只插不改）。
 - ID 约定：业务实体一律继承 `BaseEntity`，主键为雪花 `Long`（`@TableId(IdType.ASSIGN_ID)`），禁止 AUTO 自增与 UUID 混用；联表（`sys_user_role` / `sys_role_menu`）用联合主键、不设 id 列；种子与系统内置数据允许使用小整数 id（可读性）；append-only 日志表不继承 `BaseEntity` 但主键同样保持雪花；对外 JSON 中装箱 `Long` 序列化为 String（防 JS 精度丢失，Jackson 已配）；雪花 workerId 由 MyBatis-Plus 按机器自动分配，多副本部署无需额外配置。
 - 时间：实体用 `LocalDateTime`；对外 JSON 中装箱 `Long` 主键序列化为 String（Jackson 已配，原生 long 不受影响）。
+- 可选能力：`apocalypse.capabilities.<module>.enabled` 是服务端唯一事实源；默认关闭、重启生效。HTTP、菜单、权限/JWT、facade、监听器/任务必须同源 fail-closed；禁用仅关闭暴露面，不删除 Schema、数据或角色关系。未知非空 `sys_menu.module_key` 必须视为禁用。
+- Calendar 日期事实：运行时不得联网抓取政府或参考站点。SYSTEM 官方基线必须保留可审核的来源、hash、diff、review 与发布证据；无法证明官方来源的表格只能作为 MANAGED `LOCAL_POLICY`。系统基线与业务/个人覆盖分层保存，有效值按个人 → 具体业务日历 → 上级日历 → 系统校正 → 系统原始数据解析，并返回字段级 provenance；用户修改在自身 ownership/授权范围内优先，基线升级不得静默丢失其意图。
 - 缓存：用 `@Cacheable` 等注解 + 脚手架两级缓存；禁止业务代码徒手读写 Redis 当缓存用。回源互斥必须覆盖全部实例（Redisson 锁），批量 key 遍历使用 SCAN，L1 失效同时采用 Pub/Sub 快路径与 Redis 代数校验自愈。
 - 权限：统一 `sys_menu` 树（C目录/M菜单/F按钮），按钮节点 `perms` 即接口权限串；perms 命名约定 `域:对象:动作`（如 `system:user:list`），后端用 `@PreAuthorize("hasAuthority('...')")` 校验；角色用 `ROLE_<role_key>` 前缀。
 - 登录安全：失败 N 次锁定（Redis 计数）+ `@RateLimit` 限流 + 强密码策略 + 登录日志审计；access token 必须逐请求核验全局授权/用户授权/凭证版本，版本以 PostgreSQL 为持久化真源并在权限/凭证业务事务内递增，签发时用户、角色、未缓存权限与版本必须取自同一 `REPEATABLE_READ` 数据库快照，禁止以 Redis 作为唯一撤销真源；refresh token 必须用 Redis 原子消费 jti，禁止仅依赖进程内状态。
@@ -96,7 +113,7 @@ io.apocalypse
 - 部门树：用 PostgreSQL `WITH RECURSIVE` 递归查询，禁止引入 ancestors 式冗余路径列。
 - 错误消息：中文直出，`R.code` 数字为语言中立契约；不做后端 i18n 实现（触发条件与进入方式见 `docs/plans/phase-1-scaffold.md` §7）。
 
-## 6. 必须请示人类的事项（Agent 停手条款）
+## 7. 必须请示人类的事项（Agent 停手条款）
 
 1. 新增/升级/删除任何 Maven 依赖
 2. 修改公开 API 契约（`R` 结构、facade 签名、事件字段）
@@ -105,13 +122,13 @@ io.apocalypse
 5. 修改本文件、ArchUnit 规则、CI 门禁
 6. 任何 `git commit/push` 等版本库写操作
 
-## 7. 测试要求
+## 8. 测试要求
 
 - 集成测试命名 `*IT`，由 Failsafe 在 `verify` 阶段运行；使用 Testcontainers（PostgreSQL/Redis 容器，全上下文 `@SpringBootTest`），禁止连真实环境。
 - 模块切片测试（`@ApplicationModuleTest`）暂不作为强制项（数据装配在 framework 模块，独立切片成本高，2 期再评估）。
 - 边界与分层测试（Modulith verify、ArchUnit）不许删除或注释来"通过"构建。
 
-## 8. 文档维护
+## 9. 文档维护
 
 - 结构、命令、约定变化时，同 PR 更新本文件与 `README.md`。
 - 模块级细则可放 `<module>/AGENTS.md`（优先级高于本文件）。

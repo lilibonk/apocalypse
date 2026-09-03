@@ -20,4 +20,11 @@ public @interface OperLog {
 
   /** 业务动作类型（如 INSERT/UPDATE/DELETE）。 */
   String businessType() default "";
+
+  /**
+   * Optional JSON-pointer allowlist applied independently to arguments and result. Empty preserves
+   * the legacy masked payload. A nonempty list records only selected scalar metadata; exception
+   * text is also suppressed so rejected business content cannot leak through an error message.
+   */
+  String[] fields() default {};
 }

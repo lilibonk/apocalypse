@@ -9,7 +9,7 @@ pnpm install
 pnpm dev        # http://localhost:5173
 ```
 
-后端联调：axios `baseURL=/api`，dev server 将 `/api` 代理到 `http://localhost:8080` 并 rewrite 剥掉前缀（见 `vite.config.ts`）。后端不启动时页面可正常渲染，登录会提示网络异常。
+后端联调：axios `baseURL=/api`，dev server 默认将 `/api` 代理到 `http://localhost:8080` 并 rewrite 剥掉前缀（见 `vite.config.ts`）。需要隔离联调环境时，可在启动前设置服务端专用的 `APOCALYPSE_API_PROXY_TARGET`（例如 `http://127.0.0.1:18080`）；该值不会进入浏览器 bundle。后端不启动时页面可正常渲染，登录会提示网络异常。
 
 ## 常用命令
 
@@ -30,7 +30,13 @@ pnpm exec shadcn add --yes <component>   # 添加 shadcn 组件
 - `src/views/` —— 页面组件与 DynaLayer schema（动态路由 glob 来源）
 - `src/components/layout/` —— AppLayout（侧栏/顶栏/页签/cmdk/设置抽屉）
 - `src/design/DEFINITION.md` —— 设计定义（视觉唯一事实来源）；`tokens.css` 是它的 CSS 投影
-- `src/i18n/` —— react-i18next 初始化与 zh/en 词条（菜单名 key 兜底原文）
+- `src/i18n/` —— react-i18next 初始化、核心 zh/en 词条与构建期模块 locale loader；业务词条共置 `src/views/<module>/i18n/`，zh/en 合同由测试校验
 - `src/effects/` —— PixelOrb 吉祥物与 PixelWave/PixelScale 品牌动效
 
 约定与红线见 [AGENTS.md](./AGENTS.md)。
+
+## Calendar 模块接入
+
+Calendar 页面和 locale 随构建存在，运行入口只服从后端最新菜单/权限及日历范围角色，没有前端第二开关或运行时远程模块。禁用/撤权后 Calendar query、路由和页签收敛；缺少 component 显示未安装/版本不匹配，不加载任意远程脚本。
+
+六字段人工覆盖、私人/托管日程和年度日别导入的使用边界、配置、API、错误与验收证据统一见 [Calendar 手册](../docs/calendar/README.md)。CSV 只导入日期政策，不是事件导入器。当前浏览器验收见 [交付证据索引](../docs/calendar/evidence-index.md)。

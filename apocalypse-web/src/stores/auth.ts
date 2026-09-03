@@ -11,6 +11,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { queryClient } from '@/app/query-client'
 import { configureClient } from '@/lib/api/client'
 import * as authApi from '@/lib/api/auth'
 import { normalizeMenuNode, type MenuNode, type TokenPair, type UserInfo } from '@/lib/api/types'
@@ -23,6 +24,8 @@ interface AuthState {
   menus: MenuNode[]
   /** 当前用户视图是否已加载（路由守卫据此决定是否等待）。 */
   meLoaded: boolean
+  /** 本地身份代次：阻止上一账户或上一令牌发起的在途请求覆盖当前身份。 */
+  sessionEpoch: number
 
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -42,15 +45,36 @@ export const useAuthStore = create<AuthState>()(
       perms: [],
       menus: [],
       meLoaded: false,
+      sessionEpoch: 0,
 
       async login(username, password) {
         const tokens = await authApi.login(username, password)
-        set({ tokens, meLoaded: false })
+        // Query keys intentionally do not contain user identity. A successful account switch must
+        // therefore remove every query and mutation before the new credentials become active.
+        queryClient.clear()
+        set((state) => ({
+          tokens,
+          user: null,
+          roles: [],
+          perms: [],
+          menus: [],
+          meLoaded: false,
+          sessionEpoch: state.sessionEpoch + 1,
+        }))
         await get().ensureMe()
       },
 
       clearSession() {
-        set({ tokens: null, user: null, roles: [], perms: [], menus: [], meLoaded: false })
+        set((state) => ({
+          tokens: null,
+          user: null,
+          roles: [],
+          perms: [],
+          menus: [],
+          meLoaded: false,
+          sessionEpoch: state.sessionEpoch + 1,
+        }))
+        queryClient.clear()
       },
 
       async logout() {
@@ -63,8 +87,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       async ensureMe() {
-        if (!get().tokens) return
+        const sessionEpoch = get().sessionEpoch
+        const accessToken = get().tokens?.accessToken
+        if (!accessToken) return
         const me = await authApi.fetchCurrentUser()
+        if (get().sessionEpoch !== sessionEpoch || get().tokens?.accessToken !== accessToken) {
+          return
+        }
         set({
           user: me.user,
           roles: me.roles,
@@ -81,9 +110,26 @@ export const useAuthStore = create<AuthState>()(
       async tryRefresh() {
         const current = get().tokens
         if (!current?.refreshToken) return false
+        const sessionEpoch = get().sessionEpoch
         try {
           const tokens = await authApi.refreshToken(current.refreshToken)
-          set({ tokens })
+          if (
+            get().sessionEpoch !== sessionEpoch ||
+            get().tokens?.refreshToken !== current.refreshToken
+          ) {
+            return false
+          }
+          // A refreshed identity must re-read /me before any previously visible capability is
+          // trusted. RequireAuth performs that refresh while the existing request is replayed.
+          set((state) => ({
+            tokens,
+            user: null,
+            roles: [],
+            perms: [],
+            menus: [],
+            meLoaded: false,
+            sessionEpoch: state.sessionEpoch + 1,
+          }))
           return true
         } catch {
           return false

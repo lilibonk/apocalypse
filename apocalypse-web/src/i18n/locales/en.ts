@@ -8,6 +8,11 @@
  */
 export const en = {
   translation: {
+    route: {
+      unavailable:
+        'This page is unavailable: the module is disabled, access was removed, or the route is not configured. Returned to Dashboard.',
+      notInstalled: 'Page not installed or version mismatch. Please contact your administrator.',
+    },
     login: {
       title: 'Apocalypse',
       edition: 'Management control plane',

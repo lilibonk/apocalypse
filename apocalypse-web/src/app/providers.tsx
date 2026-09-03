@@ -2,25 +2,15 @@
  * 应用级 Provider 装配：React Query、设置→DOM 生效层、i18n 语言同步、Tooltip、Sonner。
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, type ReactNode } from 'react'
 
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import i18n from '@/i18n'
-import { ApiError } from '@/lib/api/client'
 import { useSettings, useSettingsStore } from '@/stores/settings'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // 业务错误（含 40100 兜底后抛出的）不重试；网络错误最多重试 2 次
-      retry: (failureCount, error) => (error instanceof ApiError ? false : failureCount < 2),
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
-})
+import { queryClient } from './query-client'
 
 /** 设置 → DOM：dark class / data-accent / data-density / data-gray / data-motion。 */
 function useApplySettingsToDom() {

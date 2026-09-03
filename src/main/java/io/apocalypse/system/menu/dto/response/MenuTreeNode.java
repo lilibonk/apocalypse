@@ -12,6 +12,7 @@ public record MenuTreeNode(
     String component,
     String perms,
     String icon,
+    String moduleKey,
     Integer sort,
     String remark,
     List<MenuTreeNode> children,

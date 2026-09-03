@@ -2,6 +2,7 @@ package io.apocalypse.framework.log;
 
 import io.apocalypse.common.event.AuditTextSanitizer;
 import io.apocalypse.common.event.OperLoggedEvent;
+import io.apocalypse.common.exception.BizException;
 import io.apocalypse.framework.security.SecurityUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -91,15 +92,17 @@ public class OperLogAspect {
                   AuditTextSanitizer.OPER_NAME_MAX_LENGTH),
               AuditTextSanitizer.fit(currentIp(), AuditTextSanitizer.IP_MAX_LENGTH),
               AuditTextSanitizer.fit(
-                  serializeArgs(signature, joinPoint.getArgs()),
+                  serializeArgs(signature, joinPoint.getArgs(), operLog.fields()),
                   AuditTextSanitizer.OPER_PAYLOAD_MAX_LENGTH),
               AuditTextSanitizer.fit(
-                  serializeResult(result), AuditTextSanitizer.OPER_PAYLOAD_MAX_LENGTH),
+                  serializeResult(result, operLog.fields()),
+                  AuditTextSanitizer.OPER_PAYLOAD_MAX_LENGTH),
               error == null ? 1 : 0,
               error == null
                   ? null
                   : AuditTextSanitizer.fit(
-                      error.getMessage(), AuditTextSanitizer.ERROR_MESSAGE_MAX_LENGTH),
+                      errorText(error, operLog.fields()),
+                      AuditTextSanitizer.ERROR_MESSAGE_MAX_LENGTH),
               costMs));
     } catch (Exception e) {
       log.warn("操作日志采集失败，已忽略: {}", e.getMessage());
@@ -107,7 +110,7 @@ public class OperLogAspect {
   }
 
   /** 参数序列化为 JSON 并脱敏；无法参与序列化的参数类型直接跳过。 */
-  private String serializeArgs(MethodSignature signature, Object[] args) {
+  private String serializeArgs(MethodSignature signature, Object[] args, String[] fields) {
     if (args == null || args.length == 0) {
       return null;
     }
@@ -121,24 +124,48 @@ public class OperLogAspect {
         String name = names != null && i < names.length ? names[i] : "arg" + i;
         node.set(name, objectMapper.valueToTree(args[i]));
       }
-      maskSensitive(node);
-      return truncate(objectMapper.writeValueAsString(node));
+      return serializePayload(node, fields);
     } catch (Exception e) {
       return "[unserializable]";
     }
   }
 
-  private String serializeResult(Object result) {
+  private String serializeResult(Object result, String[] fields) {
     if (result == null) {
       return null;
     }
     try {
       JsonNode node = objectMapper.valueToTree(result);
-      maskSensitive(node);
-      return truncate(objectMapper.writeValueAsString(node));
+      return serializePayload(node, fields);
     } catch (Exception e) {
       return "[unserializable]";
     }
+  }
+
+  private String serializePayload(JsonNode payload, String[] fields) {
+    maskSensitive(payload);
+    if (fields.length == 0) {
+      return truncate(objectMapper.writeValueAsString(payload));
+    }
+    ObjectNode selected = objectMapper.createObjectNode();
+    for (String pointer : fields) {
+      JsonNode value = payload.at(pointer);
+      // Objects/arrays must never be selected wholesale. Missing paths are not fallback permission
+      // to collect the whole payload; this remains safe when a DTO grows new fields.
+      if (!value.isMissingNode() && !value.isObject() && !value.isArray()) {
+        selected.set(pointer, value);
+      }
+    }
+    return truncate(objectMapper.writeValueAsString(selected));
+  }
+
+  private static String errorText(Throwable error, String[] fields) {
+    if (fields.length == 0) {
+      return error.getMessage();
+    }
+    return error instanceof BizException business
+        ? "BizException:" + business.getCode()
+        : error.getClass().getSimpleName();
   }
 
   /** 递归脱敏：对象字段 key 命中敏感正则的值替换为 {@code ***}。 */

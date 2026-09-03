@@ -2,13 +2,19 @@
  * 路由装配：/login 公开，其余经 RequireAuth + AppLayout；业务路由由菜单树动态生成。
  */
 
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageLoading } from '@/components/PageLoading'
 import { RequireAuth } from '@/routes/guard'
-import { useMenuRoutes } from '@/routes/menu-routes'
+import { reconcileMenuAccess } from '@/routes/menu-access'
+import { flattenMenuRoutes, useMenuRoutes } from '@/routes/menu-routes'
+import { useAuthStore } from '@/stores/auth'
+import { DASHBOARD_TAB, useTabsStore } from '@/stores/tabs'
 
 const LoginPage = lazy(() => import('@/views/login'))
 const DashboardPage = lazy(() => import('@/views/dashboard'))
@@ -25,6 +31,23 @@ function NotFoundPage() {
 /** 已认证区：布局 + 动态业务路由。 */
 function ProtectedRoutes() {
   const { routeElements } = useMenuRoutes()
+  const menus = useAuthStore((state) => state.menus)
+  const retainAllowed = useTabsStore((state) => state.retainAllowed)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { t } = useTranslation()
+  const allowedPaths = useMemo(
+    () => [DASHBOARD_TAB.key, ...flattenMenuRoutes(menus).map((route) => route.path)],
+    [menus],
+  )
+
+  useEffect(() => {
+    if (reconcileMenuAccess(menus, allowedPaths, location.pathname, queryClient, retainAllowed)) {
+      toast.info(t('route.unavailable'), { id: 'route-unavailable', duration: 8000 })
+      void navigate(DASHBOARD_TAB.key, { replace: true })
+    }
+  }, [allowedPaths, location.pathname, menus, navigate, queryClient, retainAllowed, t])
 
   return (
     <Routes>

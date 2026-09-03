@@ -89,4 +89,17 @@ describe('tabs store', () => {
       activeKey: DASHBOARD_TAB.key,
     })
   })
+
+  it('后端撤回菜单后关闭失效页签并回到工作台', () => {
+    const store = useTabsStore.getState()
+    store.open(userTab)
+    store.open(roleTab)
+
+    useTabsStore.getState().retainAllowed([userTab.key])
+
+    expect(useTabsStore.getState()).toMatchObject({
+      tabs: [DASHBOARD_TAB, userTab],
+      activeKey: DASHBOARD_TAB.key,
+    })
+  })
 })

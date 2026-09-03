@@ -24,6 +24,12 @@ spring:
   jackson:
     time-zone: GMT+8
 
+  servlet:
+    multipart:
+      # Calendar 导入：2 MiB CSV + 最多 20 MiB 来源证据；业务层再次执行精确上限与格式校验。
+      max-file-size: 20MB
+      max-request-size: 23MB
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -48,6 +54,16 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId}] %logger{36} - %msg%n"
 
 apocalypse:
+  capabilities:
+    calendar:
+      # 编译期模块、配置期暴露；默认关闭，修改后重启生效。
+      enabled: ${APOCALYPSE_CAPABILITIES_CALENDAR_ENABLED:false}
+  calendar:
+    import-storage:
+      # 原始 CSV + 来源证据的硬配额；不替代磁盘、WAL 和备份监控。
+      total-bytes: ${APOCALYPSE_CALENDAR_IMPORT_STORAGE_TOTAL_BYTES:21474836480}
+      uploader-bytes: ${APOCALYPSE_CALENDAR_IMPORT_STORAGE_UPLOADER_BYTES:2147483648}
+      target-bytes: ${APOCALYPSE_CALENDAR_IMPORT_STORAGE_TARGET_BYTES:10737418240}
   security:
     jwt:
       issuer: apocalypse
