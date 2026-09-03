@@ -1,5 +1,6 @@
 /** 投影授权是来源系统 × 目标日历的范围能力管理，使用专用列表与幂等模式说明。 */
 
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -109,7 +110,7 @@ export default function ProjectionGrantPage() {
       {publisherCalendars.length === 0 && !calendarsQuery.isLoading ? (
         <DataEmpty>{t('projections.noRole')}</DataEmpty>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.4fr)]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
           <Card className="gap-4 py-4">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle>{t('projections.addSource')}</CardTitle>
@@ -129,17 +130,19 @@ export default function ProjectionGrantPage() {
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="projection-mode">{t('projections.publishMode')}</Label>
-                <select
+                <FieldSelect
                   id="projection-mode"
                   value={publishMode}
-                  onChange={(event) =>
-                    setPublishMode(event.target.value as ProjectionGrant['publishMode'])
+                  onValueChange={(selection) =>
+                    setPublishMode(selection as ProjectionGrant['publishMode'])
                   }
                   className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="DRAFT_ONLY">DRAFT_ONLY</option>
-                  <option value="DIRECT_PUBLISH">DIRECT_PUBLISH</option>
-                </select>
+                  <FieldOption value="DRAFT_ONLY">{t('publishModes.DRAFT_ONLY')}</FieldOption>
+                  <FieldOption value="DIRECT_PUBLISH">
+                    {t('publishModes.DIRECT_PUBLISH')}
+                  </FieldOption>
+                </FieldSelect>
               </div>
               <Perm perm="calendar:projection-grant:edit">
                 <Button
@@ -181,7 +184,9 @@ export default function ProjectionGrantPage() {
                       <StateBadge value={grant.state} />
                       <Badge variant="outline">v{grant.version}</Badge>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{grant.publishMode}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {t(`publishModes.${grant.publishMode}`)}
+                    </div>
                   </div>
                   <Perm perm="calendar:projection-grant:edit">
                     <div className="flex flex-wrap gap-2">
@@ -205,8 +210,10 @@ export default function ProjectionGrantPage() {
                         }
                       >
                         <p>
-                          {grant.sourceSystem} · {grant.publishMode} →{' '}
-                          {grant.publishMode === 'DRAFT_ONLY' ? 'DIRECT_PUBLISH' : 'DRAFT_ONLY'}
+                          {grant.sourceSystem} · {t(`publishModes.${grant.publishMode}`)} →{' '}
+                          {t(
+                            `publishModes.${grant.publishMode === 'DRAFT_ONLY' ? 'DIRECT_PUBLISH' : 'DRAFT_ONLY'}`,
+                          )}
                         </p>
                       </CalendarConfirm>
                       <CalendarConfirm
@@ -223,7 +230,7 @@ export default function ProjectionGrantPage() {
                         }
                       >
                         <p>
-                          {grant.sourceSystem} · {grant.publishMode}
+                          {grant.sourceSystem} · {t(`publishModes.${grant.publishMode}`)}
                         </p>
                       </CalendarConfirm>
                     </div>

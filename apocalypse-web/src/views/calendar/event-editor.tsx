@@ -1,3 +1,5 @@
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -72,7 +74,7 @@ export function EventEditor({
 
   return (
     <Dialog open={open} onOpenChange={(value) => !pending && onOpenChange(value)}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{t('eventEditor.description')}</DialogDescription>
@@ -87,20 +89,20 @@ export function EventEditor({
           />
           <div className="grid gap-1.5">
             <Label htmlFor="event-time-kind">{t('eventEditor.timeKind')}</Label>
-            <select
+            <FieldSelect
               id="event-time-kind"
               value={form.timeKind}
-              onChange={(event) =>
+              onValueChange={(selection) =>
                 setForm((current) => ({
                   ...current,
-                  timeKind: event.target.value as EventForm['timeKind'],
+                  timeKind: selection as EventForm['timeKind'],
                 }))
               }
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="ALL_DAY">{t('timeKinds.ALL_DAY')}</option>
-              <option value="TIMED">{t('timeKinds.TIMED')}</option>
-            </select>
+              <FieldOption value="ALL_DAY">{t('timeKinds.ALL_DAY')}</FieldOption>
+              <FieldOption value="TIMED">{t('timeKinds.TIMED')}</FieldOption>
+            </FieldSelect>
           </div>
           {form.timeKind === 'ALL_DAY' ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -145,24 +147,29 @@ export function EventEditor({
                 value={form.zoneId}
                 onChange={(value) => setForm((current) => ({ ...current, zoneId: value }))}
               />
-              <div className="grid gap-1.5">
-                <Label htmlFor="event-offset-choice">{t('eventEditor.offsetChoice')}</Label>
-                <select
-                  id="event-offset-choice"
-                  value={form.offsetChoice}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      offsetChoice: event.target.value as EventForm['offsetChoice'],
-                    }))
-                  }
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">{t('eventEditor.offsetAuto')}</option>
-                  <option value="EARLIER">{t('eventEditor.offsetEarlier')}</option>
-                  <option value="LATER">{t('eventEditor.offsetLater')}</option>
-                </select>
-              </div>
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  {t('eventEditor.offsetChoice')}
+                </summary>
+                <div className="mt-3 grid gap-1.5">
+                  <Label htmlFor="event-offset-choice">{t('eventEditor.offsetChoice')}</Label>
+                  <FieldSelect
+                    id="event-offset-choice"
+                    value={form.offsetChoice}
+                    onValueChange={(selection) =>
+                      setForm((current) => ({
+                        ...current,
+                        offsetChoice: selection as EventForm['offsetChoice'],
+                      }))
+                    }
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <FieldOption value="">{t('eventEditor.offsetAuto')}</FieldOption>
+                    <FieldOption value="EARLIER">{t('eventEditor.offsetEarlier')}</FieldOption>
+                    <FieldOption value="LATER">{t('eventEditor.offsetLater')}</FieldOption>
+                  </FieldSelect>
+                </div>
+              </details>
             </>
           )}
           <FormInput
@@ -215,13 +222,17 @@ function FormInput({
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        maxLength={maxLength}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      {type === 'date' || type === 'datetime-local' ? (
+        <DatePicker id={id} mode={type} value={value} allowClear={false} onValueChange={onChange} />
+      ) : (
+        <Input
+          id={id}
+          type={type}
+          value={value}
+          maxLength={maxLength}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 /** 托管覆盖包含草稿、不可变修订、逐项冲突决策与发布 Gate，使用手写状态机工作台。 */
 
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Save, Send, Trash2, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -10,8 +12,8 @@ import { Perm } from '@/components/Perm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 import {
   discardManagedDraft,
@@ -27,6 +29,7 @@ import {
 } from '../calendar.api'
 import {
   CalendarPageFrame,
+  CalendarTrace,
   CalendarPicker,
   DataEmpty,
   InlineError,
@@ -35,7 +38,12 @@ import {
 import { dayValueText, toErrorMessage } from '../calendar.format'
 import { CalendarConfirm } from '../calendar-confirm'
 import { DayOverrideEditor } from '../day-override-editor'
-import { buildDayOverride, emptyOverrideInput, underlayField } from '../day-override-model'
+import {
+  buildDayOverride,
+  emptyOverrideInput,
+  underlayField,
+  dayFieldLabels,
+} from '../day-override-model'
 import { OverrideChangePreview } from '../override-change-preview'
 import { OverrideRevisionDiff } from '../override-revision-diff'
 
@@ -190,7 +198,7 @@ export default function ManagedOverridePage() {
       {managedCalendars.length === 0 && !calendarsQuery.isLoading ? (
         <DataEmpty>{t('managedOverrides.noRole')}</DataEmpty>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(20rem,0.85fr)_minmax(0,1.5fr)]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
           <div className="space-y-5">
             <Card className="gap-4 py-4">
               <CardHeader className="px-4 sm:px-6">
@@ -200,11 +208,12 @@ export default function ManagedOverridePage() {
               <CardContent className="space-y-4 px-4 sm:px-6">
                 <div className="grid gap-1.5">
                   <Label htmlFor="managed-override-date">{t('managedOverrides.date')}</Label>
-                  <Input
+                  <DatePicker
                     id="managed-override-date"
-                    type="date"
+                    mode="date"
+                    allowClear={false}
                     value={date}
-                    onChange={(event) => setDate(event.target.value)}
+                    onValueChange={(selection) => setDate(selection)}
                   />
                 </div>
                 <DayOverrideEditor value={input} onChange={setInput} />
@@ -297,14 +306,14 @@ export default function ManagedOverridePage() {
                 <CardDescription>{t('managedOverrides.publishGateDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 px-4 sm:px-6">
-                <div className="rounded-md border border-border p-3 text-sm">
+                <CalendarTrace>
                   <div className="text-xs text-muted-foreground">
                     {t('managedOverrides.contentHash')}
                   </div>
                   <div className="mt-1 break-all font-mono text-xs">
                     {draftQuery.data?.contentHash ?? '—'}
                   </div>
-                </div>
+                </CalendarTrace>
                 {canPublish && (
                   <Perm perm="calendar:managed-override:publish">
                     <CalendarConfirm
@@ -342,7 +351,7 @@ export default function ManagedOverridePage() {
                       {openConflicts.map((conflict) => (
                         <div key={conflict.id} className="rounded-md border p-2">
                           <p>
-                            {conflict.date} · {conflict.field} ·{' '}
+                            {conflict.date} · {t(dayFieldLabels[conflict.field])} ·{' '}
                             {t(`conflictResolutions.${decisions[conflict.id]}`)}
                           </p>
                           <p>
@@ -364,128 +373,141 @@ export default function ManagedOverridePage() {
             </Card>
           </div>
 
-          <div className="space-y-5">
-            <Card className="gap-4 py-4">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle>{t('managedOverrides.conflicts')}</CardTitle>
-                <CardDescription>{t('managedOverrides.conflictsDescription')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 px-4 sm:px-6">
-                {(conflictsQuery.data?.list ?? []).map((conflict) => (
-                  <div key={conflict.id} className="rounded-md border border-border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-medium">
-                        {conflict.date} · {conflict.field}
-                      </div>
-                      <StateBadge value={conflict.state} />
-                    </div>
-                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                      <div className="rounded-md bg-muted/40 p-2">
-                        <div className="text-xs text-muted-foreground">
-                          {t('managedOverrides.previousUnderlay')}
+          <Tabs defaultValue="review" className="min-w-0 gap-4">
+            <TabsList>
+              <TabsTrigger value="review">{t('workspace.review')}</TabsTrigger>
+              <TabsTrigger value="history">{t('workspace.history')}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="review">
+              <Card className="gap-4 py-4">
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle>{t('managedOverrides.conflicts')}</CardTitle>
+                  <CardDescription>{t('managedOverrides.conflictsDescription')}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 sm:px-6">
+                  {(conflictsQuery.data?.list ?? []).map((conflict) => (
+                    <div key={conflict.id} className="rounded-md border border-border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-medium">
+                          {conflict.date} · {t(dayFieldLabels[conflict.field])}
                         </div>
-                        <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
+                        <StateBadge value={conflict.state} />
                       </div>
-                      <div className="rounded-md bg-muted/40 p-2">
-                        <div className="text-xs text-muted-foreground">
-                          {t('managedOverrides.currentUnderlay')}
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div className="rounded-md bg-muted/40 p-2">
+                          <div className="text-xs text-muted-foreground">
+                            {t('managedOverrides.previousUnderlay')}
+                          </div>
+                          <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
                         </div>
-                        <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
+                        <div className="rounded-md bg-muted/40 p-2">
+                          <div className="text-xs text-muted-foreground">
+                            {t('managedOverrides.currentUnderlay')}
+                          </div>
+                          <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
+                        </div>
                       </div>
+                      {conflict.state === 'OPEN' && (
+                        <div className="mt-3 grid gap-1.5">
+                          <Label htmlFor={`managed-conflict-${conflict.id}`}>
+                            {t('managedOverrides.publishDecision')}
+                          </Label>
+                          <FieldSelect
+                            id={`managed-conflict-${conflict.id}`}
+                            value={decisions[conflict.id] ?? ''}
+                            onValueChange={(selection) =>
+                              setDecisions((value) => ({
+                                ...value,
+                                [conflict.id]: selection as ConflictResolution,
+                              }))
+                            }
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <FieldOption value="">
+                              {t('managedOverrides.selectDecision')}
+                            </FieldOption>
+                            <FieldOption value="KEEP">{t('conflictResolutions.KEEP')}</FieldOption>
+                            <FieldOption value="REBASE">
+                              {t('conflictResolutions.REBASE')}
+                            </FieldOption>
+                            <FieldOption value="INHERIT">
+                              {t('conflictResolutions.INHERIT')}
+                            </FieldOption>
+                          </FieldSelect>
+                        </div>
+                      )}
                     </div>
-                    {conflict.state === 'OPEN' && (
-                      <div className="mt-3 grid gap-1.5">
-                        <Label htmlFor={`managed-conflict-${conflict.id}`}>
-                          {t('managedOverrides.publishDecision')}
-                        </Label>
-                        <select
-                          id={`managed-conflict-${conflict.id}`}
-                          value={decisions[conflict.id] ?? ''}
-                          onChange={(event) =>
-                            setDecisions((value) => ({
-                              ...value,
-                              [conflict.id]: event.target.value as ConflictResolution,
-                            }))
-                          }
-                          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          <option value="">{t('managedOverrides.selectDecision')}</option>
-                          <option value="KEEP">{t('conflictResolutions.KEEP')}</option>
-                          <option value="REBASE">{t('conflictResolutions.REBASE')}</option>
-                          <option value="INHERIT">{t('conflictResolutions.INHERIT')}</option>
-                        </select>
+                  ))}
+                  {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
+                    <DataEmpty>{t('managedOverrides.noConflicts')}</DataEmpty>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="history" forceMount className="data-[state=inactive]:hidden">
+              <Card className="gap-4 py-4">
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle>{t('managedOverrides.history')}</CardTitle>
+                  <CardDescription>{t('managedOverrides.historyDescription')}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 px-4 sm:px-6">
+                  {(revisionsQuery.data?.list ?? []).map((revision) => (
+                    <div
+                      key={revision.id}
+                      className="flex flex-col justify-between gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">
+                            {t('managedOverrides.revision', { number: revision.revisionNo })}
+                          </span>
+                          <StateBadge value={revision.state} />
+                          <Badge variant="outline">
+                            {t('managedOverrides.itemCount', { count: revision.items.length })}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 max-w-xl truncate font-mono text-xs text-muted-foreground">
+                          {revision.contentHash}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-                {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
-                  <DataEmpty>{t('managedOverrides.noConflicts')}</DataEmpty>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="gap-4 py-4">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle>{t('managedOverrides.history')}</CardTitle>
-                <CardDescription>{t('managedOverrides.historyDescription')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 px-4 sm:px-6">
-                {(revisionsQuery.data?.list ?? []).map((revision) => (
-                  <div
-                    key={revision.id}
-                    className="flex flex-col justify-between gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center"
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {t('managedOverrides.revision', { number: revision.revisionNo })}
-                        </span>
-                        <StateBadge value={revision.state} />
-                        <Badge variant="outline">
-                          {t('managedOverrides.itemCount', { count: revision.items.length })}
-                        </Badge>
-                      </div>
-                      <div className="mt-1 max-w-xl truncate font-mono text-xs text-muted-foreground">
-                        {revision.contentHash}
-                      </div>
+                      {revision.state === 'PUBLISHED' && canPublish && (
+                        <Perm perm="calendar:managed-override:publish">
+                          <CalendarConfirm
+                            reviewKey={JSON.stringify([
+                              calendarId,
+                              revision.id,
+                              revision.state,
+                              revision.version,
+                            ])}
+                            title={t('managedOverrides.withdraw')}
+                            description={t('overrideEditor.withdrawWarning')}
+                            onConfirm={() => withdrawMutation.mutate(revision.id)}
+                            trigger={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={withdrawMutation.isPending}
+                              >
+                                <Undo2 />
+                                {t('managedOverrides.withdraw')}
+                              </Button>
+                            }
+                          >
+                            <p>
+                              #{revision.revisionNo} · {revision.contentHash}
+                            </p>
+                          </CalendarConfirm>
+                        </Perm>
+                      )}
                     </div>
-                    {revision.state === 'PUBLISHED' && canPublish && (
-                      <Perm perm="calendar:managed-override:publish">
-                        <CalendarConfirm
-                          reviewKey={JSON.stringify([
-                            calendarId,
-                            revision.id,
-                            revision.state,
-                            revision.version,
-                          ])}
-                          title={t('managedOverrides.withdraw')}
-                          description={t('overrideEditor.withdrawWarning')}
-                          onConfirm={() => withdrawMutation.mutate(revision.id)}
-                          trigger={
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={withdrawMutation.isPending}
-                            >
-                              <Undo2 />
-                              {t('managedOverrides.withdraw')}
-                            </Button>
-                          }
-                        >
-                          <p>
-                            #{revision.revisionNo} · {revision.contentHash}
-                          </p>
-                        </CalendarConfirm>
-                      </Perm>
-                    )}
-                  </div>
-                ))}
-                {!revisionsQuery.isLoading && (revisionsQuery.data?.list ?? []).length === 0 && (
-                  <DataEmpty>{t('managedOverrides.noRevisions')}</DataEmpty>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  ))}
+                  {!revisionsQuery.isLoading && (revisionsQuery.data?.list ?? []).length === 0 && (
+                    <DataEmpty>{t('managedOverrides.noRevisions')}</DataEmpty>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </CalendarPageFrame>

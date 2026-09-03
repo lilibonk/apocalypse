@@ -25,6 +25,7 @@ import {
 } from '../calendar.api'
 import {
   CalendarPageFrame,
+  CalendarTrace,
   CalendarPicker,
   DataEmpty,
   InlineError,
@@ -179,11 +180,13 @@ export default function ManagedEventsPage() {
                   <div className="text-xs text-muted-foreground">{t('managedEvents.location')}</div>
                   <div className="mt-1">{event.content.location || '—'}</div>
                 </div>
-                <div className="rounded-md border border-border p-3 sm:col-span-2">
-                  <div className="text-xs text-muted-foreground">
-                    {t('managedEvents.contentHash')}
-                  </div>
-                  <div className="mt-1 truncate font-mono text-xs">{event.contentHash}</div>
+                <div className="sm:col-span-2">
+                  <CalendarTrace>
+                    <div className="text-xs text-muted-foreground">
+                      {t('managedEvents.contentHash')}
+                    </div>
+                    <div className="mt-1 truncate font-mono text-xs">{event.contentHash}</div>
+                  </CalendarTrace>
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">

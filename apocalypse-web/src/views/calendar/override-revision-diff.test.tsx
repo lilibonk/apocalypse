@@ -44,6 +44,7 @@ describe('published override diff', () => {
       />,
     )
     expect(html).toContain(dayValueText(underlay))
-    expect(html).toContain('INHERIT')
+    expect(html).toContain('使用上级或系统默认')
+    expect(html).not.toContain('INHERIT')
   })
 })

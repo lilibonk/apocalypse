@@ -6,6 +6,25 @@
  */
 export const zh = {
   translation: {
+    dateControl: {
+      select: '请选择',
+      date: '选择日期',
+      month: '选择月份',
+      'datetime-local': '选择日期和时间',
+      previous: '上个月',
+      next: '下个月',
+      previousYear: '上一年',
+      nextYear: '下一年',
+      year: '年份',
+      hour: '小时',
+      minute: '分钟',
+      confirm: '确定',
+      clear: '清除',
+      today: '今天',
+      selected: '已选日期：{{date}}',
+      keyboard:
+        '方向键移动日期，Home 或 End 移至本周首尾，Page Up 或 Page Down 切换月份，Enter 选择。',
+    },
     route: {
       unavailable: '页面不可用：模块已停用、访问权限已撤回或路由未配置。已返回工作台。',
       notInstalled: '页面未安装或版本不匹配，请联系管理员。',

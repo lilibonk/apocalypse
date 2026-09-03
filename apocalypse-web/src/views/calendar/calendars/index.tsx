@@ -3,6 +3,7 @@
  * 因而使用手写逃逸舱；所有写操作仍由后端 capability、permission 与范围角色复核。
  */
 
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
@@ -191,7 +192,7 @@ export default function CalendarManagementPage() {
       }
     >
       {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
-      <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <Card className="gap-4 py-4">
           <CardHeader className="px-4">
             <CardTitle>{t('calendars.contexts')}</CardTitle>
@@ -208,7 +209,7 @@ export default function CalendarManagementPage() {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium">{calendar.name}</span>
-                  <Badge variant="outline">{calendar.kind}</Badge>
+                  <Badge variant="outline">{t(`calendarKinds.${calendar.kind}`)}</Badge>
                 </span>
                 <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
                   {calendar.calendarKey}
@@ -235,7 +236,9 @@ export default function CalendarManagementPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <StateBadge value={selected.state} />
-                      {selected.currentUserRole && <Badge>{selected.currentUserRole}</Badge>}
+                      {selected.currentUserRole && (
+                        <Badge>{t(`roles.${selected.currentUserRole}`)}</Badge>
+                      )}
                       {canManageSelected && (
                         <>
                           <Perm perm="calendar:calendar:edit">
@@ -283,7 +286,10 @@ export default function CalendarManagementPage() {
                   </div>
                   <div className="rounded-md border border-border p-3">
                     <div className="text-xs text-muted-foreground">{t('calendars.parentId')}</div>
-                    <div className="mt-1 font-mono font-medium">{selected.parentId ?? '—'}</div>
+                    <div className="mt-1 font-medium">
+                      {calendarsQuery.data?.find((item) => item.id === selected.parentId)?.name ??
+                        '—'}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -322,7 +328,7 @@ export default function CalendarManagementPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge>{member.role}</Badge>
+                          <Badge>{t(`roles.${member.role}`)}</Badge>
                           <StateBadge value={member.state} />
                           <Perm perm="calendar:member:edit">
                             <CalendarConfirm
@@ -350,7 +356,7 @@ export default function CalendarManagementPage() {
                               }
                             >
                               <p>
-                                {selected.name} · {member.username} · {member.role}
+                                {selected.name} · {member.username} · {t(`roles.${member.role}`)}
                               </p>
                             </CalendarConfirm>
                           </Perm>
@@ -392,22 +398,22 @@ export default function CalendarManagementPage() {
             />
             <div className="grid gap-1.5">
               <Label htmlFor="calendar-parent">{t('calendars.parent')}</Label>
-              <select
+              <FieldSelect
                 id="calendar-parent"
                 value={form.parentId}
-                onChange={(event) =>
-                  setForm((value) => ({ ...value, parentId: event.target.value }))
+                onValueChange={(selection) =>
+                  setForm((value) => ({ ...value, parentId: selection }))
                 }
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
                 {(calendarsQuery.data ?? [])
                   .filter((calendar) => calendar.id !== (editing === 'new' ? '' : editing?.id))
                   .map((calendar) => (
-                    <option key={calendar.id} value={calendar.id}>
+                    <FieldOption key={calendar.id} value={calendar.id}>
                       {calendar.name}
-                    </option>
+                    </FieldOption>
                   ))}
-              </select>
+              </FieldSelect>
             </div>
             <FormInput
               id="calendar-region"
@@ -456,16 +462,16 @@ export default function CalendarManagementPage() {
           />
           <div className="grid gap-1.5">
             <Label htmlFor="calendar-member-role">{t('calendars.role')}</Label>
-            <select
+            <FieldSelect
               id="calendar-member-role"
               value={memberRole}
-              onChange={(event) => setMemberRole(event.target.value as CalendarRole)}
+              onValueChange={(selection) => setMemberRole(selection as CalendarRole)}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="READER">READER</option>
-              <option value="EDITOR">EDITOR</option>
-              <option value="PUBLISHER">PUBLISHER</option>
-            </select>
+              <FieldOption value="READER">{t('roles.READER')}</FieldOption>
+              <FieldOption value="EDITOR">{t('roles.EDITOR')}</FieldOption>
+              <FieldOption value="PUBLISHER">{t('roles.PUBLISHER')}</FieldOption>
+            </FieldSelect>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMemberOpen(false)}>

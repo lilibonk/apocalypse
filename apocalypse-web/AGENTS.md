@@ -43,6 +43,15 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 - schema 先行约定：页面结构（搜索区/表格列/表单字段/操作）以 schema 为事实来源，手写页面仅保留给越出标准模式的场景。
 - `src/views/system/user/index.tsx` 是 DynaLayer golden sample；树形、组合页等越出标准模式的页面必须在文件头说明逃逸原因。
 
+### 全局管理台设计语言（强制）
+
+- 按 `src/design/DEFINITION.md` 的管理工作台层级组织页面：单一标题 → 上下文/操作栏 → 主工作区 → 按需详情；长流程按任务分区，不将编辑、复核、历史等权平铺。
+- 普通列表/月历的“查看详情”使用 Dialog 或 Sheet，禁止底部追加详情。短表单/确认用 Dialog，长详情用 Sheet；必须有可访问标题、关闭入口、正文滚动与焦点返回。复核/编辑工作台可用有明确名称、选中上下文的主辅栏，不等同于追加详情。
+- 标准下拉复用 `components/ui/field-select.tsx`；日期/月/本地时间复用 `components/ui/date-picker.tsx`，禁止业务页面引入原生 `<select>` 与 date/month/datetime-local 弹层。农历数值编辑不等同公历选择器，不得暗改日期事实。
+- 枚举值只用于接口，不作为用户可见标签；在模块 locale 中解释角色、来源、状态和动作。技术标识放追溯区，保留用户原始内容和后端错误消息。
+- 初次工作台目录收起，深链展开当前分支；叶菜单精确匹配，禁止父路径前缀导致多个菜单高亮。
+- Calendar 执法：`ui-contract.test.tsx`、共享日期模型测试与侧栏测试；浏览器检查按 `docs/calendar-ui-acceptance.md` 执行。新模块沿用此语言，并添加自己的接入/可访问性回归，不以截图或快照单项替代交互验收。
+
 ## 5. 动效治理
 
 像素语言边界、表面清单、吉祥物源资产与验收见 `src/design/DEFINITION.md`。本节管引擎与红线；视觉「像不像」以定义为准。

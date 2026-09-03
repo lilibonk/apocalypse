@@ -21,7 +21,7 @@ function fullPath(node: MenuNode, parentPath: string): string {
 
 function branchContainsPath(node: MenuNode, parentPath: string, pathname: string): boolean {
   const path = fullPath(node, parentPath)
-  if (node.menuType === 'M') return pathname === path || pathname.startsWith(`${path}/`)
+  if (node.menuType === 'M') return pathname === path
   return node.children.some(
     (child) => child.menuType !== 'F' && branchContainsPath(child, path, pathname),
   )
@@ -43,10 +43,11 @@ function MenuItemLink({
   // NavLink 的函数式 className 会被 Slot 字符串化成源码文本注入 class（样式全废）——
   // 因此必须传静态字符串 className（Slot 只安全合并字符串）。
   const { pathname } = useLocation()
-  const isActive = pathname === path || pathname.startsWith(`${path}/`)
+  const isActive = pathname === path
   const link = (
     <NavLink
       to={path}
+      end
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
@@ -85,7 +86,9 @@ function MenuGroup({
   const { pathname } = useLocation()
   const visibleChildren = node.children.filter((child) => child.menuType !== 'F')
   const activeBranch = visibleChildren.some((child) => branchContainsPath(child, path, pathname))
-  const [open, setOpen] = useState(true)
+  const [disclosure, setDisclosure] = useState<{ pathname: string; open: boolean } | null>(null)
+  // A new route reveals only its branch; an explicit toggle is respected until navigation.
+  const open = disclosure?.pathname === pathname ? disclosure.open : activeBranch
   const contentId = `sidebar-group-${node.id}`
 
   if (collapsed) {
@@ -113,7 +116,7 @@ function MenuGroup({
     <div>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setDisclosure({ pathname, open: !open })}
         aria-expanded={open}
         aria-controls={contentId}
         className={cn(

@@ -8,6 +8,25 @@
  */
 export const en = {
   translation: {
+    dateControl: {
+      select: 'Select an option',
+      date: 'Choose date',
+      month: 'Choose month',
+      'datetime-local': 'Choose date and time',
+      previous: 'Previous month',
+      next: 'Next month',
+      previousYear: 'Previous year',
+      nextYear: 'Next year',
+      year: 'Year',
+      hour: 'Hour',
+      minute: 'Minute',
+      confirm: 'Apply',
+      clear: 'Clear',
+      today: 'Today',
+      selected: 'Selected date: {{date}}',
+      keyboard:
+        'Arrow keys move by day or week. Home and End move within the week. Page Up and Page Down change the month. Enter selects.',
+    },
     route: {
       unavailable:
         'This page is unavailable: the module is disabled, access was removed, or the route is not configured. Returned to Dashboard.',

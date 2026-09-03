@@ -1,5 +1,6 @@
 /** 个人覆盖同时呈现生效来源、版本与冲突复核，属于非标准字段级工作台，手写实现。 */
 
+import { DatePicker } from '@/components/ui/date-picker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Save } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -10,8 +11,8 @@ import { Perm } from '@/components/Perm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 import {
   getDay,
@@ -130,7 +131,7 @@ export default function PersonalOverridePage() {
           message={toErrorMessage(overrideQuery.error ?? dayQuery.error ?? conflictsQuery.error)}
         />
       )}
-      <div className="grid gap-5 xl:grid-cols-[minmax(20rem,0.9fr)_minmax(0,1.4fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
         <Card className="gap-4 py-4">
           <CardHeader className="px-4 sm:px-6">
             <CardTitle>{t('personalOverrides.editLabel')}</CardTitle>
@@ -139,11 +140,12 @@ export default function PersonalOverridePage() {
           <CardContent className="space-y-4 px-4 sm:px-6">
             <div className="grid gap-1.5">
               <Label htmlFor="personal-override-date">{t('personalOverrides.date')}</Label>
-              <Input
+              <DatePicker
                 id="personal-override-date"
-                type="date"
+                mode="date"
+                allowClear={false}
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onValueChange={(selection) => setDate(selection)}
               />
             </div>
             <DayOverrideEditor value={input} onChange={setInput} />
@@ -153,7 +155,7 @@ export default function PersonalOverridePage() {
               </div>
               <div className="mt-1 font-medium">
                 {currentItem
-                  ? `${currentItem.action} · ${dayValueText(currentItem.value)}`
+                  ? `${t(`overrideActions.${currentItem.action}`)} · ${dayValueText(currentItem.value)}`
                   : t('personalOverrides.noCurrentOverride')}
               </div>
               <div className="mt-1 font-mono text-xs text-muted-foreground">
@@ -216,94 +218,101 @@ export default function PersonalOverridePage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-5">
-          <Card className="gap-4 py-4">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle>{t('personalOverrides.comparison', { date })}</CardTitle>
-              <CardDescription>{t('personalOverrides.baselineDescription')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 px-4 sm:px-6">
-              {!dayQuery.data ? (
-                <DataEmpty>{t('personalOverrides.chooseDate')}</DataEmpty>
-              ) : (
-                <>
-                  {Object.entries(dayFieldLabels).map(([field, label]) => (
-                    <FieldPair
-                      key={field}
-                      label={t(label)}
-                      baseline={dayValueText(
-                        snapshotField(
-                          dayQuery.data!.baseline,
-                          field as keyof typeof dayFieldLabels,
-                        ),
-                      )}
-                      effective={dayValueText(
-                        snapshotField(
-                          dayQuery.data!.effective,
-                          field as keyof typeof dayFieldLabels,
-                          dayQuery.data!.resolutions.find((item) => item.field === field)?.state,
-                        ),
-                      )}
-                    />
-                  ))}
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {dayQuery.data.resolutions.map((resolution) => (
-                      <Badge key={resolution.field} variant="outline">
-                        {t(dayFieldLabels[resolution.field])} · {resolution.source.layer} ·{' '}
-                        {resolution.source.sourceCalendarKey} · {resolution.source.sourceVersion}
-                      </Badge>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="gap-4 py-4">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle>{t('personalOverrides.conflicts')}</CardTitle>
-              <CardDescription>{t('personalOverrides.conflictsDescription')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 sm:px-6">
-              {(conflictsQuery.data?.list ?? []).map((conflict) => (
-                <div key={conflict.id} className="rounded-md border border-border p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium">
-                      {conflict.date} · {conflict.field}
-                    </div>
-                    <StateBadge value={conflict.state} />
-                  </div>
-                  <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                    <div className="rounded-md bg-muted/40 p-2">
-                      <div className="text-xs text-muted-foreground">
-                        {t('personalOverrides.previousUnderlay')}
-                      </div>
-                      <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
-                    </div>
-                    <div className="rounded-md bg-muted/40 p-2">
-                      <div className="text-xs text-muted-foreground">
-                        {t('personalOverrides.currentUnderlay')}
-                      </div>
-                      <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
-                    </div>
-                  </div>
-                  {conflict.state === 'OPEN' && (
-                    <Perm perm="calendar:personal-override:edit">
-                      <PersonalConflictActions
-                        calendarId={calendarId}
-                        conflict={conflict}
-                        onResolved={invalidate}
+        <Tabs defaultValue="preview" className="min-w-0 gap-4">
+          <TabsList>
+            <TabsTrigger value="preview">{t('workspace.preview')}</TabsTrigger>
+            <TabsTrigger value="review">{t('workspace.review')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="preview">
+            <Card className="gap-4 py-4">
+              <CardHeader className="px-4 sm:px-6">
+                <CardTitle>{t('personalOverrides.comparison', { date })}</CardTitle>
+                <CardDescription>{t('personalOverrides.baselineDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 px-4 sm:px-6">
+                {!dayQuery.data ? (
+                  <DataEmpty>{t('personalOverrides.chooseDate')}</DataEmpty>
+                ) : (
+                  <>
+                    {Object.entries(dayFieldLabels).map(([field, label]) => (
+                      <FieldPair
+                        key={field}
+                        label={t(label)}
+                        baseline={dayValueText(
+                          snapshotField(
+                            dayQuery.data!.baseline,
+                            field as keyof typeof dayFieldLabels,
+                          ),
+                        )}
+                        effective={dayValueText(
+                          snapshotField(
+                            dayQuery.data!.effective,
+                            field as keyof typeof dayFieldLabels,
+                            dayQuery.data!.resolutions.find((item) => item.field === field)?.state,
+                          ),
+                        )}
                       />
-                    </Perm>
-                  )}
-                </div>
-              ))}
-              {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
-                <DataEmpty>{t('personalOverrides.noConflicts')}</DataEmpty>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {dayQuery.data.resolutions.map((resolution) => (
+                        <Badge key={resolution.field} variant="outline">
+                          {t(dayFieldLabels[resolution.field])} ·{' '}
+                          {t(`layers.${resolution.source.layer}`)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="review" forceMount className="data-[state=inactive]:hidden">
+            <Card className="gap-4 py-4">
+              <CardHeader className="px-4 sm:px-6">
+                <CardTitle>{t('personalOverrides.conflicts')}</CardTitle>
+                <CardDescription>{t('personalOverrides.conflictsDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 sm:px-6">
+                {(conflictsQuery.data?.list ?? []).map((conflict) => (
+                  <div key={conflict.id} className="rounded-md border border-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-medium">
+                        {conflict.date} · {t(dayFieldLabels[conflict.field])}
+                      </div>
+                      <StateBadge value={conflict.state} />
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                      <div className="rounded-md bg-muted/40 p-2">
+                        <div className="text-xs text-muted-foreground">
+                          {t('personalOverrides.previousUnderlay')}
+                        </div>
+                        <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
+                      </div>
+                      <div className="rounded-md bg-muted/40 p-2">
+                        <div className="text-xs text-muted-foreground">
+                          {t('personalOverrides.currentUnderlay')}
+                        </div>
+                        <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
+                      </div>
+                    </div>
+                    {conflict.state === 'OPEN' && (
+                      <Perm perm="calendar:personal-override:edit">
+                        <PersonalConflictActions
+                          calendarId={calendarId}
+                          conflict={conflict}
+                          onResolved={invalidate}
+                        />
+                      </Perm>
+                    )}
+                  </div>
+                ))}
+                {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
+                  <DataEmpty>{t('personalOverrides.noConflicts')}</DataEmpty>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </CalendarPageFrame>
   )
@@ -377,8 +386,8 @@ function PersonalConflictActions({
             {t('personalOverrides.currentUnderlay')}: {dayValueText(conflict.currentUnderlay)}
           </p>
           <p>
-            {t('overrideEditor.currentOverride')}: {current?.action} ·{' '}
-            {dayValueText(current?.value)}
+            {t('overrideEditor.currentOverride')}:{' '}
+            {current && t(`overrideActions.${current.action}`)} · {dayValueText(current?.value)}
           </p>
           <p>{t('personalOverrides.revision', { number: revision.data?.revisionNo })}</p>
         </CalendarConfirm>

@@ -636,6 +636,7 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 [data-slot='tooltip-content'][data-state='delayed-open'],
 [data-slot='tooltip-content'][data-state='instant-open'],
 [data-slot='select-content'][data-state='open'],
+[data-slot='popover-content'][data-state='open'],
 [data-slot='dropdown-menu-content'][data-state='open'],
 [data-slot='dropdown-menu-sub-content'][data-state='open'] {
   animation: pixel-float-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
@@ -643,6 +644,7 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 
 [data-slot='tooltip-content'][data-state='closed'],
 [data-slot='select-content'][data-state='closed'],
+[data-slot='popover-content'][data-state='closed'],
 [data-slot='dropdown-menu-content'][data-state='closed'],
 [data-slot='dropdown-menu-sub-content'][data-state='closed'] {
   animation: pixel-float-exit var(--motion-duration-exit) var(--motion-ease-exit) both;

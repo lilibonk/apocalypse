@@ -31,6 +31,9 @@ logs/
 .verify/
 .git-backups/
 
+### Local Obsidian vault (private plans and raw QA evidence) ###
+/启示录/
+
 ### Environment files ###
 .env
 .env.*

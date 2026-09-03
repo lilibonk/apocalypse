@@ -1,4 +1,5 @@
 /** Shared six-field editor inside Calendar; domain-specific tagged values exceed flat CRUD fields. */
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,35 +29,35 @@ export function DayOverrideEditor({
     <div className="space-y-4">
       <div className="grid gap-1.5">
         <Label htmlFor={`${id}-field`}>{t('overrideEditor.field')}</Label>
-        <select
+        <FieldSelect
           id={`${id}-field`}
           className={selectClass}
           value={value.field}
-          onChange={(event) =>
-            onChange({ ...value, field: event.target.value as DayField, text: '' })
+          onValueChange={(selection) =>
+            onChange({ ...value, field: selection as DayField, text: '' })
           }
         >
           {Object.entries(dayFieldLabels).map(([key, label]) => (
-            <option key={key} value={key}>
+            <FieldOption key={key} value={key}>
               {t(label)}
-            </option>
+            </FieldOption>
           ))}
-        </select>
+        </FieldSelect>
       </div>
       <div className="grid gap-1.5">
         <Label htmlFor={`${id}-action`}>{t('personalOverrides.action')}</Label>
-        <select
+        <FieldSelect
           id={`${id}-action`}
           className={selectClass}
           value={value.action}
-          onChange={(event) => onChange({ ...value, action: event.target.value as OverrideAction })}
+          onValueChange={(selection) => onChange({ ...value, action: selection as OverrideAction })}
         >
           {(['SET', 'CLEAR', 'INHERIT'] as const).map((action) => (
-            <option key={action} value={action}>
+            <FieldOption key={action} value={action}>
               {t(`overrideActions.${action}`)}
-            </option>
+            </FieldOption>
           ))}
-        </select>
+        </FieldSelect>
       </div>
       {value.action === 'SET' && (
         <>
@@ -90,64 +91,64 @@ export function DayOverrideEditor({
           {value.field === 'ZODIAC' && (
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-zodiac`}>{t('zodiac')}</Label>
-              <select
+              <FieldSelect
                 id={`${id}-zodiac`}
                 className={selectClass}
                 value={value.zodiac}
-                onChange={(event) =>
-                  onChange({ ...value, zodiac: event.target.value as DayOverrideInput['zodiac'] })
+                onValueChange={(selection) =>
+                  onChange({ ...value, zodiac: selection as DayOverrideInput['zodiac'] })
                 }
               >
                 {zodiacs.map((code) => (
-                  <option key={code} value={code}>
+                  <FieldOption key={code} value={code}>
                     {t(`values.${code}`)}
-                  </option>
+                  </FieldOption>
                 ))}
-              </select>
+              </FieldSelect>
             </div>
           )}
           {value.field === 'SOLAR_TERM' && (
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-term`}>{t('solarTerm')}</Label>
-              <select
+              <FieldSelect
                 id={`${id}-term`}
                 className={selectClass}
                 value={value.solarTerm}
-                onChange={(event) =>
+                onValueChange={(selection) =>
                   onChange({
                     ...value,
-                    solarTerm: event.target.value as DayOverrideInput['solarTerm'],
+                    solarTerm: selection as DayOverrideInput['solarTerm'],
                   })
                 }
               >
                 {solarTerms.map((code) => (
-                  <option key={code} value={code}>
+                  <FieldOption key={code} value={code}>
                     {t(`values.${code}`)}
-                  </option>
+                  </FieldOption>
                 ))}
-              </select>
+              </FieldSelect>
             </div>
           )}
           {value.field === 'DAY_POLICY' && (
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-policy`}>{t('overrideEditor.classification')}</Label>
-              <select
+              <FieldSelect
                 id={`${id}-policy`}
                 className={selectClass}
                 value={value.classification}
-                onChange={(event) =>
+                onValueChange={(selection) =>
                   onChange({
                     ...value,
-                    classification: event.target.value as DayOverrideInput['classification'],
+                    classification: selection as DayOverrideInput['classification'],
                   })
                 }
               >
                 {dayPolicies.map((code) => (
-                  <option key={code} value={code}>
+                  <FieldOption key={code} value={code}>
                     {t(`values.${code}`)}
-                  </option>
+                  </FieldOption>
                 ))}
-              </select>
+              </FieldSelect>
               <p className="text-xs text-muted-foreground">{t('overrideEditor.localScope')}</p>
             </div>
           )}

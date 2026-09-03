@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DayField } from './calendar.api'
@@ -9,6 +10,18 @@ import {
   dayFieldLabels,
   emptyOverrideInput,
 } from './day-override-model'
+
+// Test the domain option contract, independently of the Radix portal lifecycle (browser-tested).
+vi.mock('@/components/ui/field-select', () => ({
+  FieldSelect: ({ children, id, value }: { children: ReactNode; id: string; value: string }) => (
+    <div id={id} data-value={value}>
+      {children}
+    </div>
+  ),
+  FieldOption: ({ children, value }: { children: ReactNode; value: string }) => (
+    <span data-value={value}>{children}</span>
+  ),
+}))
 
 describe('six-field override editor contract', () => {
   const fields = Object.keys(dayFieldLabels) as DayField[]

@@ -1,5 +1,6 @@
+import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { AlertCircle, CalendarDays } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -20,15 +21,32 @@ export function CalendarPageFrame({
   children: ReactNode
 }) {
   return (
-    <div className="w-full space-y-5 p-4 sm:p-6">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+    <div
+      data-slot="calendar-page"
+      className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6"
+    >
+      <header className="border-b border-border pb-5">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            {description}
+          </p>
         </div>
-        {actions}
+      </header>
+      {actions && (
+        <div
+          data-slot="calendar-toolbar"
+          className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/40 p-4"
+        >
+          {actions}
+        </div>
+      )}
+      <div
+        data-slot="calendar-workspace"
+        className="min-w-0 space-y-5 [&_[data-slot=card]]:min-w-0 [&_[data-slot=card]]:shadow-none [&_[data-slot=card-header]]:border-b [&_[data-slot=card-header]]:border-border [&_[data-slot=card-header]]:pb-4 [&_[data-slot=card-title]]:text-base"
+      >
+        {children}
       </div>
-      {children}
     </div>
   )
 }
@@ -47,25 +65,28 @@ export function CalendarPicker({
   roles?: CalendarRecord['currentUserRole'][]
 }) {
   const { t } = useTranslation('calendar')
+  const id = useId()
   const options = roles
     ? calendars.filter((calendar) => roles.includes(calendar.currentUserRole))
     : calendars
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor="calendar-context">{label ?? t('businessCalendar')}</Label>
-      <select
-        id="calendar-context"
+    <div className="grid w-full min-w-0 gap-1.5 sm:w-72">
+      <Label htmlFor={id}>{label ?? t('businessCalendar')}</Label>
+      <FieldSelect
+        id={id}
+        disabled={options.length === 0}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 min-w-52 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        onValueChange={(selection) => onChange(selection)}
       >
-        <option value="">{t('selectCalendar')}</option>
+        <FieldOption value="">
+          {options.length ? t('selectCalendar') : t('noAvailableCalendar')}
+        </FieldOption>
         {options.map((calendar) => (
-          <option key={calendar.id} value={calendar.id}>
-            {calendar.name} · {calendar.calendarKey}
-          </option>
+          <FieldOption key={calendar.id} value={calendar.id}>
+            {calendar.name}
+          </FieldOption>
         ))}
-      </select>
+      </FieldSelect>
     </div>
   )
 }
@@ -76,7 +97,7 @@ export function StateBadge({ value }: { value: string }) {
   const secondary = ['DRAFT', 'WITHDRAWN', 'INACTIVE', 'UNPUBLISHED'].includes(value)
   return (
     <Badge variant={destructive ? 'destructive' : secondary ? 'secondary' : 'outline'}>
-      {t(`states.${value}`, { defaultValue: value })}
+      {t(`states.${value}`, { defaultValue: t('unknownState') })}
     </Badge>
   )
 }
@@ -103,6 +124,16 @@ export function InlineError({ message }: { message: string }) {
   )
 }
 
+export function CalendarTrace({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('calendar')
+  return (
+    <details className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+      <summary className="cursor-pointer font-medium">{t('technicalDetails')}</summary>
+      <div className="mt-3 space-y-2 break-all">{children}</div>
+    </details>
+  )
+}
+
 export function FieldPair({
   label,
   baseline,
@@ -115,8 +146,8 @@ export function FieldPair({
   const { t } = useTranslation('calendar')
   const changed = (baseline ?? '') !== (effective ?? '')
   return (
-    <div className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[8rem_1fr_1fr]">
-      <div className="text-sm font-medium">{label}</div>
+    <div className="grid gap-2 border-b border-border py-3 last:border-b-0 sm:grid-cols-2">
+      <div className="text-sm font-medium sm:col-span-2">{label}</div>
       <div>
         <div className="text-xs text-muted-foreground">{t('systemBaseline')}</div>
         <div className="mt-1 text-sm">{baseline || '—'}</div>

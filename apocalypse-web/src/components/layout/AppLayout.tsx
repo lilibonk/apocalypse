@@ -155,7 +155,14 @@ export function AppLayout() {
             <SheetTitle className="sr-only">导航</SheetTitle>
             <BrandSignature />
           </SheetHeader>
-          <div onClick={() => setMobileNavOpen(false)} className="flex min-h-0 flex-1 flex-col">
+          <div
+            onClick={(event) => {
+              // Expanding a directory is not navigation. Otherwise collapsed mobile menus are unusable.
+              if (event.target instanceof Element && event.target.closest('a[href]'))
+                setMobileNavOpen(false)
+            }}
+            className="flex min-h-0 flex-1 flex-col"
+          >
             <Sidebar menus={sidebarMenus} collapsed={false} />
           </div>
         </SheetContent>

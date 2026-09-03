@@ -42,8 +42,7 @@ export function OverrideChangePreview({
         {t('overrideEditor.underlay')}: {dayValueText(underlay)}
       </p>
       <p className="break-all text-xs text-muted-foreground">
-        {t('fieldProvenance')}: {source?.source.layer} · {source?.source.sourceCalendarKey} ·{' '}
-        {source?.source.sourceVersion}
+        {t('fieldProvenance')}: {t(`layers.${source?.source.layer ?? 'NONE'}`)}
       </p>
     </div>
   )

@@ -1,5 +1,6 @@
 /** 可见日程包含本人私人项与已发布托管项，只有私人项可在此编辑；平台管理员不穿透所有权。 */
 
+import { DatePicker } from '@/components/ui/date-picker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -10,7 +11,6 @@ import { Perm } from '@/components/Perm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 import {
@@ -227,7 +227,7 @@ function DateInput({
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type="date" value={value} onChange={(event) => onChange(event.target.value)} />
+      <DatePicker id={id} mode="date" value={value} allowClear={false} onValueChange={onChange} />
     </div>
   )
 }

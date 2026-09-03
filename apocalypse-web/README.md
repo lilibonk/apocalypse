@@ -33,7 +33,7 @@ pnpm exec shadcn add --yes <component>   # 添加 shadcn 组件
 - `src/i18n/` —— react-i18next 初始化、核心 zh/en 词条与构建期模块 locale loader；业务词条共置 `src/views/<module>/i18n/`，zh/en 合同由测试校验
 - `src/effects/` —— PixelOrb 吉祥物与 PixelWave/PixelScale 品牌动效
 
-约定与红线见 [AGENTS.md](./AGENTS.md)。
+约定与红线见 [AGENTS.md](./AGENTS.md)。管理页按“标题 → 上下文工具栏 → 主工作区 → 弹窗/抽屉详情”组织，复用 `FieldSelect` 与 `DatePicker`，不混用浏览器原生日期和选择弹层。Calendar 人工验收修正与回归合同见 [UI 验收](docs/calendar-ui-acceptance.md)。
 
 ## Calendar 模块接入
 

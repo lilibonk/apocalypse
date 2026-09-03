@@ -27,7 +27,10 @@ vi.mock('sonner', () => ({ toast: { error: errorToast, success: vi.fn() } }))
 vi.mock('@/hooks/usePerm', () => ({ usePerm: () => true }))
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-i18next')>()),
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'zh', resolvedLanguage: 'zh' },
+  }),
 }))
 
 describe('calendar scoped management controls', () => {

@@ -25,7 +25,8 @@ export function OverrideRevisionDiff({
             {item.date} · {t(dayFieldLabels[item.field])}
           </p>
           <p>
-            {t('overrideEditor.before')}: {old.get(key(item))?.action ?? 'INHERIT'} ·{' '}
+            {t('overrideEditor.before')}:{' '}
+            {t(`overrideActions.${old.get(key(item))?.action ?? 'INHERIT'}`)} ·{' '}
             {dayValueText(
               old.get(key(item))?.action === 'INHERIT' || !old.has(key(item))
                 ? item.savedUnderlay
@@ -33,7 +34,7 @@ export function OverrideRevisionDiff({
             )}
           </p>
           <p>
-            {t('overrideEditor.after')}: {item.action} ·{' '}
+            {t('overrideEditor.after')}: {t(`overrideActions.${item.action}`)} ·{' '}
             {dayValueText(item.action === 'INHERIT' ? item.savedUnderlay : item.value)}
           </p>
           <p className="break-all text-xs text-muted-foreground">

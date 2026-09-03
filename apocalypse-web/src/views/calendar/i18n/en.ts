@@ -1,4 +1,55 @@
 export const calendarEn = {
+  noAvailableCalendar: 'No available calendars',
+  unknownState: 'Status unavailable',
+  compareDefaults: 'Compare with system defaults',
+  sourceExplanation:
+    'See who maintains each value. Your personal settings take precedence over the business calendar, which takes precedence over system defaults.',
+  reviewExplanation:
+    'Default information has changed. Your settings remain in effect. Visit date overrides to keep them or use the updated defaults.',
+  technicalDetails: 'Technical traceability',
+  baselineVersion: 'System data version',
+  layers: {
+    SYSTEM_DATASET: 'System default',
+    SYSTEM_CORRECTION: 'System correction',
+    MANAGED_OVERRIDE: 'Business calendar settings',
+    PERSONAL_OVERRIDE: 'My personal settings',
+    NONE: 'No source yet',
+  },
+  roles: { READER: 'Reader', EDITOR: 'Editor', PUBLISHER: 'Publisher' },
+  calendarKinds: { SYSTEM: 'System calendar', MANAGED: 'Business calendar' },
+  publishModes: {
+    DRAFT_ONLY: 'Save drafts for manual publication',
+    DIRECT_PUBLISH: 'Publish directly (trusted source)',
+  },
+  importTargets: {
+    MANAGED_OVERRIDE: 'Business calendar overrides',
+    SYSTEM_BASELINE: 'Official system data',
+  },
+  sourceClaims: { LOCAL_POLICY: 'Local business policy', OFFICIAL_NOTICE: 'Official notice' },
+  assurances: {
+    UNVERIFIED: 'Source not verified',
+    OFFLINE_DOCUMENT_REVIEWED: 'Offline notice reviewed',
+    ONLINE_VERIFIED: 'Source verified online',
+  },
+  changes: {
+    ADDED: 'Added',
+    MODIFIED: 'Modified',
+    INHERITED: 'Use defaults',
+    UNCHANGED: 'Unchanged',
+    CONFLICTS: 'Needs review',
+    REMOVED: 'Removed',
+  },
+  workspace: {
+    edit: 'Edit settings',
+    preview: 'Effective information',
+    review: 'Updates to review',
+    history: 'History',
+    source: 'Source and notice',
+    files: 'Upload files',
+    basic: 'Basic information',
+    schedule: 'Date and time',
+    details: 'Additional details',
+  },
   overrideEditor: {
     field: 'Field',
     year: 'Lunar year',

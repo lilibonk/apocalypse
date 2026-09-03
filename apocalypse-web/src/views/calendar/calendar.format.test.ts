@@ -32,7 +32,7 @@ describe('calendar display localization', () => {
   })
 
   it('translates field sentinel states without changing backend text', () => {
-    expect(dayValueText(fieldValue('CLEARED'), 'zh')).toBe('无值 / 已清空')
+    expect(dayValueText(fieldValue('CLEARED'), 'zh')).toBe('未设置或已清空')
     expect(dayValueText(fieldValue('CLEARED'), 'en')).toBe('Absent / cleared')
     expect(dayValueText(fieldValue('UNPUBLISHED'), 'en')).toBe('Unpublished')
   })
