@@ -91,15 +91,16 @@ class LayeringRulesTest {
           .should()
           .beAnnotatedWith(Transactional.class);
 
-  /** R4：order.domain 保持纯领域——禁依赖 Spring 与 MyBatis-Plus。 */
+  /** R4：复杂业务模块 domain 保持纯领域——禁依赖 Spring、MyBatis-Plus 与基础设施第三方库。 */
   @ArchTest
-  static final ArchRule R4_ORDER_DOMAIN_IS_PURE =
+  static final ArchRule R4_COMPLEX_MODULE_DOMAINS_ARE_PURE =
       noClasses()
           .that()
-          .resideInAPackage("io.apocalypse.order.domain..")
+          .resideInAnyPackage("io.apocalypse.order.domain..", "io.apocalypse.calendar.domain..")
           .should()
           .dependOnClassesThat()
-          .resideInAnyPackage("com.baomidou..", "org.springframework..");
+          .resideInAnyPackage(
+              "com.baomidou..", "org.springframework..", "com.nlf..", "org.apache.commons.csv..");
 
   /** R5：模块根包只允许 package-info.java，禁止顶层类。新增模块时把根包名加进列表。 */
   @ArchTest
@@ -110,7 +111,8 @@ class LayeringRulesTest {
               "io.apocalypse.common",
               "io.apocalypse.framework",
               "io.apocalypse.system",
-              "io.apocalypse.order");
+              "io.apocalypse.order",
+              "io.apocalypse.calendar");
 
   /** R6：dto 包本体禁止直接放类，请求/响应必须落 dto.request / dto.response 子包。 */
   @ArchTest
@@ -184,4 +186,39 @@ class LayeringRulesTest {
                           item, item.reflect().isRecord(), item.getName() + " 必须声明为 record"));
                 }
               });
+
+  /** R10a：lunar-java 只能由 Calendar 日期 adapter 调用，禁止算法类型向上泄漏。 */
+  @ArchTest
+  static final ArchRule R10A_LUNAR_DEPENDENCY_ISOLATED =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("io.apocalypse.calendar.infrastructure.date..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage("com.nlf..");
+
+  /** R10b：Commons CSV 只能由离线导入 adapter 调用。 */
+  @ArchTest
+  static final ArchRule R10B_CSV_DEPENDENCY_ISOLATED =
+      noClasses()
+          .that()
+          .resideOutsideOfPackage("io.apocalypse.calendar.infrastructure.importing..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage("org.apache.commons.csv..");
+
+  /** R10c：日期与导入 adapter 不得主动联网；来源 URI 只是审计文本。 */
+  @ArchTest
+  static final ArchRule R10C_CALENDAR_ADAPTERS_DO_NOT_USE_NETWORK_CLIENTS =
+      noClasses()
+          .that()
+          .resideInAnyPackage(
+              "io.apocalypse.calendar.infrastructure.date..",
+              "io.apocalypse.calendar.infrastructure.importing..")
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "java.net.http..",
+              "org.springframework.web.client..",
+              "org.springframework.web.reactive.function.client..");
 }

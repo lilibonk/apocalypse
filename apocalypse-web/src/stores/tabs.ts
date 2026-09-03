@@ -25,6 +25,7 @@ interface TabsState {
   closeRight: (key: string) => void
   closeAll: () => void
   activate: (key: string) => void
+  retainAllowed: (allowedKeys: string[]) => void
   reset: () => void
 }
 
@@ -118,6 +119,17 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
 
   activate(key) {
     set({ activeKey: key })
+  },
+
+  retainAllowed(allowedKeys) {
+    const allowed = new Set(allowedKeys.map(normalizeTabKey))
+    allowed.add(DASHBOARD_TAB.key)
+    const tabs = ensureDashboard(get().tabs.filter((item) => allowed.has(item.key)))
+    const activeKey = get().activeKey
+    set({
+      tabs,
+      activeKey: activeKey && allowed.has(activeKey) ? activeKey : DASHBOARD_TAB.key,
+    })
   },
 
   reset() {

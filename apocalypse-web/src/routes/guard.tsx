@@ -25,6 +25,24 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     }
   }, [tokens, meLoaded, ensureMe])
 
+  useEffect(() => {
+    if (!tokens || !meLoaded) return
+    const refreshIdentity = () => {
+      void ensureMe().catch(() => {
+        useAuthStore.getState().clearSession()
+      })
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshIdentity()
+    }
+    window.addEventListener('focus', refreshIdentity)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', refreshIdentity)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [tokens, meLoaded, ensureMe])
+
   if (!tokens) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }

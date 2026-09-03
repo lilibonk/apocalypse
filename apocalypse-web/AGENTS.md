@@ -18,6 +18,14 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 - ESLint（flat config）+ Prettier + oxlint（`pnpm lint` 串行跑 oxlint + eslint）
 - 包管理一律 **pnpm**，禁止 npm/yarn
 
+### 模块国际化扩展点
+
+- `src/i18n/locales/` 只承载登录、布局壳、DynaLayer 等跨模块核心词条；业务模块词条必须与模块共置于 `src/views/<module>/i18n/`。
+- 每个模块导出唯一 namespace 的 locale pack，由 `src/i18n/module-loader.ts` 使用 Vite 构建期 `import.meta.glob` 自动发现；新模块禁止在全局 i18n 入口手写 import/注册。
+- zh/en 语言包必须有完全一致的叶子 key；namespace、菜单贡献或 key 冲突必须 fail-fast，并由 Vitest 合同测试执法。
+- 模块页面使用 `useTranslation('<module>')`，纯函数使用显式 namespace 的 `getFixedT`。用户/业务原文及后端 `R.message` 原样显示，禁止当作翻译 key。
+- 当前 locale pack 随构建产物 eager 内置，运行时不联网。引入 HTTP locale backend、远程词条或运行时安装属于新架构/依赖 Gate，必须重新调研和请示。
+
 ## 3. 样式红线：token-only
 
 视觉改动必须对照 `src/design/DEFINITION.md`（设计定义，唯一事实来源）。`tokens.css` 是该文件的 CSS 投影。对不上定义的视觉 PR 先改定义再改代码。
@@ -88,6 +96,7 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 - 页签 store 的关闭动作返回目标路由，由组件负责 `navigate`；不得只删状态而让页面停留在已关闭路由。
 - 菜单图标只能通过 `MenuIconPicker` 与 `components/layout/menu-icons.ts` 的受控映射选择，禁止自由文本造成图标丢失。
 - 父菜单使用 `MenuTreeSelect`：排除当前节点及其子树，支持搜索、展开/折叠、结果上限提示与滚动容器；禁止把膨胀后的整棵树一次性铺成普通 Select。
+- 模块 capability 的运行态事实只来自后端最新 `/me` 菜单/权限，不增加前端环境开关或第二份真源。登录、refresh、窗口恢复或 `/me` 变化后，必须取消并移除失效模块的 React Query 缓存、关闭不再授权的页签；当前 URL 失效时 `replace('/dashboard')`。直接 URL、旧缓存或旧页签不得绕过菜单撤回；菜单 component 缺少本地 chunk 时 fail-closed 且不得调用该模块 API。
 
 ## 8. 设置面板：能力全集 + 下游可裁剪
 

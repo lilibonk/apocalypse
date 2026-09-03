@@ -1,8 +1,15 @@
 import {
   BookOpen,
   BookOpenText,
+  CalendarCheck,
+  CalendarClock,
+  CalendarCog,
+  CalendarDays,
+  CalendarRange,
+  CalendarSync,
   ClipboardList,
   FilePenLine,
+  FileUp,
   LayoutDashboard,
   ListTree,
   LogIn,
@@ -15,6 +22,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Users,
+  Waypoints,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -38,6 +46,14 @@ export const MENU_ICON_NAMES = [
   'online',
   'monitor',
   'config',
+  'calendar-days',
+  'calendar-cog',
+  'calendar-sync',
+  'calendar-range',
+  'calendar-clock',
+  'calendar-check',
+  'file-up',
+  'waypoints',
 ] as const
 
 const ICON_MAP: Record<(typeof MENU_ICON_NAMES)[number], LucideIcon> = {
@@ -60,6 +76,14 @@ const ICON_MAP: Record<(typeof MENU_ICON_NAMES)[number], LucideIcon> = {
   online: MonitorDot,
   monitor: Monitor,
   config: FilePenLine,
+  'calendar-days': CalendarDays,
+  'calendar-cog': CalendarCog,
+  'calendar-sync': CalendarSync,
+  'calendar-range': CalendarRange,
+  'calendar-clock': CalendarClock,
+  'calendar-check': CalendarCheck,
+  'file-up': FileUp,
+  waypoints: Waypoints,
 }
 
 export function resolveMenuIcon(name: string | null): LucideIcon {

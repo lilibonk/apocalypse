@@ -4,6 +4,7 @@ import io.apocalypse.common.response.R;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -29,6 +30,10 @@ public class ResponseWrapperAdvice implements ResponseBodyAdvice<Object> {
     Class<?> declaringClass = returnType.getContainingClass();
     // 已是统一响应结构的不再包装
     if (R.class.isAssignableFrom(returnType.getParameterType())) {
+      return false;
+    }
+    // Binary/file responses carry their own status and headers and must not be wrapped as JSON.
+    if (ResponseEntity.class.isAssignableFrom(returnType.getParameterType())) {
       return false;
     }
     String packageName = declaringClass.getPackageName();

@@ -6,7 +6,7 @@
  * 应用启动时由 stores/auth.ts 调 configureClient 注入 token 获取、刷新、登出回调。
  */
 
-import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, type InternalAxiosRequestConfig, type ResponseType } from 'axios'
 
 import { CODE_SUCCESS, CODE_UNAUTHORIZED, type R } from './types'
 
@@ -30,6 +30,8 @@ declare module 'axios' {
     anonymous?: boolean
     /** 内部：401/40100 已重放标记，禁止外部传。 */
     _retried?: boolean
+    /** 文件下载等原始响应，不执行 R 信封解包。 */
+    rawResponse?: boolean
   }
 }
 
@@ -70,10 +72,11 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 /** 401/40100 统一处理链：tryRefresh 成功则重放原请求一次，否则登出。返回 null 表示已处理完（继续抛业务错）。 */
 async function handleUnauthorized(
   config: InternalAxiosRequestConfig | undefined,
-): Promise<unknown | null> {
+): Promise<{ data: unknown } | null> {
   if (!config || config.anonymous) return null
   if (!config._retried && (await hooks.tryRefresh())) {
-    return http.request({ ...config, _retried: true })
+    // Successful void mutations also return null. Keep "not handled" distinct from that data.
+    return { data: await http.request({ ...config, _retried: true }) }
   }
   hooks.onUnauthorized()
   return null
@@ -83,13 +86,14 @@ async function handleUnauthorized(
 // 返回值用 `as never` 收窄——拦截器把 R.data 拍平为请求返回值，而 axios 静态类型仍以 AxiosResponse 表述。
 http.interceptors.response.use(
   async (response) => {
+    if (response.config.rawResponse) return response.data as never
     const envelope = response.data as R<unknown>
     if (envelope.code === CODE_SUCCESS) {
       return envelope.data as never
     }
     if (envelope.code === CODE_UNAUTHORIZED) {
       const retried = await handleUnauthorized(response.config)
-      if (retried !== null) return retried as never
+      if (retried !== null) return retried.data as never
     }
     throw new ApiError(envelope.code, envelope.message || '请求失败', envelope.traceId ?? null)
   },
@@ -98,7 +102,7 @@ http.interceptors.response.use(
       if (error.response.status === 401) {
         // HTTP 层未认证（过滤器直接拒绝，未走 R 包装）：按 40100 语义处理
         const retried = await handleUnauthorized(error.config)
-        if (retried !== null) return retried as never
+        if (retried !== null) return retried.data as never
         throw new ApiError(CODE_UNAUTHORIZED, '未认证或凭证无效')
       }
       throw new ApiError(error.response.status, `服务异常（HTTP ${error.response.status}）`)
@@ -132,5 +136,20 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
     data: options.body,
     params: options.query,
     anonymous: options.anonymous,
+  }) as unknown as Promise<T>
+}
+
+/** 获取后端明确声明为非 R 信封的文件/二进制响应。 */
+export function rawRequest<T>(
+  path: string,
+  responseType: ResponseType,
+  options: Pick<RequestOptions, 'query'> = {},
+): Promise<T> {
+  return http.request({
+    url: path,
+    method: 'GET',
+    params: options.query,
+    responseType,
+    rawResponse: true,
   }) as unknown as Promise<T>
 }

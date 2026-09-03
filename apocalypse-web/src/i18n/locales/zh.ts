@@ -6,6 +6,10 @@
  */
 export const zh = {
   translation: {
+    route: {
+      unavailable: '页面不可用：模块已停用、访问权限已撤回或路由未配置。已返回工作台。',
+      notInstalled: '页面未安装或版本不匹配，请联系管理员。',
+    },
     login: {
       title: 'Apocalypse',
       edition: '管理控制平面',

@@ -38,10 +38,10 @@ public interface SysMenuMapper extends BaseMapper<SysMenuEntity> {
       """)
   List<SysMenuEntity> selectByUserId(@Param("userId") Long userId);
 
-  /** 联表查询用户的接口权限串（perms 非空）。 */
+  /** 联表查询用户的接口权限菜单；MenuService 再按同一 capability registry 过滤。 */
   @Select(
       """
-      SELECT DISTINCT m.perms FROM sys_menu m
+      SELECT DISTINCT m.* FROM sys_menu m
       JOIN sys_role_menu rm ON m.id = rm.menu_id
       JOIN sys_role r ON rm.role_id = r.id
       JOIN sys_user_role ur ON rm.role_id = ur.role_id
@@ -50,5 +50,5 @@ public interface SysMenuMapper extends BaseMapper<SysMenuEntity> {
         AND m.deleted = 0 AND m.status = 1
         AND m.perms IS NOT NULL AND m.perms <> ''
       """)
-  List<String> selectPermsByUserId(@Param("userId") Long userId);
+  List<SysMenuEntity> selectPermissionMenusByUserId(@Param("userId") Long userId);
 }

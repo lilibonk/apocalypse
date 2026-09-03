@@ -11,9 +11,9 @@
 import { useMemo } from 'react'
 import { Route } from 'react-router'
 import { Suspense, createElement, type ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { PageLoading } from '@/components/PageLoading'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { resolvePageComponent } from '@/routes/component-map'
 import type { MenuNode } from '@/lib/api/types'
@@ -65,21 +65,17 @@ function RouteLoading() {
   return <PageLoading />
 }
 
-/** 占位页：菜单已收录但 component 未接入物理页面时渲染（标题 + skeleton）。 */
-function RouteNotFound({ title, component }: { title: string; component: string | null }) {
+/** Missing chunks are terminal, not a loading state; never render a server-supplied URL. */
+function RouteNotFound({ title }: { title: string }) {
   const menuTitle = useMenuTitle()
+  const { t } = useTranslation()
   return (
     <div className="space-y-4 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{menuTitle(title)}</h1>
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-          页面未接入（component: {component ?? '（未配置）'}）
+        <p role="status" className="mt-0.5 text-sm text-muted-foreground">
+          {t('route.notInstalled')}
         </p>
-      </div>
-      <div className="space-y-3">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-4 w-2/3" />
       </div>
     </div>
   )
@@ -101,7 +97,7 @@ export function useMenuRoutes(): { routeElements: ReactElement[]; indexPath: str
           { fallback: createElement(RouteLoading) },
           Component
             ? createElement(Component)
-            : createElement(RouteNotFound, { title: route.title, component: route.component }),
+            : createElement(RouteNotFound, { title: route.title }),
         ),
       })
     })

@@ -34,6 +34,14 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 apocalypse:
+  capabilities:
+    calendar:
+      enabled: false
+  calendar:
+    import-storage:
+      total-bytes: 21474836480
+      uploader-bytes: 2147483648
+      target-bytes: 10737418240
   security:
     jwt:
       issuer: apocalypse
@@ -62,5 +70,6 @@ apocalypse:
     # 放大登录/刷新限流窗口：多个 IT 类共享同一 Redis 容器与同一来源 IP，默认 20/30 每分钟会互相干扰。
     # RateLimitIT 用独立上下文覆盖为 2/min 验证限流本身。
     limits:
+      calendar-data-import-upload: 1000
       login: 1000
       refresh: 1000

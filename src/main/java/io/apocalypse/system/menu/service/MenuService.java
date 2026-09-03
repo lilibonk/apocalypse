@@ -3,6 +3,7 @@ package io.apocalypse.system.menu.service;
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
+import io.apocalypse.framework.capability.CapabilityRegistry;
 import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.menu.dto.request.MenuSaveReq;
 import io.apocalypse.system.menu.dto.response.MenuTreeNode;
@@ -32,6 +33,8 @@ public class MenuService {
 
   private final TokenVersionStore tokenVersionStore;
 
+  private final CapabilityRegistry capabilityRegistry;
+
   /** 全量菜单树（管理端）。 */
   public List<MenuTreeNode> tree() {
     return buildTree(sysMenuMapper.selectAll());
@@ -39,18 +42,20 @@ public class MenuService {
 
   /** 当前用户可见的菜单树。 */
   public List<MenuTreeNode> treeByUserId(Long userId) {
-    return buildTree(sysMenuMapper.selectByUserId(userId));
+    return buildTree(filterEnabledTree(sysMenuMapper.selectByUserId(userId)));
   }
 
-  /** 用户接口权限串（缓存示例：两级缓存 userPerms）。 */
-  @Cacheable(cacheNames = "userPerms", key = "#userId")
+  /** 用户接口权限串；能力状态是缓存身份的一部分，跨配置实例不会复用错误快照。 */
+  @Cacheable(
+      cacheNames = "userPerms",
+      key = "#userId + ':' + @capabilityRegistry.cacheDiscriminator()")
   public List<String> permsByUserId(Long userId) {
-    return sysMenuMapper.selectPermsByUserId(userId);
+    return enabledPermsByUserId(userId);
   }
 
   /** 认证签发专用：始终从数据库读取，禁止把可能滞后的缓存权限写入新 JWT。 */
   public List<String> freshPermsByUserId(Long userId) {
-    return sysMenuMapper.selectPermsByUserId(userId);
+    return enabledPermsByUserId(userId);
   }
 
   /** 角色授权前批量校验菜单主键。 */
@@ -170,10 +175,41 @@ public class MenuService {
         entity.getComponent(),
         entity.getPerms(),
         entity.getIcon(),
+        entity.getModuleKey(),
         entity.getSort(),
         entity.getRemark(),
         children,
         entity.getVisible(),
         entity.getStatus());
+  }
+
+  private List<String> enabledPermsByUserId(Long userId) {
+    return sysMenuMapper.selectPermissionMenusByUserId(userId).stream()
+        .filter(menu -> capabilityRegistry.isEnabled(menu.getModuleKey()))
+        .map(SysMenuEntity::getPerms)
+        .distinct()
+        .toList();
+  }
+
+  /** 禁用节点及以该节点为祖先的已返回子树全部移除，绝不把关闭模块的子节点提升为根。 */
+  private List<SysMenuEntity> filterEnabledTree(List<SysMenuEntity> menus) {
+    Map<Long, SysMenuEntity> byId =
+        menus.stream().collect(Collectors.toMap(SysMenuEntity::getId, menu -> menu));
+    return menus.stream().filter(menu -> hasEnabledReturnedAncestry(menu, byId)).toList();
+  }
+
+  private boolean hasEnabledReturnedAncestry(SysMenuEntity menu, Map<Long, SysMenuEntity> byId) {
+    Set<Long> visited = new HashSet<>();
+    SysMenuEntity cursor = menu;
+    while (cursor != null) {
+      if (!capabilityRegistry.isEnabled(cursor.getModuleKey())) {
+        return false;
+      }
+      if (!visited.add(cursor.getId())) {
+        return false;
+      }
+      cursor = cursor.getParentId() == 0 ? null : byId.get(cursor.getParentId());
+    }
+    return true;
   }
 }

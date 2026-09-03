@@ -48,8 +48,13 @@ class SystemBaseIT extends AbstractIntegrationTest {
     JsonNode menuIds = getForData("/system/roles/1/menus", token);
 
     assertThat(menuIds.isArray()).isTrue();
-    assertThat(menuIds).hasSize(36);
-    assertThat(menuIds.toString()).contains("\"100\"").contains("\"144\"").contains("\"165\"");
+    assertThat(menuIds).hasSize(63);
+    assertThat(menuIds.toString())
+        .contains("\"100\"")
+        .contains("\"144\"")
+        .contains("\"165\"")
+        .contains("\"200\"")
+        .contains("\"226\"");
   }
 
   @Test
@@ -63,6 +68,8 @@ class SystemBaseIT extends AbstractIntegrationTest {
         .contains("\"order:read:any\"")
         .contains("\"order:list:any\"");
     assertThat(currentUser.get("menus").toString()).doesNotContain("订单权限");
+    assertThat(currentUser.get("menus").toString()).doesNotContain("万年历");
+    assertThat(currentUser.get("perms").toString()).doesNotContain("calendar:");
   }
 
   @Test
