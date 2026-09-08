@@ -1,5 +1,7 @@
 # 方案文档：PixelWave + PixelOrb 品牌动效系统
 
+> LIL-85（2026-09-08）覆盖声明：PixelOrb 已替换为 Three.js WebGPU 青绿史莱姆；用户最新要求登录不展示 PixelWave，letterpress 仅保留为开发态动效实验室的默认关闭预览开关。gaze 视线跟随保留。当前角色、尺寸、主题、降级与验收以 `docs/brand-slime/revision-01.md` / `acceptance.md` 及设计定义当前章节为准。以下旧角色/登录挂载描述仅保留历史参考；PixelWave letterpress 算法、通用 PixelScale / PixelDialogMotion 的未涉及部分继续有效。
+
 > 当前版本：v2.15
 > 日期：2026-08-30
 > 适用范围：Apocalypse Web 品牌表面（登录舞台、Loading、空状态、进度）  

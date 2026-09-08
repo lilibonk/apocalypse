@@ -41,8 +41,8 @@ describe('批准设计稿状态母版', () => {
 })
 
 describe('尺寸契约', () => {
-  it('只允许 32/64/128/256 四档', () => {
-    expect([...ORB_LEGAL_SIZES].sort((a, b) => a - b)).toEqual([32, 64, 128, 256])
+  it('允许 32/64/128/256/384 五档', () => {
+    expect([...ORB_LEGAL_SIZES].sort((a, b) => a - b)).toEqual([32, 64, 128, 256, 384])
     expect(orbUnit(32)).toBe(1)
     expect(orbUnit(64)).toBe(2)
     expect(orbUnit(128)).toBe(4)
@@ -60,48 +60,26 @@ describe('尺寸契约', () => {
   })
 })
 
-describe('PixelOrb 设计稿裁切', () => {
-  it.each(ALL_STATES)('state=%s 使用图片而不是 Canvas 或代码栅格', (state) => {
+describe('PixelOrb 新品牌兼容入口', () => {
+  it.each(ALL_STATES)('state=%s 的 SSR 与小尺寸是同角色静态海报', (state) => {
     const html = renderToStaticMarkup(<PixelOrb state={state} size={128} />)
-    expect(html).toContain('data-mascot="mint-bonk"')
+    expect(html).toContain('data-mascot="mint-slime"')
     expect(html).toContain(`data-state="${state}"`)
-    expect(html).toContain('<img')
-    expect(html).toContain('src="/brand/mint-bonk-design-sprites-v1.png"')
+    expect(html).toContain(`src="/brand/slime/${state}.png"`)
+    expect(html).toContain(`src="/brand/slime/dark-${state}.png"`)
+    expect(html).toContain('data-motion="off"')
     expect(html).not.toContain('<canvas')
+    expect(html).not.toContain('mint-bonk')
+    expect(html).not.toContain('pixelated')
   })
-
-  it('waiting 以 128px 单格裁切母版上排中间帧', () => {
-    const html = renderToStaticMarkup(<PixelOrb state="waiting" size={128} />)
+  it('384px 大舞台 SSR 不访问浏览器或申请 GPU', () => {
+    const html = renderToStaticMarkup(<PixelOrb size={384} />)
     expect(html).toContain('width:384px')
-    expect(html).toContain('height:256px')
-    expect(html).toContain('left:-128px')
-    expect(html).toContain('top:0')
-    expect(html).toContain('image-rendering:pixelated')
-  })
-
-  it('sleeping 以 128px 单格裁切母版下排中间帧', () => {
-    const html = renderToStaticMarkup(<PixelOrb state="sleeping" size={128} />)
-    expect(html).toContain('left:-128px')
-    expect(html).toContain('top:-128px')
-  })
-
-  it('idle gaze 从批准素材裁出两枚原稿高光与两枚遮盖片', () => {
-    const html = renderToStaticMarkup(<PixelOrb state="idle" size={256} gaze />)
-    expect(html.match(/data-slot="mint-bonk-gaze-cover"/g)).toHaveLength(2)
-    expect(html.match(/data-slot="mint-bonk-gaze-glint"/g)).toHaveLength(2)
-    expect(html).toContain('data-gaze="enabled"')
     expect(html).not.toContain('<canvas')
   })
-
-  it('非 idle 状态不挂载视线裁片', () => {
-    const html = renderToStaticMarkup(<PixelOrb state="waiting" size={256} gaze />)
-    expect(html).not.toContain('mint-bonk-gaze-glint')
-    expect(html).not.toContain('mint-bonk-gaze-cover')
-  })
-
-  it.each(LEGACY_SKINS)('skin=%s 仅保留调用兼容，不改变批准素材', (skin) => {
+  it.each(LEGACY_SKINS)('skin=%s 不改变新品牌颜色与形象', (skin) => {
     const html = renderToStaticMarkup(<PixelOrb skin={skin} size={64} gaze />)
-    expect(html).toContain(`data-skin="${skin}"`)
-    expect(html).toContain('src="/brand/mint-bonk-design-sprites-v1.png"')
+    expect(html).toContain('src="/brand/slime/idle.png"')
+    expect(html).not.toContain('mint-bonk')
   })
 })

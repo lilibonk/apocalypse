@@ -1,6 +1,23 @@
 # effects —— 品牌动效层
 
-规格事实来源：`docs/pixel-wave-spec.md`（当前 §28 v2.16）；设计定义：`src/design/DEFINITION.md`。本目录落地双轨像素语言：焦点层 PixelOrb + 氛围层 PixelWave，共享锐利像素语言。
+当前事实来源：`docs/brand-slime/solution-fit.md` 与 `src/design/DEFINITION.md` 的 LIL-85 章节。
+
+## 当前品牌（LIL-85，2026-09-08）
+
+`PixelOrb` 是兼容入口，实际委托 `webgpu/slime/Slime.tsx`。角色为圆润、青绿半透明、带气泡的软体史莱姆；两眼一嘴与身体共用同一局部形变。384/256px 的可见舞台按需加载 Three.js WebGPU，128/64/32px 与动效关闭使用 `public/brand/slime/{state}.png` / `dark-{state}.png`。明暗各五张静态图由同一个真实模型导出。
+
+- 状态：idle 放松、waiting 小 O 嘴、success 微眯眼大笑、error 担心、sleeping 闭眼；密码聚焦继续闭眼回避。
+- Three.js 0.185.1，仅公共 `three/webgpu` / `three/tsl`。显式 `Renderer + WebGPUBackend + StandardNodeLibrary`，`getFallback: null`；无 WebGL 回退。所有颜色读取 `tokens.css` 的 `--slime-*`。
+- 物理为有界的固定步长弹簧/局部压力场近似，不宣称完整体积有限元模拟；拎起限位、重力、落地挤压、阻尼复原；五官不是 DOM 贴片。
+- 仅可见大尺寸且动效双开关允许时申请 GPU；离屏卸载设备，后台暂停；卸载、初始化失败、设备丢失释放资源。无 API/失败/丢失显示新角色静态图及明确提示。
+- 登录不挂载 PixelWave；letterpress 浪潮只在开发态“外观实验室 → 动效实验室”通过默认关闭的 pixelWaveEnabled 开关预览。关闭、收起或离开设置即卸载，生产恒关闭。静态 BrandSignature、favicon、PixelScale 进度、PixelDialogMotion 与表单/认证原逻辑保留。
+- `gaze` 在 idle 时让眼睛沿皮肤平滑、有限地跟随鼠标；56 枚细小非金属透明气泡分布在体内，缓慢上浮、小幅横漂，在不可见区淡出重生，不做三轴往返。均遵守暂停/静态模式。`skin` 与历史皮肤导出仅兼容，不改变新角色。
+- 明暗独立材质/灯光 token、静态海报自动切换；主题更新释放并重建环境贴图。pointer 聚焦无外框，键盘 focus-visible 保留。
+- 验收命令、截图、录屏与实机测量见 `docs/brand-slime/acceptance.md`；独立验收文档不会进入正常业务构建。
+
+## 历史规格（LIL-85 前，仅供回滚参考）
+
+以下 Mint Bonk 描述仅供历史参考；PixelWave letterpress 算法与 PixelScale 仍沿用，暂停治理以当前代码为准。
 
 ## PixelOrb（焦点层，全局唯一吉祥物）
 

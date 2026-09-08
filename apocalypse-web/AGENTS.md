@@ -32,8 +32,9 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 
 - 组件内**禁止写死颜色与间距像素值**（hex/rgb/oklch 字面量、`px-3.5` 之外的随意值、`style={{color:...}}`），一律走 `src/design/tokens.css` 的 CSS 变量或 Tailwind 语义类（`bg-background` `text-muted-foreground` `border-border` `bg-primary` …）。
 - 品牌色单点：只许通过 `--brand`（映射到 `primary`/`ring`）表达；accent 预设组定义在 tokens.css，新增预设只加 `[data-accent]` 组。
-- 正式产品品牌主色固定为 `mint`；accent 预设只作为开发态“外观实验室”能力，不得对批准的 Mint Bonk 角色稿运行时换色。正式品牌签名与 PixelOrb 吉祥物严格分离，侧栏、页首与 favicon 使用静态签名，不把吉祥物当 logo。
-- 品牌表面（登录舞台、空态、PageLoading、像素进度）尺寸与位移必须落在 4px 整数格上，见 DEFINITION §1；`PixelOrb` 必须直接裁切 `public/brand/mint-bonk-design-sprites-v1.png` 批准状态母版，不得用 Canvas / SVG / CSS / 代码栅格重绘近似角色。只允许显示为 256/128/64/32 四档，非法值开发环境 throw。
+- 正式产品品牌主色固定为 `mint`；accent 预设只作为开发态“外观实验室”能力，不得对正式史莱姆运行时换色。正式品牌签名与吉祥物严格分离，侧栏、页首与 favicon 使用静态签名，不把吉祥物当 logo。
+- 品牌容器尺寸与布局仍落在 4px 整数格上；LIL-85 经用户于 2026-09-08 授权，将旧 Mint Bonk 像素母版替换为半透明 WebGPU 史莱姆。`PixelOrb` 保留兼容入口，合法尺寸为 384/256/128/64/32，非法值开发环境 throw；3D 表面形变与渲染不做整像素量化。目标与验收见 `docs/brand-slime/solution-fit.md` 和 `src/design/DEFINITION.md`。
+- 3D 材质 sRGB 色值仅在 `tokens.css` 的 `--slime-*` token 中定义，运行时读取同源值；数字几何/物理/光照参数集中在 `effects/webgpu/slime/`，不得扩散到业务组件。
 - 暗色是一等公民：任何视觉改动必须同时验证 `.dark`；新增颜色变量必须明暗双写。
 - 密度走 `--spacing` 缩放（`[data-density]`），禁止为密度单独写覆盖样式。
 
@@ -58,27 +59,28 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 
 ### 引擎分域（允许多库，一库一域，越域即违规）
 
-| 引擎                                    | 域（唯一允许范围）                                                                          | 现状                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
-| CSS/Tailwind 过渡                       | 纯 CSS 可表达的微过渡（hover、显隐、颜色、位移）                                            | 内置，**优先于一切 JS 引擎** |
-| motion                                  | 通用 UI 动效：组件微交互、页面过渡、布局动画、弹簧                                          | 已装，JS 动效默认选择        |
-| GSAP                                    | 复杂时间轴 / 多步编排 / 滚动驱动 / SVG 路径动画；仅限品牌页（登录、关于）与 `effects/gsap/` | 预留域，引入按 §10 报备      |
-| WebGL 引擎（three.js / pixi，选型另议） | 2 期 Agent 化身与品牌大场面（流体、粒子、3D）                                               | 预留域，未引入               |
+| 引擎              | 域（唯一允许范围）                                                                          | 现状                         |
+| ----------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
+| CSS/Tailwind 过渡 | 纯 CSS 可表达的微过渡（hover、显隐、颜色、位移）                                            | 内置，**优先于一切 JS 引擎** |
+| motion            | 通用 UI 动效：组件微交互、页面过渡、布局动画、弹簧                                          | 已装，JS 动效默认选择        |
+| GSAP              | 复杂时间轴 / 多步编排 / 滚动驱动 / SVG 路径动画；仅限品牌页（登录、关于）与 `effects/gsap/` | 预留域，引入按 §10 报备      |
+| Three.js + WebGPU | 品牌史莱姆，限 `effects/webgpu/`；无 WebGL fallback                                         | LIL-85 已批准，精确版本锁定  |
 
-- 选最弱可用工具：能 CSS 不 JS，能 motion 不 GSAP，能 GSAP 不 WebGL。
+- 选最弱可用工具：普通 UI 能 CSS 不 JS，能 motion 不 GSAP；已批准史莱姆使用 Three.js WebGPU。禁止为了兼容而改用 WebGL。
 - **明确弃用，禁止再议**：Lottie / Rive（二进制资产，AI 无法按宪法用代码迭代，与「帧即数据」哲学冲突）、anime.js（命令式与 React 声明式不合）、react-spring（与 motion 域重叠）。
 - copy-paste 动效组件（react-bits / Magic UI / 8bitcn 等 registry）引入时，内部引擎必须落在已批准域内；自带未批准引擎（如 ogl、GSAP 变体）的组件，换用同库 motion/CSS 变体或弃用。拷入代码视同自研，遵守本文件全部条款，文件头必须标注来源与许可证。
-- 执法：ESLint `no-restricted-imports` 按目录拦截（GSAP 仅品牌页与 `effects/gsap/`、WebGL 引擎仅 `effects/webgl/`）；复杂引擎效果集中在 `src/effects/<engine>/`，`views/` 与 `components/` 只允许 CSS + motion。
+- 执法：ESLint `no-restricted-imports` 按目录拦截（GSAP 仅品牌页与 `effects/gsap/`；Three.js 仅 `effects/webgpu/`，禁止 WebGLRenderer/WebGLBackend/裸包入口及 WebGL fallback 子路径）；复杂引擎效果集中在 `src/effects/<engine>/`，`views/` 与 `components/` 只消费封装组件。真实后端与 fail-closed 由品牌契约测试和浏览器检查共同验证。
 
 ### 通用治理（所有引擎一致）
 
 - `prefers-reduced-motion: reduce` 必须降级（tokens.css 有全局兜底；JS 侧用 motion 的 `useReducedMotion` 或等价判断）。
 - 设置面板「动画」开关（`html[data-motion='off']`）必须全局生效；任何引擎的动效组件都必须同时尊重这两个开关，参考 `components/PageTransition.tsx` 与 `effects/PixelBean/`。
 - 产品面向年轻企业团队，动效目标是鲜明、轻快、可感知；“稳重、克制、内敛”不是默认方向。性能仍要求快速：Dialog / AlertDialog / Sheet 统一由 `PixelDialogMotion` 让真实标题、正文与操作区从 100ms / 150ms / 220ms 起穿过固定八段像素波前，最晚约 720ms 完成；禁止独立轨道、端点、全表面实色遮罩或空白等待。数据密集正文不常驻装饰动画。
-- 品牌视觉体系双轨（规格事实来源 `docs/pixel-wave-spec.md`）：焦点层 **PixelOrb** 直接使用批准的 3×2 透明 Mint Bonk 状态母版（`src/effects/PixelOrb/`），固定识别特征是长软左触角、短圆右触角、梨豆形薄荷身体、白色腹斑、腮红与短手脚；氛围层 **PixelWave** 只保留默认 `flowlight` 稀疏淡流光与登录 `letterpress` 同底色连续铅字浪潮。CRUD 浮层不挂 PixelWave，也不得另建视觉 DOM；其 `PixelDialogMotion` 属于通用 UI 动效，直接裁切真实内容并同时遵守双动效开关。禁止另起第三套品牌视觉。
+- 品牌角色唯一为青绿半透明史莱姆（目标 `docs/brand-slime/target-v1.png`）：圆润软体、内部漂浮气泡、两只黑豆眼与小嘴。眼睛可沿皮肤平滑跟随鼠标，脸与身体共享表面形变，不能漂浮分离。2026-09-08 用户最终要求 PixelWave 铅字浪潮仅保留为开发态动效实验室的默认关闭开关，登录禁止挂载；收起实验室/关闭抽屉卸载预览。WebGPU 画布透明合成；既有 PixelScale 与 PixelDialogMotion 保持，不把 3D 引入数据正文。旧 Mint Bonk 资产仅作历史回滚资料，不得进入新运行时。
+- 史莱姆明暗主题使用独立、同源的材质 token 与静态海报，自动切换，不依赖 accent/历史皮肤。鼠标按压不得显示键盘焦点框，键盘焦点提示仍须可见。气泡漂浮与视线跟随必须遵守动效开关与隐藏暂停；由品牌回归测试及浏览器证据执法。
 - PixelOrb 状态词汇表固定为 `idle / waiting / success / error / sleeping`（loading 语义并入 waiting；`thinking` 为 2 期 Agent 界面预留、当前不实现），全站状态语义共用同一组件。
 - **PixelBean / PixelTide / RetroGrid 已弃用**：`src/effects/PixelBean/` 与 `src/effects/registry/RetroGrid/` 仅保留历史兼容，禁止新代码引用。
-- 角色素材机制：`public/brand/mint-bonk-design-sprites-v1.png` 是运行时唯一角色事实来源，3×2 等分、每格 512×512；上排依次 `idle / waiting / success`，下排前两格依次 `error / sleeping`，右下背面仅作设定参考。idle 的 `gaze` 只允许移动从原稿裁出的两枚眼部高光，并以原稿黑色裁片覆盖静态高光；不得代码重画眼睛或身体。历史 `skin` 与 store 字段只保留兼容，设置面板不再提供吉祥物换肤入口。
+- 运行时机制：按需加载 WebGPU 引擎；无 API、初始化失败或设备丢失展示新角色静态海报与明确提示，禁止 WebGL 回退。reduced-motion/全局动画关闭以及小尺寸非交互空态使用静态新角色，不申请 GPU；隐藏/离屏暂停、卸载释放设备与资源。历史 `skin` 与 store 字段只保留兼容，设置面板不提供吉祥物换肤入口。
 - 颜色例外：像素调色板的颜色字面量只允许出现在 `effects/*/skins/*.ts` 数据文件中；组件其余样式仍 token-only。PixelWave 波纹允许**程序化 oklch 取色**（hue 随波相位旋转形成五彩纹路、明度随明暗主题适配，禁写死 hex 色板）；其余像素光效一律走 `--brand` 明度阶梯。
 
 ## 6. 后端契约（适配层在 `src/lib/api/`，页面不直接感知后端细节）

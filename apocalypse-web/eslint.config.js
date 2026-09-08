@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint'
 
 // Vite react-ts 模板标准 flat config；与 oxlint 并存（pnpm lint 串行跑两者）
 export default tseslint.config([
-  globalIgnores(['dist', 'node_modules']),
+  globalIgnores(['dist', 'dist-brand-qa', 'node_modules']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -25,10 +25,10 @@ export default tseslint.config([
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
-  // —— AGENTS.md §5「引擎分域」执法（预防性规则，相关包当前均未安装）——
+  // —— AGENTS.md §5「引擎分域」执法（LIL-85：Three.js 仅允许 WebGPU 域）——
   // 一库一域，越域即违规：
   //   · GSAP → 仅品牌页（src/views/login/）与 src/effects/gsap/
-  //   · WebGL 引擎（three / @react-three / pixi.js / ogl）→ 仅 src/effects/webgl/（2 期预留域）
+  //   · Three.js → 仅 src/effects/webgpu/；WebGL / R3F / pixi / ogl 未获批准
   //   · 其余目录（views/ 与 components/ 等）只允许 CSS + motion（motion 不限制）
   // paths 拦裸包名，patterns 拦子路径深引用（minimatch：'three/*' 不跨层，须用 'three/**'）。
   {
@@ -42,7 +42,7 @@ export default tseslint.config([
             {
               group: ['gsap/**', 'three/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
               message:
-                'AGENTS.md §5 引擎分域：GSAP 仅限 src/views/login/ 与 src/effects/gsap/；WebGL 引擎（three/@react-three/pixi/ogl）仅限 src/effects/webgl/；其余目录只允许 CSS + motion。',
+                'AGENTS.md §5 引擎分域：GSAP 仅限品牌页/effects/gsap；Three.js 仅限 effects/webgpu；其余目录只消费封装组件。',
             },
           ],
         },
@@ -61,7 +61,7 @@ export default tseslint.config([
             {
               group: ['three/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
               message:
-                'AGENTS.md §5 引擎分域：WebGL 引擎仅限 src/effects/webgl/（2 期预留域），本目录只放行 GSAP。',
+                'AGENTS.md §5 引擎分域：Three.js 仅限 src/effects/webgpu/，本目录只放行 GSAP。',
             },
           ],
         },
@@ -69,18 +69,36 @@ export default tseslint.config([
     },
   },
   {
-    // WebGL 引擎域：effects/webgl —— 放行 three/@react-three/pixi/ogl，GSAP 仍禁
-    files: ['src/effects/webgl/**/*.{ts,tsx}'],
+    // 唯一 3D 域：显式 WebGPUBackend，不能悄悄走 WebGL fallback。
+    files: ['src/effects/webgpu/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          paths: ['gsap'],
+          paths: [
+            'gsap',
+            'three',
+            'pixi.js',
+            'ogl',
+            {
+              name: 'three/webgpu',
+              importNames: ['WebGPURenderer', 'WebGLBackend', 'WebGLRenderer'],
+              message: 'LIL-85：使用 Renderer + WebGPUBackend，禁止隐式 WebGL 回退构造器。',
+            },
+          ],
           patterns: [
             {
-              group: ['gsap/**'],
+              group: [
+                'gsap/**',
+                '@react-three/**',
+                'pixi.js/**',
+                'ogl/**',
+                'three/**',
+                '!three/webgpu',
+                '!three/tsl',
+              ],
               message:
-                'AGENTS.md §5 引擎分域：GSAP 仅限 src/views/login/ 与 src/effects/gsap/，本目录为 WebGL 引擎域。',
+                'AGENTS.md §5：本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
             },
           ],
         },

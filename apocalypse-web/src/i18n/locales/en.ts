@@ -32,6 +32,22 @@ export const en = {
         'This page is unavailable: the module is disabled, access was removed, or the route is not configured. Returned to Dashboard.',
       notInstalled: 'Page not installed or version mismatch. Please contact your administrator.',
     },
+    brandSlime: {
+      interactive:
+        'Mint slime, {{state}}. Press to squeeze, drag to lift, release to bounce. Space or Enter to poke; Escape to release.',
+      static: 'Mint slime, {{state}}',
+      hint: 'Press to squeeze · Drag to lift · Release to bounce',
+      unsupported: 'WebGPU is unavailable. Showing a still image.',
+      failed: '3D could not start. Showing a still image; reload to retry.',
+      lost: 'Graphics device disconnected. Showing a still image; reload to retry.',
+      states: {
+        idle: 'relaxed',
+        waiting: 'waiting',
+        success: 'happy',
+        error: 'concerned',
+        sleeping: 'eyes closed',
+      },
+    },
     login: {
       title: 'Apocalypse',
       edition: 'Management control plane',
@@ -136,6 +152,11 @@ export const en = {
       动画: 'Motion',
       语言: 'Language',
       像素音阶: 'Pixel scale',
+      动效实验室: 'Motion lab',
+      像素浪潮: 'Pixel wave',
+      像素浪潮预览: 'Pixel wave preview',
+      '仅在实验室预览，默认关闭，不在登录页展示。':
+        'Lab preview only. Off by default; never shown on the sign-in page.',
       加载反馈预览: 'Loading feedback preview',
       反馈与品牌: 'Feedback & brand',
       '验证品牌反馈，不进入业务正文。':

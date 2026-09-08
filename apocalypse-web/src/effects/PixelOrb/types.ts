@@ -1,5 +1,5 @@
 /**
- * PixelOrb 批准设计稿状态组件契约（docs/pixel-wave-spec.md §7.1）。
+ * PixelOrb 新品牌兼容契约（docs/brand-slime/solution-fit.md）。
  *
  * 状态词表固定为 idle / waiting / success / error / sleeping：
  * loading 语义并入 waiting；thinking 为 2 期 Agent 界面化身预留、当前不实现（宪法 §5）。
@@ -24,7 +24,7 @@ export type OrbPaletteKey =
   | 'eyeHi' // 眼内单格高光
 
 /**
- * 历史皮肤定义；正式 PixelOrb 使用批准的透明 PNG，不消费该调色板。
+ * 历史皮肤定义；正式 PixelOrb 使用固定 mint 史莱姆，不消费该调色板。
  */
 export interface OrbSkinDefinition {
   id: SkinId
@@ -39,9 +39,9 @@ export interface PixelOrbProps {
   state?: OrbState
   /** 历史兼容属性；批准设计稿固定使用 mint，不再重着色。 */
   skin?: SkinId
-  /** CSS 尺寸（px），合法值 256/128/64/32（32 为图标态），非法值开发环境 throw */
+  /** CSS 尺寸（px），合法值 384/256/128/64/32；大尺寸交互、小尺寸静态，非法值开发环境 throw */
   size?: number
-  /** idle 是否让原稿眼部高光跟随指针；不改变身体或重绘眼睛。 */
+  /** idle 时眼睛沿皮肤平滑跟随鼠标；静态/闭眼时居中，默认关闭，登录显式启用。 */
   gaze?: boolean
   className?: string
 }

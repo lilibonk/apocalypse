@@ -68,6 +68,7 @@ export type CapabilityKey =
   | 'fixedHeader'
   | 'grayMode'
   | 'motion'
+  | 'pixelWave'
   | 'mascot'
   | 'language'
 
@@ -88,6 +89,7 @@ export const CAPABILITY_META: CapabilityMeta[] = [
   { key: 'fixedHeader', label: '固定顶栏', exposed: true },
   { key: 'grayMode', label: '灰色模式', exposed: true },
   { key: 'motion', label: '动画', exposed: true },
+  { key: 'pixelWave', label: '像素浪潮', exposed: true },
   { key: 'mascot', label: '吉祥物', exposed: true },
   { key: 'language', label: '语言', exposed: true },
 ]
@@ -106,6 +108,7 @@ interface SettingsState {
   fixedHeader: boolean
   grayMode: boolean
   motionEnabled: boolean
+  pixelWaveEnabled: boolean
   mascotSkin: SkinId
   language: Language
 
@@ -118,6 +121,7 @@ interface SettingsState {
   setFixedHeader: (fixed: boolean) => void
   setGrayMode: (enabled: boolean) => void
   setMotionEnabled: (enabled: boolean) => void
+  setPixelWaveEnabled: (enabled: boolean) => void
   setMascotSkin: (mascotSkin: SkinId) => void
   setLanguage: (language: Language) => void
 }
@@ -132,6 +136,7 @@ export const DEFAULT_SETTINGS = {
   fixedHeader: true,
   grayMode: false,
   motionEnabled: true,
+  pixelWaveEnabled: false,
   mascotSkin: 'v3' as SkinId,
   language: 'zh' as Language,
 }
@@ -152,6 +157,7 @@ export const useSettingsStore = create<SettingsState>()(
       setFixedHeader: (fixedHeader) => set({ fixedHeader }),
       setGrayMode: (grayMode) => set({ grayMode }),
       setMotionEnabled: (motionEnabled) => set({ motionEnabled }),
+      setPixelWaveEnabled: (pixelWaveEnabled) => set({ pixelWaveEnabled }),
       setMascotSkin: (mascotSkin) => set({ mascotSkin, accent: SKIN_ACCENT[mascotSkin] }),
       setLanguage: (language) => set({ language }),
     }),
@@ -207,6 +213,8 @@ export function useSettings() {
         : DEFAULT_SETTINGS.motionEnabled,
     mascotSkin:
       labEnabled && isCapabilityExposed('mascot') ? state.mascotSkin : DEFAULT_SETTINGS.mascotSkin,
+    pixelWaveEnabled:
+      labEnabled && isCapabilityExposed('pixelWave') && state.pixelWaveEnabled === true,
     language: isCapabilityExposed('language') ? state.language : DEFAULT_SETTINGS.language,
   }
 }

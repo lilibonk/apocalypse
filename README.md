@@ -5,6 +5,8 @@ Java 25 + Spring Boot 4.1 模块化单体通用脚手架。单 Maven 模块 + Sp
 
 ## 特性
 
+- **前端品牌**：登录舞台使用 Three.js WebGPU 软体史莱姆；无 WebGL 回退，动效关闭/不支持时静态降级。[方案与验收](apocalypse-web/docs/brand-slime/acceptance.md)
+
 - **模块化单体**：包即模块（`common`/`framework`/`system`/`order`/`calendar`），Modulith `verify()` 测试期强制边界，跨模块只走 facade 与共享事件契约
 - **可选万年历**：默认关闭的 Calendar 模块，支持农历/生肖/节气、版本化法定日别、业务/个人字段覆盖、单次日程与上游事件投影；运行时零联网
 - **安全**：Spring Security 7 + OAuth2 Resource Server（JWT/HS256）、RBAC + 对象级授权、PostgreSQL 事务持久化授权/凭证版本即时撤销、refresh jti 原子旋转、登录失败锁定 + 限流 + 强密码策略 + 审计、在线用户强退

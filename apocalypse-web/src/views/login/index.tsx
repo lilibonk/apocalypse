@@ -1,21 +1,7 @@
 /**
- * 登录页：分屏品牌页（≥lg 左舞台右表单，<lg 单列表单 + 紧凑品牌头）。
- *
- * 登录氛围层（v2.11 连续浪潮·铅字浮雕，规格 docs/pixel-wave-spec.md §22/§23）：
- * - PixelWave 只铺桌面品牌舞台 / 移动品牌头，表单维持纯数据表面；
- *   固定 32px 完整网格 + 随机角点欧氏波前 + rAF 连续指数长尾高度场；顶面与背景同色
- *   （白底白块 / 黑底黑块），灰阶侧壁与彩色剪影流光只表达抬升深度；
- *   组件恒 pointer-events-none、无任何鼠标涟漪 / 点击脉冲（v2.3 移除交互）；
- * - PixelOrb 256 主视觉（左舞台 z-10）：直接裁切批准设计稿的透明状态母版；idle 只移动原稿眼部高光跟随指针，不以代码重绘角色；
- *   五张角色稿随登录生命周期联动：
- *   idle → waiting → success（短暂停留后跳转）/ error（稍后回 idle）；
- * - 彩蛋：聚焦密码框时 Mint Bonk 进入 sleeping（闭眼回避），失焦恢复；
- * - BlurText 逐字揭示 tagline；底部等宽字体技术栈 meta 行。
- *
- * 表单面板（右，z-10）：排版驱动层级，无卡片套卡片；底部内嵌语言切换（与设置面板同源）。
- *
- * 降级（prefers-reduced-motion 或设置「动画」关闭）：PixelWave 零渲染纯背景、
- * BlurText 直出、PixelOrb 保持所选设计稿静态帧且视线回中，布局与功能不变（宪法 §5 双开关）。
+ * 登录品牌舞台：LIL-85 WebGPU 软体史莱姆；表单与认证流程保持原契约。
+ * 五种表情跟随登录生命周期，密码聚焦时闭眼。小尺寸/减少动效使用新角色静态海报。
+ * 保留 gaze 视线跟随；PixelWave 仅在动效实验室预览，登录不挂载。
  */
 
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,7 +25,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PixelOrb, type OrbState } from '@/effects/PixelOrb'
-import { PixelScale, PixelWave } from '@/effects/PixelWave'
+import { PixelScale } from '@/effects/PixelWave'
 import { BlurText } from '@/effects/registry/BlurText'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
@@ -107,14 +93,8 @@ export default function LoginPage() {
 
   return (
     <div className="relative grid min-h-svh bg-background lg:grid-cols-[3fr_2fr]">
-      {/* 品牌舞台（≥lg）：Mint Bonk 像素向导 + 编辑式品牌排版 */}
-      <section className="relative hidden overflow-hidden border-r border-border bg-background lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <PixelWave
-          appearance="letterpress"
-          waveSpeed={0.8}
-          className="absolute inset-0 z-0 opacity-90"
-        />
-
+      {/* 品牌舞台（≥lg）：纯背景 + 透明 WebGPU 软体角色。 */}
+      <section className="brand-slime-stage relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between lg:p-10">
         <header className="relative z-10 flex items-start justify-between">
           <BrandSignature />
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -123,21 +103,24 @@ export default function LoginPage() {
           </div>
         </header>
 
-        <div className="relative z-10 grid grid-cols-[auto_1fr] items-center gap-12">
-          <PixelOrb state={displayState} size={256} gaze />
+        <div className="relative z-10 flex flex-col items-center gap-4 py-4 2xl:flex-row 2xl:gap-8">
+          <div className="flex flex-col items-center">
+            <PixelOrb state={displayState} size={384} gaze />
+            <p className="text-xs text-muted-foreground">{t('brandSlime.hint')}</p>
+          </div>
 
-          <div className="max-w-lg bg-background">
+          <div className="max-w-lg text-center 2xl:text-left">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
               {t('login.stageIndex')}
             </p>
-            <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-tight tracking-tight text-balance 2xl:text-5xl">
+            <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-tight text-balance 2xl:text-4xl">
               <BlurText text={t('login.tagline')} animateBy="letters" delay={55} />
             </h1>
-            <p className="mt-5 max-w-md text-sm leading-6 text-muted-foreground">
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground 2xl:mx-0">
               {t('login.stageDesc')}
             </p>
 
-            <dl className="mt-10 grid grid-cols-3 border-y border-border py-4">
+            <dl className="mt-6 grid grid-cols-3 border-y border-border py-4 text-left">
               {(['architecture', 'runtime', 'interface'] as const).map((item) => (
                 <div key={item} className="border-l border-border pl-4 first:border-l-0 first:pl-0">
                   <dt className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -160,15 +143,10 @@ export default function LoginPage() {
       <section className="relative flex items-center justify-center bg-background px-6 py-12 sm:px-10">
         <div className="w-full max-w-sm">
           {/* 移动端紧凑品牌头（<lg 时舞台隐藏） */}
-          <div className="relative -mx-6 mb-12 overflow-hidden border-b border-border px-6 pb-8 sm:-mx-10 sm:px-10 lg:hidden">
-            <PixelWave
-              appearance="letterpress"
-              waveSpeed={0.8}
-              className="absolute inset-0 z-0 opacity-90"
-            />
+          <div className="brand-slime-stage relative -mx-6 mb-8 overflow-hidden border-b border-border px-6 py-6 sm:-mx-10 sm:px-10 lg:hidden">
             <div className="relative z-10 flex flex-col items-center gap-5 text-center">
               <BrandSignature className="self-start text-left" />
-              <PixelOrb state={displayState} size={128} gaze />
+              <PixelOrb state={displayState} size={256} gaze />
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                   {t('login.edition')}

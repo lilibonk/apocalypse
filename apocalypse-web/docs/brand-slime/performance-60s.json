@@ -1,0 +1,34 @@
+{
+  "live": {
+    "frames": 180,
+    "elapsedMs": 1500.5,
+    "averageFps": 119.96001332889037,
+    "p95FrameMs": 9.30000000000291,
+    "framesOver25Ms": 0
+  },
+  "physics": {
+    "pressed": false,
+    "dragged": false,
+    "height": 0,
+    "dent": 4.442306485302317e-54,
+    "impacts": 14
+  },
+  "benchmark": {
+    "phase": "complete",
+    "report": {
+      "frames": 7201,
+      "elapsedMs": 60007.7,
+      "averageFps": 120.00126650413198,
+      "p95FrameMs": 9.30000000000291,
+      "framesOver25Ms": 0
+    },
+    "info": {
+      "backend": "webgpu",
+      "adapter": "apple / metal-3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "dpr": 2,
+      "width": 1280,
+      "height": 1280
+    }
+  }
+}

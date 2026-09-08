@@ -1,0 +1,62 @@
+.brand-slime-stage {
+  --background: var(--slime-stage);
+  background: var(--slime-stage);
+}
+.slime-mascot {
+  position: relative;
+  flex-shrink: 0;
+}
+.slime-runtime,
+.slime-poster,
+.slime-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.slime-poster {
+  pointer-events: none;
+  user-select: none;
+  object-fit: contain;
+}
+.slime-canvas {
+  opacity: 0;
+  pointer-events: none;
+  outline: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.slime-canvas[data-ready='true'] {
+  opacity: 1;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.slime-canvas[data-ready='true']:active {
+  cursor: grabbing;
+}
+.slime-canvas:focus-visible:not([data-focus-origin='pointer']) {
+  outline: calc(var(--spacing) / 2) solid var(--ring);
+  outline-offset: var(--spacing);
+  border-radius: var(--radius);
+}
+.slime-poster-dark {
+  display: none;
+}
+.dark .slime-poster-light {
+  display: none;
+}
+.dark .slime-poster-dark {
+  display: block;
+}
+.slime-fallback {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  margin: 0;
+  padding: var(--spacing);
+  color: var(--muted-foreground);
+  background: var(--slime-stage);
+  font-size: var(--text-xs);
+  text-align: center;
+}

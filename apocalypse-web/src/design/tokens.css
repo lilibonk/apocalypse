@@ -38,6 +38,16 @@
   --overlay-backdrop: oklch(0.12 0 0 / 0.52);
   --overlay-backdrop-nested: oklch(0.12 0 0 / 0.24);
 
+  /* LIL-85: sRGB projection for Three.js, fixed mint (independent of accent presets). */
+  --slime-stage: #f5f3ef;
+  --slime-body: #93dbc4;
+  --slime-attenuation: #81c5b1;
+  --slime-face: #07140f;
+  --slime-light: #ffffff;
+  --slime-shadow: #496c60;
+  --slime-environment: #c8d4cd;
+  --slime-glow: #176b53;
+
   /* 圆角与排版。--radius-brand 供品牌表面（登录/空态/像素进度），数据表面仍走 --radius */
   --radius: 0.625rem;
   --radius-brand: 0px;
@@ -67,6 +77,14 @@
 }
 
 .dark {
+  --slime-stage: #101314;
+  --slime-body: #91efd0;
+  --slime-attenuation: #45b892;
+  --slime-face: #031610;
+  --slime-light: #effff5;
+  --slime-shadow: #000000;
+  --slime-environment: #a3c7b9;
+  --slime-glow: #39b889;
   --background: oklch(0.18 0.004 260);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.215 0.004 260);

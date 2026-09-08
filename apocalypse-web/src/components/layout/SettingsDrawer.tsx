@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { PixelScale } from '@/effects/PixelWave'
+import { PixelWaveLab } from '@/effects/PixelWave/PixelWaveLab'
 import { cn } from '@/lib/utils'
 import {
   ACCENTS,
@@ -183,6 +184,10 @@ export function SettingsDrawer({
                           </span>
                           <PixelScale variant="card" />
                         </div>
+                      </Section>
+
+                      <Section title={ct('动效实验室')}>
+                        <PixelWaveLab active={open && labOpen} />
                       </Section>
 
                       <Section title={ct('强调色')}>

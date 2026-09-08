@@ -24,7 +24,7 @@
  */
 
 import { useReducedMotion } from 'motion/react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/stores/settings'
@@ -77,6 +77,14 @@ export interface PixelWaveProps {
   className?: string
 }
 
+const subscribeDomMotion = (callback: () => void) => {
+  const observer = new MutationObserver(callback)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion'] })
+  return () => observer.disconnect()
+}
+const readDomMotion = () => document.documentElement.dataset.motion !== 'off'
+const serverDomMotion = () => false
+
 export function PixelWave({
   appearance = 'flowlight',
   cols,
@@ -88,7 +96,8 @@ export function PixelWave({
 }: PixelWaveProps) {
   const { motionEnabled } = useSettings()
   const reducedMotion = useReducedMotion()
-  const staticMode = !motionEnabled || reducedMotion === true
+  const domMotion = useSyncExternalStore(subscribeDomMotion, readDomMotion, serverDomMotion)
+  const staticMode = !motionEnabled || reducedMotion === true || !domMotion
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -215,7 +224,7 @@ export function PixelWave({
       return
     }
 
-    const t0 = performance.now()
+    let t0 = performance.now()
 
     // letterpress 每个 rAF 连续计算；flowlight 仍只在 10fps 步进边界计算。
     const paint = (frameTime: number) => {
@@ -289,9 +298,15 @@ export function PixelWave({
 
     // —— rAF 主循环（P10：FPS 采样；持续低帧 → 清空定格纯背景 + 停 rAF + console.info 一次）——
     let raf = 0
-    const fps = createFpsSampler()
+    let visible = false
+    let pausedAt = performance.now()
+    let degraded = false
+    let fps = createFpsSampler()
     const loop = (now: number) => {
+      raf = 0
+      if (!visible || document.hidden || degraded) return
       if (fps.tick(now)) {
+        degraded = true
         clearCanvas()
         console.info(
           `[PixelWave] 持续低帧（约 ${Math.round(fps.fps ?? 0)}fps < 30fps 达 2s），已自动降级为纯背景零渲染（docs/pixel-wave-spec.md §12 P10）`,
@@ -311,12 +326,33 @@ export function PixelWave({
       }
       raf = window.requestAnimationFrame(loop)
     }
-    raf = window.requestAnimationFrame(loop)
+    const updateVisibility = () => {
+      if (!visible || document.hidden) {
+        if (raf) {
+          window.cancelAnimationFrame(raf)
+          raf = 0
+        }
+        if (!pausedAt) pausedAt = performance.now()
+      } else if (!raf && !degraded) {
+        if (pausedAt) t0 += performance.now() - pausedAt
+        pausedAt = 0
+        fps = createFpsSampler()
+        raf = window.requestAnimationFrame(loop)
+      }
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting
+      updateVisibility()
+    })
+    io.observe(wrap)
+    document.addEventListener('visibilitychange', updateVisibility)
 
     return () => {
       window.cancelAnimationFrame(raf)
       ro.disconnect()
       mo.disconnect()
+      io.disconnect()
+      document.removeEventListener('visibilitychange', updateVisibility)
     }
   }, [appearance, cols, rows, block, gapSize, step, waveSpeed, staticMode, fillMode])
 
@@ -329,7 +365,7 @@ export function PixelWave({
       data-effect="pixel-wave"
       data-appearance={appearance}
     >
-      <canvas ref={canvasRef} className="block h-full w-full" />
+      <canvas ref={canvasRef} className={cn('block h-full w-full', staticMode && 'invisible')} />
     </div>
   )
 }

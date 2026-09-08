@@ -1,0 +1,44 @@
+{
+  "live": {
+    "frames": 180,
+    "elapsedMs": 1499.9000000000087,
+    "averageFps": 120.00800053336819,
+    "p95FrameMs": 9.19999999999709,
+    "framesOver25Ms": 0
+  },
+  "workload": {
+    "pixelWave": true,
+    "stageCssWidth": 442,
+    "stageCssHeight": 442
+  },
+  "ambient": {
+    "gazeX": 7.460545532284127e-8,
+    "gazeY": -2.3659332998014707e-7,
+    "bubbleY": 0.6301538554216366
+  },
+  "physics": {
+    "pressed": false,
+    "dragged": false,
+    "height": 0,
+    "dent": 2.8292870895015735e-8,
+    "impacts": 12
+  },
+  "benchmark": {
+    "phase": "interrupted",
+    "report": {
+      "frames": 6554,
+      "elapsedMs": 54616.100000000006,
+      "averageFps": 120.00124505411407,
+      "p95FrameMs": 9.10000000000582,
+      "framesOver25Ms": 0
+    },
+    "info": {
+      "backend": "webgpu",
+      "adapter": "apple / metal-3",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "dpr": 2,
+      "width": 1280,
+      "height": 1280
+    }
+  }
+}

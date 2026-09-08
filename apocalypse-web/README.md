@@ -31,9 +31,13 @@ pnpm exec shadcn add --yes <component>   # 添加 shadcn 组件
 - `src/components/layout/` —— AppLayout（侧栏/顶栏/页签/cmdk/设置抽屉）
 - `src/design/DEFINITION.md` —— 设计定义（视觉唯一事实来源）；`tokens.css` 是它的 CSS 投影
 - `src/i18n/` —— react-i18next 初始化、核心 zh/en 词条与构建期模块 locale loader；业务词条共置 `src/views/<module>/i18n/`，zh/en 合同由测试校验
-- `src/effects/` —— PixelOrb 吉祥物与 PixelWave/PixelScale 品牌动效
+- `src/effects/` —— PixelOrb 兼容入口 / WebGPU 软体史莱姆，以及 PixelWave/PixelScale 通用反馈
 
 约定与红线见 [AGENTS.md](./AGENTS.md)。管理页按“标题 → 上下文工具栏 → 主工作区 → 弹窗/抽屉详情”组织，复用 `FieldSelect` 与 `DatePicker`，不混用浏览器原生日期和选择弹层。Calendar 人工验收修正与回归合同见 [UI 验收](docs/calendar-ui-acceptance.md)。
+
+## 品牌交互
+
+品牌角色已更新为 Three.js WebGPU 青绿半透明史莱姆。登录大尺寸支持揉捏、拎起、回弹与视线跟随，细小透明气泡在体内缓慢上浮。明暗主题自动切换角色材质及海报；鼠标按压无焦点框，键盘焦点仍可见。PixelWave 铅字浪潮不在登录页展示，仅在开发态“界面设置 → 外观实验室 → 动效实验室”通过默认关闭的开关预览。小尺寸、关闭动效或无 WebGPU 环境使用同角色静态海报，不回退 WebGL。验收说明与重现命令见 [品牌验收](docs/brand-slime/acceptance.md)。
 
 ## Calendar 模块接入
 

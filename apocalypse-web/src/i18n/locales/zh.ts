@@ -29,6 +29,16 @@ export const zh = {
       unavailable: '页面不可用：模块已停用、访问权限已撤回或路由未配置。已返回工作台。',
       notInstalled: '页面未安装或版本不匹配，请联系管理员。',
     },
+    brandSlime: {
+      interactive:
+        '青绿史莱姆，{{state}}。按住揉捏、拖动拎起、松手回弹；空格或回车戳一下，Escape 松手。',
+      static: '青绿史莱姆，{{state}}',
+      hint: '按住揉捏 · 拖动拎起 · 松手回弹',
+      unsupported: '当前环境不支持 WebGPU，已显示静态形象。',
+      failed: '3D 初始化失败，已显示静态形象；刷新可重试。',
+      lost: '图形设备已断开，已显示静态形象；刷新可重试。',
+      states: { idle: '放松', waiting: '等待', success: '开心', error: '担心', sleeping: '闭眼' },
+    },
     login: {
       title: 'Apocalypse',
       edition: '管理控制平面',
