@@ -17,8 +17,8 @@ const comparison = document.createElement('div')
 comparison.className = 'slime-comparison'
 root.append(comparison)
 const reference = document.createElement('img')
-reference.src = new URL('../../../../docs/brand-slime/target-v1.png', import.meta.url).href
-reference.alt = '目标效果图'
+reference.src = '/brand/slime/idle.png'
+reference.alt = '第二版青绿史莱姆静态海报（亮色）；作者参考图保留在验收资料中'
 reference.className = 'slime-preview-canvas'
 comparison.append(reference)
 const canvas = document.createElement('canvas')
@@ -29,7 +29,10 @@ canvas.setAttribute('aria-label', '互动青绿史莱姆：按住揉捏、拖动
 canvas.setAttribute('role', 'button')
 canvas.tabIndex = 0
 canvas.className = 'slime-preview-canvas'
-stage.append(canvas)
+const anchor = document.createElement('div')
+anchor.className = 'slime-preview-anchor'
+anchor.append(canvas)
+stage.append(anchor)
 
 const controls = document.createElement('div')
 controls.className = 'slime-preview-controls'
@@ -44,6 +47,29 @@ const addButton = (label: string, action: () => void) => {
 }
 addButton('静态对齐', () => runtime?.setStatic(true))
 addButton('开始交互', () => runtime?.setStatic(false))
+addButton('重播入场双跳', () => {
+  runtime?.setStatic(false)
+  runtime?.startEntry()
+})
+addButton('回到中央', () => runtime?.reset())
+for (const reaction of ['surprised', 'happy', 'wink', 'dizzy'] as const)
+  addButton(`表情 ${reaction}`, () => {
+    runtime?.setStatic(false)
+    runtime?.react(reaction)
+  })
+for (const key of ['stiffness', 'damping'] as const) {
+  const label = document.createElement('label')
+  label.textContent = key === 'stiffness' ? '硬度' : '阻尼'
+  const input = document.createElement('input')
+  input.type = 'range'
+  input.min = '0'
+  input.max = '1'
+  input.step = '0.01'
+  input.value = key === 'stiffness' ? '0.35' : '0.45'
+  input.addEventListener('input', () => runtime?.setConfig({ [key]: Number(input.value) }))
+  label.append(input)
+  controls.append(label)
+}
 addButton('戳一下', () => {
   runtime?.setStatic(false)
   runtime?.poke()
@@ -62,6 +88,12 @@ for (const value of states)
     runtime?.setState(value)
   })
 addButton('60 秒性能验证（预热 10 秒）', () => runtime?.startBenchmark())
+addButton('桌面登录负载 384', () => {
+  root.dataset.layout = 'production'
+})
+addButton('返回参考对照', () => {
+  delete root.dataset.layout
+})
 addButton('模拟设备丢失', () => runtime?.simulateDeviceLoss())
 const exportLink = document.createElement('a')
 exportLink.textContent = '海报尚未导出'
@@ -144,13 +176,7 @@ try {
             stageCssHeight: canvas.clientHeight,
           },
           ambient,
-          physics: {
-            pressed: physics.pressed,
-            dragged: physics.dragged,
-            height: physics.y,
-            dent: physics.dent,
-            impacts: physics.impacts,
-          },
+          physics,
           benchmark: runtime?.getBenchmark(),
         },
         null,

@@ -20,6 +20,7 @@ body {
   height: min(640px, 50vw);
   display: block;
   touch-action: none;
+  object-fit: contain;
 }
 
 canvas.slime-preview-canvas {
@@ -42,10 +43,35 @@ canvas.slime-preview-canvas:focus-visible:not([data-focus-origin='pointer']) {
 
 .slime-preview-stage {
   position: relative;
+  width: min(640px, 50vw);
+  height: min(640px, 50vw);
 }
 
-.slime-preview-stage > canvas {
+.slime-preview-anchor {
   position: relative;
+  width: 100%;
+  height: 100%;
+}
+.slime-preview-anchor > canvas {
+  position: absolute;
+}
+#root[data-layout='production'] .slime-comparison {
+  display: block;
+}
+#root[data-layout='production'] .slime-comparison > img {
+  display: none;
+}
+#root[data-layout='production'] .slime-preview-stage {
+  width: 60vw;
+  height: 100svh;
+}
+#root[data-layout='production'] .slime-preview-anchor {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  transform: translateX(-50%);
+  width: calc(var(--spacing) * 96);
+  height: calc(var(--spacing) * 96);
 }
 
 .slime-preview-controls {

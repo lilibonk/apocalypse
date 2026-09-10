@@ -47,6 +47,8 @@
   --slime-shadow: #496c60;
   --slime-environment: #c8d4cd;
   --slime-glow: #176b53;
+  --slime-star: #ffc820;
+  --slime-star-glow: #ffa200;
 
   /* 圆角与排版。--radius-brand 供品牌表面（登录/空态/像素进度），数据表面仍走 --radius */
   --radius: 0.625rem;
@@ -85,6 +87,8 @@
   --slime-shadow: #000000;
   --slime-environment: #a3c7b9;
   --slime-glow: #39b889;
+  --slime-star: #ffdb63;
+  --slime-star-glow: #ffb52e;
   --background: oklch(0.18 0.004 260);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.215 0.004 260);

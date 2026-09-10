@@ -1,60 +1,35 @@
-import { frontSurfaceZ, type Point3 } from './shape'
-
-export interface Gaze {
+/** Adapted from yuanyang749/softie-webgpu, MIT, Copyright (c) 2026 yuanyang749.
+ * Source: https://github.com/yuanyang749/softie-webgpu/tree/977a60844ac6ffe6824531900cf15bd5403e408f
+ * Changes: TypeScript, Apocalypse host/lifecycle integration. See public/licenses/softie-webgpu.txt.
+ */
+import { radiusAt, type Point3 } from './shape'
+export interface BubbleSeed {
   x: number
   y: number
+  z: number
+  size: number
+  phase: number
 }
-export const GAZE = { maxX: 0.085, maxY: 0.05, settlingTime: 0.13 } as const
-const bounded = (value: number, limit = 1) =>
-  Number.isFinite(value) ? Math.max(-limit, Math.min(limit, value)) : 0
-
-/** Coordinates are normalized against the visible canvas, not the window or a floating face layer. */
-export function gazeTarget(x: number, y: number): Gaze {
-  return { x: bounded(x), y: bounded(y) }
+const smooth = (x: number, a: number, b: number) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
+  return t * t * (3 - 2 * t)
 }
-
-export function advanceGaze(current: Gaze, target: Gaze, seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return
-  const amount = 1 - Math.exp(-Math.max(0, Math.min(seconds, 1 / 15)) / GAZE.settlingTime)
-  current.x += (bounded(target.x) - current.x) * amount
-  current.y += (bounded(target.y) - current.y) * amount
-}
-
-export const BUBBLE_MOTION = { bottom: 0.14, top: 1.7, fadeDistance: 0.18 } as const
-
-const halfWidthAt = (y: number) => {
-  const ny = 2 * (y / 1.92) ** (1 / 1.2) - 1
-  return 1.3 * (1 - 0.08 * ny) * Math.sqrt(Math.max(0, 1 - ny * ny))
-}
-
-/** Rebirth happens only after a bubble has become invisible, never as a visible teleport. */
-export function bubbleVisibility(y: number) {
-  const edge = Math.min(y - BUBBLE_MOTION.bottom, BUBBLE_MOTION.top - y)
-  const value = Math.max(0, Math.min(1, (edge - 0.025) / BUBBLE_MOTION.fadeDistance))
-  return value * value * (3 - 2 * value)
-}
-
-/** Gentle buoyant rise, not a closed orbit. All coordinates stay inside the volume. */
-export function bubblePoint(
-  rest: Point3,
-  radius: number,
-  index: number,
-  seconds: number,
-  out: Point3,
-): Point3 {
-  const phase = index * 2.399963
-  const time = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
-  const height = BUBBLE_MOTION.top - BUBBLE_MOTION.bottom
-  const speed = 0.019 + (index % 11) * 0.0012
-  out.y =
-    BUBBLE_MOTION.bottom +
-    ((((rest.y - BUBBLE_MOTION.bottom + time * speed) % height) + height) % height)
-  const lane = rest.x / Math.max(0.1, halfWidthAt(rest.y))
-  const halfWidth = halfWidthAt(out.y)
-  const sway = (Math.sin(time * 0.23 + phase) - Math.sin(phase)) * 0.009
-  out.x = bounded(lane * halfWidth + sway, Math.max(0.1, halfWidth - radius * 3))
-  const depth = bounded(rest.z / Math.max(0.1, frontSurfaceZ(rest.x, rest.y)), 0.78)
-  const surface = frontSurfaceZ(out.x, out.y)
-  out.z = bounded(surface * depth, Math.max(0, surface - radius * 1.5))
+export function bubblePoint(b: BubbleSeed, time: number, out: Point3 & { scale: number }) {
+  const speed = 0.026 + b.size * 0.65 + b.phase * 0.002
+  const progress = ((b.y - 0.19 + Math.max(0, time) * speed) % 1.96) / 1.96
+  const y = 0.19 + progress * 1.96
+  const radius = radiusAt(y)
+  const drift = time * (0.5 + b.phase * 0.06)
+  let x = b.x + Math.sin(drift + b.phase) * 0.045
+  let z = b.z + Math.cos(drift * 0.73 + b.phase) * 0.035
+  const inset = Math.max(0, 1 - (b.size * 2.8) / (1.18 * radius))
+  const fit = Math.min(1, inset / Math.max(1e-9, Math.hypot(x, z)))
+  x *= 1.66 * radius * fit
+  z *= 1.18 * radius * fit
+  const fade = smooth(progress, 0, 0.08) * (1 - smooth(progress, 0.9, 1))
+  out.x = x
+  out.y = y
+  out.z = z
+  out.scale = b.size * Math.max(0.001, fade)
   return out
 }

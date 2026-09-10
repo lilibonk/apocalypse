@@ -31,9 +31,9 @@ export const zh = {
     },
     brandSlime: {
       interactive:
-        '青绿史莱姆，{{state}}。按住揉捏、拖动拎起、松手回弹；空格或回车戳一下，Escape 松手。',
+        '青绿史莱姆，{{state}}。按住揉捏、拖动拎起、快速往返摇晃后松手看星星；空格或回车戳一下，Escape 松手。',
       static: '青绿史莱姆，{{state}}',
-      hint: '按住揉捏 · 拖动拎起 · 松手回弹',
+      hint: '按住揉捏 · 拎起松手 · 快速摇晃',
       unsupported: '当前环境不支持 WebGPU，已显示静态形象。',
       failed: '3D 初始化失败，已显示静态形象；刷新可重试。',
       lost: '图形设备已断开，已显示静态形象；刷新可重试。',

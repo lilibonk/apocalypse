@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useSettings } from '@/stores/settings'
 
 import type { SlimeRuntime } from './runtime'
-import { shouldUseRealtime } from './mode'
+import { resolveSlimeMode } from './mode'
 import './slime.css'
 
 const subscribeMotion = (callback: () => void) => {
@@ -17,7 +17,7 @@ const subscribeMotion = (callback: () => void) => {
   return () => observer.disconnect()
 }
 const getMotion = () => document.documentElement.dataset.motion !== 'off'
-const serverMotion = () => false
+const serverMotion = () => null
 
 function Poster({ state }: { state: OrbState }) {
   return (
@@ -95,7 +95,7 @@ function RealtimeSlime({ state, gaze }: { state: OrbState; gaze: boolean }) {
       data-backend={status === 'ready' ? 'webgpu' : 'static'}
       data-status={status}
     >
-      {status !== 'ready' && <Poster state={state} />}
+      {status !== 'loading' && status !== 'ready' && <Poster state={state} />}
       <canvas
         ref={canvasRef}
         className="slime-canvas"
@@ -123,13 +123,7 @@ export function Slime({ state = 'idle', size = 64, gaze = false, className }: Pi
   const rootRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
   const resolvedSize = orbUnit(size) * ORB_GRID
-  const interactive = shouldUseRealtime(
-    resolvedSize,
-    visible,
-    motionEnabled,
-    domMotion,
-    reducedMotion,
-  )
+  const mode = resolveSlimeMode(resolvedSize, visible, motionEnabled, domMotion, reducedMotion)
 
   useEffect(() => {
     const element = rootRef.current
@@ -146,18 +140,19 @@ export function Slime({ state = 'idle', size = 64, gaze = false, className }: Pi
       style={{ width: resolvedSize, height: resolvedSize }}
       data-mascot="mint-slime"
       data-state={state}
-      data-motion={interactive ? 'on' : 'off'}
+      data-motion={mode === 'realtime' ? 'on' : 'off'}
+      data-presentation={mode}
     >
-      {interactive ? (
+      {mode === 'realtime' ? (
         <RealtimeSlime state={state} gaze={gaze} />
-      ) : (
+      ) : mode === 'static' ? (
         <div
           role="img"
           aria-label={t('brandSlime.static', { state: t(`brandSlime.states.${state}`) })}
         >
           <Poster state={state} />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

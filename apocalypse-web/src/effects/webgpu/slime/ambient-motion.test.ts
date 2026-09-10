@@ -1,86 +1,51 @@
 import { describe, expect, it } from 'vitest'
-
-import {
-  advanceGaze,
-  bubblePoint,
-  bubbleVisibility,
-  gazeTarget,
-  GAZE,
-  BUBBLE_MOTION,
-} from './ambient-motion'
-import { eyePoint } from './expression'
-import { frontSurfaceZ, seededRandom } from './shape'
-
-describe('人工验收回归：视线跟随', () => {
-  it('鼠标目标限幅，视线平滑靠近而不跳跃', () => {
-    expect(gazeTarget(50, -50)).toEqual({ x: 1, y: -1 })
-    expect(gazeTarget(NaN, Infinity)).toEqual({ x: 0, y: 0 })
-    const gaze = { x: 0, y: 0 }
-    advanceGaze(gaze, { x: 1, y: -1 }, 1 / 60)
-    expect(gaze.x).toBeGreaterThan(0)
-    expect(gaze.x).toBeLessThan(0.2)
-    for (let i = 0; i < 120; i++) advanceGaze(gaze, { x: 1, y: -1 }, 1 / 60)
-    expect(gaze.x).toBeCloseTo(1, 4)
-    expect(gaze.y).toBeCloseTo(-1, 4)
+import { bubblePoint, type BubbleSeed } from './ambient-motion'
+import { frontSurfaceZ, radiusAt, seededRandom } from './shape'
+const point = () => ({ x: 0, y: 0, z: 0, scale: 0 })
+const seed: BubbleSeed = { x: 0.3, y: 0.6, z: 0.6, size: 0.02, phase: 0.8 }
+describe('作者气泡：上浮、端点缩放与体积约束', () => {
+  it('单向上浮、尺寸影响速度、轻微横漂、固定时刻确定性', () => {
+    const a = bubblePoint(seed, 0, point())
+    const b = bubblePoint(seed, 2, point())
+    expect(b.y - a.y).toBeCloseTo((0.026 + 0.02 * 0.65 + 0.8 * 0.002) * 2)
+    expect(bubblePoint({ ...seed, size: 0.03 }, 2, point()).y).toBeGreaterThan(b.y)
+    expect(bubblePoint(seed, 0, point())).toEqual(a)
+    expect(Math.abs(b.x - a.x)).toBeLessThan(0.1)
   })
-  it('两眼实际移动但仍贴皮，闭眼不跟随鼠标', () => {
-    for (const side of [-1, 1]) {
-      const rest = { x: side * 0.42, y: 0.98, z: frontSurfaceZ(side * 0.42, 0.98) + 0.03 }
-      const moved = eyePoint(rest, 'idle', 0, { x: 1, y: 1 })
-      expect(moved.x - rest.x).toBeCloseTo(GAZE.maxX)
-      expect(moved.y - rest.y).toBeCloseTo(GAZE.maxY)
-      expect(moved.z - frontSurfaceZ(moved.x, moved.y)).toBeCloseTo(0.03)
-      expect(eyePoint(rest, 'sleeping', 0, { x: 1, y: 1 })).toEqual(eyePoint(rest, 'sleeping', 0))
-    }
-  })
-})
-
-describe('人工验收回归：体内气泡漂浮', () => {
-  it('缓慢单向上浮而非正弦往返，不同气泡速度不同', () => {
-    const rest = { x: 0.7, y: 0.6, z: frontSurfaceZ(0.7, 0.6) * 0.9 }
-    const a = bubblePoint(rest, 0.02, 0, 0, { x: 0, y: 0, z: 0 })
-    const b = bubblePoint(rest, 0.02, 0, 2, { x: 0, y: 0, z: 0 })
-    const c = bubblePoint(rest, 0.02, 1, 2, { x: 0, y: 0, z: 0 })
-    expect(b.y - a.y).toBeCloseTo(0.038)
-    expect(c.y).toBeGreaterThan(b.y)
-    for (let second = 1; second <= 30; second++) {
-      const previous = bubblePoint(rest, 0.02, 0, second - 1, { x: 0, y: 0, z: 0 })
-      const next = bubblePoint(rest, 0.02, 0, second, { x: 0, y: 0, z: 0 })
-      expect(next.y).toBeGreaterThan(previous.y)
-      expect(Math.abs(next.x - previous.x)).toBeLessThan(0.012)
-    }
-    expect(bubblePoint(rest, 0.02, 0, 0, { x: 0, y: 0, z: 0 })).toEqual(a)
-  })
-  it('长时间漂浮始终留在实际椭球内，不穿出外皮', () => {
-    const random = seededRandom(85)
-    for (let index = 0; index < 32; index++) {
-      const y = 0.22 + random() * 1.36
-      const x = (random() - 0.5) * 1.82 * Math.sin((y / 2) * Math.PI) ** 0.5
-      const radius = 0.006 + random() ** 2 * 0.027
-      const rest = { x, y, z: frontSurfaceZ(x, y) * (-0.35 + random() * 1.08) }
-      for (let second = 0; second < 600; second += 0.75) {
-        const point = bubblePoint(rest, radius, index, second, { x: 0, y: 0, z: 0 })
-        expect(point.y).toBeGreaterThan(radius)
-        expect(Math.abs(point.z) + radius).toBeLessThan(frontSurfaceZ(point.x, point.y))
+  it('长时间漂浮不穿皮，底部/顶端渐隐重生', () => {
+    const random = seededRandom(71561)
+    let wraps = 0
+    let largestNormalizedRadius = 0
+    let minimumClearance = Infinity
+    let largestWrapScale = 0
+    for (let i = 0; i < 32; i++) {
+      const b = {
+        ...seed,
+        size: 0.009 + random() ** 2.8 * 0.033,
+        x: random() * 0.8,
+        phase: random() * Math.PI * 2,
+      }
+      let previous = bubblePoint(b, 0, point())
+      for (let t = 1 / 60; t < 120; t += 1 / 60) {
+        const p = bubblePoint(b, t, point())
+        largestNormalizedRadius = Math.max(
+          largestNormalizedRadius,
+          Math.hypot(p.x / (1.66 * radiusAt(p.y)), p.z / (1.18 * radiusAt(p.y))),
+        )
+        minimumClearance = Math.min(
+          minimumClearance,
+          frontSurfaceZ(p.x, p.y) - Math.abs(p.z) - p.scale,
+        )
+        if (p.y < previous.y) {
+          wraps++
+          largestWrapScale = Math.max(largestWrapScale, p.scale / b.size, previous.scale / b.size)
+        }
+        previous = p
       }
     }
-  })
-  it('重生前后完全透明，不在可见区跳回底部', () => {
-    expect(bubbleVisibility(BUBBLE_MOTION.bottom)).toBe(0)
-    expect(bubbleVisibility(BUBBLE_MOTION.top)).toBe(0)
-    expect(bubbleVisibility(0.8)).toBe(1)
-    const rest = { x: 0.4, y: 0.6, z: 0.2 }
-    let previous = bubblePoint(rest, 0.02, 0, 0, { x: 0, y: 0, z: 0 })
-    let rebirths = 0
-    for (let frame = 1; frame <= 120 * 60; frame++) {
-      const next = bubblePoint(rest, 0.02, 0, frame / 60, { x: 0, y: 0, z: 0 })
-      if (next.y < previous.y) {
-        rebirths++
-        expect(bubbleVisibility(previous.y)).toBe(0)
-        expect(bubbleVisibility(next.y)).toBe(0)
-      }
-      previous = next
-    }
-    expect(rebirths).toBeGreaterThan(0)
+    expect(wraps).toBeGreaterThan(0)
+    expect(largestNormalizedRadius).toBeLessThan(1)
+    expect(minimumClearance).toBeGreaterThan(0)
+    expect(largestWrapScale).toBeLessThan(0.015)
   })
 })

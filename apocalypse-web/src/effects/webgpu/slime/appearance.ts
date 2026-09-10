@@ -2,16 +2,16 @@
 import { Color } from 'three/webgpu'
 
 export const SLIME_RECIPE = {
-  widthSegments: 64,
-  heightSegments: 48,
-  bubbleCount: 56,
+  widthSegments: 96,
+  heightSegments: 64,
+  bubbleCount: 116,
   maxPixelRatio: 2,
-  viewHeight: 3.32,
-  roughness: 0.1,
-  transmission: 0.7,
-  thickness: 0.06,
-  ior: 1.3,
-  attenuationDistance: 2.6,
+  viewHeight: 4.4,
+  roughness: 0.018,
+  transmission: 1,
+  thickness: 2.4,
+  ior: 1.46,
+  attenuationDistance: 2.4,
 } as const
 
 export function readSlimeColours(element: Element) {
@@ -30,6 +30,8 @@ export function readSlimeColours(element: Element) {
     shadow: colour('shadow'),
     environment: colour('environment'),
     glow: colour('glow'),
+    star: colour('star'),
+    starGlow: colour('star-glow'),
   }
 }
 

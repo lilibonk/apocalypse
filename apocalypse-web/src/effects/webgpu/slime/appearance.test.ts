@@ -70,27 +70,24 @@ describe('人工验收回归：完整主题材质与透明合成', () => {
     expect(view.scene.background).toBeNull()
     expect(renderer.setClearColor).toHaveBeenCalledWith(0, 0)
     const initialEnvironment = view.scene.environment
-    expect(view.bubbles).toHaveLength(56)
-    expect(view.bubbles.some(({ rest }) => rest.z < 0)).toBe(true)
+    expect(view.bubbles.count).toBe(116)
     expect(
-      view.bubbles.some(({ rest }) => Math.abs(rest.x) < 0.6 && rest.y > 0.72 && rest.y < 1.12),
+      view.bubbleSeeds.some((seed) => Math.abs(seed.x) < 0.3 && seed.y > 0.8 && seed.y < 1.4),
     ).toBe(true)
-    for (const bubble of view.bubbles) {
-      expect(bubble.material.transparent).toBe(true)
-      expect(bubble.material.metalness).toBe(0)
-      expect(bubble.radius).toBeLessThan(0.034)
-      expect(bubble.mesh.renderOrder).toBeLessThan(view.body.renderOrder)
-    }
+    expect(view.bubbles.material.transparent).toBe(true)
+    expect(view.bubbles.material.metalness).toBe(0)
+    expect(view.bubbles.material.depthWrite).toBe(false)
+    for (const seed of view.bubbleSeeds) expect(seed.size).toBeLessThanOrEqual(0.042)
     const dark = themeColours('.dark')
     view.updateColours(dark)
-    expect(view.body.material.color.equals(dark.body)).toBe(true)
+    expect(view.body.material.color.equals(dark.light)).toBe(true)
     expect(view.body.material.attenuationColor.equals(dark.attenuation)).toBe(true)
-    for (const bubble of view.bubbles) expect(bubble.material.color.equals(dark.light)).toBe(true)
+    expect(view.bubbles.material.color.equals(dark.body.clone().lerp(dark.light, 0.65))).toBe(true)
     expect(view.scene.environment).toBeInstanceOf(Texture)
     expect(view.scene.environment).not.toBe(initialEnvironment)
     expect(targets.disposals[0]).toHaveBeenCalledOnce()
     view.updateColours(light)
-    expect(view.body.material.color.equals(light.body)).toBe(true)
+    expect(view.body.material.color.equals(light.light)).toBe(true)
     expect(view.body.material.attenuationColor.equals(light.attenuation)).toBe(true)
     expect(targets.disposals[1]).toHaveBeenCalledOnce()
     view.dispose()

@@ -105,4 +105,42 @@ export default tseslint.config([
       ],
     },
   },
+  {
+    // 唯一 3D 域：显式 WebGPUBackend，不能悄悄走 WebGL fallback。
+    files: ['src/effects/webgpu/slime/scene.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'three/addons/utils/BufferGeometryUtils.js',
+              allowImportNames: ['mergeVertices', 'mergeGeometries'],
+              message: '第二版仅允许作者网格所需的两个几何 helper。',
+            },
+            'gsap',
+            'three',
+            'pixi.js',
+            'ogl',
+            {
+              name: 'three/webgpu',
+              importNames: ['WebGPURenderer', 'WebGLBackend', 'WebGLRenderer'],
+              message: 'LIL-85：使用 Renderer + WebGPUBackend，禁止隐式 WebGL 回退构造器。',
+            },
+          ],
+          patterns: [
+            {
+              regex: '^three/(?!webgpu$|tsl$|addons/utils/BufferGeometryUtils\\.js$)',
+              message: 'WebGPU/TSL 与精确几何 helper 以外的 Three.js 子路径禁止。',
+            },
+            {
+              group: ['gsap/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
+              message:
+                'AGENTS.md §5：本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ])

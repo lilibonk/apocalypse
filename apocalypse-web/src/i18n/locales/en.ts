@@ -34,9 +34,9 @@ export const en = {
     },
     brandSlime: {
       interactive:
-        'Mint slime, {{state}}. Press to squeeze, drag to lift, release to bounce. Space or Enter to poke; Escape to release.',
+        'Mint slime, {{state}}. Press to squish, lift and release, or shake back and forth to see stars on landing. Space or Enter to poke; Escape to release.',
       static: 'Mint slime, {{state}}',
-      hint: 'Press to squeeze · Drag to lift · Release to bounce',
+      hint: 'Press to squish · Lift and release · Shake',
       unsupported: 'WebGPU is unavailable. Showing a still image.',
       failed: '3D could not start. Showing a still image; reload to retry.',
       lost: 'Graphics device disconnected. Showing a still image; reload to retry.',

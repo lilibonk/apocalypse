@@ -3,20 +3,11 @@ import { Plane, Raycaster, Triangle, Vector2, Vector3 } from 'three/webgpu'
 import type { OrbState } from '@/effects/PixelOrb/types'
 
 import { readSlimeColours, SLIME_RECIPE } from './appearance'
-import { advanceGaze, bubblePoint, bubbleVisibility, gazeTarget } from './ambient-motion'
-import { eyePoint, mouthPoint } from './expression'
+import { SlimeGestures } from './gestures'
+import type { Reaction } from './face-motion'
 import { trackFocusOrigin } from './focus'
 import { summarizeFrames, type FrameReport } from './performance'
-import {
-  advancePhysics,
-  beginPress,
-  createPhysics,
-  deformPoint,
-  moveGrab,
-  poke,
-  releasePress,
-  type SlimePhysics,
-} from './physics'
+import { JellyPhysics, type JellyConfig } from './physics'
 import { createSlimeScene, type SlimeScene } from './scene'
 import { frontSurfaceZ } from './shape'
 import { createStrictGpuSession, type StrictGpuSession } from './strict-renderer'
@@ -39,12 +30,24 @@ export interface SlimeRuntimeOptions {
   onFailure?: (reason: 'unsupported' | 'failed' | 'lost') => void
   onFrame?: (
     report: FrameReport,
-    physics: Readonly<SlimePhysics>,
-    ambient: { gazeX: number; gazeY: number; bubbleY: number },
+    physics: JellyPhysics['diagnostics'],
+    ambient: {
+      gazeX: number
+      gazeY: number
+      bubbleY: number
+      expression: string
+      stars: boolean
+      entering: boolean
+      time: number
+    },
   ) => void
 }
 
 export interface SlimeRuntime {
+  startEntry: () => void
+  react: (kind: Reaction) => void
+  reset: () => void
+  setConfig: (config: Partial<JellyConfig>) => void
   setState: (state: OrbState) => void
   setStatic: (value: boolean) => void
   poke: () => void
@@ -71,13 +74,13 @@ export async function createSlimeRuntime(
   let externallySuspended = false
   let lastReport = 0
   let state = options.state ?? 'idle'
-  let physics = createPhysics()
+  const physics = new JellyPhysics()
+  const gestures = new SlimeGestures()
+  let time = 0
+  let clock = 0
+  let benchmarkCycle = -1
+  let benchmarkHeld = false
   let pointerId: number | null = null
-  let lastBlink = -1
-  let lastGazeX = Number.NaN
-  let lastGazeY = Number.NaN
-  const gaze = { x: 0, y: 0 }
-  let targetGaze = { x: 0, y: 0 }
   const recentFrames: number[] = []
   let benchmarkStarted = 0
   let benchmarkPhase = 'idle'
@@ -91,7 +94,8 @@ export async function createSlimeRuntime(
     if (disposed) return
     disposed = true
     cancelAnimationFrame(frame)
-    releasePress(physics)
+    physics.endGrab()
+    gestures.cancel()
     cleanups.forEach((cleanup) => cleanup())
     scene?.dispose()
     session?.dispose()
@@ -113,7 +117,8 @@ export async function createSlimeRuntime(
       throw new DOMException('Slime initialization cancelled', 'AbortError')
     }
     options.signal.throwIfAborted()
-    scene = createSlimeScene(session.renderer, readSlimeColours(canvas))
+    const initialTheme = document.documentElement.className
+    scene = createSlimeScene(session.renderer, readSlimeColours(canvas), physics)
     const view = scene
     const gpu = session
     const a = new Vector3()
@@ -121,78 +126,47 @@ export async function createSlimeRuntime(
     const c = new Vector3()
     const weights = new Vector3()
     const local = new Vector3()
-    const scratch = { x: 0, y: 0, z: 0 }
-    const eyeBases = view.skins
-      .filter((skin) => view.eyeGeometries.includes(skin.geometry))
-      .map((skin) => ({ skin, base: new Float32Array(skin.rest) }))
-    const mouthSkin = view.skins.find((skin) => skin.geometry === view.mouthGeometry)!
-
-    const poseFace = (blink: number) => {
-      if (lastBlink === blink && lastGazeX === gaze.x && lastGazeY === gaze.y) return
-      lastBlink = blink
-      lastGazeX = gaze.x
-      lastGazeY = gaze.y
-      for (const { skin, base } of eyeBases) {
-        for (let i = 0; i < base.length; i += 3) {
-          const point = eyePoint({ x: base[i], y: base[i + 1], z: base[i + 2] }, state, blink, gaze)
-          skin.rest[i] = point.x
-          skin.rest[i + 1] = point.y
-          skin.rest[i + 2] = point.z
-        }
-      }
-      const uv = view.mouthGeometry.getAttribute('uv')
-      for (let i = 0; i < uv.count; i++) {
-        const point = mouthPoint(uv.getX(i), uv.getY(i), state)
-        mouthSkin.rest[i * 3] = point.x
-        mouthSkin.rest[i * 3 + 1] = point.y
-        mouthSkin.rest[i * 3 + 2] = point.z
-      }
+    const face = view.faceMotion
+    physics.onLand = () => {
+      if (gestures.land(clock) && state === 'idle') face.react('dizzy')
     }
-    const updateSkin = () => {
-      const blinkPhase = physics.elapsed % 5.7
-      const blink =
-        !staticMode && state !== 'sleeping' && blinkPhase > 5.42
-          ? Math.sin(((blinkPhase - 5.42) / 0.28) * Math.PI)
-          : 0
-      poseFace(blink)
-      const breathing = staticMode ? 0 : Math.sin(physics.elapsed * 1.6) * 0.006
-      for (const skin of view.skins) {
-        const positions = skin.geometry.getAttribute('position')
-        for (let i = 0; i < skin.rest.length; i += 3) {
-          deformPoint(skin.rest[i], skin.rest[i + 1], skin.rest[i + 2], physics, scratch, breathing)
-          positions.setXYZ(i / 3, scratch.x, scratch.y, scratch.z)
-        }
-        positions.needsUpdate = true
-        skin.geometry.computeVertexNormals()
-        // Raycasting must not retain stale bounds after a squeeze or pull.
-        skin.geometry.boundingSphere = null
-        skin.geometry.boundingBox = null
-      }
-      for (let index = 0; index < view.bubbles.length; index++) {
-        const bubble = view.bubbles[index]
-        bubblePoint(bubble.rest, bubble.radius, index, staticMode ? 0 : physics.elapsed, scratch)
-        bubble.material.opacity = bubbleVisibility(scratch.y)
-        deformPoint(scratch.x, scratch.y, scratch.z, physics, scratch, breathing)
-        bubble.mesh.position.set(scratch.x, scratch.y, scratch.z)
-      }
-      view.actor.position.set(physics.x, physics.y, 0)
-      view.shadow.position.x = physics.x * 0.6
-      view.shadow.scale.setScalar(1 + physics.y * 0.4)
-      view.shadowFade.value = 1 / (1 + physics.y * 2.5)
+    physics.onEntryComplete = () => {
+      if (state === 'idle') face.react('happy')
     }
+    const updateSkin = () => view.update(staticMode ? 0 : time, state)
     const draw = () => {
       if (disposed) return
       updateSkin()
       gpu.renderer.render(view.scene, view.camera)
     }
 
+    const anchor =
+      canvas.closest('.slime-mascot, .slime-preview-anchor') ?? canvas.parentElement ?? canvas
+    const stage = canvas.closest('.brand-slime-stage') ?? anchor
     const resize = () => {
-      const { width, height } = canvas.getBoundingClientRect()
+      const rect = anchor.getBoundingClientRect()
+      const { width, height } = rect
       if (width < 1 || height < 1 || disposed) return
+      const bounds = stage.getBoundingClientRect()
+      const left = Math.max(0, rect.left - bounds.left)
+      const top = Math.max(0, rect.top - bounds.top)
+      const right = Math.max(0, bounds.right - rect.right)
+      const bottom = Math.max(0, bounds.bottom - rect.bottom)
+      const canvasWidth = width + left + right
+      const canvasHeight = height + top + bottom
+      // Overscan only the brand panel: never cover the adjacent authentication form.
+      Object.assign(canvas.style, {
+        left: `${-left}px`,
+        top: `${-top}px`,
+        right: 'auto',
+        bottom: 'auto',
+        width: `${canvasWidth}px`,
+        height: `${canvasHeight}px`,
+      })
       const dpr = Math.min(window.devicePixelRatio || 1, SLIME_RECIPE.maxPixelRatio)
       gpu.renderer.setPixelRatio(dpr)
-      gpu.renderer.setSize(Math.round(width), Math.round(height), false)
-      view.resize(width, height)
+      gpu.renderer.setSize(Math.round(canvasWidth), Math.round(canvasHeight), false)
+      view.resize(width, height, left, top, canvasWidth, canvasHeight)
       info = {
         backend: 'webgpu',
         adapter:
@@ -214,11 +188,11 @@ export async function createSlimeRuntime(
       ) {
         benchmarkPhase = 'interrupted'
         benchmarkStarted = 0
-        releasePress(physics)
+        physics.endGrab()
       }
     }
     resize()
-    poseFace(0)
+    updateSkin()
     await gpu.renderer.compileAsync(view.scene, view.camera)
     options.signal.throwIfAborted()
 
@@ -228,19 +202,37 @@ export async function createSlimeRuntime(
       benchmarkPhase =
         elapsed < 10 ? 'warming-up' : benchmarkElapsedMs < 60000 ? 'measuring' : 'complete'
       if (benchmarkPhase === 'complete') {
-        releasePress(physics)
+        physics.endGrab()
+        face.grab(false, false)
         return
       }
-      const cycle = elapsed % 10
-      if (cycle < 3) {
-        releasePress(physics)
-      } else if (cycle < 5.5) {
-        if (!physics.pressed) beginPress(physics, { x: 0.25, y: 1.1, z: frontSurfaceZ(0.25, 1.1) })
-      } else if (cycle < 8) {
-        if (!physics.pressed) beginPress(physics, { x: 0.25, y: 1.1, z: frontSurfaceZ(0.25, 1.1) })
-        moveGrab(physics, Math.sin(cycle * 2) * 0.2, 0.46)
-      } else {
-        releasePress(physics)
+      const cycle = Math.floor(elapsed / 12)
+      const phase = elapsed % 12
+      if (cycle !== benchmarkCycle) {
+        benchmarkCycle = cycle
+        physics.reset()
+        face.reset()
+        gestures.cancel()
+        benchmarkHeld = false
+      }
+      if (phase >= 3 && phase < 7.5) {
+        if (!benchmarkHeld) {
+          const point = { x: 0.25, y: 1.2, z: frontSurfaceZ(0.25, 1.2) }
+          physics.beginGrab(point, point)
+          face.grab(true)
+          gestures.begin(320, 320, now, 640)
+          benchmarkHeld = true
+        }
+        if (phase >= 5) {
+          const dx = Math.sin(phase * 18) * 0.75
+          physics.moveGrab({ x: 0.25 + dx, y: 2.3, z: frontSurfaceZ(0.25, 1.2) })
+          gestures.move(320 + dx * 160, 220, now)
+        }
+      } else if (benchmarkHeld) {
+        physics.endGrab()
+        face.grab(false, false)
+        gestures.release(now)
+        benchmarkHeld = false
       }
     }
     const tick = (now: number) => {
@@ -248,14 +240,13 @@ export async function createSlimeRuntime(
       if (disposed || document.hidden || externallySuspended || staticMode) return
       const interval = previousTime ? now - previousTime : 0
       previousTime = now
+      clock = now
       scriptedBenchmark(now)
       if (interval > 0) {
-        advancePhysics(physics, interval / 1000)
-        advanceGaze(
-          gaze,
-          options.gaze && state === 'idle' ? targetGaze : { x: 0, y: 0 },
-          interval / 1000,
-        )
+        const dt = Math.min(interval / 1000, 0.1)
+        time += dt
+        physics.update(dt)
+        if (gestures.update(now, physics.position.y) && state === 'idle') face.react('dizzy')
         recentFrames.push(interval)
         if (recentFrames.length > 180) recentFrames.shift()
         if (benchmarkPhase === 'measuring') {
@@ -271,10 +262,14 @@ export async function createSlimeRuntime(
       }
       if (now - lastReport > 500) {
         lastReport = now
-        options.onFrame?.(summarizeFrames(recentFrames), physics, {
-          gazeX: gaze.x,
-          gazeY: gaze.y,
-          bubbleY: view.bubbles[0]?.mesh.position.y ?? 0,
+        options.onFrame?.(summarizeFrames(recentFrames), physics.diagnostics, {
+          gazeX: face.state.gazeX,
+          gazeY: face.state.gazeY,
+          bubbleY: view.bubbles.instanceMatrix.array[13] ?? 0,
+          expression: state === 'idle' ? face.expression : state,
+          stars: view.dizzyStars.visible,
+          entering: physics.entering,
+          time,
         })
       }
       frame = requestAnimationFrame(tick)
@@ -286,13 +281,15 @@ export async function createSlimeRuntime(
       }
     }
     const cancelInput = () => {
-      releasePress(physics)
+      physics.endGrab()
+      face.grab(false, false)
+      gestures.cancel()
       if (pointerId !== null && canvas.hasPointerCapture(pointerId))
         canvas.releasePointerCapture(pointerId)
       pointerId = null
     }
     const resetGaze = () => {
-      targetGaze = { x: 0, y: 0 }
+      face.lookAt(0, 0)
     }
     const onBlur = () => {
       cancelInput()
@@ -325,6 +322,7 @@ export async function createSlimeRuntime(
       if (disposed) return
       try {
         view.updateColours(readSlimeColours(canvas))
+        if (!staticMode && state === 'idle') face.react('wink')
         if (staticMode) draw()
       } catch {
         fail('failed')
@@ -334,12 +332,14 @@ export async function createSlimeRuntime(
       resize()
       if (staticMode) draw()
     })
-    observer.observe(canvas)
+    observer.observe(anchor)
+    if (stage !== anchor) observer.observe(stage)
     const themeObserver = new MutationObserver(onTheme)
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class'],
     })
+    if (document.documentElement.className !== initialTheme) onTheme()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('blur', onBlur)
     cleanups.push(() => {
@@ -356,10 +356,6 @@ export async function createSlimeRuntime(
       const grabPlane = new Plane()
       const grabbedAt = new Vector3()
       const movedTo = new Vector3()
-      let originX = 0
-      let originY = 0
-      let downX = 0
-      let downY = 0
       const setRay = (event: PointerEvent) => {
         const rect = canvas.getBoundingClientRect()
         pointer.set(
@@ -369,7 +365,14 @@ export async function createSlimeRuntime(
         raycaster.setFromCamera(pointer, view.camera)
       }
       const onDown = (event: PointerEvent) => {
-        if (!event.isPrimary || event.button !== 0 || pointerId !== null || staticMode) return
+        if (
+          !event.isPrimary ||
+          event.button !== 0 ||
+          pointerId !== null ||
+          staticMode ||
+          state !== 'idle'
+        )
+          return
         setRay(event)
         const hit = raycaster.intersectObject(view.body, false)[0]
         if (!hit?.face) return
@@ -386,42 +389,77 @@ export async function createSlimeRuntime(
         b.fromBufferAttribute(positions, hit.face.b)
         c.fromBufferAttribute(positions, hit.face.c)
         Triangle.getBarycoord(local, a, b, c, weights)
-        const rest = view.skins[0].rest
+        const rest = view.bodyRest
         a.fromArray(rest, hit.face.a * 3).multiplyScalar(weights.x)
         b.fromArray(rest, hit.face.b * 3).multiplyScalar(weights.y)
         c.fromArray(rest, hit.face.c * 3).multiplyScalar(weights.z)
         a.add(b).add(c)
-        beginPress(physics, a)
-        originX = physics.x
-        originY = physics.y
-        downX = event.clientX
-        downY = event.clientY
+        physics.beginGrab(a, hit.point)
+        face.grab(true)
+        gestures.begin(
+          event.clientX,
+          event.clientY,
+          performance.now(),
+          anchor.getBoundingClientRect().width,
+        )
       }
       const onMove = (event: PointerEvent) => {
-        if (event.pointerId !== pointerId || !physics.pressed) return
-        if (!physics.dragged && Math.hypot(event.clientX - downX, event.clientY - downY) < 7) return
+        if (event.pointerId !== pointerId || !physics.dragging) return
         setRay(event)
         if (raycaster.ray.intersectPlane(grabPlane, movedTo)) {
-          moveGrab(physics, originX + movedTo.x - grabbedAt.x, originY + movedTo.y - grabbedAt.y)
+          physics.moveGrab(movedTo)
+          gestures.move(event.clientX, event.clientY, performance.now())
         }
       }
       const onUp = (event: PointerEvent) => {
+        if (event.pointerId !== pointerId) return
+        physics.endGrab()
+        face.grab(false, false)
+        const reaction = gestures.release(performance.now())
+        // Clear identity before releasing capture: lostpointercapture is cancellation, not another release.
+        const releasedId = pointerId
+        pointerId = null
+        if (canvas.hasPointerCapture(releasedId)) canvas.releasePointerCapture(releasedId)
+        if (reaction === 'poke') {
+          physics.poke()
+          face.react('surprised')
+        } else if (reaction === 'happy') face.react('happy')
+      }
+      const onCancel = (event: PointerEvent) => {
         if (event.pointerId === pointerId) cancelInput()
       }
       const onKey = (event: KeyboardEvent) => {
-        if ((event.key === ' ' || event.key === 'Enter') && !event.repeat && !staticMode) {
+        if (
+          (event.key === ' ' || event.key === 'Enter') &&
+          !event.repeat &&
+          !staticMode &&
+          state === 'idle'
+        ) {
           event.preventDefault()
-          poke(physics)
+          physics.poke()
+          face.react('surprised')
         }
         if (event.key === 'Escape') cancelInput()
       }
       const onGaze = (event: PointerEvent) => {
-        if (!options.gaze || staticMode || document.hidden || event.pointerType === 'touch') return
+        if (
+          !options.gaze ||
+          staticMode ||
+          document.hidden ||
+          event.pointerType !== 'mouse' ||
+          state !== 'idle'
+        )
+          return
         const rect = canvas.getBoundingClientRect()
         if (rect.width < 1 || rect.height < 1) return
-        targetGaze = gazeTarget(
-          ((event.clientX - rect.left) / rect.width - 0.5) * 2,
-          (0.5 - (event.clientY - rect.top) / rect.height) * 2,
+        const anchor = new Vector3()
+        physics.deform(0, 1.2, frontSurfaceZ(0, 1.2), anchor)
+        anchor.add(view.actor.position).project(view.camera)
+        const x = rect.left + ((anchor.x + 1) * rect.width) / 2
+        const y = rect.top + ((1 - anchor.y) * rect.height) / 2
+        face.lookAt(
+          (event.clientX - x) / (rect.width * 0.42),
+          (y - event.clientY) / (rect.height * 0.38),
         )
       }
       const onPointerOut = (event: PointerEvent) => {
@@ -430,8 +468,8 @@ export async function createSlimeRuntime(
       canvas.addEventListener('pointerdown', onDown)
       canvas.addEventListener('pointermove', onMove)
       canvas.addEventListener('pointerup', onUp)
-      canvas.addEventListener('pointercancel', onUp)
-      canvas.addEventListener('lostpointercapture', onUp)
+      canvas.addEventListener('pointercancel', onCancel)
+      canvas.addEventListener('lostpointercapture', onCancel)
       canvas.addEventListener('keydown', onKey)
       if (options.gaze) {
         window.addEventListener('pointermove', onGaze, { passive: true })
@@ -442,8 +480,8 @@ export async function createSlimeRuntime(
         canvas.removeEventListener('pointerdown', onDown)
         canvas.removeEventListener('pointermove', onMove)
         canvas.removeEventListener('pointerup', onUp)
-        canvas.removeEventListener('pointercancel', onUp)
-        canvas.removeEventListener('lostpointercapture', onUp)
+        canvas.removeEventListener('pointercancel', onCancel)
+        canvas.removeEventListener('lostpointercapture', onCancel)
         canvas.removeEventListener('keydown', onKey)
         window.removeEventListener('pointermove', onGaze)
         window.removeEventListener('pointerout', onPointerOut)
@@ -456,14 +494,38 @@ export async function createSlimeRuntime(
     void gpu.device.lost.then(() => {
       if (!disposed) fail('lost')
     })
+    if (state === 'idle') physics.startEntry()
     draw()
     options.onReady?.(info!)
     resume()
 
     return {
+      startEntry() {
+        if (disposed || staticMode || state !== 'idle') return
+        cancelInput()
+        face.reset()
+        physics.startEntry()
+      },
+      react(kind) {
+        if (!disposed && !staticMode && state === 'idle') face.react(kind)
+      },
+      reset() {
+        cancelInput()
+        physics.reset()
+        face.reset(0)
+        time = 0
+        draw()
+      },
+      setConfig(config) {
+        physics.setConfig(config)
+      },
       setState(value) {
         state = value
-        lastBlink = -1
+        if (value !== 'idle') {
+          cancelInput()
+          physics.reset()
+          face.reset()
+        }
         if (staticMode) draw()
       },
       setStatic(value) {
@@ -476,25 +538,39 @@ export async function createSlimeRuntime(
             benchmarkPhase = 'interrupted'
             benchmarkStarted = 0
           }
-          physics = createPhysics()
-          gaze.x = 0
-          gaze.y = 0
+          physics.reset()
+          face.reset(0)
+          time = 0
           resetGaze()
-          lastBlink = -1
           draw()
         } else resume()
       },
       poke() {
-        if (!disposed && !staticMode) poke(physics)
+        if (!disposed && !staticMode && state === 'idle') {
+          physics.poke()
+          face.react('surprised')
+        }
       },
       suspend,
       holdPressure(value) {
-        if (value) beginPress(physics, { x: 0, y: 1.03, z: frontSurfaceZ(0, 1.03) })
-        else releasePress(physics)
+        if (disposed || staticMode || state !== 'idle') return
+        if (value) {
+          const point = { x: 0, y: 1.2, z: frontSurfaceZ(0, 1.2) }
+          physics.beginGrab(point, point)
+          face.grab(true)
+        } else {
+          physics.endGrab()
+          face.grab(false)
+        }
       },
       startBenchmark() {
         staticMode = false
-        physics = createPhysics()
+        cancelInput()
+        physics.reset()
+        face.reset(0)
+        state = 'idle'
+        time = 0
+        benchmarkCycle = -1
         benchmarkFrames = []
         benchmarkElapsedMs = 0
         benchmarkStarted = performance.now()
