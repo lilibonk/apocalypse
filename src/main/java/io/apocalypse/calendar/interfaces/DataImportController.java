@@ -25,7 +25,6 @@ import jakarta.validation.constraints.Min;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -48,10 +47,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/calendar/data-imports")
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class DataImportController {
 
   private final DataImportService dataImportService;

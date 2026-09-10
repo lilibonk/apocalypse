@@ -1,6 +1,5 @@
 package io.apocalypse.framework.mybatis;
 
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -10,9 +9,8 @@ import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerIntercep
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 
-/** MyBatis-Plus 装配：分页、防全表删改、乐观锁三个内置插件；统一扫描各模块 mapper 包与 DDD 模块的 infrastructure.persistence 包。 */
+/** MyBatis-Plus 共享插件装配；Mapper 扫描只归属业务模块入口。 */
 @Configuration
-@MapperScan({"io.apocalypse.**.mapper", "io.apocalypse.**.persistence"})
 public class MybatisPlusConfig {
 
   @Bean

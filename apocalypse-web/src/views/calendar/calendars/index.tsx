@@ -1,10 +1,14 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /**
  * 日历层级、日历属性与成员授权是一个相互约束的组合管理面，超出单表 DynaLayer，
  * 因而使用手写逃逸舱；所有写操作仍由后端 capability、permission 与范围角色复核。
  */
 
 import { FieldSelect, FieldOption } from '@/components/ui/field-select'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,22 +30,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePerm } from '@/hooks/usePerm'
 
-import {
-  archiveCalendar,
-  createCalendar,
-  listCalendars,
-  listMembers,
-  removeMember,
-  saveMember,
-  updateCalendar,
-  type CalendarRecord,
-  type CalendarRole,
-} from '../calendar.api'
+import type { CalendarRecord, CalendarRole } from '../calendar.api'
 import { CalendarPageFrame, DataEmpty, InlineError, StateBadge } from '../calendar.ui'
 import { toErrorMessage } from '../calendar.format'
 import { CalendarConfirm } from '../calendar-confirm'
-
-const CONTEXTS_KEY = ['calendar', 'contexts'] as const
 
 type CalendarForm = {
   calendarKey: string
@@ -61,7 +53,7 @@ const EMPTY_FORM: CalendarForm = {
   state: 'ACTIVE',
 }
 
-export default function CalendarManagementPage() {
+function CalendarManagementPage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const canReadMembers = usePerm('calendar:member:list')
@@ -72,27 +64,39 @@ export default function CalendarManagementPage() {
   const [memberUserId, setMemberUserId] = useState('')
   const [memberRole, setMemberRole] = useState<CalendarRole>('READER')
 
-  const calendarsQuery = useQuery({ queryKey: CONTEXTS_KEY, queryFn: listCalendars })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const selectedId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
   const selected = calendarsQuery.data?.find((calendar) => calendar.id === selectedId) ?? null
   const canManageSelected = selected?.kind === 'MANAGED' && selected.currentUserRole === 'PUBLISHER'
-  const membersQuery = useQuery({
-    queryKey: ['calendar', 'members', selectedId],
-    queryFn: () => listMembers(selectedId),
-    enabled: canManageSelected && canReadMembers,
+  const membersQuery = useQuery(
+    calendarQueries.members(
+      { calendarId: selectedId, page: 1, size: 50 },
+      canManageSelected && canReadMembers,
+    ),
+  )
+
+  const onDenied = useCalendarDenial(selectedId, [calendarsQuery.error, membersQuery.error], () => {
+    setCalendarSelection('')
+    setEditing(null)
+    setForm(EMPTY_FORM)
+    setMemberOpen(false)
+    setMemberUserId('')
+    setMemberRole('READER')
   })
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: CONTEXTS_KEY })
+    void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
     if (selectedId)
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'members', selectedId] })
+      void queryClient.invalidateQueries(calendarQueries.members.filter({ calendarId: selectedId }))
   }
-  const saveCalendarMutation = useMutation({
-    mutationFn: () => {
+  const saveCalendarMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([selectedId, editing, form, memberOpen, memberUserId, memberRole]),
+    mutationFn: (run) => {
       if (editing === 'new') {
-        return createCalendar({
+        return run(calendarOperations.createCalendar, {
           calendarKey: form.calendarKey.trim(),
           name: form.name.trim(),
           parentId: form.parentId,
@@ -101,7 +105,7 @@ export default function CalendarManagementPage() {
         })
       }
       if (!editing) throw new Error(t('calendars.selectionRequired'))
-      return updateCalendar(editing, {
+      return run(calendarOperations.updateCalendar, editing, {
         name: form.name.trim(),
         parentId: form.parentId,
         zoneId: form.zoneId.trim(),
@@ -119,8 +123,10 @@ export default function CalendarManagementPage() {
       refresh()
     },
   })
-  const archiveMutation = useMutation({
-    mutationFn: archiveCalendar,
+  const archiveMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([selectedId, editing, form, memberOpen, memberUserId, memberRole]),
+    mutationFn: (run, id: string) => run(calendarOperations.archiveCalendar, id),
     onSuccess: () => {
       toast.success(t('calendars.archived'))
       refresh()
@@ -130,9 +136,12 @@ export default function CalendarManagementPage() {
       refresh()
     },
   })
-  const saveMemberMutation = useMutation({
-    mutationFn: () =>
-      saveMember(
+  const saveMemberMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([selectedId, editing, form, memberOpen, memberUserId, memberRole]),
+    mutationFn: (run) =>
+      run(
+        calendarOperations.saveMember,
         selectedId,
         memberUserId.trim(),
         memberRole,
@@ -143,18 +152,20 @@ export default function CalendarManagementPage() {
       toast.success(t('calendars.memberSaved'))
       setMemberOpen(false)
       setMemberUserId('')
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'members', selectedId] })
+      void queryClient.invalidateQueries(calendarQueries.members.filter({ calendarId: selectedId }))
     },
     onError: (error) => {
       toast.error(toErrorMessage(error))
       refresh()
     },
   })
-  const removeMemberMutation = useMutation({
-    mutationFn: (userId: string) => removeMember(selectedId, userId),
+  const removeMemberMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([selectedId, editing, form, memberOpen, memberUserId, memberRole]),
+    mutationFn: (run, userId: string) => run(calendarOperations.removeMember, selectedId, userId),
     onSuccess: () => {
       toast.success(t('calendars.memberRemoved'))
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'members', selectedId] })
+      void queryClient.invalidateQueries(calendarQueries.members.filter({ calendarId: selectedId }))
     },
     onError: (error) => {
       toast.error(toErrorMessage(error))
@@ -515,3 +526,8 @@ function FormInput({
     </div>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={CalendarManagementPage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

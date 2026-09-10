@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DaySnapshot, EffectiveDay } from './calendar.api'
 import CalendarOverviewPage, { DateDetailsContent } from './index'
+import { QueryClient } from '@tanstack/react-query'
+import { accessLifecycle } from '@/lib/query/access-lease'
+import { normalizeMenuNode } from '@/lib/api/types'
+import { calendarScope } from './calendar.queries'
 
 const { query } = vi.hoisted(() => ({ query: vi.fn() }))
-vi.mock('@tanstack/react-query', () => ({ useQuery: query }))
-vi.mock('./calendar.api', () => ({ listCalendars: vi.fn(), listDays: vi.fn() }))
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+  useQuery: query,
+}))
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-i18next')>()),
   useTranslation: () => ({
@@ -27,6 +33,27 @@ const baseline: DaySnapshot = {
 describe('calendar date details', () => {
   let fixture: EffectiveDay
   beforeEach(() => {
+    const client = new QueryClient()
+    accessLifecycle.reset(0, client)
+    accessLifecycle.accept(
+      0,
+      [
+        normalizeMenuNode({
+          id: '1',
+          parentId: '0',
+          menuName: 'Calendar',
+          type: 'M',
+          path: 'calendar',
+          component: 'calendar/index',
+          moduleKey: 'calendar',
+          perms: null,
+          icon: null,
+          sort: 0,
+        }),
+      ],
+      [...calendarScope.requiredPerms],
+      client,
+    )
     const now = new Date()
     const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
     const day: EffectiveDay = {
@@ -49,8 +76,8 @@ describe('calendar date details', () => {
       resolutions: [],
     }
     fixture = day
-    query.mockImplementation(({ queryKey }: { queryKey: string[] }) => ({
-      data: queryKey[1] === 'contexts' ? [{ id: '1', name: 'Test', calendarKey: 'test' }] : [day],
+    query.mockImplementation(({ meta }: { meta: { resource: string } }) => ({
+      data: meta.resource === 'contexts' ? [{ id: '1', name: 'Test', calendarKey: 'test' }] : [day],
       isLoading: false,
     }))
   })
@@ -77,3 +104,4 @@ describe('calendar date details', () => {
     expect(html).toContain('compareDefaults')
   })
 })
+vi.mock('./use-calendar-denial', () => ({ useCalendarDenial: () => undefined }))

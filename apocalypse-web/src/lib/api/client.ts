@@ -6,7 +6,14 @@
  * 应用启动时由 stores/auth.ts 调 configureClient 注入 token 获取、刷新、登出回调。
  */
 
-import axios, { AxiosError, type InternalAxiosRequestConfig, type ResponseType } from 'axios'
+import axios, {
+  AxiosError,
+  CanceledError,
+  type InternalAxiosRequestConfig,
+  type ResponseType,
+} from 'axios'
+
+import type { RequestContext } from '@/lib/query/access-lease'
 
 import { CODE_SUCCESS, CODE_UNAUTHORIZED, type R } from './types'
 
@@ -32,12 +39,15 @@ declare module 'axios' {
     _retried?: boolean
     /** 文件下载等原始响应，不执行 R 信封解包。 */
     rawResponse?: boolean
+    requestContext?: RequestContext
+    noRefresh?: boolean
   }
 }
 
 interface ClientHooks {
   /** 取当前 accessToken。 */
   getAccessToken: () => string | null
+  getPrincipalEpoch?: () => number
   /** 尝试刷新令牌（POST /auth/refresh，旋转机制）；返回是否成功。 */
   tryRefresh: () => Promise<boolean>
   /** 刷新失败或 401/40100 不可恢复时的登出+跳转处理。 */
@@ -61,6 +71,7 @@ export const http = axios.create({
 
 // 请求拦截：挂 Authorization（白名单除外）+ X-Trace-Id 透传
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  assertRequestCurrent(config)
   if (!config.anonymous) {
     const token = hooks.getAccessToken()
     if (token) config.headers.Authorization = `Bearer ${token}`
@@ -69,12 +80,52 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+function assertRequestCurrent(config: InternalAxiosRequestConfig | undefined) {
+  if (!config) return
+  if (config.signal?.aborted) throw new CanceledError()
+  config.requestContext?.assertCurrent()
+}
+
+export function captureRequestContext(): RequestContext {
+  const principalEpoch = hooks.getPrincipalEpoch?.() ?? 0
+  return {
+    principalEpoch,
+    scoped: false,
+    assertCurrent: () => {
+      if (principalEpoch !== (hooks.getPrincipalEpoch?.() ?? 0))
+        throw new CanceledError('Identity changed')
+    },
+  }
+}
+
+let refreshFlight: { epoch: number; promise: Promise<boolean> } | undefined
+
+function refreshOnce(epoch: number): Promise<boolean> {
+  if (refreshFlight?.epoch === epoch) return refreshFlight.promise
+  const flight = { epoch, promise: hooks.tryRefresh() }
+  refreshFlight = flight
+  void flight.promise.finally(() => {
+    if (refreshFlight === flight) refreshFlight = undefined
+  })
+  return flight.promise
+}
+
 /** 401/40100 统一处理链：tryRefresh 成功则重放原请求一次，否则登出。返回 null 表示已处理完（继续抛业务错）。 */
 async function handleUnauthorized(
   config: InternalAxiosRequestConfig | undefined,
 ): Promise<{ data: unknown } | null> {
-  if (!config || config.anonymous) return null
-  if (!config._retried && (await hooks.tryRefresh())) {
+  if (!config || config.anonymous || config.noRefresh) return null
+  assertRequestCurrent(config)
+  const epoch = config.requestContext?.principalEpoch ?? hooks.getPrincipalEpoch?.() ?? 0
+  const refreshed = !config._retried && (await refreshOnce(epoch))
+  // A scoped lease is invalidated by refresh; only the new /me generation may issue new work.
+  if (epoch !== (hooks.getPrincipalEpoch?.() ?? 0)) throw new CanceledError('Identity changed')
+  if (config.requestContext?.scoped) {
+    if (!refreshed) hooks.onUnauthorized()
+    throw new CanceledError('Authorization refreshed; retry from current state')
+  }
+  assertRequestCurrent(config)
+  if (refreshed) {
     // Successful void mutations also return null. Keep "not handled" distinct from that data.
     return { data: await http.request({ ...config, _retried: true }) }
   }
@@ -86,8 +137,29 @@ async function handleUnauthorized(
 // 返回值用 `as never` 收窄——拦截器把 R.data 拍平为请求返回值，而 axios 静态类型仍以 AxiosResponse 表述。
 http.interceptors.response.use(
   async (response) => {
-    if (response.config.rawResponse) return response.data as never
-    const envelope = response.data as R<unknown>
+    assertRequestCurrent(response.config)
+    let data: unknown = response.data
+    if (response.config.rawResponse) {
+      // Download endpoints return binary on success, but business failures still use JSON R.
+      // Do not save a 403/404 envelope as a file or bypass the scoped 401 lifecycle.
+      if (!String(response.headers['content-type'] ?? '').includes('application/json'))
+        return response.data as never
+      const json =
+        data instanceof Blob
+          ? await data.text()
+          : data instanceof ArrayBuffer
+            ? new TextDecoder().decode(data)
+            : data
+      assertRequestCurrent(response.config)
+      try {
+        data = typeof json === 'string' ? JSON.parse(json) : json
+      } catch {
+        throw new ApiError(-1, '下载响应格式无效')
+      }
+      if (!data || typeof data !== 'object' || !('code' in data) || data.code === CODE_SUCCESS)
+        return response.data as never
+    }
+    const envelope = data as R<unknown>
     if (envelope.code === CODE_SUCCESS) {
       return envelope.data as never
     }
@@ -98,6 +170,8 @@ http.interceptors.response.use(
     throw new ApiError(envelope.code, envelope.message || '请求失败', envelope.traceId ?? null)
   },
   async (error: AxiosError) => {
+    if (axios.isCancel(error)) throw error
+    assertRequestCurrent(error.config)
     if (error.response) {
       if (error.response.status === 401) {
         // HTTP 层未认证（过滤器直接拒绝，未走 R 包装）：按 40100 语义处理
@@ -119,6 +193,10 @@ export interface RequestOptions {
   query?: Record<string, string | number | undefined>
   /** 跳过 Authorization 头（登录等白名单端点）。 */
   anonymous?: boolean
+  signal?: AbortSignal
+  context?: RequestContext
+  /** Authentication bootstrap must not recursively refresh itself. */
+  noRefresh?: boolean
 }
 
 /**
@@ -136,6 +214,9 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
     data: options.body,
     params: options.query,
     anonymous: options.anonymous,
+    signal: options.signal,
+    requestContext: options.context ?? captureRequestContext(),
+    noRefresh: options.noRefresh,
   }) as unknown as Promise<T>
 }
 
@@ -143,7 +224,7 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
 export function rawRequest<T>(
   path: string,
   responseType: ResponseType,
-  options: Pick<RequestOptions, 'query'> = {},
+  options: Pick<RequestOptions, 'query' | 'signal' | 'context'> = {},
 ): Promise<T> {
   return http.request({
     url: path,
@@ -151,5 +232,7 @@ export function rawRequest<T>(
     params: options.query,
     responseType,
     rawResponse: true,
+    signal: options.signal,
+    requestContext: options.context ?? captureRequestContext(),
   }) as unknown as Promise<T>
 }

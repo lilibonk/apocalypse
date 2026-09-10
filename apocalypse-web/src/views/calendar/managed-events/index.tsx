@@ -1,6 +1,10 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /** 托管日程是带范围角色与草稿发布状态机的工作台，超出标准 CRUD schema。 */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, Pencil, Plus, Send, Trash2, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,18 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-import {
-  cancelManagedEvent,
-  createManagedEvent,
-  discardManagedEventDraft,
-  listCalendars,
-  listManagedEvents,
-  publishManagedEvent,
-  saveManagedEventDraft,
-  withdrawManagedEvent,
-  type CalendarEvent,
-  type EventContentCommand,
-} from '../calendar.api'
+import type { CalendarEvent, EventContentCommand } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarTrace,
@@ -35,16 +28,13 @@ import { toErrorMessage } from '../calendar.format'
 import { EventEditor } from '../event-editor'
 import { CalendarConfirm } from '../calendar-confirm'
 
-export default function ManagedEventsPage() {
+function ManagedEventsPage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const [calendarSelection, setCalendarSelection] = useState('')
   const [editor, setEditor] = useState<CalendarEvent | 'new' | null>(null)
 
-  const calendarsQuery = useQuery({
-    queryKey: ['calendar', 'contexts'],
-    queryFn: listCalendars,
-  })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const managedCalendars = useMemo(
     () =>
       (calendarsQuery.data ?? []).filter(
@@ -57,25 +47,34 @@ export default function ManagedEventsPage() {
   const calendarId = managedCalendars.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (managedCalendars[0]?.id ?? '')
-  const eventsQuery = useQuery({
-    queryKey: ['calendar', 'managed-events', calendarId],
-    queryFn: () => listManagedEvents(calendarId),
-    enabled: calendarId !== '',
+  const eventsQuery = useQuery(
+    calendarQueries.managedEvents({ calendarId: calendarId }, calendarId !== ''),
+  )
+  const onDenied = useCalendarDenial(calendarId, [calendarsQuery.error, eventsQuery.error], () => {
+    setCalendarSelection('')
+    setEditor(null)
   })
+
   const selectedCalendar = managedCalendars.find((calendar) => calendar.id === calendarId)
   const canPublish = selectedCalendar?.currentUserRole === 'PUBLISHER'
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'contexts'] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'managed-events', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'private-events', calendarId] })
+    void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
+    void queryClient.invalidateQueries(
+      calendarQueries.managedEvents.filter({ calendarId: calendarId }),
+    )
+    void queryClient.invalidateQueries(
+      calendarQueries.privateEvents.filter({ calendarId: calendarId }),
+    )
   }
 
-  const saveMutation = useMutation({
-    mutationFn: (content: EventContentCommand) =>
+  const saveMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, editor]),
+    mutationFn: (run, content: EventContentCommand) =>
       editor === 'new'
-        ? createManagedEvent(calendarId, content)
+        ? run(calendarOperations.createManagedEvent, calendarId, content)
         : editor
-          ? saveManagedEventDraft(calendarId, editor, content)
+          ? run(calendarOperations.saveManagedEventDraft, calendarId, editor, content)
           : Promise.reject(new Error(t('managedEvents.selectionRequired'))),
     onSuccess: () => {
       toast.success(
@@ -89,8 +88,11 @@ export default function ManagedEventsPage() {
       invalidate()
     },
   })
-  const publishMutation = useMutation({
-    mutationFn: (event: CalendarEvent) => publishManagedEvent(calendarId, event),
+  const publishMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, editor]),
+    mutationFn: (run, event: CalendarEvent) =>
+      run(calendarOperations.publishManagedEvent, calendarId, event),
     onSuccess: () => {
       toast.success(t('managedEvents.published'))
       invalidate()
@@ -100,17 +102,24 @@ export default function ManagedEventsPage() {
       invalidate()
     },
   })
-  const actionMutation = useMutation({
-    mutationFn: ({
-      event,
-      action,
-    }: {
-      event: CalendarEvent
-      action: 'discard' | 'withdraw' | 'cancel'
-    }) => {
-      if (action === 'discard') return discardManagedEventDraft(calendarId, event.id)
-      if (action === 'withdraw') return withdrawManagedEvent(calendarId, event.id)
-      return cancelManagedEvent(calendarId, event.id)
+  const actionMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, editor]),
+    mutationFn: (
+      run,
+      {
+        event,
+        action,
+      }: {
+        event: CalendarEvent
+        action: 'discard' | 'withdraw' | 'cancel'
+      },
+    ) => {
+      if (action === 'discard')
+        return run(calendarOperations.discardManagedEventDraft, calendarId, event.id)
+      if (action === 'withdraw')
+        return run(calendarOperations.withdrawManagedEvent, calendarId, event.id)
+      return run(calendarOperations.cancelManagedEvent, calendarId, event.id)
     },
     onSuccess: () => {
       toast.success(t('managedEvents.stateUpdated'))
@@ -342,3 +351,8 @@ function EventActionConfirm({
     </CalendarConfirm>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={ManagedEventsPage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

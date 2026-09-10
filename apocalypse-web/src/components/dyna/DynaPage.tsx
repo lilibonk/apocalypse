@@ -12,7 +12,7 @@
  * CI 已有 schema.test.ts 全量校验，这里是页面级兜底。
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -31,8 +31,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PixelScale } from '@/effects/PixelWave'
-import { ApiError, request } from '@/lib/api/client'
+import { ApiError } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+import type { ModuleOperation, ModuleScope } from '@/lib/query/module-scope'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
+import { useResourceDenial } from '@/lib/query/use-resource-denial'
+import { createDynaQueries } from './dyna-queries'
 
 import { DynaDetail } from './DynaDetail'
 import { DynaForm } from './DynaForm'
@@ -67,15 +72,39 @@ function errorText(error: unknown, fallback: string): string {
 
 export interface DynaPageProps {
   schema: DynaPageSchema
+  queryScope?: ModuleScope
   /**
    * custom 行操作的 handler 注册表：action.key → 点击回调（拿到整行数据）。
    * 越出标准 CRUD 的行级动作（授权弹窗、跳转等）由页面经此注入；
    * schema 里声明了 custom 但未注册 handler 的 key 渲染为禁用按钮（失配可见）。
    */
-  customActions?: Record<string, (row: Record<string, unknown>) => void>
+  customActions?: Record<string, ((row: Row) => void) | ScopedDynaAction>
 }
 
-export function DynaPage({ schema, customActions }: DynaPageProps) {
+export interface ScopedDynaAction {
+  operation: ModuleOperation<[Row], unknown>
+  onSuccess?: (result: unknown, row: Row) => void
+}
+
+export function DynaPage(props: DynaPageProps) {
+  const queries = useMemo(
+    () => createDynaQueries(props.schema, props.queryScope),
+    [props.schema, props.queryScope],
+  )
+  const content = <DynaPageContent {...props} queries={queries} />
+  return props.queryScope ? (
+    <ModuleAccess scope={props.queryScope}>{content}</ModuleAccess>
+  ) : (
+    content
+  )
+}
+
+function DynaPageContent({
+  schema,
+  customActions,
+  queryScope,
+  queries,
+}: DynaPageProps & { queries: ReturnType<typeof createDynaQueries> }) {
   const t = useDynaText()
   const queryClient = useQueryClient()
 
@@ -94,25 +123,47 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
   const [deleting, setDeleting] = useState<Row | null>(null)
   const [toggling, setToggling] = useState<ToggleState | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['dyna', schema.key, page, appliedSearch],
-    queryFn: () => {
-      const query: Record<string, string | number | undefined> = { page, size: pageSize }
-      for (const [name, value] of Object.entries(appliedSearch)) {
-        query[name] = value === '' ? undefined : value
-      }
-      return request<PageResult<Row>>(`${schema.endpoint}/page`, { query })
+  const { data, isLoading, error } = useQuery<PageResult<Row>>(
+    queries.list(
+      {
+        schemaKey: schema.key,
+        endpoint: schema.endpoint,
+        page,
+        size: pageSize,
+        search: appliedSearch,
+      },
+      validation.success,
+    ),
+  )
+
+  const invalidate = () => queryClient.invalidateQueries(queries.filter())
+  const onDenied = useResourceDenial({
+    errors: queryScope ? [error] : [],
+    clear: queries.filter(),
+    reset: () => {
+      setDialog(null)
+      setViewing(null)
+      setDeleting(null)
+      setToggling(null)
     },
-    enabled: validation.success,
   })
+  const localKey = JSON.stringify([
+    page,
+    pageSize,
+    appliedSearch,
+    dialog,
+    deleting,
+    toggling,
+    viewing,
+  ])
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['dyna', schema.key] })
-
-  const saveMutation = useMutation({
-    mutationFn: (input: { body: Row; mode: 'create' | 'edit'; id?: string }) =>
+  const saveMutation = useModuleMutation(queryScope, {
+    onDenied: queryScope ? onDenied : undefined,
+    localKey,
+    mutationFn: (run, input: { body: Row; mode: 'create' | 'edit'; id?: string }) =>
       input.mode === 'create'
-        ? request<Row>(schema.endpoint, { method: 'POST', body: input.body })
-        : request<Row>(`${schema.endpoint}/${input.id}`, { method: 'PUT', body: input.body }),
+        ? run(queries.create, input.body)
+        : run(queries.edit, { id: input.id!, body: input.body }),
     onSuccess: (_result, input) => {
       toast.success(t(input.mode === 'create' ? 'created' : 'updated', { entity }))
       setDialog(null)
@@ -121,8 +172,10 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
     onError: (error) => toast.error(errorText(error, t('保存失败'))),
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => request<void>(`${schema.endpoint}/${id}`, { method: 'DELETE' }),
+  const deleteMutation = useModuleMutation(queryScope, {
+    onDenied: queryScope ? onDenied : undefined,
+    localKey,
+    mutationFn: (run, id: string) => run(queries.remove, id),
     onSuccess: () => {
       toast.success(t('deleted', { entity }))
       setDeleting(null)
@@ -131,17 +184,28 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
     onError: (error) => toast.error(errorText(error, t('删除失败'))),
   })
 
-  const toggleMutation = useMutation({
-    mutationFn: (input: { id: string; body: Row }) =>
-      request<Row>(`${schema.endpoint}/${input.id}`, {
-        method: 'PUT',
-        body: input.body,
-      }),
+  const toggleMutation = useModuleMutation(queryScope, {
+    onDenied: queryScope ? onDenied : undefined,
+    localKey,
+    mutationFn: (run, input: { id: string; body: Row; action: DynaStatusToggleAction }) => {
+      const operation = queries.toggles.get(input.action)
+      if (!operation) throw new Error('Unknown Dyna action')
+      return run(operation, input)
+    },
     onSuccess: () => {
       toast.success(t('操作成功'))
       setToggling(null)
       void invalidate()
     },
+    onError: (error) => toast.error(errorText(error, t('操作失败'))),
+  })
+
+  const customMutation = useModuleMutation(queryScope, {
+    onDenied: queryScope ? onDenied : undefined,
+    localKey,
+    mutationFn: (run, input: { action: ScopedDynaAction; row: Row }) =>
+      run(input.action.operation, input.row),
+    onSuccess: (result, input) => input.action.onSuccess?.(result, input.row),
     onError: (error) => toast.error(errorText(error, t('操作失败'))),
   })
 
@@ -169,7 +233,7 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
     const next = row[action.field] === action.onValue ? action.offValue : action.onValue
     // submitRow：全量替换语义的更新端点（如 RoleSaveReq 必填 roleName/roleKey）提交整行
     const body = action.submitRow ? { ...row, [action.field]: next } : { [action.field]: next }
-    toggleMutation.mutate({ id: rowIdOf(row, rowKey), body })
+    toggleMutation.mutate({ id: rowIdOf(row, rowKey), body, action })
   }
 
   const renderActions = (row: Row) => (
@@ -259,8 +323,16 @@ export function DynaPage({ schema, customActions }: DynaPageProps) {
               variant="ghost"
               size="sm"
               aria-label={t(action.label)}
-              disabled={!handler}
-              onClick={() => handler?.(row)}
+              disabled={
+                !handler ||
+                (queryScope !== undefined && typeof handler === 'function') ||
+                customMutation.isPending
+              }
+              onClick={() => {
+                if (typeof handler === 'function' && !queryScope) handler(row)
+                else if (handler && typeof handler !== 'function')
+                  customMutation.mutate({ action: handler, row })
+              }}
             >
               {t(action.label)}
             </Button>

@@ -1,7 +1,11 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /** 个人覆盖同时呈现生效来源、版本与冲突复核，属于非标准字段级工作台，手写实现。 */
 
 import { DatePicker } from '@/components/ui/date-picker'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Save } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,16 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-import {
-  getDay,
-  getPersonalOverride,
-  listCalendars,
-  listPersonalConflicts,
-  resolvePersonalConflict,
-  savePersonalOverride,
-  type ConflictResolution,
-  type OverrideConflict,
-} from '../calendar.api'
+import type { ConflictResolution, OverrideConflict } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
@@ -50,7 +45,7 @@ function today(): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10)
 }
 
-export default function PersonalOverridePage() {
+function PersonalOverridePage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const [calendarSelection, setCalendarSelection] = useState('')
@@ -59,28 +54,34 @@ export default function PersonalOverridePage() {
   const operation = buildDayOverride(input)
   const year = date.slice(0, 4)
 
-  const calendarsQuery = useQuery({
-    queryKey: ['calendar', 'contexts'],
-    queryFn: listCalendars,
-  })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const calendarId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
-  const overrideQuery = useQuery({
-    queryKey: ['calendar', 'personal-overrides', calendarId, year],
-    queryFn: () => getPersonalOverride(calendarId, `${year}-01-01`, `${year}-12-31`),
-    enabled: calendarId !== '',
-  })
-  const dayQuery = useQuery({
-    queryKey: ['calendar', 'day', calendarId, date],
-    queryFn: () => getDay(calendarId, date),
-    enabled: calendarId !== '' && date !== '',
-  })
-  const conflictsQuery = useQuery({
-    queryKey: ['calendar', 'personal-conflicts', calendarId],
-    queryFn: () => listPersonalConflicts(calendarId),
-    enabled: calendarId !== '',
-  })
+  const overrideQuery = useQuery(
+    calendarQueries.personalOverrides(
+      { calendarId: calendarId, from: `${year}-01-01`, to: `${year}-12-31` },
+      calendarId !== '',
+    ),
+  )
+  const dayQuery = useQuery(
+    calendarQueries.day(
+      { calendarId: calendarId, date: date, includePersonal: true },
+      calendarId !== '' && date !== '',
+    ),
+  )
+  const conflictsQuery = useQuery(
+    calendarQueries.personalConflicts({ calendarId: calendarId }, calendarId !== ''),
+  )
+
+  const onDenied = useCalendarDenial(
+    calendarId,
+    [calendarsQuery.error, overrideQuery.error, dayQuery.error, conflictsQuery.error],
+    () => {
+      setCalendarSelection('')
+      setInput(emptyOverrideInput())
+    },
+  )
 
   const currentItem = useMemo(
     () =>
@@ -90,16 +91,28 @@ export default function PersonalOverridePage() {
   )
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'contexts'] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'personal-overrides', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'personal-conflicts', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'day', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'days', calendarId] })
+    void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
+    void queryClient.invalidateQueries(
+      calendarQueries.personalOverrides.filter({ calendarId: calendarId }),
+    )
+    void queryClient.invalidateQueries(
+      calendarQueries.personalConflicts.filter({ calendarId: calendarId }),
+    )
+    void queryClient.invalidateQueries(calendarQueries.day.filter({ calendarId: calendarId }))
+    void queryClient.invalidateQueries(calendarQueries.days.filter({ calendarId: calendarId }))
   }
-  const saveMutation = useMutation({
-    mutationFn: () => {
+  const saveMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, date, input]),
+    mutationFn: (run) => {
       if (!operation) throw new Error(t('overrideEditor.invalid'))
-      return savePersonalOverride(calendarId, date, overrideQuery.data?.revisionNo ?? 0, operation)
+      return run(
+        calendarOperations.savePersonalOverride,
+        calendarId,
+        date,
+        overrideQuery.data?.revisionNo ?? 0,
+        operation,
+      )
     },
     onSuccess: () => {
       toast.success(t('personalOverrides.saved'))
@@ -301,6 +314,7 @@ export default function PersonalOverridePage() {
                           calendarId={calendarId}
                           conflict={conflict}
                           onResolved={invalidate}
+                          onDenied={onDenied}
                         />
                       </Perm>
                     )}
@@ -323,21 +337,34 @@ function PersonalConflictActions({
   calendarId,
   conflict,
   onResolved,
+  onDenied,
 }: {
   calendarId: string
   conflict: OverrideConflict
   onResolved: () => void
+  onDenied: import('@/lib/query/use-resource-denial').ResourceDenialHandler
 }) {
   const { t } = useTranslation('calendar')
   const year = conflict.date.slice(0, 4)
-  const revision = useQuery({
-    queryKey: ['calendar', 'personal-overrides', calendarId, year],
-    queryFn: () => getPersonalOverride(calendarId, `${year}-01-01`, `${year}-12-31`),
-  })
+  const revision = useQuery(
+    calendarQueries.personalOverrides({
+      calendarId: calendarId,
+      from: `${year}-01-01`,
+      to: `${year}-12-31`,
+    }),
+  )
   const current = revision.data?.items.find((item) => item.id === conflict.overrideItemId)
-  const resolve = useMutation({
-    mutationFn: (resolution: ConflictResolution) =>
-      resolvePersonalConflict(calendarId, conflict.id, resolution, revision.data!.revisionNo),
+  const resolve = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, conflict.id, conflict.currentHash]),
+    mutationFn: (run, resolution: ConflictResolution) =>
+      run(
+        calendarOperations.resolvePersonalConflict,
+        calendarId,
+        conflict.id,
+        resolution,
+        revision.data!.revisionNo,
+      ),
     onSuccess: () => {
       toast.success(t('personalOverrides.conflictResolved'))
       onResolved()
@@ -347,6 +374,7 @@ function PersonalConflictActions({
       onResolved()
     },
   })
+
   const disabled = !current || revision.isFetching || !!revision.error || resolve.isPending
   return (
     <div className="mt-3 flex flex-wrap gap-2">
@@ -395,3 +423,8 @@ function PersonalConflictActions({
     </div>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={PersonalOverridePage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

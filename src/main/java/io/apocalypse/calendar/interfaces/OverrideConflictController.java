@@ -12,7 +12,6 @@ import io.apocalypse.framework.security.SecurityUtils;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,10 +26,6 @@ import lombok.RequiredArgsConstructor;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class OverrideConflictController {
 
   private final OverrideConflictService overrideConflictService;

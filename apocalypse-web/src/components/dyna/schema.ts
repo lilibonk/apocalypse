@@ -171,6 +171,8 @@ export interface DynaPageSchema {
   /** 行主键字段名（默认 'id'；雪花 string 原样使用）。 */
   rowKey?: string
   pageSize?: number
+  /** 列表接口权限；模块 queryScope 页面必填，核心页面保持兼容。 */
+  listPerm?: string
   /** 顶部「新增」按钮权限串；缺省不渲染新增按钮。 */
   createPerm?: string
   /** 新增按钮文案（默认 `新增${entityName ?? ''}`）。 */
@@ -332,6 +334,7 @@ export const pageSchemaValidator = z
     entityName: z.string().optional(),
     rowKey: z.string().min(1).optional(),
     pageSize: z.number().int().positive().optional(),
+    listPerm: permsString.optional(),
     createPerm: permsString.optional(),
     createLabel: z.string().optional(),
     search: z.array(searchFieldSchema).optional(),

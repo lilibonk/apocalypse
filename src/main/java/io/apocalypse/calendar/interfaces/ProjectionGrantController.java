@@ -10,7 +10,6 @@ import io.apocalypse.framework.security.SecurityUtils;
 
 import java.util.List;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,10 +24,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/calendar/calendars/{calendarId}/projection-grants")
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class ProjectionGrantController {
 
   private final ProjectionGrantService projectionGrantService;

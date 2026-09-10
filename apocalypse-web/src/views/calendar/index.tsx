@@ -1,3 +1,6 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from './calendar.queries'
+import { calendarScope, calendarQueries } from './calendar.queries'
 /** Month navigation and field-level date details are a two-dimensional, non-CRUD workspace. */
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -18,7 +21,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-import { listCalendars, listDays, type EffectiveDay } from './calendar.api'
+import type { EffectiveDay } from './calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
@@ -36,22 +39,28 @@ import {
 import { dayFieldLabels, snapshotField } from './day-override-model'
 import { monthRange, shiftMonth } from './month-grid'
 
-export default function CalendarOverviewPage() {
+function CalendarOverviewPage() {
   const { t, i18n } = useTranslation('calendar')
   const [calendarSelection, setCalendarSelection] = useState('')
   const [month, setMonth] = useState(() => localToday().slice(0, 7))
   const [selectedDate, setSelectedDate] = useState('')
   const trigger = useRef<HTMLButtonElement | null>(null)
   const range = monthRange(month)
-  const calendarsQuery = useQuery({ queryKey: ['calendar', 'contexts'], queryFn: listCalendars })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const calendarId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
-  const daysQuery = useQuery({
-    queryKey: ['calendar', 'days', calendarId, range.from, range.to],
-    queryFn: () => listDays(calendarId, range.from, range.to),
-    enabled: calendarId !== '',
+  const daysQuery = useQuery(
+    calendarQueries.days(
+      { calendarId: calendarId, from: range.from, to: range.to, includePersonal: true },
+      calendarId !== '',
+    ),
+  )
+  useCalendarDenial(calendarId, [calendarsQuery.error, daysQuery.error], () => {
+    setCalendarSelection('')
+    setSelectedDate('')
   })
+
   const days = useMemo(
     () => new Map((daysQuery.data ?? []).map((day) => [day.date, day])),
     [daysQuery.data],
@@ -335,3 +344,8 @@ export function DateDetailsContent({ day }: { day: EffectiveDay }) {
     </>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={CalendarOverviewPage} />
+}
+import { useCalendarDenial } from './use-calendar-denial'

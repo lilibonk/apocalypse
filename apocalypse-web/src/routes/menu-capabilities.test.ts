@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { normalizeMenuNode, type RawMenuNode } from '@/lib/api/types'
 
-import { belongsToModuleQuery, hasMenuModule } from './menu-capabilities'
+import { hasMenuModule } from './menu-capabilities'
 
 function menu(overrides: Partial<RawMenuNode> = {}): RawMenuNode {
   return {
@@ -41,11 +41,5 @@ describe('menu capability lifecycle', () => {
     const menus = [normalizeMenuNode(menu({ path: '/calendar' }))]
 
     expect(hasMenuModule(menus, 'calendar')).toBe(false)
-  })
-
-  it('只清理目标模块的 query cache', () => {
-    expect(belongsToModuleQuery(['calendar', 'days', '2026-08'], 'calendar')).toBe(true)
-    expect(belongsToModuleQuery(['system', 'users'], 'calendar')).toBe(false)
-    expect(belongsToModuleQuery([], 'calendar')).toBe(false)
   })
 })

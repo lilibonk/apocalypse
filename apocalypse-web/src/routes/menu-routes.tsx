@@ -25,6 +25,7 @@ export interface FlatRoute {
   title: string
   component: string | null
   icon: string | null
+  moduleKey: string | null
 }
 
 /**
@@ -41,23 +42,25 @@ export function resolveMenuPath(rawPath: string | null, parentPath: string): str
 export function flattenMenuRoutes(menus: MenuNode[]): FlatRoute[] {
   const routes: FlatRoute[] = []
 
-  const walk = (nodes: MenuNode[], parentPath: string) => {
+  const walk = (nodes: MenuNode[], parentPath: string, parentModule: string | null) => {
     for (const node of [...nodes].sort((a, b) => a.sort - b.sort)) {
       if (node.menuType === 'F') continue
       const fullPath = resolveMenuPath(node.path, parentPath)
+      const moduleKey = node.moduleKey || parentModule
       if (node.menuType === 'M' && node.path) {
         routes.push({
           path: fullPath,
           title: node.menuName,
           component: node.component,
           icon: node.icon,
+          moduleKey,
         })
       }
-      if (node.children.length > 0) walk(node.children, fullPath)
+      if (node.children.length > 0) walk(node.children, fullPath, moduleKey)
     }
   }
 
-  walk(menus, '')
+  walk(menus, '', null)
   return routes
 }
 
@@ -88,7 +91,7 @@ export function useMenuRoutes(): { routeElements: ReactElement[]; indexPath: str
   return useMemo(() => {
     const flat = flattenMenuRoutes(menus)
     const routeElements = flat.map((route) => {
-      const Component = resolvePageComponent(route.component)
+      const Component = resolvePageComponent(route.component, route.moduleKey)
       return createElement(Route, {
         key: route.path,
         path: route.path.replace(/^\//, ''),

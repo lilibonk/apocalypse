@@ -6,6 +6,10 @@ import CalendarManagementPage from './calendars'
 import PrivateEventsPage from './events'
 import ManagedEventsPage from './managed-events'
 import ManagedOverridePage from './managed-overrides'
+import { QueryClient } from '@tanstack/react-query'
+import { accessLifecycle } from '@/lib/query/access-lease'
+import { normalizeMenuNode } from '@/lib/api/types'
+import { calendarScope } from './calendar.queries'
 
 const { query, state, invalidate, errorToast, mutations } = vi.hoisted(() => ({
   query: vi.fn(),
@@ -14,10 +18,13 @@ const { query, state, invalidate, errorToast, mutations } = vi.hoisted(() => ({
   mutations: [] as { onError?: (error: Error) => void }[],
   state: { role: 'EDITOR' as CalendarRole, revision: 'DRAFT' },
 }))
-vi.mock('@tanstack/react-query', () => ({
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: query,
   useQueryClient: () => ({ invalidateQueries: invalidate }),
-  useMutation: (options: { onError?: (error: Error) => void }) => {
+}))
+vi.mock('@/lib/query/use-module-mutation', () => ({
+  useModuleMutation: (_scope: unknown, options: { onError?: (error: Error) => void }) => {
     mutations.push(options)
     return { mutate: vi.fn(), isPending: false }
   },
@@ -35,74 +42,102 @@ vi.mock('react-i18next', async (importOriginal) => ({
 
 describe('calendar scoped management controls', () => {
   beforeEach(() => {
+    const client = new QueryClient()
+    accessLifecycle.reset(0, client)
+    accessLifecycle.accept(
+      0,
+      [
+        normalizeMenuNode({
+          id: '1',
+          parentId: '0',
+          menuName: 'Calendar',
+          type: 'M',
+          path: 'calendar',
+          component: 'calendar/index',
+          moduleKey: 'calendar',
+          perms: null,
+          icon: null,
+          sort: 0,
+        }),
+      ],
+      [...calendarScope.requiredPerms],
+      client,
+    )
     state.role = 'EDITOR'
     state.revision = 'DRAFT'
     query.mockReset()
     invalidate.mockReset()
     errorToast.mockReset()
     mutations.length = 0
-    query.mockImplementation(({ queryKey }: { queryKey: string[]; enabled?: boolean }) => {
-      const calendar: CalendarRecord = {
-        id: '1',
-        calendarKey: 'qa',
-        name: 'QA',
-        kind: 'MANAGED',
-        parentId: null,
-        regionCode: 'CN',
-        zoneId: 'Asia/Shanghai',
-        state: 'ACTIVE',
-        currentUserRole: state.role,
-        version: 0,
-      }
-      const revision = {
-        id: '3',
-        revisionNo: 1,
-        state: 'PUBLISHED',
-        items: [],
-        contentHash: 'hash',
-      }
-      let data: unknown = { list: [], total: 0 }
-      if (queryKey[1] === 'contexts') data = [calendar]
-      if (queryKey[1] === 'managed-events' && queryKey[2])
-        data = {
-          list: [
-            {
-              id: '2',
-              sourceKind: 'USER',
+    query.mockImplementation(
+      ({
+        meta,
+      }: {
+        meta: { resource: string; params: { calendarId?: string } }
+        enabled?: boolean
+      }) => {
+        const calendar: CalendarRecord = {
+          id: '1',
+          calendarKey: 'qa',
+          name: 'QA',
+          kind: 'MANAGED',
+          parentId: null,
+          regionCode: 'CN',
+          zoneId: 'Asia/Shanghai',
+          state: 'ACTIVE',
+          currentUserRole: state.role,
+          version: 0,
+        }
+        const revision = {
+          id: '3',
+          revisionNo: 1,
+          state: 'PUBLISHED',
+          items: [],
+          contentHash: 'hash',
+        }
+        let data: unknown = { list: [], total: 0 }
+        if (meta.resource === 'contexts') data = [calendar]
+        if (meta.resource === 'managed-events' && meta.params.calendarId)
+          data = {
+            list: [
+              {
+                id: '2',
+                sourceKind: 'USER',
+                state: 'ACTIVE',
+                revisionState: state.revision,
+                revisionNo: 1,
+                contentHash: 'hash',
+                content: {
+                  title: 'QA event',
+                  timeKind: 'ALL_DAY',
+                  startDate: '2026-09-02',
+                  endDateExclusive: '2026-09-03',
+                },
+              },
+            ],
+          }
+        if (['managed-draft', 'managed-revisions'].includes(meta.resource))
+          data =
+            meta.resource === 'managed-draft'
+              ? { ...revision, state: 'DRAFT', version: 0 }
+              : { list: [revision], total: 1 }
+        if (meta.resource === 'private-events')
+          data = {
+            list: ['PRIVATE', 'MANAGED'].map((eventKind) => ({
+              id: eventKind,
+              eventKind,
               state: 'ACTIVE',
-              revisionState: state.revision,
-              revisionNo: 1,
-              contentHash: 'hash',
               content: {
-                title: 'QA event',
+                title: eventKind,
                 timeKind: 'ALL_DAY',
                 startDate: '2026-09-02',
                 endDateExclusive: '2026-09-03',
               },
-            },
-          ],
-        }
-      if (queryKey[1] === 'managed-overrides')
-        data =
-          queryKey[3] === 'draft'
-            ? { ...revision, state: 'DRAFT', version: 0 }
-            : { list: [revision], total: 1 }
-      if (queryKey[1] === 'private-events')
-        data = {
-          list: ['PRIVATE', 'MANAGED'].map((eventKind) => ({
-            id: eventKind,
-            eventKind,
-            state: 'ACTIVE',
-            content: {
-              title: eventKind,
-              timeKind: 'ALL_DAY',
-              startDate: '2026-09-02',
-              endDateExclusive: '2026-09-03',
-            },
-          })),
-        }
-      return { data, isLoading: false }
-    })
+            })),
+          }
+        return { data, isLoading: false }
+      },
+    )
   })
 
   it.each(['EDITOR', 'PUBLISHER'] as const)('limits draft publishing for %s', (role) => {
@@ -129,9 +164,9 @@ describe('calendar scoped management controls', () => {
     expect(html.includes('>calendars.edit<')).toBe(role === 'PUBLISHER')
     expect(html.includes('>calendars.archive<')).toBe(role === 'PUBLISHER')
     expect(html.includes('>calendars.addMember<')).toBe(role === 'PUBLISHER')
-    expect(query.mock.calls.find(([config]) => config.queryKey[1] === 'members')?.[0].enabled).toBe(
-      role === 'PUBLISHER',
-    )
+    expect(
+      query.mock.calls.find(([config]) => config.meta.resource === 'members')?.[0].enabled,
+    ).toBe(role === 'PUBLISHER')
   })
 
   it('does not query editor workbenches for a reader', () => {
@@ -139,7 +174,7 @@ describe('calendar scoped management controls', () => {
     renderToStaticMarkup(<ManagedEventsPage />)
     renderToStaticMarkup(<ManagedOverridePage />)
     for (const [config] of query.mock.calls) {
-      if (config.queryKey[1] !== 'contexts') expect(config.enabled).toBe(false)
+      if (config.meta.resource !== 'contexts') expect(config.enabled).toBe(false)
     }
   })
 
@@ -161,7 +196,10 @@ describe('calendar scoped management controls', () => {
         options.onError?.(error)
         expect(errorToast).toHaveBeenLastCalledWith(error.message)
         expect(invalidate).toHaveBeenCalled()
-        for (const [config] of invalidate.mock.calls) expect(config.queryKey[0]).toBe('calendar')
+        const client = new QueryClient()
+        const core = client.getQueryCache().build(client, { queryKey: ['dictionary'] })
+        for (const [config] of invalidate.mock.calls) expect(config.predicate(core)).toBe(false)
+        client.clear()
       }
     },
   )

@@ -1,6 +1,10 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { DatePicker } from '@/components/ui/date-picker'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileCheck2, RefreshCw, Send, ShieldCheck, Upload, XCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,20 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-import {
-  downloadDataImportFile,
-  downloadDataImportTemplate,
-  getDataImportDiff,
-  listCalendars,
-  listDataImports,
-  publishDataImport,
-  rejectDataImport,
-  reviewDataImport,
-  uploadDataImport,
-  validateDataImport,
-  type DataImportRecord,
-  type DataImportTarget,
-} from '../calendar.api'
+import type { DataImportRecord, DataImportTarget } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarTrace,
@@ -37,8 +28,6 @@ import {
   StateBadge,
 } from '../calendar.ui'
 import { calendarValueText, toErrorMessage } from '../calendar.format'
-
-const IMPORTS_KEY = ['calendar', 'data-imports'] as const
 
 function nextYear(): number {
   return new Date().getFullYear() + 1
@@ -59,7 +48,7 @@ function formatBytes(value: number): string {
   return `${(value / 1024 / 1024).toFixed(1)} MiB`
 }
 
-export default function DataImportPage() {
+function DataImportPage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState('')
@@ -81,8 +70,8 @@ export default function DataImportPage() {
   const [reviewNote, setReviewNote] = useState('')
   const [sourceAttested, setSourceAttested] = useState(false)
 
-  const calendarsQuery = useQuery({ queryKey: ['calendar', 'contexts'], queryFn: listCalendars })
-  const importsQuery = useQuery({ queryKey: IMPORTS_KEY, queryFn: () => listDataImports(1, 100) })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
+  const importsQuery = useQuery(calendarQueries.dataImports({ page: 1, size: 100 }))
   const managedCalendars = useMemo(
     () =>
       (calendarsQuery.data ?? []).filter(
@@ -104,26 +93,50 @@ export default function DataImportPage() {
       documentTitle.trim().length > 0 &&
       issuer.trim().length > 0 &&
       documentPublishedOn.length > 0)
-  const diffQuery = useQuery({
-    queryKey: ['calendar', 'data-imports', selected?.id, 'diff'],
-    queryFn: () => getDataImportDiff(selected!.id),
-    enabled: selected != null && ['VALIDATED', 'REVIEWED', 'PUBLISHED'].includes(selected.state),
-  })
+  const diffQuery = useQuery(
+    calendarQueries.importDiff(
+      { id: selected?.id ?? '' },
+      selected != null && ['VALIDATED', 'REVIEWED', 'PUBLISHED'].includes(selected.state),
+    ),
+  )
+
+  const onDenied = useCalendarDenial(
+    calendarId,
+    [calendarsQuery.error, importsQuery.error, diffQuery.error],
+    () => {
+      setSelectedId('')
+      setCalendarId('')
+      setDataFile(null)
+      setEvidenceFile(null)
+      setReviewNote('')
+      setSourceAttested(false)
+    },
+    selectedId,
+  )
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: IMPORTS_KEY })
+    void queryClient.invalidateQueries(calendarQueries.dataImports.filter({}))
     if (selectedId)
-      void queryClient.invalidateQueries({
-        queryKey: ['calendar', 'data-imports', selectedId, 'diff'],
-      })
+      void queryClient.invalidateQueries(calendarQueries.importDiff.filter({ id: selectedId }))
   }
-  const uploadMutation = useMutation({
-    mutationFn: () => {
+  const uploadMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run) => {
       if (!dataFile) throw new Error(t('imports.dataFileRequired'))
       if (targetType === 'MANAGED_OVERRIDE' && !calendarId)
         throw new Error(t('imports.calendarRequired'))
       if (!systemSourceReady) throw new Error(t('imports.officialSourceRequired'))
-      return uploadDataImport(
+      return run(
+        calendarOperations.uploadDataImport,
         {
           importKey: importKey.trim(),
           targetType,
@@ -152,16 +165,36 @@ export default function DataImportPage() {
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const validateMutation = useMutation({
-    mutationFn: (id: string) => validateDataImport(id),
+  const validateMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run, id: string) => run(calendarOperations.validateDataImport, id),
     onSuccess: (value) => {
       toast.success(value.state === 'VALIDATED' ? t('imports.validated') : t('imports.invalid'))
       refresh()
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const reviewMutation = useMutation({
-    mutationFn: () => reviewDataImport(selected!, reviewNote.trim()),
+  const reviewMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run) => run(calendarOperations.reviewDataImport, selected!, reviewNote.trim()),
     onSuccess: () => {
       toast.success(t('imports.reviewed'))
       setSourceAttested(false)
@@ -169,38 +202,81 @@ export default function DataImportPage() {
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const publishMutation = useMutation({
-    mutationFn: () => publishDataImport(selected!, diffQuery.data!),
+  const publishMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run) => run(calendarOperations.publishDataImport, selected!, diffQuery.data!),
     onSuccess: () => {
       toast.success(t('imports.published'))
       refresh()
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'days'] })
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'day'] })
+      void queryClient.invalidateQueries(calendarQueries.days.filter({}))
+      void queryClient.invalidateQueries(calendarQueries.day.filter({}))
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const rejectMutation = useMutation({
-    mutationFn: () => rejectDataImport(selected!, reviewNote.trim()),
+  const rejectMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run) => run(calendarOperations.rejectDataImport, selected!, reviewNote.trim()),
     onSuccess: () => {
       toast.success(t('imports.rejected'))
       refresh()
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const templateMutation = useMutation({
-    mutationFn: () => downloadDataImportTemplate(targetType, year),
+  const templateMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: (run) => run(calendarOperations.downloadDataImportTemplate, targetType, year),
     onSuccess: (blob) => saveBlob(blob, `calendar-${targetType.toLowerCase()}-${year}.csv`),
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const fileMutation = useMutation({
-    mutationFn: async ({
-      value,
-      type,
-    }: {
-      value: DataImportRecord
-      type: 'data' | 'evidence'
-    }) => ({
-      blob: await downloadDataImportFile(value.id, type),
+  const fileMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([
+      selectedId,
+      workspace,
+      targetType,
+      calendarId,
+      year,
+      importKey,
+      reviewNote,
+    ]),
+    mutationFn: async (
+      run,
+      {
+        value,
+        type,
+      }: {
+        value: DataImportRecord
+        type: 'data' | 'evidence'
+      },
+    ) => ({
+      blob: await run(calendarOperations.downloadDataImportFile, value.id, type),
       fileName: type === 'data' ? value.dataFile.fileName : value.evidenceFile!.fileName,
     }),
     onSuccess: ({ blob, fileName }) => saveBlob(blob, fileName),
@@ -741,3 +817,8 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
     </>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={DataImportPage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

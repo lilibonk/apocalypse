@@ -12,9 +12,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 import { queryClient } from '@/app/query-client'
-import { configureClient } from '@/lib/api/client'
+import { ApiError, configureClient } from '@/lib/api/client'
 import * as authApi from '@/lib/api/auth'
 import { normalizeMenuNode, type MenuNode, type TokenPair, type UserInfo } from '@/lib/api/types'
+import { accessLifecycle } from '@/lib/query/access-lease'
+
+let loginSequence = 0
+let meSequence = 0
+let refreshFlight: { epoch: number; promise: Promise<boolean> } | undefined
+let refreshingToken: string | undefined
 
 interface AuthState {
   tokens: TokenPair | null
@@ -48,10 +54,20 @@ export const useAuthStore = create<AuthState>()(
       sessionEpoch: 0,
 
       async login(username, password) {
-        const tokens = await authApi.login(username, password)
+        const attempt = ++loginSequence
+        const epoch = get().sessionEpoch
+        let tokens: TokenPair
+        try {
+          tokens = await authApi.login(username, password)
+        } catch (error) {
+          if (attempt !== loginSequence || epoch !== get().sessionEpoch) return
+          throw error
+        }
+        if (attempt !== loginSequence || epoch !== get().sessionEpoch) return
         // Query keys intentionally do not contain user identity. A successful account switch must
         // therefore remove every query and mutation before the new credentials become active.
         queryClient.clear()
+        accessLifecycle.reset(epoch + 1, queryClient)
         set((state) => ({
           tokens,
           user: null,
@@ -65,6 +81,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearSession() {
+        loginSequence++
+        meSequence++
+        accessLifecycle.reset(get().sessionEpoch + 1, queryClient)
         set((state) => ({
           tokens: null,
           user: null,
@@ -78,29 +97,45 @@ export const useAuthStore = create<AuthState>()(
       },
 
       async logout() {
+        const epoch = get().sessionEpoch
         if (!get().tokens) {
           get().clearSession()
           return
         }
-        await authApi.logout()
-        get().clearSession()
+        try {
+          await authApi.logout()
+        } catch (error) {
+          if (epoch !== get().sessionEpoch) return
+          throw error
+        }
+        if (epoch === get().sessionEpoch) get().clearSession()
       },
 
       async ensureMe() {
         const sessionEpoch = get().sessionEpoch
         const accessToken = get().tokens?.accessToken
-        if (!accessToken) return
-        const me = await authApi.fetchCurrentUser()
-        if (get().sessionEpoch !== sessionEpoch || get().tokens?.accessToken !== accessToken) {
-          return
+        if (!accessToken || accessToken === refreshingToken) return
+        const sequence = ++meSequence
+        const current = () =>
+          sequence === meSequence &&
+          get().sessionEpoch === sessionEpoch &&
+          get().tokens?.accessToken === accessToken
+        try {
+          const me = await authApi.fetchCurrentUser()
+          if (!current()) return
+          const menus = (me.menus ?? []).map(normalizeMenuNode)
+          accessLifecycle.accept(sessionEpoch, menus, me.perms, queryClient)
+          set({ user: me.user, roles: me.roles, perms: me.perms, menus, meLoaded: true })
+        } catch (error) {
+          if (!current()) return
+          // /me does not recurse in the interceptor. One store-owned refresh may bootstrap it.
+          if (error instanceof ApiError && error.code === 40100 && !refreshFlight) {
+            if (await get().tryRefresh()) return
+            if (!current()) return
+          }
+          get().clearSession()
+          throw error
         }
-        set({
-          user: me.user,
-          roles: me.roles,
-          perms: me.perms,
-          menus: (me.menus ?? []).map(normalizeMenuNode),
-          meLoaded: true,
-        })
       },
 
       hasPerm(perm) {
@@ -110,29 +145,48 @@ export const useAuthStore = create<AuthState>()(
       async tryRefresh() {
         const current = get().tokens
         if (!current?.refreshToken) return false
+        const refreshToken = current.refreshToken
         const sessionEpoch = get().sessionEpoch
-        try {
-          const tokens = await authApi.refreshToken(current.refreshToken)
-          if (
-            get().sessionEpoch !== sessionEpoch ||
-            get().tokens?.refreshToken !== current.refreshToken
-          ) {
+        if (refreshFlight?.epoch === sessionEpoch) return refreshFlight.promise
+        refreshingToken = current.accessToken
+        meSequence++
+        accessLifecycle.pause(queryClient)
+        set({ meLoaded: false })
+        const run = async () => {
+          try {
+            const tokens = await authApi.refreshToken(refreshToken)
+            if (
+              get().sessionEpoch !== sessionEpoch ||
+              get().tokens?.refreshToken !== current.refreshToken
+            ) {
+              return false
+            }
+            // Finish /me bootstrap before making the new authorization generation available.
+            set({
+              tokens,
+              user: null,
+              roles: [],
+              perms: [],
+              menus: [],
+              meLoaded: false,
+            })
+            refreshingToken = undefined
+            await get().ensureMe()
+            return get().sessionEpoch === sessionEpoch && get().meLoaded
+          } catch {
+            if (get().sessionEpoch === sessionEpoch) get().clearSession()
             return false
           }
-          // A refreshed identity must re-read /me before any previously visible capability is
-          // trusted. RequireAuth performs that refresh while the existing request is replayed.
-          set((state) => ({
-            tokens,
-            user: null,
-            roles: [],
-            perms: [],
-            menus: [],
-            meLoaded: false,
-            sessionEpoch: state.sessionEpoch + 1,
-          }))
-          return true
-        } catch {
-          return false
+        }
+        const flight = { epoch: sessionEpoch, promise: run() }
+        refreshFlight = flight
+        try {
+          return await flight.promise
+        } finally {
+          if (refreshFlight === flight) {
+            refreshFlight = undefined
+            refreshingToken = undefined
+          }
         }
       },
     }),
@@ -146,6 +200,7 @@ export const useAuthStore = create<AuthState>()(
 // client ↔ store 解耦接线（模块加载即完成一次）
 configureClient({
   getAccessToken: () => useAuthStore.getState().tokens?.accessToken ?? null,
+  getPrincipalEpoch: () => useAuthStore.getState().sessionEpoch,
   tryRefresh: () => useAuthStore.getState().tryRefresh(),
   onUnauthorized: () => {
     useAuthStore.getState().clearSession()

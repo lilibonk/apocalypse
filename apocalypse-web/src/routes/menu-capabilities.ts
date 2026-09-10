@@ -6,8 +6,3 @@ export function hasMenuModule(menus: MenuNode[], moduleKey: string): boolean {
     (menu) => menu.moduleKey === moduleKey || hasMenuModule(menu.children, moduleKey),
   )
 }
-
-/** React Query 的模块缓存统一以稳定 module key 作为首段。 */
-export function belongsToModuleQuery(queryKey: readonly unknown[], moduleKey: string): boolean {
-  return queryKey[0] === moduleKey
-}

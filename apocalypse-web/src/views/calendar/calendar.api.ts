@@ -1,16 +1,14 @@
+import type { RequestOptions } from '@/lib/api/client'
 /** Calendar v1 页面适配层。所有雪花 ID 保持 string，页面不接触响应信封。 */
-
 import { rawRequest, request } from '@/lib/api/client'
 import type { PageResult, SnowflakeId } from '@/lib/api/types'
 import type { DayOverrideCommand } from './day-override-model'
-
 export type CalendarRole = 'READER' | 'EDITOR' | 'PUBLISHER'
 export type CalendarState = 'ACTIVE' | 'ARCHIVED'
 export type DayField =
   'LUNAR_DATE' | 'ZODIAC' | 'SOLAR_TERM' | 'DAY_POLICY' | 'DISPLAY_LABEL' | 'DISPLAY_NOTE'
 export type OverrideAction = 'SET' | 'CLEAR' | 'INHERIT'
 export type ConflictResolution = 'KEEP' | 'REBASE' | 'INHERIT'
-
 export interface CalendarRecord {
   id: SnowflakeId
   calendarKey: string
@@ -23,7 +21,6 @@ export interface CalendarRecord {
   currentUserRole: CalendarRole | null
   version: number
 }
-
 export interface CalendarMember {
   userId: SnowflakeId
   username: string
@@ -32,7 +29,6 @@ export interface CalendarMember {
   state: 'ACTIVE' | 'INACTIVE'
   version: number
 }
-
 export interface DayFieldValue {
   field: DayField
   lunarDate: {
@@ -44,11 +40,13 @@ export interface DayFieldValue {
   } | null
   zodiac: string | null
   solarTerm: string | null
-  dayPolicy: { classification: string; name: string | null } | null
+  dayPolicy: {
+    classification: string
+    name: string | null
+  } | null
   text: string | null
   state: 'VALUE' | 'CLEARED' | 'UNPUBLISHED'
 }
-
 export interface DaySnapshot {
   lunarDate: DayFieldValue['lunarDate']
   zodiac: string | null
@@ -57,7 +55,6 @@ export interface DaySnapshot {
   displayLabel: string | null
   displayNote: string | null
 }
-
 export interface ResolutionSource {
   layer: 'SYSTEM_DATASET' | 'SYSTEM_CORRECTION' | 'MANAGED_OVERRIDE' | 'PERSONAL_OVERRIDE' | 'NONE'
   sourceCalendarId: SnowflakeId | null
@@ -65,7 +62,6 @@ export interface ResolutionSource {
   sourceVersion: string | null
   action: OverrideAction | 'BASE'
 }
-
 export interface FieldResolution {
   field: DayField
   state: DayFieldValue['state']
@@ -75,7 +71,6 @@ export interface FieldResolution {
   conflictState: 'NONE' | 'NEEDS_REVIEW' | 'KEPT'
   conflictId: SnowflakeId | null
 }
-
 export interface EffectiveDay {
   date: string
   dayOfWeek: string
@@ -95,7 +90,6 @@ export interface EffectiveDay {
   effective: DaySnapshot
   resolutions: FieldResolution[]
 }
-
 export interface DayOverrideItem {
   id: SnowflakeId
   date: string
@@ -106,7 +100,6 @@ export interface DayOverrideItem {
   savedUnderlayHash: string
   savedUnderlaySource: ResolutionSource
 }
-
 export interface OverrideRevision {
   id: SnowflakeId
   calendarId: SnowflakeId
@@ -118,7 +111,6 @@ export interface OverrideRevision {
   version: number
   items: DayOverrideItem[]
 }
-
 export interface OverrideConflict {
   id: SnowflakeId
   overrideItemId: SnowflakeId
@@ -138,7 +130,6 @@ export interface OverrideConflict {
   resolvedBy: string | null
   resolutionRevisionId: SnowflakeId | null
 }
-
 export interface EventContent {
   title: string
   description: string | null
@@ -152,7 +143,6 @@ export interface EventContent {
   startOffset: string | null
   endOffset: string | null
 }
-
 export interface CalendarEvent {
   id: SnowflakeId
   calendarId: SnowflakeId
@@ -167,7 +157,6 @@ export interface CalendarEvent {
   contentHash: string
   content: EventContent
 }
-
 export interface ProjectionGrant {
   id: SnowflakeId
   calendarId: SnowflakeId
@@ -176,25 +165,21 @@ export interface ProjectionGrant {
   state: 'ACTIVE' | 'INACTIVE'
   version: number
 }
-
 export type DataImportTarget = 'SYSTEM_BASELINE' | 'MANAGED_OVERRIDE'
 export type DataImportState =
   'UPLOADED' | 'VALIDATED' | 'INVALID' | 'REVIEWED' | 'PUBLISHED' | 'REJECTED'
-
 export interface ImportValidationIssue {
   rowNumber: number
   column: string
   errorCode: string
   message: string
 }
-
 export interface ImportValidation {
   valid: boolean
   rowCount: number
   validatorVersion: string
   issues: ImportValidationIssue[]
 }
-
 export interface ImportDiffItem {
   date: string
   changeType: 'ADDED' | 'MODIFIED' | 'INHERITED' | 'UNCHANGED'
@@ -205,7 +190,6 @@ export interface ImportDiffItem {
   newClassification: string | null
   newName: string | null
 }
-
 export interface ImportDiff {
   added: number
   modified: number
@@ -215,7 +199,6 @@ export interface ImportDiff {
   targetContentHash: string
   items: ImportDiffItem[]
 }
-
 export interface DataImportRecord {
   id: SnowflakeId
   importKey: string
@@ -231,8 +214,18 @@ export interface DataImportRecord {
   documentPublishedOn: string | null
   sourceUri: string | null
   state: DataImportState
-  dataFile: { fileName: string; contentType: string; size: number; sha256: string }
-  evidenceFile: { fileName: string; contentType: string; size: number; sha256: string } | null
+  dataFile: {
+    fileName: string
+    contentType: string
+    size: number
+    sha256: string
+  }
+  evidenceFile: {
+    fileName: string
+    contentType: string
+    size: number
+    sha256: string
+  } | null
   normalizedPayloadHash: string | null
   validation: ImportValidation | null
   diff: ImportDiff | null
@@ -245,7 +238,6 @@ export interface DataImportRecord {
   publishedRevisionId: SnowflakeId | null
   version: number
 }
-
 export interface EventContentCommand {
   title: string
   description?: string
@@ -259,334 +251,471 @@ export interface EventContentCommand {
   startOffsetChoice?: 'EARLIER' | 'LATER'
   endOffsetChoice?: 'EARLIER' | 'LATER'
 }
-
-export function listCalendars(): Promise<CalendarRecord[]> {
-  return request<CalendarRecord[]>('/calendar/calendars')
+export function listCalendars(
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<CalendarRecord[]> {
+  return request<CalendarRecord[]>('/calendar/calendars', {
+    ...transport,
+  })
 }
-
 export function listDays(
   calendarId: SnowflakeId,
   from: string,
   to: string,
   includePersonal = true,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<EffectiveDay[]> {
   return request<EffectiveDay[]>('/calendar/days', {
-    query: { calendarId, from, to, includePersonal: String(includePersonal) },
+    ...{
+      query: { calendarId, from, to, includePersonal: String(includePersonal) },
+    },
+    ...transport,
   })
 }
-
 export function getDay(
   calendarId: SnowflakeId,
   date: string,
   includePersonal = true,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<EffectiveDay> {
   return request<EffectiveDay>(`/calendar/days/${date}`, {
-    query: { calendarId, includePersonal: String(includePersonal) },
+    ...{
+      query: { calendarId, includePersonal: String(includePersonal) },
+    },
+    ...transport,
   })
 }
-
-export function createCalendar(body: {
-  calendarKey: string
-  name: string
-  parentId: SnowflakeId
-  regionCode: string
-  zoneId: string
-}): Promise<CalendarRecord> {
-  return request<CalendarRecord>('/calendar/calendars', { method: 'POST', body })
+export function createCalendar(
+  body: {
+    calendarKey: string
+    name: string
+    parentId: SnowflakeId
+    regionCode: string
+    zoneId: string
+  },
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<CalendarRecord> {
+  return request<CalendarRecord>('/calendar/calendars', {
+    ...{ method: 'POST', body },
+    ...transport,
+  })
 }
-
 export function updateCalendar(
   calendar: CalendarRecord,
-  body: { name: string; parentId: SnowflakeId; zoneId: string; state: CalendarState },
+  body: {
+    name: string
+    parentId: SnowflakeId
+    zoneId: string
+    state: CalendarState
+  },
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarRecord> {
   return request<CalendarRecord>(`/calendar/calendars/${calendar.id}`, {
-    method: 'PUT',
-    body: { ...body, expectedVersion: calendar.version },
+    ...{
+      method: 'PUT',
+      body: { ...body, expectedVersion: calendar.version },
+    },
+    ...transport,
   })
 }
-
-export function archiveCalendar(calendarId: SnowflakeId): Promise<void> {
-  return request<void>(`/calendar/calendars/${calendarId}/archive`, { method: 'POST' })
+export function archiveCalendar(
+  calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
+  return request<void>(`/calendar/calendars/${calendarId}/archive`, {
+    ...{ method: 'POST' },
+    ...transport,
+  })
 }
-
 export function listMembers(
   calendarId: SnowflakeId,
   page = 1,
   size = 50,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<CalendarMember>> {
   return request<PageResult<CalendarMember>>(`/calendar/calendars/${calendarId}/members/page`, {
-    query: { page, size },
+    ...{
+      query: { page, size },
+    },
+    ...transport,
   })
 }
-
 export function saveMember(
   calendarId: SnowflakeId,
   userId: SnowflakeId,
   role: CalendarRole,
   expectedVersion: number,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarMember> {
   return request<CalendarMember>(`/calendar/calendars/${calendarId}/members/${userId}`, {
-    method: 'PUT',
-    body: { role, expectedVersion },
+    ...{
+      method: 'PUT',
+      body: { role, expectedVersion },
+    },
+    ...transport,
   })
 }
-
-export function removeMember(calendarId: SnowflakeId, userId: SnowflakeId): Promise<void> {
+export function removeMember(
+  calendarId: SnowflakeId,
+  userId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
   return request<void>(`/calendar/calendars/${calendarId}/members/${userId}`, {
-    method: 'DELETE',
+    ...{
+      method: 'DELETE',
+    },
+    ...transport,
   })
 }
-
 export function getPersonalOverride(
   calendarId: SnowflakeId,
   from: string,
   to: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<OverrideRevision | null> {
   return request<OverrideRevision | null>(`/calendar/calendars/${calendarId}/personal-overrides`, {
-    query: { from, to },
+    ...{
+      query: { from, to },
+    },
+    ...transport,
   })
 }
-
 export function savePersonalOverride(
   calendarId: SnowflakeId,
   date: string,
   expectedRevisionNo: number,
   operation: DayOverrideCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<OverrideRevision> {
   return request<OverrideRevision>(`/calendar/calendars/${calendarId}/personal-overrides/${date}`, {
-    method: 'PUT',
-    body: { expectedRevisionNo, operations: [operation] },
+    ...{
+      method: 'PUT',
+      body: { expectedRevisionNo, operations: [operation] },
+    },
+    ...transport,
   })
 }
-
 export function listPersonalConflicts(
   calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<OverrideConflict>> {
   return request<PageResult<OverrideConflict>>(
     `/calendar/calendars/${calendarId}/personal-override-conflicts/page`,
-    { query: { page: 1, size: 200 } },
+    {
+      ...{ query: { page: 1, size: 200 } },
+      ...transport,
+    },
   )
 }
-
 export function resolvePersonalConflict(
   calendarId: SnowflakeId,
   conflictId: SnowflakeId,
   resolution: ConflictResolution,
   expectedRevisionNo: number,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<OverrideConflict> {
   return request<OverrideConflict>(
     `/calendar/calendars/${calendarId}/personal-override-conflicts/${conflictId}/resolve`,
-    { method: 'POST', body: { resolution, expectedRevisionNo } },
+    {
+      ...{ method: 'POST', body: { resolution, expectedRevisionNo } },
+      ...transport,
+    },
   )
 }
-
-export function getManagedDraft(calendarId: SnowflakeId): Promise<OverrideRevision | null> {
+export function getManagedDraft(
+  calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<OverrideRevision | null> {
   return request<OverrideRevision | null>(
     `/calendar/calendars/${calendarId}/managed-overrides/draft`,
+    {
+      ...transport,
+    },
   )
 }
-
 export function listManagedRevisions(
   calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<OverrideRevision>> {
   return request<PageResult<OverrideRevision>>(
     `/calendar/calendars/${calendarId}/managed-overrides/revisions/page`,
-    { query: { page: 1, size: 200 } },
+    {
+      ...{ query: { page: 1, size: 200 } },
+      ...transport,
+    },
   )
 }
-
 export function saveManagedOverride(
   calendarId: SnowflakeId,
   date: string,
   expectedRevisionNo: number,
   operation: DayOverrideCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<OverrideRevision> {
   return request<OverrideRevision>(
     `/calendar/calendars/${calendarId}/managed-overrides/draft/days/${date}`,
-    { method: 'PUT', body: { expectedRevisionNo, operations: [operation] } },
+    {
+      ...{ method: 'PUT', body: { expectedRevisionNo, operations: [operation] } },
+      ...transport,
+    },
   )
 }
-
-export function discardManagedDraft(calendarId: SnowflakeId): Promise<void> {
+export function discardManagedDraft(
+  calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
   return request<void>(`/calendar/calendars/${calendarId}/managed-overrides/draft`, {
-    method: 'DELETE',
+    ...{
+      method: 'DELETE',
+    },
+    ...transport,
   })
 }
-
 export function listManagedConflicts(
   calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<OverrideConflict>> {
   return request<PageResult<OverrideConflict>>(
     `/calendar/calendars/${calendarId}/managed-override-conflicts/page`,
-    { query: { page: 1, size: 200 } },
+    {
+      ...{ query: { page: 1, size: 200 } },
+      ...transport,
+    },
   )
 }
-
 export function publishManagedOverride(
   calendarId: SnowflakeId,
   draft: OverrideRevision,
-  conflictResolutions: { conflictId: SnowflakeId; resolution: ConflictResolution }[],
+  conflictResolutions: {
+    conflictId: SnowflakeId
+    resolution: ConflictResolution
+  }[],
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<OverrideRevision> {
   return request<OverrideRevision>(
     `/calendar/calendars/${calendarId}/managed-overrides/draft/publish`,
     {
-      method: 'POST',
-      body: {
-        expectedDraftVersion: draft.version,
-        expectedContentHash: draft.contentHash,
-        conflictResolutions,
+      ...{
+        method: 'POST',
+        body: {
+          expectedDraftVersion: draft.version,
+          expectedContentHash: draft.contentHash,
+          conflictResolutions,
+        },
       },
+      ...transport,
     },
   )
 }
-
 export function withdrawManagedOverride(
   calendarId: SnowflakeId,
   revisionId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<void> {
   return request<void>(
     `/calendar/calendars/${calendarId}/managed-overrides/revisions/${revisionId}/withdraw`,
-    { method: 'POST' },
+    {
+      ...{ method: 'POST' },
+      ...transport,
+    },
   )
 }
-
 export function listPrivateEvents(
   calendarId: SnowflakeId,
   from: string,
   to: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<CalendarEvent>> {
   return request<PageResult<CalendarEvent>>('/calendar/events/page', {
-    query: { calendarId, from, to, page: 1, size: 200 },
+    ...{
+      query: { calendarId, from, to, page: 1, size: 200 },
+    },
+    ...transport,
   })
 }
-
 export function createPrivateEvent(
   calendarId: SnowflakeId,
   content: EventContentCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarEvent> {
   return request<CalendarEvent>('/calendar/events', {
-    method: 'POST',
-    body: { calendarId, content },
+    ...{
+      method: 'POST',
+      body: { calendarId, content },
+    },
+    ...transport,
   })
 }
-
 export function updatePrivateEvent(
   event: CalendarEvent,
   content: EventContentCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarEvent> {
   return request<CalendarEvent>(`/calendar/events/${event.id}`, {
-    method: 'PUT',
-    body: { calendarId: event.calendarId, expectedVersion: event.version, content },
+    ...{
+      method: 'PUT',
+      body: { calendarId: event.calendarId, expectedVersion: event.version, content },
+    },
+    ...transport,
   })
 }
-
-export function deletePrivateEvent(eventId: SnowflakeId): Promise<void> {
-  return request<void>(`/calendar/events/${eventId}`, { method: 'DELETE' })
+export function deletePrivateEvent(
+  eventId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
+  return request<void>(`/calendar/events/${eventId}`, {
+    ...{ method: 'DELETE' },
+    ...transport,
+  })
 }
-
-export function listManagedEvents(calendarId: SnowflakeId): Promise<PageResult<CalendarEvent>> {
+export function listManagedEvents(
+  calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<PageResult<CalendarEvent>> {
   return request<PageResult<CalendarEvent>>(
     `/calendar/calendars/${calendarId}/managed-events/page`,
-    { query: { page: 1, size: 200 } },
+    {
+      ...{ query: { page: 1, size: 200 } },
+      ...transport,
+    },
   )
 }
-
 export function createManagedEvent(
   calendarId: SnowflakeId,
   content: EventContentCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarEvent> {
   return request<CalendarEvent>(`/calendar/calendars/${calendarId}/managed-events`, {
-    method: 'POST',
-    body: { content },
+    ...{
+      method: 'POST',
+      body: { content },
+    },
+    ...transport,
   })
 }
-
 export function saveManagedEventDraft(
   calendarId: SnowflakeId,
   event: CalendarEvent,
   content: EventContentCommand,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarEvent> {
   return request<CalendarEvent>(
     `/calendar/calendars/${calendarId}/managed-events/${event.id}/draft`,
     {
-      method: 'PUT',
-      body: {
-        expectedDraftVersion: event.revisionState === 'DRAFT' ? event.revisionVersion : 0,
-        content,
+      ...{
+        method: 'PUT',
+        body: {
+          expectedDraftVersion: event.revisionState === 'DRAFT' ? event.revisionVersion : 0,
+          content,
+        },
       },
+      ...transport,
     },
   )
 }
-
 export function discardManagedEventDraft(
   calendarId: SnowflakeId,
   eventId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<void> {
   return request<void>(`/calendar/calendars/${calendarId}/managed-events/${eventId}/draft`, {
-    method: 'DELETE',
+    ...{
+      method: 'DELETE',
+    },
+    ...transport,
   })
 }
-
 export function publishManagedEvent(
   calendarId: SnowflakeId,
   event: CalendarEvent,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<CalendarEvent> {
   return request<CalendarEvent>(
     `/calendar/calendars/${calendarId}/managed-events/${event.id}/publish`,
     {
-      method: 'POST',
-      body: {
-        expectedDraftVersion: event.revisionVersion,
-        expectedContentHash: event.contentHash,
+      ...{
+        method: 'POST',
+        body: {
+          expectedDraftVersion: event.revisionVersion,
+          expectedContentHash: event.contentHash,
+        },
       },
+      ...transport,
     },
   )
 }
-
-export function withdrawManagedEvent(calendarId: SnowflakeId, eventId: SnowflakeId): Promise<void> {
+export function withdrawManagedEvent(
+  calendarId: SnowflakeId,
+  eventId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
   return request<void>(`/calendar/calendars/${calendarId}/managed-events/${eventId}/withdraw`, {
-    method: 'POST',
+    ...{
+      method: 'POST',
+    },
+    ...transport,
   })
 }
-
-export function cancelManagedEvent(calendarId: SnowflakeId, eventId: SnowflakeId): Promise<void> {
+export function cancelManagedEvent(
+  calendarId: SnowflakeId,
+  eventId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
   return request<void>(`/calendar/calendars/${calendarId}/managed-events/${eventId}/cancel`, {
-    method: 'POST',
+    ...{
+      method: 'POST',
+    },
+    ...transport,
   })
 }
-
-export function listProjectionGrants(calendarId: SnowflakeId): Promise<ProjectionGrant[]> {
-  return request<ProjectionGrant[]>(`/calendar/calendars/${calendarId}/projection-grants`)
+export function listProjectionGrants(
+  calendarId: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<ProjectionGrant[]> {
+  return request<ProjectionGrant[]>(`/calendar/calendars/${calendarId}/projection-grants`, {
+    ...transport,
+  })
 }
-
 export function saveProjectionGrant(
   calendarId: SnowflakeId,
   sourceSystem: string,
   publishMode: ProjectionGrant['publishMode'],
   expectedVersion: number,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<ProjectionGrant> {
   return request<ProjectionGrant>(
     `/calendar/calendars/${calendarId}/projection-grants/${encodeURIComponent(sourceSystem)}`,
-    { method: 'PUT', body: { publishMode, expectedVersion } },
+    {
+      ...{ method: 'PUT', body: { publishMode, expectedVersion } },
+      ...transport,
+    },
   )
 }
-
 export function removeProjectionGrant(
   calendarId: SnowflakeId,
   sourceSystem: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<void> {
   return request<void>(
     `/calendar/calendars/${calendarId}/projection-grants/${encodeURIComponent(sourceSystem)}`,
-    { method: 'DELETE' },
+    {
+      ...{ method: 'DELETE' },
+      ...transport,
+    },
   )
 }
-
-export function listDataImports(page = 1, size = 50): Promise<PageResult<DataImportRecord>> {
+export function listDataImports(
+  page = 1,
+  size = 50,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<PageResult<DataImportRecord>> {
   return request<PageResult<DataImportRecord>>('/calendar/data-imports/page', {
-    query: { page, size },
+    ...{
+      query: { page, size },
+    },
+    ...transport,
   })
 }
-
 export function uploadDataImport(
   metadata: {
     importKey: string
@@ -604,71 +733,101 @@ export function uploadDataImport(
   },
   dataFile: File,
   evidenceFile?: File,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<DataImportRecord> {
   const form = new FormData()
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
   form.append('dataFile', dataFile)
   if (evidenceFile) form.append('evidenceFile', evidenceFile)
-  return request<DataImportRecord>('/calendar/data-imports', { method: 'POST', body: form })
+  return request<DataImportRecord>('/calendar/data-imports', {
+    ...{ method: 'POST', body: form },
+    ...transport,
+  })
 }
-
-export function validateDataImport(id: SnowflakeId): Promise<DataImportRecord> {
-  return request<DataImportRecord>(`/calendar/data-imports/${id}/validate`, { method: 'POST' })
+export function validateDataImport(
+  id: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<DataImportRecord> {
+  return request<DataImportRecord>(`/calendar/data-imports/${id}/validate`, {
+    ...{ method: 'POST' },
+    ...transport,
+  })
 }
-
-export function getDataImportDiff(id: SnowflakeId): Promise<ImportDiff> {
-  return request<ImportDiff>(`/calendar/data-imports/${id}/diff`)
+export function getDataImportDiff(
+  id: SnowflakeId,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<ImportDiff> {
+  return request<ImportDiff>(`/calendar/data-imports/${id}/diff`, {
+    ...transport,
+  })
 }
-
 export function reviewDataImport(
   value: DataImportRecord,
   reviewNote: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<DataImportRecord> {
   return request<DataImportRecord>(`/calendar/data-imports/${value.id}/review`, {
-    method: 'POST',
-    body: {
-      expectedVersion: value.version,
-      expectedDataFileSha256: value.dataFile.sha256,
-      expectedNormalizedPayloadHash: value.normalizedPayloadHash,
-      sourceAttested: true,
-      reviewNote,
+    ...{
+      method: 'POST',
+      body: {
+        expectedVersion: value.version,
+        expectedDataFileSha256: value.dataFile.sha256,
+        expectedNormalizedPayloadHash: value.normalizedPayloadHash,
+        sourceAttested: true,
+        reviewNote,
+      },
     },
+    ...transport,
   })
 }
-
 export function publishDataImport(
   value: DataImportRecord,
   diff: ImportDiff,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<DataImportRecord> {
   return request<DataImportRecord>(`/calendar/data-imports/${value.id}/publish`, {
-    method: 'POST',
-    body: {
-      expectedVersion: value.version,
-      expectedNormalizedPayloadHash: value.normalizedPayloadHash,
-      expectedTargetContentHash: diff.targetContentHash,
+    ...{
+      method: 'POST',
+      body: {
+        expectedVersion: value.version,
+        expectedNormalizedPayloadHash: value.normalizedPayloadHash,
+        expectedTargetContentHash: diff.targetContentHash,
+      },
     },
+    ...transport,
   })
 }
-
 export function rejectDataImport(
   value: DataImportRecord,
   reviewNote: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<DataImportRecord> {
   return request<DataImportRecord>(`/calendar/data-imports/${value.id}/reject`, {
-    method: 'POST',
-    body: { expectedVersion: value.version, reviewNote },
+    ...{
+      method: 'POST',
+      body: { expectedVersion: value.version, reviewNote },
+    },
+    ...transport,
   })
 }
-
 export function downloadDataImportTemplate(
   targetType: DataImportTarget,
   year: number,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<Blob> {
   return rawRequest<Blob>('/calendar/data-imports/template', 'blob', {
-    query: { targetType, year },
+    ...{
+      query: { targetType, year },
+    },
+    ...transport,
   })
 }
-
-export function downloadDataImportFile(id: SnowflakeId, type: 'data' | 'evidence'): Promise<Blob> {
-  return rawRequest<Blob>(`/calendar/data-imports/${id}/files/${type}`, 'blob')
+export function downloadDataImportFile(
+  id: SnowflakeId,
+  type: 'data' | 'evidence',
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<Blob> {
+  return rawRequest<Blob>(`/calendar/data-imports/${id}/files/${type}`, 'blob', {
+    ...transport,
+  })
 }

@@ -18,19 +18,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (tokens && !meLoaded) {
-      void ensureMe().catch(() => {
-        // token 失效等：client 层 40100 已负责登出跳转；此处兜底清理
-        useAuthStore.getState().clearSession()
-      })
+      // The store owns sequence-bound failure handling; an old effect cannot clear a new user.
+      void ensureMe().catch(() => {})
     }
   }, [tokens, meLoaded, ensureMe])
 
   useEffect(() => {
     if (!tokens || !meLoaded) return
     const refreshIdentity = () => {
-      void ensureMe().catch(() => {
-        useAuthStore.getState().clearSession()
-      })
+      void ensureMe().catch(() => {})
     }
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') refreshIdentity()

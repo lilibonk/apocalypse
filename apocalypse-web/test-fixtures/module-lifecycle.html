@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Optional module lifecycle — isolated browser tests</title>
+  </head>
+  <body>
+    <main class="mx-auto max-w-5xl space-y-6 p-6">
+      <h1 class="text-xl font-semibold">模块生命周期 · 隔离浏览器测试</h1>
+      <p>仅使用本页生成的测试身份和内存响应，不连接业务服务。</p>
+      <pre
+        id="status"
+        role="status"
+        class="whitespace-pre-wrap rounded-lg border border-border p-4"
+      >
+RUNNING</pre>
+      <div id="root"></div>
+    </main>
+    <script type="module" src="/src/lib/query/__fixtures__/module-lifecycle.browser.tsx"></script>
+  </body>
+</html>

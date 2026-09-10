@@ -15,6 +15,7 @@ vi.mock('@/lib/api/auth', () => ({
 }))
 
 import { queryClient } from '@/app/query-client'
+import { accessLifecycle } from '@/lib/query/access-lease'
 
 import { useAuthStore } from './auth'
 
@@ -32,6 +33,7 @@ describe('auth logout state machine', () => {
     logoutRequest.mockReset()
     refreshRequest.mockReset()
     queryClient.clear()
+    accessLifecycle.reset(0, queryClient)
     useAuthStore.setState({
       tokens,
       user: null,
@@ -143,7 +145,7 @@ describe('auth logout state machine', () => {
     expect(useAuthStore.getState().tokens).toBeNull()
   })
 
-  it('refresh 成功后先清空旧身份能力并强制重新读取 me', async () => {
+  it('refresh 成功后必须完成 me 才恢复授权，身份代次不因令牌旋转而改变', async () => {
     const refreshed = { ...tokens, accessToken: 'refreshed-access' }
     useAuthStore.setState({
       user: { id: '1', username: 'admin', nickname: '管理员' },
@@ -153,17 +155,24 @@ describe('auth logout state machine', () => {
       meLoaded: true,
     })
     refreshRequest.mockResolvedValue(refreshed)
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '1', username: 'admin', nickname: '管理员' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
 
     await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(true)
 
     expect(refreshRequest).toHaveBeenCalledWith('refresh')
     expect(useAuthStore.getState()).toMatchObject({
       tokens: refreshed,
-      user: null,
+      user: { id: '1' },
       roles: [],
       perms: [],
       menus: [],
-      meLoaded: false,
+      meLoaded: true,
+      sessionEpoch: 0,
     })
   })
 
@@ -192,6 +201,79 @@ describe('auth logout state machine', () => {
     await useAuthStore.getState().ensureMe()
 
     expect(useAuthStore.getState().menus[0]?.moduleKey).toBe('calendar')
+    expect(useAuthStore.getState().meLoaded).toBe(true)
+  })
+
+  it.each(['success', 'failure'])('同账户旧 me %s 不覆盖较新撤权快照', async (outcome) => {
+    let resolve!: (value: unknown) => void
+    let reject!: (error: Error) => void
+    const stale = new Promise((yes, no) => {
+      resolve = yes
+      reject = no
+    })
+    const me = { user: { id: '1', username: 'admin' }, roles: [], perms: [], menus: [] }
+    fetchCurrentUserRequest.mockReturnValueOnce(stale).mockResolvedValueOnce(me)
+    const first = useAuthStore.getState().ensureMe()
+    await useAuthStore.getState().ensureMe()
+    if (outcome === 'success') resolve({ ...me, perms: ['withdrawn'] })
+    else reject(new Error('old failure'))
+    await first
+    expect(useAuthStore.getState().tokens).toEqual(tokens)
+    expect(useAuthStore.getState().perms).toEqual([])
+    expect(useAuthStore.getState().meLoaded).toBe(true)
+  })
+
+  it('旧登录与迟到登出不能覆盖后发登录', async () => {
+    let finishOldLogin!: (value: typeof tokens) => void
+    let finishLogout!: () => void
+    loginRequest
+      .mockReturnValueOnce(
+        new Promise((done) => {
+          finishOldLogin = done
+        }),
+      )
+      .mockResolvedValueOnce({ ...tokens, accessToken: 'new-account' })
+    logoutRequest.mockReturnValueOnce(
+      new Promise<void>((done) => {
+        finishLogout = done
+      }),
+    )
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    const oldLogin = useAuthStore.getState().login('old', 'secret')
+    const oldLogout = useAuthStore.getState().logout()
+    await useAuthStore.getState().login('new', 'secret')
+    finishOldLogin(tokens)
+    finishLogout()
+    await Promise.all([oldLogin, oldLogout])
+    expect(useAuthStore.getState().tokens?.accessToken).toBe('new-account')
+    expect(useAuthStore.getState().user?.id).toBe('2')
+  })
+
+  it('并发刷新只消费一次 refreshToken，并等待 me 完成', async () => {
+    let finishRefresh!: (value: typeof tokens) => void
+    refreshRequest.mockReturnValueOnce(
+      new Promise((done) => {
+        finishRefresh = done
+      }),
+    )
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '1' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    const first = useAuthStore.getState().tryRefresh()
+    const second = useAuthStore.getState().tryRefresh()
+    expect(refreshRequest).toHaveBeenCalledOnce()
+    expect(useAuthStore.getState().meLoaded).toBe(false)
+    finishRefresh({ ...tokens, accessToken: 'refreshed' })
+    expect(await Promise.all([first, second])).toEqual([true, true])
+    expect(fetchCurrentUserRequest).toHaveBeenCalledOnce()
     expect(useAuthStore.getState().meLoaded).toBe(true)
   })
 })

@@ -53,5 +53,5 @@ export function logout(): Promise<void> {
 
 /** 当前登录用户视图（用户/角色/权限/菜单树）。 */
 export function fetchCurrentUser(): Promise<CurrentUser> {
-  return request<CurrentUser>('/system/users/me')
+  return request<CurrentUser>('/system/users/me', { noRefresh: true })
 }

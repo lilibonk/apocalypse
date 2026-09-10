@@ -1,7 +1,11 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /** 可见日程包含本人私人项与已发布托管项，只有私人项可在此编辑；平台管理员不穿透所有权。 */
 
 import { DatePicker } from '@/components/ui/date-picker'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,15 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 
-import {
-  createPrivateEvent,
-  deletePrivateEvent,
-  listCalendars,
-  listPrivateEvents,
-  updatePrivateEvent,
-  type CalendarEvent,
-  type EventContentCommand,
-} from '../calendar.api'
+import type { CalendarEvent, EventContentCommand } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
@@ -39,7 +35,7 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-export default function PrivateEventsPage() {
+function PrivateEventsPage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const initialRange = monthRange(currentMonth())
@@ -48,39 +44,50 @@ export default function PrivateEventsPage() {
   const [to, setTo] = useState(initialRange.to)
   const [editor, setEditor] = useState<CalendarEvent | 'new' | null>(null)
 
-  const calendarsQuery = useQuery({
-    queryKey: ['calendar', 'contexts'],
-    queryFn: listCalendars,
-  })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const calendarId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
-  const eventsQuery = useQuery({
-    queryKey: ['calendar', 'private-events', calendarId, from, to],
-    queryFn: () => listPrivateEvents(calendarId, from, to),
-    enabled: calendarId !== '' && from !== '' && to >= from,
-  })
+  const eventsQuery = useQuery(
+    calendarQueries.privateEvents(
+      { calendarId: calendarId, from: from, to: to },
+      calendarId !== '' && from !== '' && to >= from,
+    ),
+  )
 
   const selectedCalendar = calendarsQuery.data?.find((calendar) => calendar.id === calendarId)
-  const mutation = useMutation({
-    mutationFn: (content: EventContentCommand) =>
+  const onDenied = useCalendarDenial(calendarId, [calendarsQuery.error, eventsQuery.error], () => {
+    setCalendarSelection('')
+    setEditor(null)
+  })
+
+  const mutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, editor, from, to]),
+    mutationFn: (run, content: EventContentCommand) =>
       editor === 'new'
-        ? createPrivateEvent(calendarId, content)
+        ? run(calendarOperations.createPrivateEvent, calendarId, content)
         : editor
-          ? updatePrivateEvent(editor, content)
+          ? run(calendarOperations.updatePrivateEvent, editor, content)
           : Promise.reject(new Error(t('privateEvents.selectionRequired'))),
     onSuccess: () => {
       toast.success(editor === 'new' ? t('privateEvents.created') : t('privateEvents.updated'))
       setEditor(null)
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'private-events', calendarId] })
+      void queryClient.invalidateQueries(
+        calendarQueries.privateEvents.filter({ calendarId: calendarId }),
+      )
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
-  const deleteMutation = useMutation({
-    mutationFn: deletePrivateEvent,
+  const deleteMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, editor, from, to]),
+    mutationFn: (run, id: string) => run(calendarOperations.deletePrivateEvent, id),
     onSuccess: () => {
       toast.success(t('privateEvents.deleted'))
-      void queryClient.invalidateQueries({ queryKey: ['calendar', 'private-events', calendarId] })
+      void queryClient.invalidateQueries(
+        calendarQueries.privateEvents.filter({ calendarId: calendarId }),
+      )
     },
     onError: (error) => toast.error(toErrorMessage(error)),
   })
@@ -237,3 +244,8 @@ function eventTimeText(event: CalendarEvent, allDayRange: string): string {
     ? allDayRange
     : `${event.content.startLocal} ${event.content.startOffset ?? ''} → ${event.content.endLocal} ${event.content.endOffset ?? ''}`
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={PrivateEventsPage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

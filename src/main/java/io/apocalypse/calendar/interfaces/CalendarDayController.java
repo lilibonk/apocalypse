@@ -9,7 +9,6 @@ import io.apocalypse.framework.security.SecurityUtils;
 import java.time.LocalDate;
 import java.util.List;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,10 +25,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/calendar")
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class CalendarDayController {
 
   private final DateQueryService dateQueryService;

@@ -2,7 +2,6 @@
  * 路由装配：/login 公开，其余经 RequireAuth + AppLayout；业务路由由菜单树动态生成。
  */
 
-import { useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useMemo } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -35,7 +34,6 @@ function ProtectedRoutes() {
   const retainAllowed = useTabsStore((state) => state.retainAllowed)
   const location = useLocation()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const allowedPaths = useMemo(
     () => [DASHBOARD_TAB.key, ...flattenMenuRoutes(menus).map((route) => route.path)],
@@ -43,11 +41,11 @@ function ProtectedRoutes() {
   )
 
   useEffect(() => {
-    if (reconcileMenuAccess(menus, allowedPaths, location.pathname, queryClient, retainAllowed)) {
+    if (reconcileMenuAccess(allowedPaths, location.pathname, retainAllowed)) {
       toast.info(t('route.unavailable'), { id: 'route-unavailable', duration: 8000 })
       void navigate(DASHBOARD_TAB.key, { replace: true })
     }
-  }, [allowedPaths, location.pathname, menus, navigate, queryClient, retainAllowed, t])
+  }, [allowedPaths, location.pathname, navigate, retainAllowed, t])
 
   return (
     <Routes>

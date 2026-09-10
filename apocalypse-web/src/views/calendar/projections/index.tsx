@@ -1,7 +1,11 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import { calendarScope, calendarQueries, calendarOperations } from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /** 投影授权是来源系统 × 目标日历的范围能力管理，使用专用列表与幂等模式说明。 */
 
 import { FieldSelect, FieldOption } from '@/components/ui/field-select'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,13 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-import {
-  listCalendars,
-  listProjectionGrants,
-  removeProjectionGrant,
-  saveProjectionGrant,
-  type ProjectionGrant,
-} from '../calendar.api'
+import type { ProjectionGrant } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
@@ -31,17 +29,14 @@ import {
 import { toErrorMessage } from '../calendar.format'
 import { CalendarConfirm } from '../calendar-confirm'
 
-export default function ProjectionGrantPage() {
+function ProjectionGrantPage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const [calendarSelection, setCalendarSelection] = useState('')
   const [sourceSystem, setSourceSystem] = useState('')
   const [publishMode, setPublishMode] = useState<ProjectionGrant['publishMode']>('DRAFT_ONLY')
 
-  const calendarsQuery = useQuery({
-    queryKey: ['calendar', 'contexts'],
-    queryFn: listCalendars,
-  })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const publisherCalendars = useMemo(
     () =>
       (calendarsQuery.data ?? []).filter(
@@ -52,25 +47,36 @@ export default function ProjectionGrantPage() {
   const calendarId = publisherCalendars.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (publisherCalendars[0]?.id ?? '')
-  const grantsQuery = useQuery({
-    queryKey: ['calendar', 'projection-grants', calendarId],
-    queryFn: () => listProjectionGrants(calendarId),
-    enabled: calendarId !== '',
+  const grantsQuery = useQuery(
+    calendarQueries.projectionGrants({ calendarId: calendarId }, calendarId !== ''),
+  )
+  const onDenied = useCalendarDenial(calendarId, [calendarsQuery.error, grantsQuery.error], () => {
+    setCalendarSelection('')
+    setSourceSystem('')
+    setPublishMode('DRAFT_ONLY')
   })
+
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'contexts'] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'projection-grants', calendarId] })
+    void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
+    void queryClient.invalidateQueries(
+      calendarQueries.projectionGrants.filter({ calendarId: calendarId }),
+    )
   }
-  const saveMutation = useMutation({
-    mutationFn: ({
-      source,
-      mode,
-      expectedVersion,
-    }: {
-      source: string
-      mode: ProjectionGrant['publishMode']
-      expectedVersion: number
-    }) => saveProjectionGrant(calendarId, source, mode, expectedVersion),
+  const saveMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId]),
+    mutationFn: (
+      run,
+      {
+        source,
+        mode,
+        expectedVersion,
+      }: {
+        source: string
+        mode: ProjectionGrant['publishMode']
+        expectedVersion: number
+      },
+    ) => run(calendarOperations.saveProjectionGrant, calendarId, source, mode, expectedVersion),
     onSuccess: () => {
       toast.success(t('projections.saved'))
       setSourceSystem('')
@@ -81,8 +87,11 @@ export default function ProjectionGrantPage() {
       invalidate()
     },
   })
-  const removeMutation = useMutation({
-    mutationFn: (source: string) => removeProjectionGrant(calendarId, source),
+  const removeMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId]),
+    mutationFn: (run, source: string) =>
+      run(calendarOperations.removeProjectionGrant, calendarId, source),
     onSuccess: () => {
       toast.success(t('projections.disabled'))
       invalidate()
@@ -247,3 +256,8 @@ export default function ProjectionGrantPage() {
     </CalendarPageFrame>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={ProjectionGrantPage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

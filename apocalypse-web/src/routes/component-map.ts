@@ -10,7 +10,9 @@
  * 由 schema 渲染器接管；本映射表仅保留越出标准模式的页面。
  */
 
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import { createElement, lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { ModuleScope } from '@/lib/query/module-scope'
 
 type PageComponent = ComponentType | LazyExoticComponent<ComponentType>
 
@@ -26,9 +28,29 @@ const EXPLICIT_MAP: Record<string, PageComponent> = {
 }
 
 /** 约定兜底：views 目录全量 glob（懒加载 chunk）。 */
-const PAGE_GLOBS = import.meta.glob<{ default: ComponentType }>('../views/**/index.tsx')
+const PAGE_GLOBS = import.meta.glob<PageModule>('../views/**/index.tsx')
 
-function resolveByConvention(component: string): PageComponent | null {
+interface PageModule {
+  default: ComponentType
+  queryScope?: ModuleScope
+}
+
+function ModuleNotInstalled() {
+  const { t } = useTranslation()
+  return createElement(
+    'p',
+    { role: 'status', className: 'p-6 text-muted-foreground' },
+    t('route.notInstalled'),
+  )
+}
+
+export function matchesPageScope(page: PageModule, moduleKey: string | null): boolean {
+  return (page.queryScope?.moduleKey ?? null) === moduleKey
+}
+
+const resolvedPages = new Map<string, PageComponent>()
+
+function resolveByConvention(component: string, moduleKey: string | null): PageComponent | null {
   const normalized = component.replace(/^\/+|\/+$/g, '')
   const candidates = [
     `../views/${normalized}/index.tsx`,
@@ -36,14 +58,31 @@ function resolveByConvention(component: string): PageComponent | null {
   ]
   for (const key of candidates) {
     const loader = PAGE_GLOBS[key]
-    if (loader) return lazy(loader)
+    if (loader)
+      return lazy(async () => {
+        const page = await loader()
+        return matchesPageScope(page, moduleKey) ? page : { default: ModuleNotInstalled }
+      })
   }
   return null
 }
 
 /** 解析 component 字符串；未命中返回 null（路由层落 404 占位）。 */
-export function resolvePageComponent(component: string | null): PageComponent | null {
+export function resolvePageComponent(
+  component: string | null,
+  moduleKey: string | null = null,
+): PageComponent | null {
   if (!component) return null
   const normalized = component.replace(/^\/+|\/+$/g, '')
-  return EXPLICIT_MAP[normalized] ?? resolveByConvention(normalized)
+  const cacheKey = JSON.stringify([normalized, moduleKey])
+  const cached = resolvedPages.get(cacheKey)
+  if (cached) return cached
+  const explicit = EXPLICIT_MAP[normalized]
+  const page = explicit
+    ? moduleKey === null
+      ? explicit
+      : null
+    : resolveByConvention(normalized, moduleKey)
+  if (page) resolvedPages.set(cacheKey, page)
+  return page
 }

@@ -1,8 +1,17 @@
+import { ModuleAccess } from '@/lib/query/ModuleAccess'
+export { calendarScope as queryScope } from '../calendar.queries'
+import {
+  calendarScope,
+  calendarQueries,
+  calendarOperations,
+  calendarFilters,
+} from '../calendar.queries'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
 /** 托管覆盖包含草稿、不可变修订、逐项冲突决策与发布 Gate，使用手写状态机工作台。 */
 
 import { FieldSelect, FieldOption } from '@/components/ui/field-select'
 import { DatePicker } from '@/components/ui/date-picker'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Save, Send, Trash2, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,18 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-import {
-  discardManagedDraft,
-  getManagedDraft,
-  getDay,
-  listCalendars,
-  listManagedConflicts,
-  listManagedRevisions,
-  publishManagedOverride,
-  saveManagedOverride,
-  withdrawManagedOverride,
-  type ConflictResolution,
-} from '../calendar.api'
+import type { ConflictResolution } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarTrace,
@@ -51,7 +49,7 @@ function today(): string {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
-export default function ManagedOverridePage() {
+function ManagedOverridePage() {
   const { t } = useTranslation('calendar')
   const queryClient = useQueryClient()
   const [calendarSelection, setCalendarSelection] = useState('')
@@ -60,10 +58,7 @@ export default function ManagedOverridePage() {
   const operation = buildDayOverride(input)
   const [decisions, setDecisions] = useState<Record<string, ConflictResolution | ''>>({})
 
-  const calendarsQuery = useQuery({
-    queryKey: ['calendar', 'contexts'],
-    queryFn: listCalendars,
-  })
+  const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const managedCalendars = useMemo(
     () =>
       (calendarsQuery.data ?? []).filter(
@@ -76,27 +71,38 @@ export default function ManagedOverridePage() {
   const calendarId = managedCalendars.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (managedCalendars[0]?.id ?? '')
-  const draftQuery = useQuery({
-    queryKey: ['calendar', 'managed-overrides', calendarId, 'draft'],
-    queryFn: () => getManagedDraft(calendarId),
-    enabled: calendarId !== '',
-  })
-  const revisionsQuery = useQuery({
-    queryKey: ['calendar', 'managed-overrides', calendarId, 'revisions'],
-    queryFn: () => listManagedRevisions(calendarId),
-    enabled: calendarId !== '',
-  })
-  const conflictsQuery = useQuery({
-    queryKey: ['calendar', 'managed-conflicts', calendarId],
-    queryFn: () => listManagedConflicts(calendarId),
-    enabled: calendarId !== '',
-  })
+  const draftQuery = useQuery(
+    calendarQueries.managedDraft({ calendarId: calendarId }, calendarId !== ''),
+  )
+  const revisionsQuery = useQuery(
+    calendarQueries.managedRevisions({ calendarId: calendarId }, calendarId !== ''),
+  )
+  const conflictsQuery = useQuery(
+    calendarQueries.managedConflicts({ calendarId: calendarId }, calendarId !== ''),
+  )
 
-  const dayQuery = useQuery({
-    queryKey: ['calendar', 'day', calendarId, date, 'managed'],
-    queryFn: () => getDay(calendarId, date, false),
-    enabled: calendarId !== '' && date !== '',
-  })
+  const dayQuery = useQuery(
+    calendarQueries.day(
+      { calendarId: calendarId, date: date, includePersonal: false },
+      calendarId !== '' && date !== '',
+    ),
+  )
+
+  const onDenied = useCalendarDenial(
+    calendarId,
+    [
+      calendarsQuery.error,
+      draftQuery.error,
+      revisionsQuery.error,
+      conflictsQuery.error,
+      dayQuery.error,
+    ],
+    () => {
+      setCalendarSelection('')
+      setInput(emptyOverrideInput())
+      setDecisions({})
+    },
+  )
 
   const published = revisionsQuery.data?.list.find((revision) => revision.state === 'PUBLISHED')
   const expectedRevisionNo = draftQuery.data?.revisionNo ?? published?.revisionNo ?? 0
@@ -108,16 +114,26 @@ export default function ManagedOverridePage() {
   const decisionsComplete = openConflicts.every((conflict) => decisions[conflict.id])
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'contexts'] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'managed-overrides', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'managed-conflicts', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'day', calendarId] })
-    void queryClient.invalidateQueries({ queryKey: ['calendar', 'days', calendarId] })
+    void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
+    void queryClient.invalidateQueries(calendarFilters.managedOverrides({ calendarId: calendarId }))
+    void queryClient.invalidateQueries(
+      calendarQueries.managedConflicts.filter({ calendarId: calendarId }),
+    )
+    void queryClient.invalidateQueries(calendarQueries.day.filter({ calendarId: calendarId }))
+    void queryClient.invalidateQueries(calendarQueries.days.filter({ calendarId: calendarId }))
   }
-  const saveMutation = useMutation({
-    mutationFn: () => {
+  const saveMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, date, input, decisions]),
+    mutationFn: (run) => {
       if (!operation) throw new Error(t('overrideEditor.invalid'))
-      return saveManagedOverride(calendarId, date, expectedRevisionNo, operation)
+      return run(
+        calendarOperations.saveManagedOverride,
+        calendarId,
+        date,
+        expectedRevisionNo,
+        operation,
+      )
     },
     onSuccess: () => {
       toast.success(t('managedOverrides.saved'))
@@ -128,8 +144,10 @@ export default function ManagedOverridePage() {
       invalidate()
     },
   })
-  const discardMutation = useMutation({
-    mutationFn: () => discardManagedDraft(calendarId),
+  const discardMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, date, input, decisions]),
+    mutationFn: (run) => run(calendarOperations.discardManagedDraft, calendarId),
     onSuccess: () => {
       toast.success(t('managedOverrides.discarded'))
       invalidate()
@@ -139,11 +157,14 @@ export default function ManagedOverridePage() {
       invalidate()
     },
   })
-  const publishMutation = useMutation({
-    mutationFn: () => {
+  const publishMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, date, input, decisions]),
+    mutationFn: (run) => {
       const draft = draftQuery.data
       if (!draft) throw new Error(t('managedOverrides.noDraft'))
-      return publishManagedOverride(
+      return run(
+        calendarOperations.publishManagedOverride,
         calendarId,
         draft,
         openConflicts.map((conflict) => ({
@@ -161,8 +182,11 @@ export default function ManagedOverridePage() {
       invalidate()
     },
   })
-  const withdrawMutation = useMutation({
-    mutationFn: (revisionId: string) => withdrawManagedOverride(calendarId, revisionId),
+  const withdrawMutation = useModuleMutation(calendarScope, {
+    onDenied,
+    localKey: JSON.stringify([calendarId, date, input, decisions]),
+    mutationFn: (run, revisionId: string) =>
+      run(calendarOperations.withdrawManagedOverride, calendarId, revisionId),
     onSuccess: () => {
       toast.success(t('managedOverrides.withdrawn'))
       invalidate()
@@ -513,3 +537,8 @@ export default function ManagedOverridePage() {
     </CalendarPageFrame>
   )
 }
+
+export default function CalendarModulePage() {
+  return <ModuleAccess scope={calendarScope} component={ManagedOverridePage} />
+}
+import { useCalendarDenial } from '../use-calendar-denial'

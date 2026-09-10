@@ -12,11 +12,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CalendarCapabilityGuard {
 
+  public static final String MODULE_KEY = "calendar";
+
   private final CapabilityRegistry capabilityRegistry;
 
   public void requireEnabled() {
     CalendarErrorCode error = CalendarErrorCode.CALENDAR_DISABLED;
-    capabilityRegistry.requireEnabled(
-        CapabilityRegistry.CALENDAR, error.getCode(), error.getMessage());
+    capabilityRegistry.requireEnabled(MODULE_KEY, error.getCode(), error.getMessage());
   }
 }

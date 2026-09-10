@@ -10,7 +10,6 @@ import io.apocalypse.framework.security.SecurityUtils;
 
 import java.time.LocalDate;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -28,10 +27,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/calendar/calendars/{calendarId}/personal-overrides")
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class PersonalOverrideController {
 
   private final PersonalOverrideService personalOverrideService;

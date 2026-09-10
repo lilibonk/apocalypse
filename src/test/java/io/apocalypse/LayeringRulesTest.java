@@ -96,7 +96,7 @@ class LayeringRulesTest {
   static final ArchRule R4_COMPLEX_MODULE_DOMAINS_ARE_PURE =
       noClasses()
           .that()
-          .resideInAnyPackage("io.apocalypse.order.domain..", "io.apocalypse.calendar.domain..")
+          .resideInAnyPackage("io.apocalypse.calendar.domain..")
           .should()
           .dependOnClassesThat()
           .resideInAnyPackage(
@@ -111,7 +111,6 @@ class LayeringRulesTest {
               "io.apocalypse.common",
               "io.apocalypse.framework",
               "io.apocalypse.system",
-              "io.apocalypse.order",
               "io.apocalypse.calendar");
 
   /** R6：dto 包本体禁止直接放类，请求/响应必须落 dto.request / dto.response 子包。 */

@@ -18,7 +18,6 @@ import jakarta.validation.constraints.Min;
 
 import java.util.List;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,10 +36,6 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/calendar/calendars")
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "apocalypse.capabilities.calendar",
-    name = "enabled",
-    havingValue = "true")
 public class CalendarManagementController {
 
   private final CalendarManagementService calendarManagementService;

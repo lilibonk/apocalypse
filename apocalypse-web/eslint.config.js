@@ -25,6 +25,15 @@ export default tseslint.config([
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    files: ['src/views/**/index.tsx'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true, allowExportNames: ['queryScope'] },
+      ],
+    },
+  },
   // —— AGENTS.md §5「引擎分域」执法（LIL-85：Three.js 仅允许 WebGPU 域）——
   // 一库一域，越域即违规：
   //   · GSAP → 仅品牌页（src/views/login/）与 src/effects/gsap/
