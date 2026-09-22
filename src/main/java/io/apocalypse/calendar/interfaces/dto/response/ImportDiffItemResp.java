@@ -5,12 +5,14 @@ import io.apocalypse.calendar.domain.OverrideAction;
 
 import java.time.LocalDate;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record ImportDiffItemResp(
     LocalDate date,
     String changeType,
-    OverrideAction oldAction,
-    DayClassification oldClassification,
-    String oldName,
-    OverrideAction newAction,
-    DayClassification newClassification,
-    String newName) {}
+    @Schema(nullable = true) OverrideAction oldAction,
+    @Schema(nullable = true) DayClassification oldClassification,
+    @Schema(nullable = true) String oldName,
+    @Schema(nullable = true) OverrideAction newAction,
+    @Schema(nullable = true) DayClassification newClassification,
+    @Schema(nullable = true) String newName) {}

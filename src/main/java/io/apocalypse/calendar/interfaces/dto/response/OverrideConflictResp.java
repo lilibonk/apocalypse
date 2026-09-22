@@ -8,6 +8,8 @@ import io.apocalypse.calendar.domain.OverrideScope;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record OverrideConflictResp(
     Long id,
     Long overrideItemId,
@@ -23,6 +25,6 @@ public record OverrideConflictResp(
     String currentHash,
     OverrideConflictRecordState state,
     LocalDateTime detectedAt,
-    LocalDateTime resolvedAt,
-    String resolvedBy,
-    Long resolutionRevisionId) {}
+    @Schema(nullable = true) LocalDateTime resolvedAt,
+    @Schema(nullable = true) String resolvedBy,
+    @Schema(nullable = true) Long resolutionRevisionId) {}

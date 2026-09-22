@@ -5,11 +5,13 @@ import io.apocalypse.common.response.ErrorCode;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.Duration;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.redisson.api.RRateLimiter;
-import org.redisson.api.RateIntervalUnit;
+import org.redisson.api.RateLimiterConfig;
 import org.redisson.api.RateType;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 限流切面：key = 注解 key（空则方法签名）+ 调用方 IP，Redisson 限流器名 {@code apoc:rl:{key}:{ip}}。 {@code trySetRate}
- * 仅在限流器不存在时写入速率（不覆盖既有配置）；超限抛 {@link BizException}(42900)。
+ * 仅在限流器不存在时写入速率；已有配置不一致时拒绝请求，避免静默使用旧阈值。超限抛 {@link BizException}(42900)。
  *
  * <p>实现注意：RRateLimiter 的许可计数存于独立键 {@code {name}:value} / {@code {name}:permits}（集群 hash-tag
  * 包装），清理限流器状态须三键并删（RateLimitIT 有对应处理与注释）。
@@ -44,9 +46,18 @@ public class RateLimitAspect {
             ? rateLimit.key()
             : joinPoint.getSignature().toLongString();
     int limit = properties.getLimits().getOrDefault(key, rateLimit.limit());
+    if (limit < 1 || rateLimit.windowSeconds() < 1) {
+      throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "限流配置无效，请联系管理员");
+    }
+    Duration interval = Duration.ofSeconds(rateLimit.windowSeconds());
     RRateLimiter limiter = redissonClient.getRateLimiter("apoc:rl:" + key + ":" + currentCaller());
-    limiter.trySetRate(
-        RateType.OVERALL, limit, rateLimit.windowSeconds(), RateIntervalUnit.SECONDS);
+    limiter.trySetRate(RateType.OVERALL, limit, interval);
+    RateLimiterConfig config = limiter.getConfig();
+    if (config.getRateType() != RateType.OVERALL
+        || config.getRate() != limit
+        || config.getRateInterval() != interval.toMillis()) {
+      throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "限流配置尚未同步，请联系管理员");
+    }
     if (!limiter.tryAcquire()) {
       throw new BizException(ErrorCode.TOO_MANY_REQUESTS);
     }

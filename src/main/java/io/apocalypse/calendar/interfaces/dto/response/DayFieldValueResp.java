@@ -5,11 +5,13 @@ import io.apocalypse.calendar.domain.FieldValueState;
 import io.apocalypse.calendar.domain.SolarTerm;
 import io.apocalypse.calendar.domain.Zodiac;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record DayFieldValueResp(
     DayField field,
-    LunarDateResp lunarDate,
-    Zodiac zodiac,
-    SolarTerm solarTerm,
-    DayPolicyResp dayPolicy,
-    String text,
+    @Schema(nullable = true) LunarDateResp lunarDate,
+    @Schema(nullable = true) Zodiac zodiac,
+    @Schema(nullable = true) SolarTerm solarTerm,
+    @Schema(nullable = true) DayPolicyResp dayPolicy,
+    @Schema(nullable = true) String text,
     FieldValueState state) {}

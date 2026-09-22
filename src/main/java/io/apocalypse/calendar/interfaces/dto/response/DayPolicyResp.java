@@ -2,4 +2,7 @@ package io.apocalypse.calendar.interfaces.dto.response;
 
 import io.apocalypse.calendar.domain.DayClassification;
 
-public record DayPolicyResp(DayClassification classification, String name) {}
+import io.swagger.v3.oas.annotations.media.Schema;
+
+public record DayPolicyResp(
+    DayClassification classification, @Schema(nullable = true) String name) {}

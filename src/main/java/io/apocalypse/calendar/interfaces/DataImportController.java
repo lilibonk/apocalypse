@@ -41,6 +41,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 
 @Validated
@@ -52,6 +56,15 @@ public class DataImportController {
   private final DataImportService dataImportService;
 
   @GetMapping("/template")
+  @ApiResponse(
+      responseCode = "200",
+      description = "成功返回原始CSV附件；业务错误返回JSON R",
+      content =
+          @Content(mediaType = "text/csv", schema = @Schema(type = "string", format = "binary")),
+      headers = {
+        @Header(name = "Content-Disposition", schema = @Schema(type = "string")),
+        @Header(name = "Cache-Control", schema = @Schema(type = "string"))
+      })
   @PreAuthorize("hasAuthority('calendar:data-import:list')")
   public ResponseEntity<byte[]> template(
       @RequestParam DataImportTarget targetType, @RequestParam @Min(1901) @Max(2100) int year) {
@@ -83,12 +96,34 @@ public class DataImportController {
   }
 
   @GetMapping("/{id}/files/data")
+  @ApiResponse(
+      responseCode = "200",
+      description = "成功返回原始文件附件；业务错误返回JSON R",
+      content =
+          @Content(
+              mediaType = "application/octet-stream",
+              schema = @Schema(type = "string", format = "binary")),
+      headers = {
+        @Header(name = "Content-Disposition", schema = @Schema(type = "string")),
+        @Header(name = "Cache-Control", schema = @Schema(type = "string"))
+      })
   @PreAuthorize("hasAuthority('calendar:data-import:list')")
   public ResponseEntity<byte[]> dataFile(@PathVariable Long id) {
     return downloadResponse(dataImportService.dataFile(id, currentUserId()));
   }
 
   @GetMapping("/{id}/files/evidence")
+  @ApiResponse(
+      responseCode = "200",
+      description = "成功返回原始证据附件；业务错误返回JSON R",
+      content =
+          @Content(
+              mediaType = "application/octet-stream",
+              schema = @Schema(type = "string", format = "binary")),
+      headers = {
+        @Header(name = "Content-Disposition", schema = @Schema(type = "string")),
+        @Header(name = "Cache-Control", schema = @Schema(type = "string"))
+      })
   @PreAuthorize("hasAuthority('calendar:data-import:list')")
   public ResponseEntity<byte[]> evidenceFile(@PathVariable Long id) {
     return downloadResponse(dataImportService.evidenceFile(id, currentUserId()));

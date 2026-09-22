@@ -4,11 +4,13 @@ import io.apocalypse.calendar.domain.ConflictState;
 import io.apocalypse.calendar.domain.DayField;
 import io.apocalypse.calendar.domain.FieldValueState;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record FieldResolutionResp(
     DayField field,
     FieldValueState state,
     ResolutionSourceResp source,
-    DayFieldValueResp underlay,
-    String underlayHash,
+    @Schema(nullable = true) DayFieldValueResp underlay,
+    @Schema(nullable = true) String underlayHash,
     ConflictState conflictState,
-    Long conflictId) {}
+    @Schema(nullable = true) Long conflictId) {}

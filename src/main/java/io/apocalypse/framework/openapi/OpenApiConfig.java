@@ -1,9 +1,12 @@
 package io.apocalypse.framework.openapi;
 
+import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import io.swagger.v3.core.converter.ModelConverter;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -16,6 +19,21 @@ public class OpenApiConfig {
 
   /** Bearer JWT security scheme 名称。 */
   private static final String JWT_SCHEME = "bearer-jwt";
+
+  @Bean
+  public OperationCustomizer responseContractCustomizer() {
+    return new ResponseContractCustomizer();
+  }
+
+  @Bean
+  public ModelConverter jsonScalarModelConverter() {
+    return new JsonScalarModelConverter();
+  }
+
+  @Bean
+  public OpenApiCustomizer jsonSchemaContractCustomizer() {
+    return new JsonSchemaContractCustomizer();
+  }
 
   @Bean
   public OpenAPI apocalypseOpenAPI(

@@ -1,6 +1,7 @@
 package io.apocalypse.framework.security;
 
 import io.apocalypse.common.response.R;
+import io.apocalypse.framework.web.HttpBusinessMetrics;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -54,6 +55,7 @@ public class JwtBlacklistFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        HttpBusinessMetrics.recordCode(request, 40100);
         response.getWriter().write(objectMapper.writeValueAsString(R.fail(40100, "凭证已失效")));
         return;
       }

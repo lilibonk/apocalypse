@@ -6,15 +6,17 @@ import io.apocalypse.calendar.domain.EventTimeKind;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record EventContentReq(
     String title,
-    String description,
-    String location,
+    @Schema(nullable = true) String description,
+    @Schema(nullable = true) String location,
     EventTimeKind timeKind,
-    LocalDate startDate,
-    LocalDate endDateExclusive,
-    LocalDateTime startLocal,
-    LocalDateTime endLocal,
-    String zoneId,
-    DstOffsetChoice startOffsetChoice,
-    DstOffsetChoice endOffsetChoice) {}
+    @Schema(nullable = true) LocalDate startDate,
+    @Schema(nullable = true) LocalDate endDateExclusive,
+    @Schema(nullable = true) LocalDateTime startLocal,
+    @Schema(nullable = true) LocalDateTime endLocal,
+    @Schema(nullable = true) String zoneId,
+    @Schema(nullable = true) DstOffsetChoice startOffsetChoice,
+    @Schema(nullable = true) DstOffsetChoice endOffsetChoice) {}

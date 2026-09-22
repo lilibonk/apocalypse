@@ -2,6 +2,7 @@ package io.apocalypse.framework.security;
 
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.R;
+import io.apocalypse.framework.web.HttpBusinessMetrics;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,6 +34,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
     response.setStatus(HttpServletResponse.SC_OK);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+    HttpBusinessMetrics.recordCode(request, ErrorCode.FORBIDDEN.getCode());
     response.getWriter().write(objectMapper.writeValueAsString(R.fail(ErrorCode.FORBIDDEN)));
   }
 }

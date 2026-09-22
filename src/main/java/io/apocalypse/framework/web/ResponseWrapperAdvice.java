@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
@@ -28,13 +29,13 @@ public class ResponseWrapperAdvice implements ResponseBodyAdvice<Object> {
   public boolean supports(
       MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
     Class<?> declaringClass = returnType.getContainingClass();
-    // 已是统一响应结构的不再包装
+    // 显式 R 与 ResponseEntity 仍需记录结果，但 beforeBodyWrite 保留原生内容。
     if (R.class.isAssignableFrom(returnType.getParameterType())) {
-      return false;
+      return true;
     }
     // Binary/file responses carry their own status and headers and must not be wrapped as JSON.
     if (ResponseEntity.class.isAssignableFrom(returnType.getParameterType())) {
-      return false;
+      return true;
     }
     String packageName = declaringClass.getPackageName();
     // 排除 springdoc（/v3/api-docs、swagger-ui）与 actuator 端点
@@ -52,8 +53,14 @@ public class ResponseWrapperAdvice implements ResponseBodyAdvice<Object> {
       ServerHttpRequest request,
       ServerHttpResponse response) {
     if (body instanceof R<?> r) {
+      recordCode(request, r.code());
       return r;
     }
+    if (R.class.isAssignableFrom(returnType.getParameterType())
+        || ResponseEntity.class.isAssignableFrom(returnType.getParameterType())) {
+      return body;
+    }
+    recordCode(request, 0);
     // String 返回类型由 StringHttpMessageConverter 处理，直接返回 R 会触发 ClassCastException，
     // 这里手动序列化为 JSON 字符串并强制 contentType 为 application/json
     if (body instanceof String) {
@@ -61,5 +68,11 @@ public class ResponseWrapperAdvice implements ResponseBodyAdvice<Object> {
       return objectMapper.writeValueAsString(R.ok(body));
     }
     return R.ok(body);
+  }
+
+  private static void recordCode(ServerHttpRequest request, int code) {
+    if (request instanceof ServletServerHttpRequest servletRequest) {
+      HttpBusinessMetrics.recordCode(servletRequest.getServletRequest(), code);
+    }
   }
 }

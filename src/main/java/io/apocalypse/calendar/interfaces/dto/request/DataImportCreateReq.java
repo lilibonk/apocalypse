@@ -13,16 +13,18 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public record DataImportCreateReq(
     @NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$") String importKey,
     @NotNull DataImportTarget targetType,
-    Long targetCalendarId,
+    @Schema(nullable = true) Long targetCalendarId,
     @NotBlank @Size(max = 16) String regionCode,
     @Min(1901) @Max(2100) int dataYear,
     @NotNull ImportSourceClaim sourceClaim,
     @NotNull ImportAssuranceLevel assuranceLevel,
-    @Size(max = 128) String documentNo,
-    @Size(max = 256) String documentTitle,
-    @Size(max = 128) String issuer,
-    LocalDate documentPublishedOn,
-    @Size(max = 500) String sourceUri) {}
+    @Size(max = 128) @Schema(nullable = true) String documentNo,
+    @Size(max = 256) @Schema(nullable = true) String documentTitle,
+    @Size(max = 128) @Schema(nullable = true) String issuer,
+    @Schema(nullable = true) LocalDate documentPublishedOn,
+    @Size(max = 500) @Schema(nullable = true) String sourceUri) {}

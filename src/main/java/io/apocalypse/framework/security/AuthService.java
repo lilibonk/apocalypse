@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -89,7 +90,10 @@ public class AuthService {
 
   /** 登录响应（refreshToken 仅账密登录签发，client 令牌为 null）。 */
   public record TokenResponse(
-      String accessToken, String refreshToken, String tokenType, long expiresIn) {}
+      String accessToken,
+      @Schema(nullable = true) String refreshToken,
+      String tokenType,
+      long expiresIn) {}
 
   /** 账密登录。system 模块未提供 {@link LoginUserQuery} 实现时返回空——由 Controller 层转为 "登录能力未接入"响应，不阻塞应用启动。 */
   public Optional<TokenResponse> login(
