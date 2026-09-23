@@ -1,6 +1,22 @@
 # Third-party notices
 
-Calendar v1 adds the following runtime libraries. Their types are confined to Calendar infrastructure adapters by architecture tests.
+This index identifies source code copied or adapted into the repository and the Calendar libraries previously called out here. These permissions belong to their respective rightsholders; they do not change the Apocalypse project's [Apache License 2.0](LICENSE). Original license texts for frontend sources are distributed under `apocalypse-web/public/licenses/` so they remain available with the frontend build. Maven and pnpm dependency graphs also contain other packages governed by their own licenses; a complete release-artifact notice review is still required before formal distribution.
+
+## Adapted frontend source
+
+| Source | Use in this repository | Original permission notice |
+| --- | --- | --- |
+| [softie-webgpu at 977a608](https://github.com/yuanyang749/softie-webgpu/tree/977a60844ac6ffe6824531900cf15bd5403e408f) | WebGPU slime implementation in `apocalypse-web/src/effects/webgpu/slime/` | [MIT text and attribution](apocalypse-web/public/licenses/softie-webgpu.txt) |
+| [8bitcn UI](https://github.com/TheOrcDev/8bitcn-ui) | PixelBubble's stepped border technique | [MIT text and attribution](apocalypse-web/public/licenses/8bitcn-ui.txt) |
+| [Magic UI at b7443b4](https://github.com/magicuidesign/magicui/tree/b7443b4780af83a6fe064010a4c6a839202b81d1) | Retained, deprecated RetroGrid adaptation | [MIT text and attribution](apocalypse-web/public/licenses/magic-ui.txt) |
+| [shadcn/ui](https://github.com/shadcn-ui/ui) | Copied and adapted components in `apocalypse-web/src/components/ui/` | [MIT text and attribution](apocalypse-web/public/licenses/shadcn-ui.txt) |
+| [three.js](https://github.com/mrdoob/three.js/tree/r185) | WebGPU rendering dependency, pinned in `apocalypse-web/package.json` | [MIT text and attribution](apocalypse-web/public/licenses/three.txt) |
+
+The earlier React Bits BlurText and SpotlightCard source is no longer included in the current tree. Its upstream MIT + Commons Clause conditions restrict redistribution of the components themselves, so the login text effect now uses a separate local implementation.
+
+## Calendar runtime libraries
+
+Calendar's library types are confined to infrastructure adapters by architecture tests.
 
 ## lunar-java 1.7.7
 

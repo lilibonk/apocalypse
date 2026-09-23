@@ -68,15 +68,15 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 
 - 选最弱可用工具：普通 UI 能 CSS 不 JS，能 motion 不 GSAP；已批准史莱姆使用 Three.js WebGPU。禁止为了兼容而改用 WebGL。
 - **明确弃用，禁止再议**：Lottie / Rive（二进制资产，AI 无法按宪法用代码迭代，与「帧即数据」哲学冲突）、anime.js（命令式与 React 声明式不合）、react-spring（与 motion 域重叠）。
-- copy-paste 动效组件（react-bits / Magic UI / 8bitcn 等 registry）引入时，内部引擎必须落在已批准域内；自带未批准引擎（如 ogl、GSAP 变体）的组件，换用同库 motion/CSS 变体或弃用。拷入代码视同自研，遵守本文件全部条款，文件头必须标注来源与许可证。
+- 引入第三方 copy-paste 组件前先核对可再分发授权，带限制性 Commons Clause 的组件不得进入通用脚手架源码；内部引擎还必须落在已批准域内。自带未批准引擎（如 ogl、GSAP 变体）的组件，换用许可与引擎均合规的变体或弃用。拷入代码仍遵守本文件全部条款，保留原始版权/许可通知并在[第三方声明](../THIRD_PARTY_NOTICES.md)索引。
 - 执法：ESLint `no-restricted-imports` 按目录拦截（GSAP 仅品牌页与 `effects/gsap/`；Three.js 仅 `effects/webgpu/`，禁止 WebGLRenderer/WebGLBackend/裸包入口及 WebGL fallback 子路径）；复杂引擎效果集中在 `src/effects/<engine>/`，`views/` 与 `components/` 只消费封装组件。真实后端与 fail-closed 由品牌契约测试和浏览器检查共同验证。
 
 ### 通用治理（所有引擎一致）
 
 - `prefers-reduced-motion: reduce` 必须降级（tokens.css 有全局兜底；JS 侧用 motion 的 `useReducedMotion` 或等价判断）。
-- 设置面板「动画」开关（`html[data-motion='off']`）必须全局生效；任何引擎的动效组件都必须同时尊重这两个开关，参考 `components/PageTransition.tsx` 与 `effects/PixelBean/`。
+- 设置面板「动画」开关（`html[data-motion='off']`）必须全局生效；任何引擎的动效组件都必须同时尊重这两个开关，参考 `components/PageTransition.tsx` 与 `effects/PixelOrb/`。
 - 产品面向年轻企业团队，动效目标是鲜明、轻快、可感知；“稳重、克制、内敛”不是默认方向。性能仍要求快速：Dialog / AlertDialog / Sheet 统一由 `PixelDialogMotion` 让真实标题、正文与操作区从 100ms / 150ms / 220ms 起穿过固定八段像素波前，最晚约 720ms 完成；禁止独立轨道、端点、全表面实色遮罩或空白等待。数据密集正文不常驻装饰动画。
-- 品牌角色唯一为青绿半透明史莱姆（目标 `docs/brand-slime/target-v1.png`）：圆润软体、内部漂浮气泡、两只黑豆眼与小嘴。眼睛可沿皮肤平滑跟随鼠标，脸与身体共享表面形变，不能漂浮分离。2026-09-08 用户最终要求 PixelWave 铅字浪潮仅保留为开发态动效实验室的默认关闭开关，登录禁止挂载；收起实验室/关闭抽屉卸载预览。WebGPU 画布透明合成；既有 PixelScale 与 PixelDialogMotion 保持，不把 3D 引入数据正文。旧 Mint Bonk 资产仅作历史回滚资料，不得进入新运行时。
+- 品牌角色唯一为青绿半透明史莱姆；现行第二版形态、材质、表情与动效以[设计定义](src/design/DEFINITION.md)和 `src/effects/webgpu/slime/` 为准，适配来源及原始 MIT 授权见[随附许可](public/licenses/softie-webgpu.txt)。身体、五官和气泡共享形变场；入场双跳、抓取/释放/落地、眨眼/gaze 与眩晕五星环须有回归证据。仅 `effects/webgpu/slime/scene.ts` 允许从 `three/addons/utils/BufferGeometryUtils.js` 命名导入 `mergeVertices` / `mergeGeometries`，其余 addons 与 WebGL 禁令不变，由 import 正反例测试执法。PixelWave 铅字浪潮仅保留为开发态动效实验室的默认关闭开关，登录禁止挂载；收起实验室/关闭抽屉卸载预览。WebGPU 画布透明合成；既有 PixelScale 与 PixelDialogMotion 保持，不把 3D 引入数据正文。旧 Mint Bonk 资产仅作历史回滚资料，不得进入新运行时。
 - 史莱姆明暗主题使用独立、同源的材质 token 与静态海报，自动切换，不依赖 accent/历史皮肤。鼠标按压不得显示键盘焦点框，键盘焦点提示仍须可见。气泡漂浮与视线跟随必须遵守动效开关与隐藏暂停；由品牌回归测试及浏览器证据执法。
 - PixelOrb 状态词汇表固定为 `idle / waiting / success / error / sleeping`（loading 语义并入 waiting；`thinking` 为 2 期 Agent 界面预留、当前不实现），全站状态语义共用同一组件。
 - **PixelBean / PixelTide / RetroGrid 已弃用**：`src/effects/PixelBean/` 与 `src/effects/registry/RetroGrid/` 仅保留历史兼容，禁止新代码引用。
@@ -108,6 +108,14 @@ Apocalypse 管理台前端，位于同一仓库的 `apocalypse-web/` 子目录�
 - 菜单图标只能通过 `MenuIconPicker` 与 `components/layout/menu-icons.ts` 的受控映射选择，禁止自由文本造成图标丢失。
 - 父菜单使用 `MenuTreeSelect`：排除当前节点及其子树，支持搜索、展开/折叠、结果上限提示与滚动容器；禁止把膨胀后的整棵树一次性铺成普通 Select。
 - 模块 capability 的运行态事实只来自后端最新 `/me` 菜单/权限，不增加前端环境开关或第二份真源。登录、refresh、窗口恢复或 `/me` 变化后，必须取消并移除失效模块的 React Query 缓存、关闭不再授权的页签；当前 URL 失效时 `replace('/dashboard')`。直接 URL、旧缓存或旧页签不得绕过菜单撤回；菜单 component 缺少本地 chunk 时 fail-closed 且不得调用该模块 API。
+
+### 可选模块查询与操作生命周期
+
+- 在模块唯一 `*.queries.ts` 内声明一个 `ModuleScope`，用其 query/operation 定义派生原生 `queryOptions`、key、meta 与筛选器。页面不得另写 moduleKey、queryKey/meta 或绕过定义直接调用 API；请求参数必须完整进入查询身份。同一选项用于 useQuery/fetch/prefetch，失效筛选和写缓存沿用同一归属。
+- 页面导出既有 scope 为 `queryScope`，并由 `ModuleAccess` 包裹。菜单 moduleKey 与页面 scope 不匹配时 fail-closed；新模块不修改共享业务名单。DynaLayer 通过 `queryScope` prop 复用相同机制，未传入时保持核心页行为；自定义异步动作必须提供 scope operation，禁止在回调外等待结果后写 UI/下载文件。
+- 查询/操作捕获身份、模块/所需权限代次和 AbortSignal；只接受最新 `/me`，令牌刷新先暂停模块，新 `/me` 接受后才恢复。scoped 401 不重放旧操作；核心请求保留同身份的一次重放。撤权/登出/换号需取消并清除旧 Query/Mutation，迟到 success/error/settled、toast、导航和下载全部受原始有效期约束；不能在 await 后重捕获当前授权给旧结果续命。
+- 异步页面操作使用 `useModuleMutation`，编辑/选择/输入上下文纳入 `localKey`，副作用只在受保护回调内执行。对象级 403/404 不一定改变 `/me`；用 `useResourceDenial` 清除当前资源缓存和编辑态、失效同页在途回调并重取资源上下文，拒绝本身不得形成 refetch 循环。其他资源/模块/核心缓存保持不受影响。
+- `module-source-contract.test.ts` 对可选模块导入链、别名/namespace/barrel、查询/副作用旁路执行正反例检查；授权与缓存测试、真实 React/Axios/Dyna 隔离浏览器夹具验证竞态。静态规则不宣称覆盖任意反射 JavaScript；动态导入、computed 操作和新旁路必须重新评审。测试夹具不得进入生产入口/产物。
 
 ## 8. 设置面板：能力全集 + 下游可裁剪
 

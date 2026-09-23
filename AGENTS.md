@@ -16,8 +16,9 @@ Java 25 + Spring Boot 4.1.x **单 Maven 模块**模块化单体脚手架（刻�
 ## 2. 构建与验证命令
 
 ```bash
-# 环境前置（Windows Git Bash；IDEA 用户在 Project SDK 选 jdk-25 目录即可）
-export JAVA_HOME='/d/IDE/JDK/jdk-25.0.4.1+1'
+# 环境前置：将 JAVA_HOME 指向本机 JDK 25；IDEA 用户在 Project SDK 选同一目录
+export JAVA_HOME='/path/to/jdk-25'
+export PATH="$JAVA_HOME/bin:$PATH"
 
 ./mvnw compile              # 编译
 ./mvnw test                 # 单元/架构测试（Surefire；不运行 *IT）
@@ -31,7 +32,7 @@ docker compose up -d        # 启动 PostgreSQL 18.6 + Redis 8.10.1
 
 提交代码前必须通过 `./mvnw verify`。macOS/Colima 若 socket 不在 `/var/run/docker.sock`，按设备实际值设置 `DOCKER_HOST` 与 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`。GitHub Actions 后端门禁执行同一条 `./mvnw --batch-mode verify`。
 
-Python 只作辅助工具时，统一使用 `/Users/zile.zhou/workspace/github-projects/env/python`：先 `source /Users/zile.zhou/workspace/github-projects/env/python/activate.zsh`，再通过该环境的 `uv` 管理 Python 版本、缓存与隔离 CLI。禁止使用系统/Homebrew/user-site `pip install`。若本项目后续成为 Python 项目，依赖必须在本项目 `pyproject.toml` / `uv.lock` 声明，项目 `.venv` 不提交。
+Python 只作辅助工具时，使用 `uv` 管理 Python 版本、缓存与隔离 CLI；隔离环境可放在仓库外，不依赖维护者本机的固定路径。禁止使用系统/Homebrew/user-site `pip install`。若本项目后续成为 Python 项目，依赖必须在本项目 `pyproject.toml` / `uv.lock` 声明，项目 `.venv` 不提交。
 
 ## 3. Solution Fitness Gate（实现前置门禁）
 
@@ -60,6 +61,7 @@ Python 只作辅助工具时，统一使用 `/Users/zile.zhou/workspace/github-p
 | 9 | 对外（含外部 Agent）只允许通过 facade + `@AgentExposed` 白名单暴露能力；禁止向外部系统开放 DB/Redis 直连 | 评审 + 2 期强制扫描 |
 | 10 | 日志禁止输出密码、令牌、身份证号等敏感字段；禁止提交任何密钥到仓库；操作日志参数必须经统一脱敏 | `OperLogAspect` 脱敏 + 评审 |
 | 11 | system 子域 Service 禁止穿透其他子域的 Mapper/Entity；跨子域编排走对方 Service/DTO 稳定入口 | ArchUnit R8 |
+| 12 | 业务模块只经 `@ModuleConfiguration` 入口装配；根仅扫描 common/framework，入口发现仅按标记；模块扫描/MapperScan 不得越界，运行配置须由入口显式导入。framework 外禁止自行动态注册 bean。 | `ModuleAssemblyRulesTest` + Calendar 装配 on/off IT |
 
 ## 5. 分层与分包约定
 
@@ -68,7 +70,6 @@ io.apocalypse
 ├── common/       # OPEN：response(R/ErrorCode/PageResult)、exception(BizException)、entity(BaseEntity)、annotation(@AgentExposed)、event(跨模块集成事件契约)
 ├── framework/    # OPEN：security / cache / redis / mybatis / openapi / web / log / ratelimit / config 技术装配
 ├── system/       # 系统管理域：用户/角色/菜单/部门/字典/参数/日志/在线用户
-├── order/        # 核心域范本（api/application/domain/infrastructure 分层）
 └── calendar/     # 可选万年历域（api/application/domain/infrastructure/interfaces）
 ```
 
@@ -90,9 +91,16 @@ io.apocalypse
 └── listener/             # 跨模块事件消费者（@ApplicationModuleListener）统一位置
 ```
 
-- 简单模块（如 system）：子域 → 分层两级结构（上表）；复杂模块（如 order）：`api`/`application`/`domain`/`infrastructure`/`interfaces` 分层，domain 纯 Java。
+- 简单模块（如 system）：子域 → 分层两级结构（上表）；复杂模块（如 calendar）：`api`/`application`/`domain`/`infrastructure`/`interfaces` 分层，domain 纯 Java。Order 早期示例运行代码已退役；仅保留 `OrderCreatedEvent`/`OrderEventListener` 历史事件兼容桥，数据库/种子与旧迁移不删除。退役 HTTP 与提交/回滚事件行为由 `OrderRetirementIT` 验证。
 - system 内部子域的 mapper/entity 仅归本子域使用；跨子域只允许依赖对方 service 与 response DTO，禁止把持久化对象当内部公共模型。
 - 跨模块异步动作用 Spring 事件 + `@ApplicationModuleListener`，禁止直接调对方 Service/Mapper。**事件契约统一放 `common.event`**：若事件放发布方 api 包，消费方对发布方的依赖与反向 facade 调用易形成模块循环（Modulith verify 拒绝）；沉淀到 OPEN 内核后依赖图保持无环。
+
+### 模块装配
+
+- 每个业务域一个 `infrastructure/config/*ModuleConfiguration` 入口，使用 `@ModuleConfiguration`；根包仍只放 package-info。核心 System 常驻，包内扫描保留 MapStruct 生成组件。
+- 可选模块的无副作用 `CapabilityDefinition`、guard 与稳定 facade 常驻；facade 必须先 guard 再从 `ObjectProvider` 取运行入口，禁止常驻构造器强制依赖专属服务/Mapper/配置或读取运行资源。
+- 运行配置统一 `@ConditionalOnCapability`，在 `PARSE_CONFIGURATION` 阶段使用与 Registry 相同的 Binder Boolean 语义；只扫描本模块，排除配置/常驻组件并保留 `TypeExcludeFilter`。子配置显式 Import，MapperScan 归模块所有；禁止业务静态初始化读取运行资源。
+- key 由模块声明，非法/重复声明启动失败，未知配置不注册能力。全部已声明启停状态排序组成 `caps:v1` 权限缓存指纹；保留原配置键、默认关闭和重启生效。关闭不跳过共享数据源/Flyway/安全完整性校验。
 
 ## 6. 统一约定
 

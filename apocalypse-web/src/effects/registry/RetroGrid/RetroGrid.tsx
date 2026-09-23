@@ -5,7 +5,7 @@
  *
  * 来源：Magic UI — Retro Grid
  * 原文：https://github.com/magicuidesign/magicui/blob/b7443b4780af83a6fe064010a4c6a839202b81d1/apps/www/registry/magicui/retro-grid.tsx
- * 许可：MIT License（Magic UI © magicui.design）
+ * 许可：MIT License（原始版权声明为 Copyright (c) Magic UI；见 public/licenses/magic-ui.txt）
  * 适配说明：
  * - 取 2025-09 的纯 CSS 变体。react-bits 的 Aurora 依赖 ogl、Magic UI main 分支的
  *   Retro Grid 现行版已重写为原生 WebGL——两者均越出 AGENTS.md §5 引擎分域

@@ -26,11 +26,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { PixelOrb, type OrbState } from '@/effects/PixelOrb'
 import { PixelScale } from '@/effects/PixelWave'
-import { BlurText } from '@/effects/registry/BlurText'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useSettings, useSettingsStore, type Language, type ThemeMode } from '@/stores/settings'
+
+import { TaglineReveal } from './TaglineReveal'
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -114,7 +115,7 @@ export default function LoginPage() {
               {t('login.stageIndex')}
             </p>
             <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-tight text-balance 2xl:text-4xl">
-              <BlurText text={t('login.tagline')} animateBy="letters" delay={55} />
+              <TaglineReveal text={t('login.tagline')} animate={motionEnabled && !reducedMotion} />
             </h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground 2xl:mx-0">
               {t('login.stageDesc')}
