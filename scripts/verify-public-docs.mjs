@@ -17,7 +17,12 @@ const tracked = new Set(
 
 const published = [
   "README.md",
+  "AGENTS.md",
+  "THIRD_PARTY_NOTICES.md",
   "apocalypse-web/README.md",
+  "apocalypse-web/AGENTS.md",
+  "apocalypse-web/src/design/DEFINITION.md",
+  "apocalypse-web/src/effects/README.md",
   "docs/README.md",
   "docs/getting-started.md",
   "docs/module-development.md",

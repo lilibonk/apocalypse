@@ -1,0 +1,29 @@
+.tagline-reveal-character {
+  display: inline-block;
+  animation: tagline-reveal-enter 420ms both;
+  animation-delay: var(--tagline-delay);
+}
+
+@keyframes tagline-reveal-enter {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(0.3em);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+html[data-motion='off'] .tagline-reveal-character {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tagline-reveal-character {
+    animation: none;
+  }
+}

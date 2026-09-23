@@ -22,4 +22,4 @@ pnpm dev
 
 Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/权限开放；前端不设置第二个启停开关。其边界和配置见[Calendar 手册](../docs/calendar/README.md)。
 
-登录页的 WebGPU 史莱姆是当前品牌实现；不支持 WebGPU 或用户关闭动效时使用静态展示。第三方来源与授权见[随附 MIT 许可](public/licenses/softie-webgpu.txt)和仓库[第三方声明](../THIRD_PARTY_NOTICES.md)。历史设计验收记录不是新业务页面的接入指南；现行视觉与交互约束见[设计定义](src/design/DEFINITION.md)。
+登录页的 WebGPU 史莱姆是当前品牌实现；不支持 WebGPU 或用户关闭动效时使用静态展示。Apocalypse 项目自有部分按 [Apache License 2.0](../LICENSE) 授权；史莱姆、UI 组件和其他直接移植来源的原始许可见[第三方声明](../THIRD_PARTY_NOTICES.md)。历史设计验收记录不是新业务页面的接入指南；现行视觉与交互约束见[设计定义](src/design/DEFINITION.md)。

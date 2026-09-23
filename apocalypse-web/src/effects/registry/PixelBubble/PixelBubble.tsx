@@ -4,7 +4,7 @@
  * 来源：8bitcn UI — Dialogue（gaming block）+ Alert（像素边框技法）
  * 原文：https://github.com/TheOrcDev/8bitcn-ui/blob/main/components/ui/8bit/blocks/dialogue.tsx
  *       https://github.com/TheOrcDev/8bitcn-ui/blob/main/components/ui/8bit/alert.tsx
- * 许可：MIT License（8bitcn UI © TheOrcDev）
+ * 许可：MIT License（原始版权声明为 Copyright (c) 2025 8bitcn；见 public/licenses/8bitcn-ui.txt）
  * 适配说明：
  * - 只取 CSS 部分：12 个角/边小块拼出像素阶梯边框；不引入其 shadcn Alert/Avatar
  *   组件链，也不引入 Press Start 2P 等外部像素字体（字体沿用现有 --font-sans 栈）。

@@ -21,3 +21,7 @@ Apocalypse 是开发中的 Java 25 / Spring Boot 4.1 模块化单体管理后台
 - [架构约束](AGENTS.md)：贡献者必须遵守的项目红线；前端另见[前端约束](apocalypse-web/AGENTS.md)。
 
 维护者的产品计划、历史设计和验收证据不属于使用脚手架的前置条件。仓库内 `docs/plans/` 等历史记录不替代上述现行使用文档。部署前请阅读[运行与升级边界](docs/operations.md)，并按自己的环境验证安全、备份及观测配置。
+
+## 许可
+
+Apocalypse 项目自有部分采用 [Apache License 2.0](LICENSE)；直接移植的代码、素材和依赖仍适用各自原始授权，来源与随附文本见[第三方声明](THIRD_PARTY_NOTICES.md)。公开源代码授权不等于已发布稳定版本；发行、升级与制品级通知的剩余验收见[发行契约](docs/release.md)。
