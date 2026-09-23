@@ -16,12 +16,16 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  */
 public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
 
+  /** 所有部门结构写操作先锁后读，防止不同节点并发改父级绕过子树校验；事务结束自动释放。 */
+  @Select("SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext('system-dept-hierarchy'))) locked")
+  Integer lockHierarchy();
+
   /** 整棵树（自根节点递归向下，按 sort 排序；逻辑删除显式过滤）。 */
   @Select(
       """
       WITH RECURSIVE dept_tree AS (
         SELECT * FROM sys_dept WHERE parent_id = 0 AND deleted = 0
-        UNION ALL
+        UNION
         SELECT d.* FROM sys_dept d
         JOIN dept_tree t ON d.parent_id = t.id
         WHERE d.deleted = 0
@@ -30,12 +34,12 @@ public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
       """)
   List<SysDeptEntity> selectTree();
 
-  /** 以 rootId 为根的子树（含 rootId 自身）。 */
+  /** 以 rootId 为根的子树（含 rootId 自身）；UNION 对完整行去重，使历史循环数据也能有限返回。 */
   @Select(
       """
       WITH RECURSIVE dept_tree AS (
         SELECT * FROM sys_dept WHERE id = #{rootId} AND deleted = 0
-        UNION ALL
+        UNION
         SELECT d.* FROM sys_dept d
         JOIN dept_tree t ON d.parent_id = t.id
         WHERE d.deleted = 0

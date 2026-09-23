@@ -33,9 +33,10 @@ import {
   type MenuNode,
   type PageResult,
   type RawMenuNode,
+  type UserInfo,
 } from '@/lib/api/types'
-import { pageUsers } from '@/lib/api/user'
 
+import { GRANT_USERS_PAGE_SIZE, loadAssignedUserIds } from './grant-users'
 import schema from './role.schema'
 
 type Row = Record<string, unknown>
@@ -44,14 +45,6 @@ type Row = Record<string, unknown>
 interface GrantTarget {
   id: string
   roleName: string
-}
-
-/** 角色下用户（对应后端 RoleUserResp）。 */
-interface RoleUserRow {
-  id: string
-  username: string
-  nickname: string | null
-  status: number
 }
 
 function grantTargetOf(row: Row): GrantTarget {
@@ -459,43 +452,45 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
   )
 }
 
-/** 分配用户弹窗：全量用户多选（回显已分配）→ PUT /system/roles/{id}/users（body Long[]）。 */
-function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose: () => void }) {
+/** 候选用户分页，完整读取当前分配后才允许整体替换；每次打开独立初始化。 */
+export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose: () => void }) {
   const { t } = useTranslation()
-  const open = role !== null
-  const roleId = role?.id ?? ''
+  const roleId = role.id
   const queryClient = useQueryClient()
+  const [loadId] = useState(() => crypto.randomUUID())
+  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [initialized, setInitialized] = useState(false)
 
-  // 候选全集：size 大值一次拉全量（系统用户量级小，无搜索需求）
   const usersQuery = useQuery({
-    queryKey: ['system', 'users', 'all'],
-    queryFn: () => pageUsers(1, 1000),
-    enabled: open,
-  })
-
-  // 已分配回显：GET /system/roles/{id}/users 为现成接口
-  const assignedQuery = useQuery({
-    queryKey: ['system', 'roles', roleId, 'users'],
-    queryFn: () =>
-      request<PageResult<RoleUserRow>>(`/system/roles/${roleId}/users`, {
-        query: { page: 1, size: 1000 },
+    queryKey: ['system', 'users', 'grant-candidates', page, GRANT_USERS_PAGE_SIZE],
+    queryFn: ({ signal }) =>
+      request<PageResult<UserInfo>>('/system/users/page', {
+        query: { page, size: GRANT_USERS_PAGE_SIZE },
+        signal,
       }),
-    enabled: open,
   })
 
-  // 回显同步：打开且分配数据到达时按角色初始化勾选（render 期按 prev 比较调整，替代 effect setState；
-  // 同一角色数据后台 refetch 不重置，避免覆盖用户已改勾选）
-  const [echoedRoleId, setEchoedRoleId] = useState<string | null>(null)
-  if (!open && echoedRoleId !== null) {
-    setEchoedRoleId(null)
+  // 独立加载身份防止重开时从旧缓存初始化；所有页面成功后才一次性返回。
+  const assignedQuery = useQuery({
+    queryKey: ['system', 'roles', roleId, 'users', 'grant', loadId],
+    queryFn: ({ signal }) => loadAssignedUserIds(roleId, signal),
+    enabled: !initialized,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  })
+
+  if (!initialized && assignedQuery.isSuccess && !assignedQuery.isFetching) {
+    setInitialized(true)
+    setSelected(new Set(assignedQuery.data))
   }
-  if (open && assignedQuery.data && echoedRoleId !== roleId) {
-    setEchoedRoleId(roleId)
-    setSelected(new Set(assignedQuery.data.list.map((user) => user.id)))
-  }
+  const assignmentsReady = initialized && assignedQuery.isSuccess && !assignedQuery.isFetching
 
   const toggle = (userId: string, checked: boolean) => {
+    if (!assignmentsReady) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (checked) {
@@ -508,8 +503,10 @@ function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose
   }
 
   const saveMutation = useMutation({
-    mutationFn: (userIds: string[]) =>
-      request<void>(`/system/roles/${roleId}/users`, { method: 'PUT', body: userIds }),
+    mutationFn: (userIds: string[]) => {
+      if (!assignmentsReady) throw new ApiError(-1, '请等待已分配用户完整加载后再保存')
+      return request<void>(`/system/roles/${roleId}/users`, { method: 'PUT', body: userIds })
+    },
     onSuccess: () => {
       toast.success(t('common.用户分配已保存', { defaultValue: '用户分配已保存' }))
       void queryClient.invalidateQueries({ queryKey: ['system', 'roles', roleId, 'users'] })
@@ -520,30 +517,48 @@ function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose
   })
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('common.分配用户', { defaultValue: '分配用户' })}</DialogTitle>
           <DialogDescription>
             {t('common.为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。', {
-              name: role?.roleName ?? '',
+              name: role.roleName,
               defaultValue:
                 '为角色「{{name}}」勾选要分配的用户（已回显当前分配），保存将整体替换。',
             })}
           </DialogDescription>
         </DialogHeader>
+        {assignedQuery.isFetching && (
+          <p role="status" className="text-sm text-muted-foreground">
+            正在完整加载已分配用户，完成后可编辑和保存…
+          </p>
+        )}
+        {assignedQuery.isError && (
+          <div role="alert" className="space-y-2 text-sm text-destructive">
+            <p>{errorText(assignedQuery.error, '已分配用户加载失败，暂不能保存')}</p>
+            <Button variant="outline" size="sm" onClick={() => void assignedQuery.refetch()}>
+              重试加载已分配用户
+            </Button>
+          </div>
+        )}
         <div className="max-h-80 space-y-1 overflow-y-auto rounded-md border border-border p-3">
           {usersQuery.isLoading &&
             Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-5 w-full" />
             ))}
           {usersQuery.isError && (
-            <p className="text-sm text-destructive">
-              {errorText(
-                usersQuery.error,
-                t('common.用户列表加载失败', { defaultValue: '用户列表加载失败' }),
-              )}
-            </p>
+            <div role="alert" className="space-y-2 text-sm text-destructive">
+              <p>
+                {errorText(
+                  usersQuery.error,
+                  t('common.用户列表加载失败', { defaultValue: '用户列表加载失败' }),
+                )}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => void usersQuery.refetch()}>
+                重试加载候选用户
+              </Button>
+            </div>
           )}
           {usersQuery.data?.list.length === 0 && (
             <p className="text-sm text-muted-foreground">
@@ -556,6 +571,7 @@ function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose
                 type="checkbox"
                 className="size-4 accent-primary"
                 checked={selected.has(user.id)}
+                disabled={!assignmentsReady || saveMutation.isPending}
                 onChange={(event) => toggle(user.id, event.target.checked)}
               />
               <span>{user.username}</span>
@@ -563,16 +579,41 @@ function GrantUsersDialog({ role, onClose }: { role: GrantTarget | null; onClose
             </label>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          已加载 {usersQuery.data?.list.length ?? 0} / {usersQuery.data?.total ?? 0}
-          名候选用户，单次上限 1000 条
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            第 {page} 页，共 {usersQuery.data?.total ?? 0} 名候选用户；
+            {assignmentsReady ? `已选 ${selected.size} 人（含其他页）` : '已分配用户尚未完整加载'}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1 || usersQuery.isFetching || saveMutation.isPending}
+              onClick={() => setPage((current) => current - 1)}
+            >
+              上一页
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                usersQuery.isFetching ||
+                usersQuery.isError ||
+                page * GRANT_USERS_PAGE_SIZE >= (usersQuery.data?.total ?? 0) ||
+                saveMutation.isPending
+              }
+              onClick={() => setPage((current) => current + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             {t('common.取消', { defaultValue: '取消' })}
           </Button>
           <Button
-            disabled={saveMutation.isPending}
+            disabled={!assignmentsReady || saveMutation.isPending}
             onClick={() => saveMutation.mutate([...selected])}
           >
             {saveMutation.isPending
@@ -601,7 +642,13 @@ export default function RolePage() {
     <>
       <DynaPage schema={schema} customActions={customActions} />
       <GrantMenusDialog role={grantingMenus} onClose={() => setGrantingMenus(null)} />
-      <GrantUsersDialog role={grantingUsers} onClose={() => setGrantingUsers(null)} />
+      {grantingUsers && (
+        <GrantUsersDialog
+          key={grantingUsers.id}
+          role={grantingUsers}
+          onClose={() => setGrantingUsers(null)}
+        />
+      )}
     </>
   )
 }

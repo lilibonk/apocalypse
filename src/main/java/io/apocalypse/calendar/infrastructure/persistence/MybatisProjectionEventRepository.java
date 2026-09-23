@@ -5,6 +5,7 @@ import io.apocalypse.calendar.api.CancelProjectedEventCommand;
 import io.apocalypse.calendar.api.ProjectionItemResult;
 import io.apocalypse.calendar.api.ProjectionResultStatus;
 import io.apocalypse.calendar.domain.EventContent;
+import io.apocalypse.calendar.domain.EventContentHasher;
 import io.apocalypse.calendar.domain.EventKind;
 import io.apocalypse.calendar.domain.EventRevisionState;
 import io.apocalypse.calendar.domain.EventSourceKind;
@@ -202,6 +203,7 @@ public class MybatisProjectionEventRepository implements ProjectionEventReposito
               event.content(),
               event.payloadHash(),
               actor);
+      draft.setVersion(Math.incrementExact(revisionMapper.selectMaxVersion(eventHead.getId())));
       revisionMapper.insert(draft);
       draftVersion = draft.getVersion();
     } else {
@@ -225,18 +227,29 @@ public class MybatisProjectionEventRepository implements ProjectionEventReposito
     }
   }
 
-  private static ProjectionItemResult idempotentResult(
+  private ProjectionItemResult idempotentResult(
       ProjectionSourceDo source, PreparedProjectionEvent event) {
     if (event.sourceVersion() < source.getSourceVersion()) {
       return result(source, source.getSourceVersion(), ProjectionResultStatus.STALE);
     }
     if (event.sourceVersion() == source.getSourceVersion()) {
-      if (event.payloadHash().equals(source.getPayloadHash())) {
+      if (event.payloadHash().equals(source.getPayloadHash())
+          || matchesPersistedLegacyPayload(source, event)) {
         return result(source, source.getSourceVersion(), ProjectionResultStatus.UNCHANGED);
       }
       throw versionConflict();
     }
     return null;
+  }
+
+  private boolean matchesPersistedLegacyPayload(
+      ProjectionSourceDo source, PreparedProjectionEvent event) {
+    if (!EventContentHasher.matchesLegacyHash(event.content(), source.getPayloadHash())) {
+      return false;
+    }
+    EventRevisionDo latest = revisionMapper.selectLatestRetained(source.getEventId());
+    // Compare persisted precision, including discarded history, without trusting the legacy hash.
+    return latest != null && event.payloadHash().equals(EventContentHasher.hash(toContent(latest)));
   }
 
   private static void requireSameCalendar(ProjectionSourceDo source, Long calendarId) {

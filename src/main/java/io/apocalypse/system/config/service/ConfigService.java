@@ -31,7 +31,7 @@ public class ConfigService {
   private final ConfigConvert configConvert;
 
   /** 按参数键取值，不存在返回 null（null 也会被缓存，防止穿透）。 */
-  @Cacheable(cacheNames = "config", key = "#key")
+  @Cacheable(cacheNames = "config", key = "#key", sync = true)
   public String get(String key) {
     return sysConfigMapper.findByKey(key).map(SysConfigEntity::getConfigValue).orElse(null);
   }

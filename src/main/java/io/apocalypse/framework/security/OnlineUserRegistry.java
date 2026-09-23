@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.data.redis.core.RedisTemplate;
@@ -74,6 +75,12 @@ public class OnlineUserRegistry {
             })
         .filter(session -> session != null)
         .toList();
+  }
+
+  /** 读取所选在线条目；条目已过期或刷新移除时，调用方必须要求重新选择。 */
+  public Optional<OnlineUser> find(String jti) {
+    Object value = redisTemplate.opsForValue().get(ONLINE_KEY_PREFIX + jti);
+    return value instanceof OnlineUser user ? Optional.of(user) : Optional.empty();
   }
 
   /**

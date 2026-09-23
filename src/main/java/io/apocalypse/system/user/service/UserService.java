@@ -93,7 +93,7 @@ public class UserService implements UserApi, LoginUserQuery {
   }
 
   /** 用户详情（缓存示例：两级缓存 user；更新/删除/重置密码时 evict）。 */
-  @Cacheable(cacheNames = "user", key = "#id")
+  @Cacheable(cacheNames = "user", key = "#id", sync = true)
   public UserResp getDetail(Long id) {
     return withDeptName(userConvert.toResp(requireById(id)));
   }
@@ -167,9 +167,9 @@ public class UserService implements UserApi, LoginUserQuery {
     tokenVersionStore.invalidateCredential(entity.getUsername());
   }
 
-  /** 重置用户角色。角色变化影响权限串，evict 该用户的 userPerms 缓存。 */
+  /** 重置用户角色。权限缓存含能力指纹，整体失效覆盖不同实例的全部指纹变体。 */
   @Transactional
-  @CacheEvict(cacheNames = "userPerms", key = "#userId")
+  @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void assignRoles(Long userId, List<Long> roleIds) {
     SysUserEntity user = requireById(userId);
     List<Long> ids = roleIds == null ? List.of() : roleIds;

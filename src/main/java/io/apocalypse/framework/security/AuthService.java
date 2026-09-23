@@ -209,6 +209,17 @@ public class AuthService {
     return issueToken(user, ip, userAgent);
   }
 
+  /** 管理员强退所选用户的全部设备；在线条目仅用于解析用户，撤销以数据库凭证代次为准。 */
+  @Transactional
+  public void kickUser(String jti) {
+    String username =
+        onlineUserRegistry
+            .find(jti)
+            .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "在线条目已失效，请刷新列表后重试"))
+            .username();
+    revokeAllSessions(username);
+  }
+
   /** 主动注销采用持久化凭证代次，可靠撤销该用户全部 access/refresh token；Redis 在线条目同步清理，仅作为快速路径和在线视图。 */
   @Transactional
   public void logout(Jwt accessToken) {
@@ -217,12 +228,16 @@ public class AuthService {
         || !StringUtils.hasText(accessToken.getSubject())) {
       throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
     }
-    tokenVersionStore.invalidateCredential(accessToken.getSubject());
+    revokeAllSessions(accessToken.getSubject());
+  }
+
+  private void revokeAllSessions(String username) {
+    tokenVersionStore.invalidateCredential(username);
     try {
-      onlineUserRegistry.kickAll(accessToken.getSubject());
+      onlineUserRegistry.kickAll(username);
     } catch (RuntimeException e) {
       // Redis 只是在线视图/快速清理路径；故障不能回滚 PostgreSQL 中已经递增的撤销代次。
-      log.warn("注销已持久化，但 Redis 在线会话清理失败: {}", e.getMessage());
+      log.warn("凭证撤销已写入当前事务，但 Redis 在线会话清理失败: {}", e.getMessage());
     }
   }
 

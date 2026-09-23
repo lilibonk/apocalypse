@@ -1,6 +1,8 @@
 package io.apocalypse;
 
+import io.apocalypse.framework.capability.CapabilityRegistry;
 import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.menu.service.MenuService;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,10 @@ class TokenRevocationIT extends AbstractIntegrationTest {
   @Autowired private PlatformTransactionManager transactionManager;
 
   @Autowired private CacheManager cacheManager;
+
+  @Autowired private CapabilityRegistry capabilityRegistry;
+
+  @Autowired private MenuService menuService;
 
   @Test
   void globalAuthorizationChangeRevokesOldAccessButAllowsRefresh() {
@@ -92,7 +98,9 @@ class TokenRevocationIT extends AbstractIntegrationTest {
     String oldAccess = login.at("/data/accessToken").asText();
     String oldRefresh = login.at("/data/refreshToken").asText();
 
+    assertThat(menuService.permsByUserId(Long.valueOf(userId))).isEmpty();
     putForData("/system/users/" + userId + "/roles", List.of(1L), adminToken);
+    assertThat(menuService.permsByUserId(Long.valueOf(userId))).contains("system:user:list");
     assertThat(exchangeRaw("/system/users/me", HttpMethod.GET, null, oldAccess).get("code").asInt())
         .isEqualTo(40100);
 
@@ -146,7 +154,10 @@ class TokenRevocationIT extends AbstractIntegrationTest {
 
     Cache permissionCache = cacheManager.getCache("userPerms");
     assertThat(permissionCache).isNotNull();
-    permissionCache.put(userId, List.of());
+    String permissionKey = userId + ":" + capabilityRegistry.cacheDiscriminator();
+    permissionCache.put(permissionKey, List.of());
+    assertThat(menuService.permsByUserId(userId)).isEmpty();
+    assertThat(menuService.freshPermsByUserId(userId)).contains("system:user:list");
 
     String userToken = loginAndGetToken("fresh_permission_user", "Fresh12345");
     assertThat(getForData("/system/users/page?page=1&size=1", userToken).get("size").asInt())

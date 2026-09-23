@@ -11,9 +11,16 @@ import io.apocalypse.calendar.api.ProjectionResultStatus;
 import io.apocalypse.calendar.api.ProjectionTimeKind;
 import io.apocalypse.common.exception.BizException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -33,6 +40,118 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
     properties = "apocalypse.capabilities.calendar.enabled=true")
 class CalendarProjectionConcurrencyIT extends AbstractIntegrationTest {
   @Autowired private CalendarProjectionApi api;
+
+  @Test
+  void legacyTimedRetryMatchesTheMicrosecondPrecisionActuallyStored() throws Exception {
+    String target = target("legacy-nanos");
+    Instant start = Instant.parse("2026-09-22T23:59:59.999999500Z");
+    ProjectedEventContent content =
+        new ProjectedEventContent(
+            "Nanosecond event",
+            null,
+            null,
+            ProjectionTimeKind.TIMED,
+            null,
+            null,
+            start,
+            start.plusSeconds(3600),
+            "UTC");
+    ProjectedEventCommand command = new ProjectedEventCommand("lesson", "legacy-nanos", 1, content);
+    var created = api.upsert(batch(target, List.of(command))).items().getFirst();
+    jdbcTemplate.update(
+        "UPDATE cal_projection_source SET payload_hash = ? WHERE event_id = ?",
+        legacyHash(content),
+        created.eventId());
+    assertThat(api.upsert(batch(target, List.of(command))).items().getFirst().status())
+        .isEqualTo(ProjectionResultStatus.UNCHANGED);
+  }
+
+  @Test
+  void discardedLegacyDraftRetryUsesRetainedContentAndRejectsAHashCollision() throws Exception {
+    String target = target("legacy-discard", "DRAFT_ONLY");
+    ProjectedEventContent reviewed =
+        new ProjectedEventContent(
+            "Meeting",
+            "Agenda|Room 101",
+            "HQ",
+            ProjectionTimeKind.ALL_DAY,
+            LocalDate.of(2026, 10, 1),
+            LocalDate.of(2026, 10, 2),
+            null,
+            null,
+            null);
+    ProjectedEventCommand command =
+        new ProjectedEventCommand("lesson", "legacy-discard", 1, reviewed);
+    var created = api.upsert(batch(target, List.of(command))).items().getFirst();
+    jdbcTemplate.update(
+        "UPDATE cal_projection_source SET payload_hash = ? WHERE event_id = ?",
+        legacyHash(reviewed),
+        created.eventId());
+    Long calendarId =
+        jdbcTemplate.queryForObject(
+            "SELECT calendar_id FROM cal_event WHERE id = ?", Long.class, created.eventId());
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    deleteForData(
+        "/calendar/calendars/" + calendarId + "/managed-events/" + created.eventId() + "/draft",
+        token);
+    assertThat(api.upsert(batch(target, List.of(command))).items().getFirst().status())
+        .isEqualTo(ProjectionResultStatus.UNCHANGED);
+    ProjectedEventContent substituted =
+        new ProjectedEventContent(
+            "Meeting|Agenda",
+            "Room 101",
+            "HQ",
+            ProjectionTimeKind.ALL_DAY,
+            reviewed.startDate(),
+            reviewed.endDateExclusive(),
+            null,
+            null,
+            null);
+    assertThat(legacyHash(substituted)).isEqualTo(legacyHash(reviewed));
+    assertThatThrownBy(
+            () ->
+                api.upsert(
+                    batch(
+                        target,
+                        List.of(
+                            new ProjectedEventCommand(
+                                "lesson", "legacy-discard", 1, substituted)))))
+        .isInstanceOf(BizException.class);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT deleted FROM cal_event_revision WHERE event_id = ?",
+                Integer.class,
+                created.eventId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void unchangedLegacyProjectionRetryChecksRetainedContentWithoutMutatingIt() throws Exception {
+    String target = target("legacy-retry");
+    ProjectedEventCommand command = lesson("legacy", 1, 2);
+    var created = api.upsert(batch(target, List.of(command))).items().getFirst();
+    String legacyHash =
+        HexFormat.of()
+            .formatHex(
+                MessageDigest.getInstance("SHA-256")
+                    .digest(
+                        "Lesson legacy|||ALL_DAY|2026-09-02|2026-09-03|||"
+                            .getBytes(StandardCharsets.UTF_8)));
+    jdbcTemplate.update(
+        "UPDATE cal_projection_source SET payload_hash = ? WHERE event_id = ?",
+        legacyHash,
+        created.eventId());
+    assertThat(api.upsert(batch(target, List.of(command))).items().getFirst().status())
+        .isEqualTo(ProjectionResultStatus.UNCHANGED);
+    jdbcTemplate.update(
+        "UPDATE cal_event_revision SET title = 'Different retained content' WHERE event_id = ?",
+        created.eventId());
+    ProjectedEventCommand newItem = lesson("legacy-retry-atomic", 1, 3);
+    assertThatThrownBy(() -> api.upsert(batch(target, List.of(newItem, command))))
+        .isInstanceOf(BizException.class);
+    assertThat(api.upsert(batch(target, List.of(newItem))).items().getFirst().status())
+        .isEqualTo(ProjectionResultStatus.CREATED);
+  }
 
   @Test
   void reversedConcurrentBatchesCreateOnceAndPreserveCallerResultOrder() throws Exception {
@@ -122,6 +241,10 @@ class CalendarProjectionConcurrencyIT extends AbstractIntegrationTest {
   }
 
   private String target(String suffix) {
+    return target(suffix, "DIRECT_PUBLISH");
+  }
+
+  private String target(String suffix, String publishMode) {
     String token = loginAndGetToken("admin", ADMIN_PASSWORD);
     String key = "it-campus-" + suffix;
     String id =
@@ -143,9 +266,32 @@ class CalendarProjectionConcurrencyIT extends AbstractIntegrationTest {
             .asText();
     putForData(
         "/calendar/calendars/" + id + "/projection-grants/campus-concurrency",
-        Map.of("publishMode", "DIRECT_PUBLISH", "expectedVersion", 0),
+        Map.of("publishMode", publishMode, "expectedVersion", 0),
         token);
     return key;
+  }
+
+  private static String legacyHash(ProjectedEventContent content) throws Exception {
+    String canonical =
+        String.join(
+            "|",
+            content.title(),
+            Objects.toString(content.description(), ""),
+            Objects.toString(content.location(), ""),
+            content.timeKind().name(),
+            Objects.toString(content.startDate(), ""),
+            Objects.toString(content.endDateExclusive(), ""),
+            content.startInstant() == null
+                ? ""
+                : LocalDateTime.ofInstant(content.startInstant(), ZoneOffset.UTC).toString(),
+            content.endInstant() == null
+                ? ""
+                : LocalDateTime.ofInstant(content.endInstant(), ZoneOffset.UTC).toString(),
+            Objects.toString(content.zoneId(), ""));
+    return HexFormat.of()
+        .formatHex(
+            MessageDigest.getInstance("SHA-256")
+                .digest(canonical.getBytes(StandardCharsets.UTF_8)));
   }
 
   private static ProjectionBatchCommand batch(String target, List<ProjectedEventCommand> events) {

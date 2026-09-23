@@ -1,6 +1,7 @@
 package io.apocalypse.system.online.controller;
 
 import io.apocalypse.framework.log.OperLog;
+import io.apocalypse.framework.security.AuthService;
 import io.apocalypse.framework.security.OnlineUserRegistry;
 import io.apocalypse.system.online.dto.response.OnlineUserResp;
 
@@ -15,16 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-/**
- * 在线用户端点。数据来自 framework 在线注册表（{@code apoc:online:{jti}}）； 强退 = 删在线条目 + jti 写入黑名单（JwtBlacklistFilter
- * 逐请求拦截）。
- */
+/** 在线用户端点。所选在线条目用于确定用户名；管理员强退持久化撤销该用户全部设备的 access/refresh 令牌。 */
 @RestController
 @RequestMapping("/system/online-users")
 @RequiredArgsConstructor
 public class OnlineUserController {
 
   private final OnlineUserRegistry onlineUserRegistry;
+
+  private final AuthService authService;
 
   /** 在线用户列表。 */
   @GetMapping
@@ -42,11 +42,11 @@ public class OnlineUserController {
         .toList();
   }
 
-  /** 强退指定会话（jti）。 */
+  /** 按所选会话（jti）确定用户，并强退该用户全部设备。 */
   @DeleteMapping("/{jti}")
   @PreAuthorize("hasAuthority('system:online:kick')")
   @OperLog(title = "在线用户", businessType = "FORCE")
   public void kick(@PathVariable String jti) {
-    onlineUserRegistry.kick(jti);
+    authService.kickUser(jti);
   }
 }

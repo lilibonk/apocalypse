@@ -29,7 +29,16 @@ const MIME = {
 };
 
 http.createServer((req, res) => {
-  let p = decodeURIComponent((req.url || '/').split('?')[0]);
+  let p;
+  try {
+    p = decodeURIComponent((req.url || '/').split('?')[0]);
+  } catch (error) {
+    if (!(error instanceof URIError)) throw error;
+    res.writeHead(400); res.end('bad request'); return;
+  }
+  if (p.includes('\0')) {
+    res.writeHead(400); res.end('bad request'); return;
+  }
   if (p === '/' || p === '') p = '/index.html';
   const file = path.normalize(path.join(root, p));
   if (!file.startsWith(root)) {

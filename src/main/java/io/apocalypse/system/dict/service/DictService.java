@@ -37,7 +37,7 @@ public class DictService {
   private final DictConvert dictConvert;
 
   /** 按类型取有效字典项（下拉用，两级缓存）。 */
-  @Cacheable(cacheNames = "dict", key = "#type")
+  @Cacheable(cacheNames = "dict", key = "#type", sync = true)
   public List<DictDataResp> getByType(String type) {
     return sysDictDataMapper.findEnabledByType(type).stream().map(dictConvert::toDataResp).toList();
   }

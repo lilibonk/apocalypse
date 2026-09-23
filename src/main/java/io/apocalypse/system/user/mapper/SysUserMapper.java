@@ -31,7 +31,7 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
           .or()
           .like(SysUserEntity::getNickname, keyword);
     }
-    wrapper.orderByDesc(SysUserEntity::getCreateTime);
+    wrapper.orderByDesc(SysUserEntity::getCreateTime, SysUserEntity::getId);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));
   }
 
