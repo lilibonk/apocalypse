@@ -29,6 +29,14 @@ src/main/resources/db/migration/V<n>__<key>_*.sql
 
 可选页面至少对应 `src/views/<key>/index.tsx`、`<key>.api.ts`、`<key>.queries.ts` 与 `i18n/index.ts`。菜单 `component='<key>/index'` 通过约定映射到该页面；页面导出的 `queryScope.moduleKey` 必须等于菜单的 `module_key`，中英文 locale pack 的叶子键须一致。
 
+## 有状态与归属数据的接入
+
+只读示例验证的是装配路径，不能直接证明业务写入与对象授权。新增包含用户归属的数据时，先在服务端从 `SecurityUtils.currentUserId()` 取得身份；创建时由服务端写入 `owner_id`，请求体中的 `userId` / `ownerId` 不作所有权依据。详情、列表、修改和删除查询必须带 owner 约束，记录存在但不属于当前用户时不能返回内容。业务记录 ID 沿用雪花 `Long`，MyBatis-Plus 类型留在 mapper/infrastructure，写操作的事务放在 service/application 层。
+
+菜单页与按钮权限分别声明 `域:对象:动作`，给需要的角色建立关系；可选模块每个菜单的 `module_key` 必须与后端能力 key 和前端 `ModuleScope` 一致。Flyway 版本、菜单 ID 与权限串先在目标仓库查重，不从示例补丁原样复制。验证时用两个都具有接口权限的账号做读写：同权限不等于同 owner；再检查无权限账号、模块关闭/重启和迁移仍在的状态。
+
+前端写操作在模块 `*.queries.ts` 通过同一个 scope 的 `operation` 定义，组件用 `useModuleMutation` 调用，并提供 `localKey` 与 `onDenied`。对象级 403/404 可能不改变 `/me`，应使用 `useResourceDenial` 清掉被拒对象的缓存和编辑态；成功后只通过模块查询定义的 `filter` 失效相关查询。详情 ID、分页和筛选条件必须进入 query 参数身份；不要在异步回调结束后重新捕获当前授权来写旧结果。现有[只读接入补丁](../examples/consumer-probe.patch)仍是最小装配练习，写路径需按本节补全。
+
 ## 完成检查
 
 从新库启动时确认迁移、菜单、角色与接口权限一致；分别核查有权、无权和对象不属于当前用户的路径。可选模块还需验证开、关、重启和旧权限缓存；关停不能跳过共享 Flyway 与安全校验。运行 `./mvnw --batch-mode verify` 和前端 `pnpm check`；测试必须使用 Testcontainers，不连接已有业务环境。
