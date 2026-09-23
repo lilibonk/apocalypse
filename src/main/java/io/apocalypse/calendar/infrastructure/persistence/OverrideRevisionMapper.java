@@ -102,6 +102,13 @@ public interface OverrideRevisionMapper extends BaseMapper<OverrideRevisionDo> {
       """)
   int selectMaxManagedRevisionNo(@Param("calendarId") Long calendarId);
 
+  @Select(
+      """
+      SELECT COALESCE(MAX(version), -1) FROM cal_override_revision
+      WHERE calendar_id = #{calendarId} AND scope_type = 'MANAGED' AND owner_user_id IS NULL
+      """)
+  int selectMaxManagedVersion(@Param("calendarId") Long calendarId);
+
   @Update(
       """
       UPDATE cal_override_revision

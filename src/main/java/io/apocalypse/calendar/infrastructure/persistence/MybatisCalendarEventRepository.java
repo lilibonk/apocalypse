@@ -4,6 +4,7 @@ import io.apocalypse.calendar.api.CalendarErrorCode;
 import io.apocalypse.calendar.domain.CalendarEventRepository;
 import io.apocalypse.calendar.domain.CalendarEventSnapshot;
 import io.apocalypse.calendar.domain.EventContent;
+import io.apocalypse.calendar.domain.EventContentHasher;
 import io.apocalypse.calendar.domain.EventKind;
 import io.apocalypse.calendar.domain.EventRevisionSnapshot;
 import io.apocalypse.calendar.domain.EventRevisionState;
@@ -240,14 +241,17 @@ public class MybatisCalendarEventRepository implements CalendarEventRepository {
       if (command.expectedDraftVersion() != 0) {
         throw new BizException(ErrorCode.CONFLICT);
       }
-      revisionMapper.insert(
+      EventRevisionDo created =
           newRevision(
               event.getId(),
               revisionMapper.selectMaxRevisionNo(event.getId()) + 1,
               EventRevisionState.DRAFT,
               command.content(),
               command.contentHash(),
-              command.actor()));
+              command.actor());
+      // Retained (including discarded) history prevents a stale approval from matching a new draft.
+      created.setVersion(Math.incrementExact(revisionMapper.selectMaxVersion(event.getId())));
+      revisionMapper.insert(created);
     } else {
       if (draft.getVersion() != command.expectedDraftVersion()) {
         throw new BizException(ErrorCode.CONFLICT);
@@ -285,6 +289,9 @@ public class MybatisCalendarEventRepository implements CalendarEventRepository {
     if (draft.getVersion() != command.expectedDraftVersion()
         || !draft.getContentHash().equals(command.expectedContentHash())) {
       throw new BizException(ErrorCode.CONFLICT);
+    }
+    if (!EventContentHasher.hash(toContent(draft)).equals(draft.getContentHash())) {
+      throw new BizException(ErrorCode.CONFLICT.getCode(), "草稿使用旧版内容校验，请重新保存或由投影来源更新并复核后发布");
     }
     EventRevisionDo published = revisionMapper.selectPublishedForUpdate(event.getId());
     if (published != null) {

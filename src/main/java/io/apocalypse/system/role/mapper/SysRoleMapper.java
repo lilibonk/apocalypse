@@ -77,7 +77,7 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
       SELECT u.id, u.username, u.nickname, u.status FROM sys_user u
       JOIN sys_user_role ur ON u.id = ur.user_id
       WHERE ur.role_id = #{roleId} AND u.deleted = 0
-      ORDER BY u.create_time DESC
+      ORDER BY u.create_time DESC, u.id DESC
       """)
   Page<RoleUserResp> selectUserPage(Page<RoleUserResp> page, @Param("roleId") Long roleId);
 

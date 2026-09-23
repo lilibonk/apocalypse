@@ -2,6 +2,7 @@ package io.apocalypse.framework.cache;
 
 import io.apocalypse.framework.redis.RedisKeyScanner;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,8 +17,11 @@ import org.redisson.api.RedissonClient;
 import org.springframework.cache.Cache;
 import org.springframework.cache.support.NullValue;
 import org.springframework.cache.support.SimpleValueWrapper;
+import org.springframework.data.redis.connection.ReturnType;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.util.Assert;
 
@@ -54,6 +58,23 @@ public class TwoLevelCache implements Cache {
 
   private static final long GENERATION_CHECK_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(1);
 
+  private static final byte[] PUT_IF_GENERATION =
+      """
+      local generation = redis.call('GET', KEYS[2]) or '0'
+      if generation ~= ARGV[1] then return 0 end
+      redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+      return 1
+      """
+          .getBytes(StandardCharsets.UTF_8);
+
+  private static final byte[] EVICT_AND_INCREMENT =
+      """
+      local generation = redis.call('INCR', KEYS[2])
+      redis.call('DEL', KEYS[1])
+      return generation
+      """
+          .getBytes(StandardCharsets.UTF_8);
+
   private final String name;
 
   private final CacheProperties properties;
@@ -70,7 +91,11 @@ public class TwoLevelCache implements Cache {
 
   private final String instanceId;
 
-  private volatile long localGeneration;
+  private final Object l1Monitor = new Object();
+
+  private long localGeneration;
+
+  private long invalidationEpoch;
 
   private final AtomicLong lastGenerationCheckNanos = new AtomicLong();
 
@@ -110,10 +135,15 @@ public class TwoLevelCache implements Cache {
   @Override
   public ValueWrapper get(Object key) {
     ensureFreshGeneration();
-    // L1 命中直接返回（含空值哨兵）
-    Object value = l1.getIfPresent(key);
-    if (value != null) {
-      return toWrapper(value);
+    long readEpoch;
+    Object value;
+    synchronized (l1Monitor) {
+      // L1 命中直接返回（含空值哨兵）
+      value = l1.getIfPresent(key);
+      if (value != null) {
+        return toWrapper(value);
+      }
+      readEpoch = invalidationEpoch;
     }
     // L2 命中则回填 L1；旧格式/损坏条目按失效自愈：清掉毒条目并视为未命中（回源重建）
     try {
@@ -124,7 +154,12 @@ public class TwoLevelCache implements Cache {
       return null;
     }
     if (value != null) {
-      l1.put(key, value);
+      synchronized (l1Monitor) {
+        // 失效先于 L2 响应到达时，不得把旧响应重新写入已经清理的 L1。
+        if (readEpoch == invalidationEpoch) {
+          l1.put(key, value);
+        }
+      }
       return toWrapper(value);
     }
     return null;
@@ -152,8 +187,13 @@ public class TwoLevelCache implements Cache {
       if (wrapper != null) {
         return (T) wrapper.get();
       }
+      long loadGeneration = readGeneration();
+      long loadEpoch;
+      synchronized (l1Monitor) {
+        loadEpoch = invalidationEpoch;
+      }
       T value = valueLoader.call();
-      put(key, value);
+      putIfGeneration(key, value, loadGeneration, loadEpoch);
       return value;
     } catch (Exception e) {
       throw new ValueRetrievalException(key, valueLoader, e);
@@ -166,16 +206,58 @@ public class TwoLevelCache implements Cache {
 
   @Override
   public void put(Object key, Object value) {
+    long writeGeneration = readGeneration();
+    long writeEpoch;
+    synchronized (l1Monitor) {
+      writeEpoch = invalidationEpoch;
+    }
+    putIfGeneration(key, value, writeGeneration, writeEpoch);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void putIfGeneration(Object key, Object value, long generation, long writeEpoch) {
     Object storeValue = toStoreValue(value);
-    l1.put(key, storeValue);
-    l2.opsForValue().set(redisKey(key), storeValue, jitteredTtlSeconds(), TimeUnit.SECONDS);
+    RedisSerializer<Object> serializer = (RedisSerializer<Object>) l2.getValueSerializer();
+    byte[] payload = serializer.serialize(storeValue);
+    Long stored =
+        l2.execute(
+            (RedisCallback<Long>)
+                connection ->
+                    connection
+                        .scriptingCommands()
+                        .eval(
+                            PUT_IF_GENERATION,
+                            ReturnType.INTEGER,
+                            2,
+                            redisKey(key).getBytes(StandardCharsets.UTF_8),
+                            generationKey().getBytes(StandardCharsets.UTF_8),
+                            Long.toString(generation).getBytes(StandardCharsets.UTF_8),
+                            payload,
+                            Long.toString(jitteredTtlSeconds()).getBytes(StandardCharsets.UTF_8)));
+    synchronized (l1Monitor) {
+      if (Long.valueOf(1).equals(stored) && writeEpoch == invalidationEpoch) {
+        l1.put(key, storeValue);
+      }
+    }
   }
 
   @Override
   public void evict(Object key) {
     evictLocal(key);
-    l2.delete(redisKey(key));
-    long generation = incrementGeneration();
+    Long generation =
+        l2.execute(
+            (RedisCallback<Long>)
+                connection ->
+                    connection
+                        .scriptingCommands()
+                        .eval(
+                            EVICT_AND_INCREMENT,
+                            ReturnType.INTEGER,
+                            2,
+                            redisKey(key).getBytes(StandardCharsets.UTF_8),
+                            generationKey().getBytes(StandardCharsets.UTF_8)));
+    Assert.notNull(generation, "缓存失效未返回代数");
+    advanceLocalGeneration(generation);
     invalidationPublisher.accept(
         new CacheInvalidateMessage(name, String.valueOf(key), instanceId, generation));
   }
@@ -183,6 +265,8 @@ public class TwoLevelCache implements Cache {
   @Override
   public void clear() {
     clearLocal();
+    // 先阻止清理前开始的回源重新写入；完成 SCAN 后再推进一次，使清理期间的 L1 读取自愈。
+    incrementGeneration();
     RedisKeyScanner.delete(l2, KEY_PREFIX + name + ":*");
     long generation = incrementGeneration();
     invalidationPublisher.accept(new CacheInvalidateMessage(name, null, instanceId, generation));
@@ -190,22 +274,25 @@ public class TwoLevelCache implements Cache {
 
   /** 仅失效本实例 L1（供失效广播订阅方调用）。 */
   public void evictLocal(Object key) {
-    l1.invalidate(key);
+    synchronized (l1Monitor) {
+      l1.invalidate(key);
+      invalidationEpoch++;
+    }
   }
 
   /** 仅清空本实例 L1（供失效广播订阅方调用）。 */
   public void clearLocal() {
-    l1.invalidateAll();
+    synchronized (l1Monitor) {
+      clearLocalUnderLock();
+    }
   }
 
-  /** 接收远端失效后同步代数；key 失效可精准清理，clear 则清空本地缓存。 */
+  /** 区域失效与代数推进原子完成：兼容非 String key，也覆盖之前漏收的失效消息。 */
   public void applyRemoteInvalidation(CacheInvalidateMessage message) {
-    if (message.key() == null) {
-      clearLocal();
-    } else {
-      evictLocal(message.key());
+    synchronized (l1Monitor) {
+      clearLocalUnderLock();
+      localGeneration = Math.max(localGeneration, message.generation());
     }
-    localGeneration = Math.max(localGeneration, message.generation());
   }
 
   private String redisKey(Object key) {
@@ -219,8 +306,15 @@ public class TwoLevelCache implements Cache {
   private long incrementGeneration() {
     Long generation = redisStrings.opsForValue().increment(generationKey());
     long resolved = generation == null ? readGeneration() : generation;
-    localGeneration = resolved;
+    advanceLocalGeneration(resolved);
     return resolved;
+  }
+
+  private void advanceLocalGeneration(long generation) {
+    synchronized (l1Monitor) {
+      clearLocalUnderLock();
+      localGeneration = Math.max(localGeneration, generation);
+    }
   }
 
   private long readGeneration() {
@@ -242,11 +336,22 @@ public class TwoLevelCache implements Cache {
         || !lastGenerationCheckNanos.compareAndSet(previous, now)) {
       return;
     }
-    long remoteGeneration = readGeneration();
-    if (remoteGeneration != localGeneration) {
-      clearLocal();
-      localGeneration = remoteGeneration;
+    long checkEpoch;
+    synchronized (l1Monitor) {
+      checkEpoch = invalidationEpoch;
     }
+    long remoteGeneration = readGeneration();
+    synchronized (l1Monitor) {
+      if (checkEpoch == invalidationEpoch && remoteGeneration != localGeneration) {
+        clearLocalUnderLock();
+        localGeneration = remoteGeneration;
+      }
+    }
+  }
+
+  private void clearLocalUnderLock() {
+    l1.invalidateAll();
+    invalidationEpoch++;
   }
 
   private Object toStoreValue(Object value) {

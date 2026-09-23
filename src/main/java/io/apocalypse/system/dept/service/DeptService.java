@@ -34,6 +34,7 @@ public class DeptService {
   /** 新增部门，返回主键。 */
   @Transactional
   public Long create(DeptSaveReq req) {
+    sysDeptMapper.lockHierarchy();
     requireParent(req.parentId());
     SysDeptEntity entity = new SysDeptEntity();
     applyReq(entity, req);
@@ -44,6 +45,7 @@ public class DeptService {
   /** 更新部门。新父部门不得为自身或自身子树内的节点（防循环导致递归 CTE 死循环）。 */
   @Transactional
   public void update(Long id, DeptSaveReq req) {
+    sysDeptMapper.lockHierarchy();
     SysDeptEntity entity = requireById(id);
     if (req.parentId() != 0) {
       requireParent(req.parentId());
@@ -62,6 +64,7 @@ public class DeptService {
   /** 删除部门（逻辑删）。存在子部门或挂接用户时不允许删除。 */
   @Transactional
   public void delete(Long id) {
+    sysDeptMapper.lockHierarchy();
     requireById(id);
     if (sysDeptMapper.existsByParentId(id)) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "存在子部门，不允许删除");

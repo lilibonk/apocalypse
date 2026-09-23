@@ -48,7 +48,8 @@ public class MenuService {
   /** 用户接口权限串；能力状态是缓存身份的一部分，跨配置实例不会复用错误快照。 */
   @Cacheable(
       cacheNames = "userPerms",
-      key = "#userId + ':' + @capabilityRegistry.cacheDiscriminator()")
+      key = "#userId + ':' + @capabilityRegistry.cacheDiscriminator()",
+      sync = true)
   public List<String> permsByUserId(Long userId) {
     return enabledPermsByUserId(userId);
   }

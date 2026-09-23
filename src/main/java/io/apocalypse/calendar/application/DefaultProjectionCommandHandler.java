@@ -181,9 +181,12 @@ public class DefaultProjectionCommandHandler implements ProjectionCommandHandler
                 throw revisionStateInvalid();
               }
               if (source.sourceVersion() == event.sourceVersion()
-                  && !source.payloadHash().equals(event.payloadHash())) {
+                  && !source.payloadHash().equals(event.payloadHash())
+                  && !EventContentHasher.matchesLegacyHash(event.content(), source.payloadHash())) {
                 throw versionConflict();
               }
+              // A legacy candidate still needs exact retained-content validation in repository
+              // upsert; this transactional preflight never authorizes a write or no-op by itself.
             });
   }
 

@@ -159,6 +159,9 @@ public class ManagedOverrideService {
         || !Objects.equals(draft.contentHash(), request.expectedContentHash())) {
       throw new BizException(ErrorCode.CONFLICT);
     }
+    if (!OverrideContentHasher.hash(draft.operations()).equals(draft.contentHash())) {
+      throw new BizException(ErrorCode.CONFLICT.getCode(), "草稿使用旧版内容校验，请重新保存并复核后发布");
+    }
     ManagedConflictPreparation preparation =
         overrideConflictService.prepareManagedPublish(calendarId, request, draft, userId, actor);
     OverrideRevisionSnapshot published =

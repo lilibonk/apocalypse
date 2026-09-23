@@ -1,46 +1,54 @@
 package io.apocalypse.calendar.domain;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
-import java.util.Objects;
 
 public final class OverrideContentHasher {
 
   private OverrideContentHasher() {}
 
   public static String hash(List<DayOverrideOperation> operations) {
-    String canonical =
+    List<DayOverrideOperation> sorted =
         operations.stream()
             .sorted(
                 Comparator.comparing(DayOverrideOperation::date)
                     .thenComparing(operation -> operation.field().name()))
-            .map(OverrideContentHasher::canonical)
-            .reduce((left, right) -> left + "\n" + right)
-            .orElse("");
-    try {
-      byte[] digest =
-          MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(digest);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("JDK 缺少 SHA-256", e);
+            .toList();
+    CanonicalContentHash hash =
+        new CanonicalContentHash("calendar-override-content:v2").add(sorted.size());
+    for (DayOverrideOperation operation : sorted) {
+      hash.add(operation.date()).add(operation.field()).add(operation.action());
+      addValue(hash, operation.value());
+      addValue(hash, operation.savedUnderlay());
+      hash.add(operation.savedUnderlayHash())
+          .add(operation.savedUnderlaySource().layer())
+          .add(
+              operation.savedUnderlaySource().layer() == SourceLayer.SYSTEM_DATASET
+                  ? operation.savedUnderlaySource().sourceVersion()
+                  : operation.savedUnderlaySource().sourceCalendarKey())
+          .add(operation.savedUnderlaySource().sourceVersion());
     }
+    return hash.finish();
   }
 
-  private static String canonical(DayOverrideOperation operation) {
-    return String.join(
-        "|",
-        operation.date().toString(),
-        operation.field().name(),
-        operation.action().name(),
-        operation.value() == null ? "" : operation.value().canonicalForm(),
-        operation.savedUnderlay().canonicalForm(),
-        operation.savedUnderlayHash(),
-        operation.savedUnderlaySource().layer().name(),
-        Objects.toString(operation.savedUnderlaySource().sourceCalendarKey(), ""),
-        Objects.toString(operation.savedUnderlaySource().sourceVersion(), ""));
+  private static void addValue(CanonicalContentHash hash, DayFieldValue value) {
+    hash.add(value != null);
+    if (value == null) {
+      return;
+    }
+    LunarDateValue lunar = value.lunarDate();
+    DayPolicyValue policy = value.dayPolicy();
+    hash.add(value.field())
+        .add(value.state())
+        .add(lunar == null ? null : lunar.year())
+        .add(lunar == null ? null : lunar.month())
+        .add(lunar == null ? null : lunar.day())
+        .add(lunar == null ? null : lunar.leapMonth())
+        .add(lunar == null ? null : lunar.displayText())
+        .add(value.zodiac())
+        .add(value.solarTerm())
+        .add(policy == null ? null : policy.classification())
+        .add(policy == null ? null : policy.name())
+        .add(value.text());
   }
 }

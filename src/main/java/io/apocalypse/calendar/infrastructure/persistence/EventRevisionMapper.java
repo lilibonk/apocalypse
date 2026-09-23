@@ -31,6 +31,15 @@ public interface EventRevisionMapper extends BaseMapper<EventRevisionDo> {
             .last("LIMIT 1"));
   }
 
+  @Select(
+      """
+      SELECT * FROM cal_event_revision
+      WHERE event_id = #{eventId}
+      ORDER BY revision_no DESC, id DESC
+      LIMIT 1
+      """)
+  EventRevisionDo selectLatestRetained(@Param("eventId") Long eventId);
+
   default java.util.List<EventRevisionDo> selectPublishedByEventIds(java.util.List<Long> eventIds) {
     return selectList(
         new LambdaQueryWrapper<EventRevisionDo>()
@@ -58,9 +67,17 @@ public interface EventRevisionMapper extends BaseMapper<EventRevisionDo> {
       """
       SELECT COALESCE(MAX(revision_no), 0)
       FROM cal_event_revision
-      WHERE event_id = #{eventId} AND deleted = 0
+      WHERE event_id = #{eventId}
       """)
   int selectMaxRevisionNo(@Param("eventId") Long eventId);
+
+  @Select(
+      """
+      SELECT COALESCE(MAX(version), -1)
+      FROM cal_event_revision
+      WHERE event_id = #{eventId}
+      """)
+  int selectMaxVersion(@Param("eventId") Long eventId);
 
   @Update(
       """

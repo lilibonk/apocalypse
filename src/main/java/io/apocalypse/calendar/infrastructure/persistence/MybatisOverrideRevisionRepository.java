@@ -10,6 +10,7 @@ import io.apocalypse.calendar.domain.OverrideAction;
 import io.apocalypse.calendar.domain.OverrideConflictRecordState;
 import io.apocalypse.calendar.domain.OverrideConflictRepository;
 import io.apocalypse.calendar.domain.OverrideConflictSnapshot;
+import io.apocalypse.calendar.domain.OverrideContentHasher;
 import io.apocalypse.calendar.domain.OverrideRevisionRepository;
 import io.apocalypse.calendar.domain.OverrideRevisionSnapshot;
 import io.apocalypse.calendar.domain.OverrideRevisionState;
@@ -152,6 +153,9 @@ public class MybatisOverrideRevisionRepository implements OverrideRevisionReposi
       draft =
           newManagedDraft(
               replacement, revisionMapper.selectMaxManagedRevisionNo(replacement.calendarId()) + 1);
+      // The scope lock serializes this generation with every draft mutation and publication.
+      draft.setVersion(
+          Math.incrementExact(revisionMapper.selectMaxManagedVersion(replacement.calendarId())));
       revisionMapper.insert(draft);
     } else {
       if (replacement.expectedRevisionNo() != draft.getRevisionNo()) {
@@ -198,6 +202,10 @@ public class MybatisOverrideRevisionRepository implements OverrideRevisionReposi
     if (draft.getVersion() != publish.expectedDraftVersion()
         || !Objects.equals(draft.getContentHash(), publish.expectedContentHash())) {
       throw new BizException(ErrorCode.CONFLICT);
+    }
+    if (!OverrideContentHasher.hash(toSnapshot(draft).operations())
+        .equals(draft.getContentHash())) {
+      throw new BizException(ErrorCode.CONFLICT.getCode(), "草稿使用旧版内容校验，请重新保存并复核后发布");
     }
     OverrideRevisionDo current =
         revisionMapper.selectPublishedManagedForUpdate(publish.calendarId());

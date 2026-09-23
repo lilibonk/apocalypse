@@ -1,6 +1,7 @@
 package io.apocalypse;
 
 import io.apocalypse.framework.cache.CacheInvalidateMessage;
+import io.apocalypse.framework.cache.TwoLevelCache;
 import io.apocalypse.framework.cache.TwoLevelCacheManager;
 
 import java.time.Duration;
@@ -69,5 +70,52 @@ class CacheInvalidationIT extends AbstractIntegrationTest {
         .pollDelay(Duration.ofSeconds(1))
         .atMost(Duration.ofSeconds(5))
         .untilAsserted(() -> assertThat(cache.get("k1", String.class)).isEqualTo("v2"));
+  }
+
+  @Test
+  void stringEncodedBroadcastAlsoEvictsLongKey() {
+    TwoLevelCache cache = (TwoLevelCache) cacheManager.getCache("it-cache-long-key");
+    assertThat(cache).isNotNull();
+    cache.put(42L, "old");
+    assertThat(cache.get(42L, String.class)).isEqualTo("old");
+    redisTemplate.opsForValue().set("apoc:v2:it-cache-long-key:42", "new");
+    stringRedisTemplate.opsForValue().set("apoc:cache:generation:it-cache-long-key", "1");
+    cacheManager.onInvalidateMessage(
+        new CacheInvalidateMessage("it-cache-long-key", "42", "remote", 1));
+    assertThat(cache.get(42L, String.class)).isEqualTo("new");
+  }
+
+  @Test
+  void laterAndOutOfOrderMessagesCannotMaskAnEarlierMissedInvalidation() {
+    String name = "it-cache-generation-gap";
+    TwoLevelCache cache = (TwoLevelCache) cacheManager.getCache(name);
+    assertThat(cache).isNotNull();
+    cache.put("first", "old-first");
+    cache.put("second", "old-second");
+    assertThat(cache.get("first", String.class)).isEqualTo("old-first");
+    redisTemplate.opsForValue().set("apoc:v2:" + name + ":first", "new-first");
+    redisTemplate.opsForValue().set("apoc:v2:" + name + ":second", "new-second");
+    stringRedisTemplate.opsForValue().set("apoc:cache:generation:" + name, "2");
+    // Generation 1 (first) is lost; only generation 2 (second) arrives.
+    cache.applyRemoteInvalidation(new CacheInvalidateMessage(name, "second", "remote", 2));
+    assertThat(cache.get("first", String.class)).isEqualTo("new-first");
+    assertThat(cache.get("second", String.class)).isEqualTo("new-second");
+    cache.applyRemoteInvalidation(new CacheInvalidateMessage(name, "first", "remote", 1));
+    cache.applyRemoteInvalidation(new CacheInvalidateMessage(name, "second", "remote", 2));
+    assertThat(cache.get("first", String.class)).isEqualTo("new-first");
+  }
+
+  @Test
+  void localGenerationAdvanceAlsoClearsMissedRemoteInvalidation() {
+    String name = "it-cache-local-generation-gap";
+    Cache cache = cacheManager.getCache(name);
+    assertThat(cache).isNotNull();
+    cache.put("remote-key", "old");
+    cache.put("local-key", "local");
+    assertThat(cache.get("remote-key", String.class)).isEqualTo("old");
+    redisTemplate.opsForValue().set("apoc:v2:" + name + ":remote-key", "new");
+    stringRedisTemplate.opsForValue().increment("apoc:cache:generation:" + name);
+    cache.evict("local-key");
+    assertThat(cache.get("remote-key", String.class)).isEqualTo("new");
   }
 }

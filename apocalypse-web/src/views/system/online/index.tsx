@@ -55,7 +55,9 @@ export default function OnlineUserPage() {
   const kickMutation = useMutation({
     mutationFn: (jti: string) => kickOnlineUser(jti),
     onSuccess: () => {
-      toast.success(t('common.已将该用户强制下线', { defaultValue: '已将该用户强制下线' }))
+      toast.success(
+        t('common.已将该用户全部设备强制下线', { defaultValue: '已将该用户全部设备强制下线' }),
+      )
       setKicking(null)
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY })
     },
@@ -83,8 +85,8 @@ export default function OnlineUserPage() {
           {t('common.在线用户', { defaultValue: '在线用户' })}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {t('common.当前在线的登录会话，可强制下线', {
-            defaultValue: '当前在线的登录会话，可强制下线',
+          {t('common.当前在线的登录会话，强退将使该用户全部设备下线', {
+            defaultValue: '当前在线的登录会话，强退将使该用户全部设备下线',
           })}
         </p>
       </div>
@@ -171,8 +173,9 @@ export default function OnlineUserPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {kicking
-                ? t('common.将强制用户 {{name}} 下线，该操作立即生效。', {
-                    defaultValue: '将强制用户「{{name}}」下线，该操作立即生效。',
+                ? t('common.将强制用户 {{name}} 的全部设备下线，所有现有登录和刷新令牌立即失效。', {
+                    defaultValue:
+                      '将强制用户「{{name}}」的全部设备下线，所有现有登录和刷新令牌立即失效。',
                     name: kicking.username,
                   })
                 : ''}
