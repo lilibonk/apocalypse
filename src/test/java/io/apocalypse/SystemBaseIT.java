@@ -48,7 +48,10 @@ class SystemBaseIT extends AbstractIntegrationTest {
     JsonNode menuIds = getForData("/system/roles/1/menus", token);
 
     assertThat(menuIds.isArray()).isTrue();
-    assertThat(menuIds).hasSize(63);
+    int assignments =
+        jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM sys_role_menu WHERE role_id = 1", Integer.class);
+    assertThat(menuIds).hasSize(assignments);
     assertThat(menuIds.toString())
         .contains("\"100\"")
         .contains("\"144\"")
