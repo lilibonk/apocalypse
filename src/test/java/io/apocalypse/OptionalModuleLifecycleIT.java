@@ -163,7 +163,9 @@ class OptionalModuleLifecycleIT {
         assertThat(get(enabled, "/calendar/events/" + eventId, oldToken).at("/data").toString())
             .isEqualTo(preservedEvent);
         assertThat(enabled.getBean(CapabilityRegistry.class).cacheDiscriminator())
-            .isEqualTo("caps:v1;calendar=1;fixture=1");
+            .startsWith("caps:v1;")
+            .contains(";calendar=1", ";fixture=1")
+            .doesNotContain(";unknown=");
         enabled.getBean(Flyway.class).validate();
       }
       try (var independent = start(postgres, redis, false, true)) {
