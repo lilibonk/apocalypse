@@ -9,6 +9,8 @@ export const BODY_WIDTH = 1.56
 export const BODY_DEPTH = 1.18
 export const BODY_TOP = 2.785
 export const FACE_X = -0.28
+// Compress the lower meridians into a broad resting foot and taper the crown.
+const HEIGHT_CURVE = 1.65
 
 export function restPoint(nx: number, ny: number, nz: number): Point3 {
   const theta = Math.acos(Math.max(-1, Math.min(1, ny)))
@@ -17,13 +19,13 @@ export function restPoint(nx: number, ny: number, nz: number): Point3 {
   const scale = radial > 0.00001 ? radius / radial : 0
   return {
     x: nx * BODY_WIDTH * scale,
-    y: 0.035 + 2.75 * ((ny + 1) / 2) ** 1.18,
+    y: 0.035 + 2.75 * ((ny + 1) / 2) ** HEIGHT_CURVE,
     z: nz * BODY_DEPTH * scale,
   }
 }
 
 export function radiusAt(y: number) {
-  const t = Math.max(0, Math.min(1, (y - 0.035) / 2.75)) ** (1 / 1.18)
+  const t = Math.max(0, Math.min(1, (y - 0.035) / 2.75)) ** (1 / HEIGHT_CURVE)
   const c = t * 2 - 1
   return Math.sqrt(Math.max(0, 1 - c * c)) ** 0.72 * (1 - 0.07 * c)
 }

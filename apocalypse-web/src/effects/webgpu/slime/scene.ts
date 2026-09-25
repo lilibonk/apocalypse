@@ -35,14 +35,12 @@ import {
   cameraPosition,
   materialColor,
   mix,
-  normalLocal,
   normalView,
   normalWorld,
   pmremTexture,
   positionViewDirection,
   positionWorld,
   reflect,
-  transformNormalToView,
   uniform,
   vec3,
   vec4,
@@ -62,7 +60,6 @@ import {
   radiusAt,
   restPoint,
   seededRandom,
-  type Point3,
 } from './shape'
 import { createStudio } from './studio'
 import type { OrbState } from '@/effects/PixelOrb/types'
@@ -77,6 +74,19 @@ function scatteringColour(colours: SlimeColours) {
 }
 
 const restVertices = new WeakMap<BufferGeometry, Float32Array>()
+// Front cage faces: crown, shoulders and lower folds frame one calm facial panel.
+const panelTones: Record<number, number> = {
+  0: 0.76,
+  1: 0.63,
+  4: 0.26,
+  5: 0.62,
+  6: 0.49,
+  7: 0.29,
+  10: 0.72,
+  11: 0.4,
+  15: 0.82,
+  16: 0.33,
+}
 function remember(geometry: BufferGeometry) {
   restVertices.set(geometry, Float32Array.from(geometry.attributes.position.array))
   const attribute = geometry.attributes.position
@@ -85,20 +95,17 @@ function remember(geometry: BufferGeometry) {
 }
 
 function makeBody() {
-  // The design has a smooth silhouette and a few broad optical planes. Keep
-  // the elastic surface continuous, then blend coarse facet normals across
-  // rounded boundaries. Displacing whole triangles created visible ridges.
+  // The coarse cage defines the folded planes; its subdivisions round the
+  // joins while retaining continuous vertices for the shared soft-body field.
   const source = new IcosahedronGeometry(1, 0)
   source.rotateY(0.37)
-  source.rotateZ(0.19)
+  source.rotateZ(-0.28)
   const sourcePositions = source.getAttribute('position')
   const sourceIndices = source.getIndex()
   const positions: number[] = []
   const indices: number[] = []
   const blends: number[] = []
   const tones: number[] = []
-  const owners: number[] = []
-  const corners: [Point3, Point3, Point3][] = []
   const shared = new Map<string, number>()
   const subdivisions = 12
   const smoothstep = (a: number, b: number, x: number) => {
@@ -121,7 +128,6 @@ function makeBody() {
     const pa = restPoint(a.x, a.y, a.z)
     const pb = restPoint(b.x, b.y, b.z)
     const pc = restPoint(c.x, c.y, c.z)
-    corners.push([pa, pb, pc])
     const planeNormal = new Vector3(pb.x - pa.x, pb.y - pa.y, pb.z - pa.z)
       .cross(new Vector3(pc.x - pa.x, pc.y - pa.y, pc.z - pa.z))
       .normalize()
@@ -132,7 +138,7 @@ function makeBody() {
       0
     )
       planeNormal.negate()
-    const tone = Math.max(0.08, Math.min(0.92, 0.48 + planeNormal.x * 0.34 + planeNormal.y * 0.1))
+    const tone = panelTones[face] ?? Math.max(0.16, Math.min(0.84, 0.48 + planeNormal.x * 0.28))
     const rows: number[][] = []
     for (let i = 0; i <= subdivisions; i++) {
       const row: number[] = []
@@ -145,20 +151,24 @@ function makeBody() {
           .addScaledVector(b, wb)
           .addScaledVector(c, wc)
           .normalize()
-        const point = restPoint(direction.x, direction.y, direction.z)
+        const smooth = restPoint(direction.x, direction.y, direction.z)
+        const faceDistance = Math.hypot((smooth.x - FACE_X) / 1.04, (smooth.y - 1.55) / 0.55)
+        const faceClearance = 1 - 0.9 * (1 - smoothstep(0.7, 1.26, faceDistance))
+        const frontFold = 0.2 + 0.8 * smoothstep(0.02, 0.46, smooth.z)
+        const fold = 0.68 * frontFold * faceClearance * smoothstep(0.06, 0.36, smooth.y)
+        const point = {
+          x: smooth.x + (pa.x * wa + pb.x * wb + pc.x * wc - smooth.x) * fold,
+          y: smooth.y + (pa.y * wa + pb.y * wb + pc.y * wc - smooth.y) * fold,
+          z: smooth.z + (pa.z * wa + pb.z * wb + pc.z * wc - smooth.z) * fold,
+        }
         const key = [point.x, point.y, point.z].map((value) => Math.round(value * 1e5)).join(',')
         let index = shared.get(key)
         if (index === undefined) {
           index = positions.length / 3
           shared.set(key, index)
           positions.push(point.x, point.y, point.z)
-          owners.push(face)
           tones.push(tone)
-          const faceDistance = Math.hypot(point.x / 0.95, (point.y - 1.48) / 0.6)
-          const faceClearance =
-            point.z > 0.55 ? 0.55 * (1 - smoothstep(0.8, 1.25, faceDistance)) : 0
-          const edge = smoothstep(0, 0.18, Math.min(wa, wb, wc))
-          blends.push(edge * (1 - faceClearance) * smoothstep(0.08, 0.42, point.y) * 0.9)
+          blends.push(fold * smoothstep(0, 0.16, Math.min(wa, wb, wc)))
         }
         row.push(index)
       }
@@ -175,14 +185,11 @@ function makeBody() {
   source.dispose()
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  const facetNormal = new Float32BufferAttribute(new Float32Array(positions.length), 3)
-  facetNormal.setUsage(DynamicDrawUsage)
-  geometry.setAttribute('facetNormal', facetNormal)
   geometry.setAttribute('facetBlend', new Float32BufferAttribute(blends, 1))
   geometry.setAttribute('facetShade', new Float32BufferAttribute(tones, 1))
   geometry.setIndex(indices)
   geometry.computeVertexNormals()
-  return { geometry: remember(geometry), corners, owners }
+  return remember(geometry)
 }
 
 // Sculpted surface patches, not rigid eye meshes. Every point uses the body field.
@@ -252,28 +259,24 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     ior: SLIME_RECIPE.ior,
     attenuationColor: colours.attenuation.clone(),
     attenuationDistance: SLIME_RECIPE.attenuationDistance,
-    clearcoat: 0.75,
-    clearcoatRoughness: 0.055,
-    specularIntensity: 0.7,
-    envMapIntensity: 0.8,
+    clearcoat: 0.62,
+    clearcoatRoughness: 0.12,
+    specularIntensity: 0.58,
+    envMapIntensity: 0.7,
   })
   const tint = uniform(gel.attenuationColor)
-  const facetDark = uniform(colours.attenuation.clone().lerp(colours.shadow, 0.25))
-  const facetLight = uniform(colours.body.clone().lerp(colours.light, 0.55))
+  const facetDark = uniform(colours.attenuation.clone().lerp(colours.shadow, 0.47))
+  const facetLight = uniform(colours.body.clone().lerp(colours.light, 0.7))
   const scattering = uniform(scatteringColour(colours))
   const stageTint = uniform(colours.stage.clone())
   const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1)
   const facetBlend = attribute('facetBlend', 'float')
   const facetColour = mix(facetDark, facetLight, attribute('facetShade', 'float'))
-  gel.colorNode = mix(
-    materialColor,
-    facetColour,
-    (facetBlend as unknown as Node<'float'>).mul(0.65),
-  )
+  gel.colorNode = mix(materialColor, facetColour, (facetBlend as unknown as Node<'float'>).mul(0.8))
   gel.attenuationColorNode = mix(
     tint,
     facetColour,
-    (facetBlend as unknown as Node<'float'>).mul(0.65),
+    (facetBlend as unknown as Node<'float'>).mul(0.8),
   )
   gel.emissiveNode = scattering
 
@@ -288,59 +291,15 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     // NodeMaterial output is RGBA; upstream declarations erase its vector dimension.
     const rgba = outputNode as Node<'vec4'>
     const rimmed = mix(rgba, vec4(candy, rgba.a), limb)
-    const opticalPlane = (facetBlend as unknown as Node<'float'>).mul(0.65).mul(limb.oneMinus())
+    const opticalPlane = (facetBlend as unknown as Node<'float'>).mul(0.72).mul(limb.oneMinus())
     const faceted = vec4(mix(rimmed.rgb, facetColour, opticalPlane), rimmed.a)
     return setupOutput(builder, faceted)
   }
-  gel.normalNode = transformNormalToView(
-    mix(
-      normalLocal,
-      attribute('facetNormal', 'vec3'),
-      (facetBlend as unknown as Node<'float'>).mul(0.03),
-    ).normalize(),
-  )
-  gel.clearcoatNormalNode = gel.normalNode
-  const facetedBody = makeBody()
-  const body = new Mesh(facetedBody.geometry, gel)
+  const body = new Mesh(makeBody(), gel)
   body.geometry.boundingSphere = new Sphere(new Vector3(0, 1.2, 0), 6)
   body.name = 'deformable-gel'
   body.frustumCulled = false
   group.add(body)
-  const facetAttribute = body.geometry.getAttribute('facetNormal')
-  const facetNormals = facetedBody.corners.map(() => new Vector3())
-  const fa: Point3 = { x: 0, y: 0, z: 0 }
-  const fb: Point3 = { x: 0, y: 0, z: 0 }
-  const fc: Point3 = { x: 0, y: 0, z: 0 }
-  const updateFacetNormals = () => {
-    for (let i = 0; i < facetedBody.corners.length; i++) {
-      const [a, b, c] = facetedBody.corners[i]
-      physics.deform(a.x, a.y, a.z, fa)
-      physics.deform(b.x, b.y, b.z, fb)
-      physics.deform(c.x, c.y, c.z, fc)
-      const normal = facetNormals[i]
-      normal.set(fb.x - fa.x, fb.y - fa.y, fb.z - fa.z)
-      const edgeX = fc.x - fa.x
-      const edgeY = fc.y - fa.y
-      const edgeZ = fc.z - fa.z
-      normal
-        .set(
-          normal.y * edgeZ - normal.z * edgeY,
-          normal.z * edgeX - normal.x * edgeZ,
-          normal.x * edgeY - normal.y * edgeX,
-        )
-        .normalize()
-      const centerX = (fa.x + fb.x + fc.x) / 3
-      const centerY = (fa.y + fb.y + fc.y) / 3 - 1.4
-      const centerZ = (fa.z + fb.z + fc.z) / 3
-      if (normal.x * centerX + normal.y * centerY + normal.z * centerZ < 0) normal.negate()
-    }
-    for (let i = 0; i < facetedBody.owners.length; i++) {
-      const normal = facetNormals[facetedBody.owners[i]]
-      facetAttribute.setXYZ(i, normal.x, normal.y, normal.z)
-    }
-    facetAttribute.needsUpdate = true
-  }
-  updateFacetNormals()
 
   // Render the rear interface into the transmission buffer. The front glass then
   // refracts its reflections, rather than only sampling the featureless page color.
@@ -494,8 +453,8 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
       gel.color.copy(c.body)
       gel.attenuationColor.copy(c.attenuation)
       scattering.value.copy(scatteringColour(c))
-      facetDark.value.copy(c.attenuation).lerp(c.shadow, 0.25)
-      facetLight.value.copy(c.body).lerp(c.light, 0.55)
+      facetDark.value.copy(c.attenuation).lerp(c.shadow, 0.47)
+      facetLight.value.copy(c.body).lerp(c.light, 0.7)
       stageTint.value.copy(c.stage)
       black.color.copy(c.face)
       bubbleMaterial.color.copy(c.body).lerp(c.light, 0.65)
@@ -543,7 +502,6 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
         geometry.boundingSphere = null
         geometry.boundingBox = null
       }
-      updateFacetNormals()
       for (let i = 0; i < count; i++) {
         const b = bubbleSeeds[i]
         bubblePoint(b, time, bubbleP)
