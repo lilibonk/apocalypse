@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bubblePoint, type BubbleSeed } from './ambient-motion'
-import { frontSurfaceZ, radiusAt, seededRandom } from './shape'
+import { BODY_DEPTH, BODY_WIDTH, frontSurfaceZ, radiusAt, seededRandom } from './shape'
 const point = () => ({ x: 0, y: 0, z: 0, scale: 0 })
 const seed: BubbleSeed = { x: 0.3, y: 0.6, z: 0.6, size: 0.02, phase: 0.8 }
 describe('作者气泡：上浮、端点缩放与体积约束', () => {
@@ -30,7 +30,7 @@ describe('作者气泡：上浮、端点缩放与体积约束', () => {
         const p = bubblePoint(b, t, point())
         largestNormalizedRadius = Math.max(
           largestNormalizedRadius,
-          Math.hypot(p.x / (1.66 * radiusAt(p.y)), p.z / (1.18 * radiusAt(p.y))),
+          Math.hypot(p.x / (BODY_WIDTH * radiusAt(p.y)), p.z / (BODY_DEPTH * radiusAt(p.y))),
         )
         minimumClearance = Math.min(
           minimumClearance,

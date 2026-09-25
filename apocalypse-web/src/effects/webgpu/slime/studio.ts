@@ -33,8 +33,8 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
     studio.add(card)
     cards.push(card)
   }
-  addCard(-4.5, 5, 3, 3.2, 5.5, 12)
-  addCard(4.5, 3, 2, 1.6, 5, 9)
+  addCard(-4.5, 5, 3, 3.2, 5.5, 2)
+  addCard(4.5, 3, 2, 1.6, 5, 5)
   addCard(-1, 1, -5, 3, 3, 1.2)
   addCard(-6, -0.5, -2, 1.5, 5, -0.45)
   addCard(6, -0.5, -2, 1.5, 5, -0.45)
@@ -97,12 +97,12 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
     update(p: Point3) {
       shadow.mesh.position.set(p.x, 0.002, p.z)
       shadow.mesh.scale.setScalar(1 + p.y * 0.16)
-      shadow.material.opacity = 0.22 * Math.max(0.14, 1 - p.y * 0.24)
+      shadow.material.opacity = 0.3 * Math.max(0.14, 1 - p.y * 0.24)
       projection.mesh.position.set(p.x, 0.005, p.z + 0.33)
       projection.mesh.scale.setScalar(1 + p.y * 0.12)
       projection.material.opacity = 0.48 * 0.95 * Math.exp(-p.y * 4.5)
       contact.mesh.position.set(p.x, 0.007, p.z + 0.32)
-      contact.material.opacity = 0.36 * 0.85 * Math.exp(-p.y * 5)
+      contact.material.opacity = 0.44 * 0.85 * Math.exp(-p.y * 5)
     },
     dispose() {
       if (disposed) return

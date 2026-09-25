@@ -5,6 +5,9 @@
 import {
   DynamicDrawUsage,
   SphereGeometry,
+  IcosahedronGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   Vector3,
   TubeGeometry,
   CatmullRomCurve3,
@@ -22,47 +25,55 @@ import {
   PerspectiveCamera,
   Scene,
   NoToneMapping,
-  type BufferGeometry,
   type Texture,
   type NodeBuilder,
   type Node,
   type Renderer,
 } from 'three/webgpu'
 import {
-  bumpMap,
+  attribute,
   cameraPosition,
+  materialColor,
   mix,
-  mx_worley_noise_float,
+  normalLocal,
   normalView,
   normalWorld,
   pmremTexture,
-  positionLocal,
   positionViewDirection,
   positionWorld,
   reflect,
+  transformNormalToView,
   uniform,
   vec3,
   vec4,
 } from 'three/tsl'
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { bubblePoint, type BubbleSeed } from './ambient-motion'
 import { FaceMotion } from './face-motion'
 import { hostPose, poseFacePoint } from './expression'
 import { JellyPhysics } from './physics'
 import { SLIME_RECIPE, type SlimeColours } from './appearance'
-import { frontSurfaceZ as frontAt, radiusAt, restPoint, seededRandom } from './shape'
+import {
+  BODY_DEPTH,
+  BODY_TOP,
+  BODY_WIDTH,
+  FACE_X,
+  frontSurfaceZ as frontAt,
+  radiusAt,
+  restPoint,
+  seededRandom,
+  type Point3,
+} from './shape'
 import { createStudio } from './studio'
 import type { OrbState } from '@/effects/PixelOrb/types'
 
-const WIDTH = 1.66
-const DEPTH = 1.18
 /** Absorption alone cannot illuminate glass on a dark page; retain the approved jade fill. */
 function scatteringColour(colours: SlimeColours) {
   const dark = colours.stage.r * 0.2126 + colours.stage.g * 0.7152 + colours.stage.b * 0.0722 < 0.05
   return colours.glow
     .clone()
-    .multiplyScalar(dark ? 1 : 0)
-    .add(colours.body.clone().multiplyScalar(dark ? 0.2 : 0))
+    .multiplyScalar(dark ? 0.12 : 0)
+    .add(colours.body.clone().multiplyScalar(dark ? 0.04 : 0))
 }
 
 const restVertices = new WeakMap<BufferGeometry, Float32Array>()
@@ -74,18 +85,104 @@ function remember(geometry: BufferGeometry) {
 }
 
 function makeBody() {
-  const sphere = new SphereGeometry(1, SLIME_RECIPE.widthSegments, SLIME_RECIPE.heightSegments)
-  sphere.deleteAttribute('uv')
-  sphere.deleteAttribute('normal')
-  const geometry = mergeVertices(sphere, 1e-5)
-  sphere.dispose()
-  const positions = geometry.attributes.position
-  for (let i = 0; i < positions.count; i++) {
-    const point = restPoint(positions.getX(i), positions.getY(i), positions.getZ(i))
-    positions.setXYZ(i, point.x, point.y, point.z)
+  // The design has a smooth silhouette and a few broad optical planes. Keep
+  // the elastic surface continuous, then blend coarse facet normals across
+  // rounded boundaries. Displacing whole triangles created visible ridges.
+  const source = new IcosahedronGeometry(1, 0)
+  source.rotateY(0.37)
+  source.rotateZ(0.19)
+  const sourcePositions = source.getAttribute('position')
+  const sourceIndices = source.getIndex()
+  const positions: number[] = []
+  const indices: number[] = []
+  const blends: number[] = []
+  const tones: number[] = []
+  const owners: number[] = []
+  const corners: [Point3, Point3, Point3][] = []
+  const shared = new Map<string, number>()
+  const subdivisions = 12
+  const smoothstep = (a: number, b: number, x: number) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
   }
+  const vertex = (index: number) => {
+    const v = sourceIndices ? sourceIndices.getX(index) : index
+    return new Vector3(
+      sourcePositions.getX(v),
+      sourcePositions.getY(v),
+      sourcePositions.getZ(v),
+    ).normalize()
+  }
+  const faceCount = (sourceIndices?.count ?? sourcePositions.count) / 3
+  for (let face = 0; face < faceCount; face++) {
+    const a = vertex(face * 3)
+    const b = vertex(face * 3 + 1)
+    const c = vertex(face * 3 + 2)
+    const pa = restPoint(a.x, a.y, a.z)
+    const pb = restPoint(b.x, b.y, b.z)
+    const pc = restPoint(c.x, c.y, c.z)
+    corners.push([pa, pb, pc])
+    const planeNormal = new Vector3(pb.x - pa.x, pb.y - pa.y, pb.z - pa.z)
+      .cross(new Vector3(pc.x - pa.x, pc.y - pa.y, pc.z - pa.z))
+      .normalize()
+    if (
+      planeNormal.x * (pa.x + pb.x + pc.x) +
+        planeNormal.y * (pa.y + pb.y + pc.y - 4.2) +
+        planeNormal.z * (pa.z + pb.z + pc.z) <
+      0
+    )
+      planeNormal.negate()
+    const tone = Math.max(0.08, Math.min(0.92, 0.48 + planeNormal.x * 0.34 + planeNormal.y * 0.1))
+    const rows: number[][] = []
+    for (let i = 0; i <= subdivisions; i++) {
+      const row: number[] = []
+      for (let j = 0; j <= subdivisions - i; j++) {
+        const wb = i / subdivisions
+        const wc = j / subdivisions
+        const wa = 1 - wb - wc
+        const direction = new Vector3()
+          .addScaledVector(a, wa)
+          .addScaledVector(b, wb)
+          .addScaledVector(c, wc)
+          .normalize()
+        const point = restPoint(direction.x, direction.y, direction.z)
+        const key = [point.x, point.y, point.z].map((value) => Math.round(value * 1e5)).join(',')
+        let index = shared.get(key)
+        if (index === undefined) {
+          index = positions.length / 3
+          shared.set(key, index)
+          positions.push(point.x, point.y, point.z)
+          owners.push(face)
+          tones.push(tone)
+          const faceDistance = Math.hypot(point.x / 0.95, (point.y - 1.48) / 0.6)
+          const faceClearance =
+            point.z > 0.55 ? 0.55 * (1 - smoothstep(0.8, 1.25, faceDistance)) : 0
+          const edge = smoothstep(0, 0.18, Math.min(wa, wb, wc))
+          blends.push(edge * (1 - faceClearance) * smoothstep(0.08, 0.42, point.y) * 0.9)
+        }
+        row.push(index)
+      }
+      rows.push(row)
+    }
+    for (let i = 0; i < subdivisions; i++) {
+      for (let j = 0; j < subdivisions - i; j++) {
+        indices.push(rows[i][j], rows[i + 1][j], rows[i][j + 1])
+        if (j < subdivisions - i - 1)
+          indices.push(rows[i + 1][j], rows[i + 1][j + 1], rows[i][j + 1])
+      }
+    }
+  }
+  source.dispose()
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  const facetNormal = new Float32BufferAttribute(new Float32Array(positions.length), 3)
+  facetNormal.setUsage(DynamicDrawUsage)
+  geometry.setAttribute('facetNormal', facetNormal)
+  geometry.setAttribute('facetBlend', new Float32BufferAttribute(blends, 1))
+  geometry.setAttribute('facetShade', new Float32BufferAttribute(tones, 1))
+  geometry.setIndex(indices)
   geometry.computeVertexNormals()
-  return remember(geometry)
+  return { geometry: remember(geometry), corners, owners }
 }
 
 // Sculpted surface patches, not rigid eye meshes. Every point uses the body field.
@@ -93,8 +190,8 @@ function makeEye(cx: number) {
   const geometry = new SphereGeometry(1, 32, 24)
   const p = geometry.attributes.position
   for (let i = 0; i < p.count; i++) {
-    const x = cx + p.getX(i) * 0.128
-    const y = 1.2 + p.getY(i) * 0.137
+    const x = cx + p.getX(i) * 0.112
+    const y = 1.62 + p.getY(i) * 0.12
     p.setXYZ(i, x, y, frontAt(x, y) + 0.009 + p.getZ(i) * 0.055)
   }
   geometry.computeVertexNormals()
@@ -105,11 +202,11 @@ function makeMouth(open = false) {
   const points = []
   for (let i = 0; i <= 24; i++) {
     const angle = (i / 24 - 0.5) * (open ? Math.PI * 2 : 2.7)
-    const x = (open ? 0.052 : 0.1) * Math.sin(angle)
-    const y = (open ? 1.075 : 1.111) - (open ? 0.065 : 0.076) * Math.cos(angle)
-    points.push(new Vector3(x, y, frontAt(x, y) + 0.023))
+    const x = FACE_X + (open ? 0.068 : 0.13) * Math.sin(angle)
+    const y = (open ? 1.5 : 1.535) - (open ? 0.08 : 0.09) * Math.cos(angle)
+    points.push(new Vector3(x, y, frontAt(x, y) + 0.035))
   }
-  const tube = new TubeGeometry(new CatmullRomCurve3(points), 48, 0.014, 12, false)
+  const tube = new TubeGeometry(new CatmullRomCurve3(points), 48, 0.017, 12, false)
   const caps = [points[0], points[points.length - 1]].map((point) =>
     new SphereGeometry(0.014, 12, 8).translate(point.x, point.y, point.z),
   )
@@ -146,9 +243,8 @@ function makeStarGeometry(outerRadius = 0.052, innerRadius = 0.023, thickness = 
 function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeColours) {
   const group = new Group()
   group.name = 'apo'
-  let currentHostColours = colours
   const gel = new MeshPhysicalNodeMaterial({
-    color: colours.light,
+    color: colours.body,
     metalness: 0,
     roughness: SLIME_RECIPE.roughness,
     transmission: SLIME_RECIPE.transmission,
@@ -156,26 +252,30 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     ior: SLIME_RECIPE.ior,
     attenuationColor: colours.attenuation.clone(),
     attenuationDistance: SLIME_RECIPE.attenuationDistance,
-    clearcoat: 1,
-    clearcoatRoughness: 0.025,
-    specularIntensity: 1,
-    envMapIntensity: 1.1,
+    clearcoat: 0.75,
+    clearcoatRoughness: 0.055,
+    specularIntensity: 0.7,
+    envMapIntensity: 0.8,
   })
   const tint = uniform(gel.attenuationColor)
+  const facetDark = uniform(colours.attenuation.clone().lerp(colours.shadow, 0.25))
+  const facetLight = uniform(colours.body.clone().lerp(colours.light, 0.55))
   const scattering = uniform(scatteringColour(colours))
   const stageTint = uniform(colours.stage.clone())
   const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1)
-
-  // Inner Luminous Core (呼吸光核)
-  const corePos = vec3(0, 1.05, 0.05)
-  const coreDist = positionLocal.distance(corePos)
-  const coreFalloff = coreDist.smoothstep(0.16, 0.78).oneMinus()
-  const corePulse = uniform(1.0)
-  const coreColor = uniform(colours.glow.clone().lerp(colours.light, 0.45))
-  // Three's color uniform is vec3 in shaders, while its node type remains "color".
-  gel.emissiveNode = (scattering as unknown as Node<'vec3'>).add(
-    coreColor.mul(coreFalloff.mul(corePulse)),
+  const facetBlend = attribute('facetBlend', 'float')
+  const facetColour = mix(facetDark, facetLight, attribute('facetShade', 'float'))
+  gel.colorNode = mix(
+    materialColor,
+    facetColour,
+    (facetBlend as unknown as Node<'float'>).mul(0.65),
   )
+  gel.attenuationColorNode = mix(
+    tint,
+    facetColour,
+    (facetBlend as unknown as Node<'float'>).mul(0.65),
+  )
+  gel.emissiveNode = scattering
 
   // Tint only transmitted light; a short optical path stays clear at the silhouette.
   gel.thicknessNode = facing.pow(0.55).mul(2.25).add(0.15)
@@ -188,18 +288,59 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     // NodeMaterial output is RGBA; upstream declarations erase its vector dimension.
     const rgba = outputNode as Node<'vec4'>
     const rimmed = mix(rgba, vec4(candy, rgba.a), limb)
-    return setupOutput(builder, rimmed)
+    const opticalPlane = (facetBlend as unknown as Node<'float'>).mul(0.65).mul(limb.oneMinus())
+    const faceted = vec4(mix(rimmed.rgb, facetColour, opticalPlane), rimmed.a)
+    return setupOutput(builder, faceted)
   }
-  // Organic faceted sea-glass normal perturbation:
-  // Worley/cellular distance field creates geometric planar facets with soft chamfered edges
-  const facetNoise = mx_worley_noise_float(positionLocal.mul(2.4))
-  gel.normalNode = bumpMap(facetNoise, uniform(0.045))
+  gel.normalNode = transformNormalToView(
+    mix(
+      normalLocal,
+      attribute('facetNormal', 'vec3'),
+      (facetBlend as unknown as Node<'float'>).mul(0.03),
+    ).normalize(),
+  )
   gel.clearcoatNormalNode = gel.normalNode
-  const body = new Mesh(makeBody(), gel)
+  const facetedBody = makeBody()
+  const body = new Mesh(facetedBody.geometry, gel)
   body.geometry.boundingSphere = new Sphere(new Vector3(0, 1.2, 0), 6)
   body.name = 'deformable-gel'
   body.frustumCulled = false
   group.add(body)
+  const facetAttribute = body.geometry.getAttribute('facetNormal')
+  const facetNormals = facetedBody.corners.map(() => new Vector3())
+  const fa: Point3 = { x: 0, y: 0, z: 0 }
+  const fb: Point3 = { x: 0, y: 0, z: 0 }
+  const fc: Point3 = { x: 0, y: 0, z: 0 }
+  const updateFacetNormals = () => {
+    for (let i = 0; i < facetedBody.corners.length; i++) {
+      const [a, b, c] = facetedBody.corners[i]
+      physics.deform(a.x, a.y, a.z, fa)
+      physics.deform(b.x, b.y, b.z, fb)
+      physics.deform(c.x, c.y, c.z, fc)
+      const normal = facetNormals[i]
+      normal.set(fb.x - fa.x, fb.y - fa.y, fb.z - fa.z)
+      const edgeX = fc.x - fa.x
+      const edgeY = fc.y - fa.y
+      const edgeZ = fc.z - fa.z
+      normal
+        .set(
+          normal.y * edgeZ - normal.z * edgeY,
+          normal.z * edgeX - normal.x * edgeZ,
+          normal.x * edgeY - normal.y * edgeX,
+        )
+        .normalize()
+      const centerX = (fa.x + fb.x + fc.x) / 3
+      const centerY = (fa.y + fb.y + fc.y) / 3 - 1.4
+      const centerZ = (fa.z + fb.z + fc.z) / 3
+      if (normal.x * centerX + normal.y * centerY + normal.z * centerZ < 0) normal.negate()
+    }
+    for (let i = 0; i < facetedBody.owners.length; i++) {
+      const normal = facetNormals[facetedBody.owners[i]]
+      facetAttribute.setXYZ(i, normal.x, normal.y, normal.z)
+    }
+    facetAttribute.needsUpdate = true
+  }
+  updateFacetNormals()
 
   // Render the rear interface into the transmission buffer. The front glass then
   // refracts its reflections, rather than only sampling the featureless page color.
@@ -230,7 +371,7 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     transparent: true,
     depthWrite: false,
   })
-  const faceParts = [makeEye(-0.41), makeEye(0.41), makeMouth()]
+  const faceParts = [makeEye(FACE_X - 0.53), makeEye(FACE_X + 0.53), makeMouth()]
   const eyeVertices = faceParts[0].attributes.position.count
   const mergedFace = mergeGeometries(faceParts)
   if (!mergedFace) throw new Error('Invalid face geometry')
@@ -277,9 +418,9 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     .abs()
     .oneMinus()
     .pow(3)
-    .mul(0.45)
-    .add(bubbleGlint.mul(0.8))
-    .add(0.008)
+    .mul(0.2)
+    .add(bubbleGlint.mul(0.28))
+    .add(0.005)
     .clamp(0, 1)
   const count = SLIME_RECIPE.bubbleCount
   const bubbles = new InstancedMesh(bubbleGeometry, bubbleMaterial, count)
@@ -291,15 +432,15 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
   const bubbleSeeds: BubbleSeed[] = []
   for (let i = 0; i < count; i++) {
     const y = 0.19 + random() * 1.96
-    const x = (random() * 2 - 1) * WIDTH * radiusAt(y) * 0.89
+    const x = (random() * 2 - 1) * BODY_WIDTH * radiusAt(y) * 0.89
     const front = frontAt(x, y)
     const z = front * (0.15 + random() * 0.8)
     const size = 0.009 + Math.pow(random(), 2.8) * 0.033
     const radius = radiusAt(y)
     bubbleSeeds.push({
-      x: x / (WIDTH * radius),
+      x: x / (BODY_WIDTH * radius),
       y,
-      z: Math.min(front - size * 2.3, z) / (DEPTH * radius),
+      z: Math.min(front - size * 2.3, z) / (BODY_DEPTH * radius),
       size,
       phase: random() * Math.PI * 2,
     })
@@ -350,11 +491,11 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     bubbleSeeds,
     stars,
     updateColours(c: SlimeColours, nextEnvironment: Texture) {
-      currentHostColours = c
-      gel.color.copy(c.light)
+      gel.color.copy(c.body)
       gel.attenuationColor.copy(c.attenuation)
       scattering.value.copy(scatteringColour(c))
-      coreColor.value.copy(c.glow).lerp(c.light, 0.45)
+      facetDark.value.copy(c.attenuation).lerp(c.shadow, 0.25)
+      facetLight.value.copy(c.body).lerp(c.light, 0.55)
       stageTint.value.copy(c.stage)
       black.color.copy(c.face)
       bubbleMaterial.color.copy(c.body).lerp(c.light, 0.65)
@@ -369,24 +510,6 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     },
     update(time: number, host: OrbState = 'idle') {
       group.position.copy(physics.position)
-      // Inner luminous core dynamics matching host state
-      if (host === 'error') {
-        corePulse.value = 0.95 + 0.2 * Math.sin(time * 3.0)
-        coreColor.value.copy(currentHostColours.starGlow)
-      } else if (host === 'waiting') {
-        corePulse.value = 0.85 + 0.35 * Math.sin(time * 5.2)
-        coreColor.value.copy(currentHostColours.glow).lerp(currentHostColours.light, 0.6)
-      } else if (host === 'success') {
-        corePulse.value = 1.35 + 0.15 * Math.sin(time * 8.0)
-        coreColor.value.copy(currentHostColours.light)
-      } else if (host === 'sleeping') {
-        corePulse.value = 0.22 + 0.08 * Math.sin(time * 1.25)
-        coreColor.value.copy(currentHostColours.glow).multiplyScalar(0.4)
-      } else {
-        // idle
-        corePulse.value = 0.85 + 0.22 * Math.sin(time * 1.96)
-        coreColor.value.copy(currentHostColours.glow).lerp(currentHostColours.light, 0.45)
-      }
       // A sustained privacy eyelid must read as a dark lid, not a flattened white specular flash.
       black.roughness = host === 'sleeping' ? 0.65 : 0.17
       black.clearcoat = host === 'sleeping' ? 0.1 : 0.85
@@ -420,6 +543,7 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
         geometry.boundingSphere = null
         geometry.boundingBox = null
       }
+      updateFacetNormals()
       for (let i = 0; i < count; i++) {
         const b = bubbleSeeds[i]
         bubblePoint(b, time, bubbleP)
@@ -438,7 +562,7 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
       } else {
         dizzyStarsGroup.visible = true
         // Anchor to the dynamically deformed crown apex (tuft) of the jelly
-        physics.deform(0, 2.38, 0, crownP)
+        physics.deform(0, BODY_TOP, 0, crownP)
         dizzyStarsGroup.position.set(crownP.x, crownP.y + 0.3, crownP.z)
         // Tilted halo plane for cartoon 3D perspective
         dizzyStarsGroup.rotation.x = 0.32 + Math.sin(time * 3.5) * 0.05
@@ -528,13 +652,13 @@ export function createSlimeScene(
       camera.aspect = width / height
       const visibleHeight = Math.max(SLIME_RECIPE.viewHeight, 4.45 / camera.aspect)
       const distance = visibleHeight / (2 * Math.tan((16 * Math.PI) / 180))
-      camera.position.set(0, 1.1 + distance * 0.15, distance)
-      camera.lookAt(0, 1.1, 0)
+      camera.position.set(0, 1.46 + distance * 0.15, distance)
+      camera.lookAt(0, 1.46, 0)
       camera.setViewOffset(width, height, -left, -top, canvasWidth, canvasHeight)
       camera.updateProjectionMatrix()
       const unit = visibleHeight / height
       const horizontalRoom = Math.min(width / 2 + left, canvasWidth - left - width / 2) * unit
-      physics.setBounds(horizontalRoom - 2.05, 1.1 + visibleHeight / 2 + top * unit - 3.2)
+      physics.setBounds(horizontalRoom - 2.05, 1.46 + visibleHeight / 2 + top * unit - 3.2)
     },
     updateColours(c: SlimeColours) {
       studio.updateColours(c)

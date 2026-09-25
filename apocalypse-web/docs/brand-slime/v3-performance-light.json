@@ -1,0 +1,23 @@
+{
+  "phase": "complete",
+  "report": {
+    "frames": 7201,
+    "elapsedMs": 60007.69999999999,
+    "averageFps": 120.00126650413199,
+    "p95FrameMs": 9.099999999998545,
+    "framesOver25Ms": 0
+  },
+  "info": {
+    "backend": "webgpu",
+    "adapter": "apple / metal-3",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "dpr": 1,
+    "width": 640,
+    "height": 640
+  },
+  "workload": {
+    "pixelWave": false,
+    "stageCssWidth": 640,
+    "stageCssHeight": 640
+  }
+}

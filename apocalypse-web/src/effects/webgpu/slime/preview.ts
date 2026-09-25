@@ -6,6 +6,7 @@ import './slime.css'
 import type { OrbState } from '@/effects/PixelOrb/types'
 
 import { createSlimeRuntime, type SlimeRuntime } from './runtime'
+import apoReference from '../../../../docs/brand-slime/apo-reference-idle.jpg'
 
 const root = document.getElementById('root')!
 let runtime: SlimeRuntime | undefined
@@ -17,8 +18,8 @@ const comparison = document.createElement('div')
 comparison.className = 'slime-comparison'
 root.append(comparison)
 const reference = document.createElement('img')
-reference.src = '/brand/slime/idle.png'
-reference.alt = '第二版青绿史莱姆静态海报（亮色）；作者参考图保留在验收资料中'
+reference.src = apoReference
+reference.alt = 'Apo 晶润多面微晶果冻正式设计稿；右侧为实时 WebGPU 画面'
 reference.className = 'slime-preview-canvas'
 comparison.append(reference)
 const canvas = document.createElement('canvas')
@@ -46,6 +47,14 @@ const addButton = (label: string, action: () => void) => {
   return button
 }
 addButton('静态对齐', () => runtime?.setStatic(true))
+addButton('对照设计稿', () => {
+  reference.src = apoReference
+  reference.alt = 'Apo 晶润多面微晶果冻正式设计稿'
+})
+addButton('对照静态海报', () => {
+  reference.src = `/brand/slime/${document.documentElement.classList.contains('dark') ? 'dark-' : ''}${state}.png`
+  reference.alt = `${state} 状态的静态降级海报`
+})
 addButton('开始交互', () => runtime?.setStatic(false))
 addButton('重播入场双跳', () => {
   runtime?.setStatic(false)

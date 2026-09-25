@@ -40,8 +40,8 @@
 
   /* LIL-85: sRGB projection for Three.js, fixed mint (independent of accent presets). */
   --slime-stage: #f5f3ef;
-  --slime-body: #93dbc4;
-  --slime-attenuation: #81c5b1;
+  --slime-body: #8bd3c2;
+  --slime-attenuation: #78c1b0;
   --slime-face: #07140f;
   --slime-light: #ffffff;
   --slime-shadow: #496c60;
