@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 import { ApiError } from '@/lib/api/client'
 import { summarizeUserAgent } from '@/lib/user-agent'
 

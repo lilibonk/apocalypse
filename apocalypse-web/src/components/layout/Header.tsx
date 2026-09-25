@@ -96,7 +96,9 @@ export function Header({
             : t('common.收起侧边栏', { defaultValue: '收起侧边栏' })
         }
       >
-        <ChevronsLeft className={cn('size-4 transition-transform', collapsed && 'rotate-180')} />
+        <ChevronsLeft
+          className={cn('size-4 transition-transform motion-feedback', collapsed && 'rotate-180')}
+        />
       </Button>
 
       {topMenus && topMenus.length > 0 && (

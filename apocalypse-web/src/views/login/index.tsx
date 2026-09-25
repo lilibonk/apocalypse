@@ -5,7 +5,6 @@
  */
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -25,7 +24,8 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PixelOrb, type OrbState } from '@/effects/PixelOrb'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
+import { useMotionPolicy } from '@/hooks/useMotionPolicy'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -38,10 +38,10 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((state) => state.login)
-  const { motionEnabled, language, theme } = useSettings()
+  const { language, theme } = useSettings()
+  const { motionActive } = useMotionPolicy()
   const setLanguage = useSettingsStore((state) => state.setLanguage)
   const setTheme = useSettingsStore((state) => state.setTheme)
-  const reducedMotion = useReducedMotion()
   const [submitting, setSubmitting] = useState(false)
   const [orbState, setOrbState] = useState<OrbState>('idle')
   /** 密码框聚焦 → 向导闭眼回避（peek-a-boo）；仅覆盖 idle 态，不盖 waiting/success/error。 */
@@ -80,7 +80,7 @@ export default function LoginPage() {
       await login(values.username, values.password)
       setOrbState('success')
       // 动效可用时短暂停留展示 success 态，否则立即跳转
-      if (motionEnabled && !reducedMotion) {
+      if (motionActive) {
         await new Promise((resolve) => window.setTimeout(resolve, 600))
       }
       navigate(from, { replace: true })
@@ -115,7 +115,7 @@ export default function LoginPage() {
               {t('login.stageIndex')}
             </p>
             <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-tight text-balance 2xl:text-4xl">
-              <TaglineReveal text={t('login.tagline')} animate={motionEnabled && !reducedMotion} />
+              <TaglineReveal text={t('login.tagline')} animate={motionActive} />
             </h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground 2xl:mx-0">
               {t('login.stageDesc')}

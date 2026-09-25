@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -42,7 +42,7 @@ import {
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 
-import { createDept, deleteDept, getDeptTree, updateDept } from './api'
+import { createDept, deleteDept, getDeptTree, updateDept } from './dept.api'
 import { DeptFormDialog, type DeptFormValues } from './DeptFormDialog'
 import { flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } from './types'
@@ -231,6 +231,7 @@ export default function DeptPage() {
                           onClick={() => toggleExpanded(node.id)}
                         >
                           <ChevronRight
+                            data-slot="tree-toggle"
                             className={cn(
                               'size-3.5 transition-transform',
                               !isCollapsed && 'rotate-90',

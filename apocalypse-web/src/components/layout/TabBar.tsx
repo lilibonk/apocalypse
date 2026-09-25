@@ -87,6 +87,7 @@ export function TabBar() {
               {!pinned && (
                 <button
                   type="button"
+                  data-slot="tab-close"
                   aria-label={t('common.closeTab', { title })}
                   className={cn(
                     'mr-0.5 inline-flex size-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',

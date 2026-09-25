@@ -20,7 +20,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 import { PixelWaveLab } from '@/effects/PixelWave/PixelWaveLab'
 import { cn } from '@/lib/utils'
 import {

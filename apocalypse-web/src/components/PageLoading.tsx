@@ -5,7 +5,7 @@
 
 import { useTranslation } from 'react-i18next'
 
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 import { cn } from '@/lib/utils'
 
 export function PageLoading({ className }: { className?: string }) {

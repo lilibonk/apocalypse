@@ -682,7 +682,10 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 [data-slot='switch'],
 [data-slot='command-item'],
 [data-slot='dialog-close'],
-[data-slot='sheet-close'] {
+[data-slot='sheet-close'],
+[data-slot='tab-close'],
+[data-slot='tree-toggle'],
+.motion-feedback {
   transition-duration: var(--motion-duration-feedback);
   transition-timing-function: var(--motion-ease-enter);
 }

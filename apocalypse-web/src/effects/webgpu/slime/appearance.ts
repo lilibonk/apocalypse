@@ -7,11 +7,11 @@ export const SLIME_RECIPE = {
   bubbleCount: 116,
   maxPixelRatio: 2,
   viewHeight: 4.4,
-  roughness: 0.018,
-  transmission: 1,
-  thickness: 2.4,
-  ior: 1.46,
-  attenuationDistance: 2.4,
+  roughness: 0.024,
+  transmission: 0.96,
+  thickness: 2.2,
+  ior: 1.42,
+  attenuationDistance: 2.6,
 } as const
 
 export function readSlimeColours(element: Element) {

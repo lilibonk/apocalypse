@@ -8,17 +8,16 @@
  * 品牌动效元素（PixelOrb / PixelWave）不经过本组件，见 effects/README.md 与 effects/PixelOrb/。
  */
 
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 
 import { motionGeometry, motionTransition } from '@/design/motion'
-import { useSettings } from '@/stores/settings'
+import { useMotionPolicy } from '@/hooks/useMotionPolicy'
 
 export function PageTransition({ children }: { children: ReactNode }) {
-  const { motionEnabled } = useSettings()
-  const reducedMotion = useReducedMotion()
+  const { motionActive } = useMotionPolicy()
 
-  if (!motionEnabled || reducedMotion) {
+  if (!motionActive) {
     return children
   }
 

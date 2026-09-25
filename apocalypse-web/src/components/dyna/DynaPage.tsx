@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 import { ApiError } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
 import { ModuleAccess } from '@/lib/query/ModuleAccess'

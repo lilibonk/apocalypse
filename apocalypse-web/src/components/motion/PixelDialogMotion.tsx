@@ -6,7 +6,7 @@
  * 揭开三段信息，结束后不留下边线、端点或其它装饰 DOM。
  */
 
-import { useAnimate, useReducedMotion } from 'motion/react'
+import { useAnimate } from 'motion/react'
 import { useLayoutEffect, type ReactNode } from 'react'
 
 import {
@@ -16,7 +16,7 @@ import {
   motionEase,
   motionGeometry,
 } from '@/design/motion'
-import { useSettings } from '@/stores/settings'
+import { useMotionPolicy } from '@/hooks/useMotionPolicy'
 
 const STAGE_ATTRIBUTE = 'data-pixel-dialog-stage'
 
@@ -28,15 +28,14 @@ export function PixelDialogMotion({
   animateSurface?: boolean
 }) {
   const [scope, animate] = useAnimate<HTMLDivElement>()
-  const reducedMotion = useReducedMotion()
-  const { motionEnabled } = useSettings()
+  const { motionActive } = useMotionPolicy()
 
   useLayoutEffect(() => {
     const surface = scope.current?.parentElement
     const overlay = surface?.previousElementSibling
 
     if (!scope.current || !surface) return
-    if (!motionEnabled || reducedMotion) return
+    if (!motionActive) return
 
     const autoStages = Array.from(scope.current.children).filter(
       (element): element is HTMLElement =>
@@ -123,7 +122,7 @@ export function PixelDialogMotion({
         delete element.dataset.pixelDialogAutoStage
       }
     }
-  }, [animate, animateSurface, motionEnabled, reducedMotion, scope])
+  }, [animate, animateSurface, motionActive, scope])
 
   return (
     <div ref={scope} data-slot="pixel-dialog-motion" className="contents">

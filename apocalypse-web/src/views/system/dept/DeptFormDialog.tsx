@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { PixelScale } from '@/effects/PixelWave'
+import { PixelScale } from '@/components/ui/pixel-scale'
 
 import { collectSubTreeIds, flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptTreeNode, type SnowflakeId } from './types'

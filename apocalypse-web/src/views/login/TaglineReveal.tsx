@@ -30,7 +30,7 @@ export function TaglineReveal({ text, animate }: TaglineRevealProps) {
                 <span
                   key={index}
                   className="tagline-reveal-character"
-                  style={{ '--tagline-delay': `${(start + index) * 55}ms` } as CSSProperties}
+                  style={{ '--tagline-delay': `${(start + index) * 25}ms` } as CSSProperties}
                 >
                   {character}
                 </span>

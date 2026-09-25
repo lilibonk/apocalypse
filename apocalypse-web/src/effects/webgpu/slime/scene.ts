@@ -32,7 +32,7 @@ import {
   bumpMap,
   cameraPosition,
   mix,
-  mx_noise_float,
+  mx_worley_noise_float,
   normalView,
   normalWorld,
   pmremTexture,
@@ -145,16 +145,17 @@ function makeStarGeometry(outerRadius = 0.052, innerRadius = 0.023, thickness = 
 
 function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeColours) {
   const group = new Group()
-  group.name = 'softie'
+  group.name = 'apo'
+  let currentHostColours = colours
   const gel = new MeshPhysicalNodeMaterial({
     color: colours.light,
     metalness: 0,
-    roughness: 0.018,
-    transmission: 1,
-    thickness: 2.4,
-    ior: 1.46,
+    roughness: SLIME_RECIPE.roughness,
+    transmission: SLIME_RECIPE.transmission,
+    thickness: SLIME_RECIPE.thickness,
+    ior: SLIME_RECIPE.ior,
     attenuationColor: colours.attenuation.clone(),
-    attenuationDistance: 2.4,
+    attenuationDistance: SLIME_RECIPE.attenuationDistance,
     clearcoat: 1,
     clearcoatRoughness: 0.025,
     specularIntensity: 1,
@@ -162,9 +163,20 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
   })
   const tint = uniform(gel.attenuationColor)
   const scattering = uniform(scatteringColour(colours))
-  gel.emissiveNode = scattering
   const stageTint = uniform(colours.stage.clone())
   const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1)
+
+  // Inner Luminous Core (呼吸光核)
+  const corePos = vec3(0, 1.05, 0.05)
+  const coreDist = positionLocal.distance(corePos)
+  const coreFalloff = coreDist.smoothstep(0.16, 0.78).oneMinus()
+  const corePulse = uniform(1.0)
+  const coreColor = uniform(colours.glow.clone().lerp(colours.light, 0.45))
+  // Three's color uniform is vec3 in shaders, while its node type remains "color".
+  gel.emissiveNode = (scattering as unknown as Node<'vec3'>).add(
+    coreColor.mul(coreFalloff.mul(corePulse)),
+  )
+
   // Tint only transmitted light; a short optical path stays clear at the silhouette.
   gel.thicknessNode = facing.pow(0.55).mul(2.25).add(0.15)
   // Grazing Fresnel writes a gray stroke the volume cannot tint. Replace only
@@ -178,8 +190,10 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     const rimmed = mix(rgba, vec4(candy, rgba.a), limb)
     return setupOutput(builder, rimmed)
   }
-  // Very shallow surface undulations break up perfectly plastic softbox outlines.
-  gel.normalNode = bumpMap(mx_noise_float(positionLocal.mul(9)), uniform(0.012))
+  // Organic faceted sea-glass normal perturbation:
+  // Worley/cellular distance field creates geometric planar facets with soft chamfered edges
+  const facetNoise = mx_worley_noise_float(positionLocal.mul(2.4))
+  gel.normalNode = bumpMap(facetNoise, uniform(0.045))
   gel.clearcoatNormalNode = gel.normalNode
   const body = new Mesh(makeBody(), gel)
   body.geometry.boundingSphere = new Sphere(new Vector3(0, 1.2, 0), 6)
@@ -336,9 +350,11 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     bubbleSeeds,
     stars,
     updateColours(c: SlimeColours, nextEnvironment: Texture) {
+      currentHostColours = c
       gel.color.copy(c.light)
       gel.attenuationColor.copy(c.attenuation)
       scattering.value.copy(scatteringColour(c))
+      coreColor.value.copy(c.glow).lerp(c.light, 0.45)
       stageTint.value.copy(c.stage)
       black.color.copy(c.face)
       bubbleMaterial.color.copy(c.body).lerp(c.light, 0.65)
@@ -353,6 +369,24 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     },
     update(time: number, host: OrbState = 'idle') {
       group.position.copy(physics.position)
+      // Inner luminous core dynamics matching host state
+      if (host === 'error') {
+        corePulse.value = 0.95 + 0.2 * Math.sin(time * 3.0)
+        coreColor.value.copy(currentHostColours.starGlow)
+      } else if (host === 'waiting') {
+        corePulse.value = 0.85 + 0.35 * Math.sin(time * 5.2)
+        coreColor.value.copy(currentHostColours.glow).lerp(currentHostColours.light, 0.6)
+      } else if (host === 'success') {
+        corePulse.value = 1.35 + 0.15 * Math.sin(time * 8.0)
+        coreColor.value.copy(currentHostColours.light)
+      } else if (host === 'sleeping') {
+        corePulse.value = 0.22 + 0.08 * Math.sin(time * 1.25)
+        coreColor.value.copy(currentHostColours.glow).multiplyScalar(0.4)
+      } else {
+        // idle
+        corePulse.value = 0.85 + 0.22 * Math.sin(time * 1.96)
+        coreColor.value.copy(currentHostColours.glow).lerp(currentHostColours.light, 0.45)
+      }
       // A sustained privacy eyelid must read as a dark lid, not a flattened white specular flash.
       black.roughness = host === 'sleeping' ? 0.65 : 0.17
       black.clearcoat = host === 'sleeping' ? 0.1 : 0.85
