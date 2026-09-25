@@ -3,6 +3,7 @@
  * Changes: TypeScript, Apocalypse host/lifecycle integration. See public/licenses/softie-webgpu.txt.
  */
 import type { OrbState } from '@/effects/PixelOrb/types'
+import { FACE_X } from './shape'
 import type { FacePose } from './face-motion'
 import { frontSurfaceZ } from './shape'
 
@@ -38,7 +39,7 @@ export function poseFacePoint(
     depth = faceDepth[i]
   if (i < eyeVertices * 2) {
     const left = i < eyeVertices,
-      cx = left ? -0.41 : 0.41
+      cx = FACE_X + (left ? -0.53 : 0.53)
     const dizzy = expression.dizzy ?? 0
     const spinAngle = time * 18
     const orbitR = 0.042 * dizzy
@@ -56,10 +57,10 @@ export function poseFacePoint(
     const localX = (x - cx) * wobbleScaleX
     x = cx + eyeOffsetX + localX * (1 + expression.surprised * 0.12) + expression.gazeX * 0.05
     y =
-      1.2 +
+      1.62 +
       eyeOffsetY +
-      (y - 1.2) * (1 - closed) * wobbleScaleY * (1 + expression.surprised * 0.14) +
-      closed * 0.025 * (1 - (localX / 0.128) ** 2) +
+      (y - 1.62) * (1 - closed) * wobbleScaleY * (1 + expression.surprised * 0.14) +
+      closed * 0.025 * (1 - (localX / 0.112) ** 2) +
       expression.gazeY * 0.028
   } else {
     const m = (i - eyeVertices * 2) * 3
@@ -68,11 +69,12 @@ export function poseFacePoint(
     x += (mouthTarget[m] - x) * open
     y += (mouthTarget[m + 1] - y) * open
     depth += (mouthDepth[m / 3] - depth) * open
-    x *= 1 + expression.happy * 0.25 + expression.squish * 0.1
-    y = 1.111 + (y - 1.111) * (1 + expression.happy * 0.2) + expression.wink * x * 0.16
-    y += Math.sin(x * 42 + time * 20) * 0.024 * dizzy - 0.015 * dizzy
+    const localX = x - FACE_X
+    x = FACE_X + localX * (1 + expression.happy * 0.25 + expression.squish * 0.1)
+    y = 1.535 + (y - 1.535) * (1 + expression.happy * 0.2) + expression.wink * localX * 0.16
+    y += Math.sin(localX * 42 + time * 20) * 0.024 * dizzy - 0.015 * dizzy
   }
-  if (host === 'error' && i >= eyeVertices * 2) y = 2 * 1.075 - y
+  if (host === 'error' && i >= eyeVertices * 2) y = 2 * 1.5 - y
   posed[n] = x
   posed[n + 1] = y
   posed[n + 2] = frontSurfaceZ(x, y) + depth

@@ -587,13 +587,22 @@ export async function createSlimeRuntime(
       },
       exportPoster() {
         const background = view.scene.background
-        view.scene.background = null
-        gpu.renderer.setClearColor(0, 0)
-        draw()
-        const data = canvas.toDataURL('image/png')
-        view.scene.background = background
-        draw()
-        return data
+        const logicalWidth = canvas.clientWidth
+        const logicalHeight = canvas.clientHeight
+        const pixelRatio = info.dpr
+        try {
+          view.scene.background = null
+          gpu.renderer.setClearColor(0, 0)
+          gpu.renderer.setPixelRatio(SLIME_RECIPE.maxPixelRatio)
+          gpu.renderer.setSize(logicalWidth, logicalHeight, false)
+          draw()
+          return canvas.toDataURL('image/png')
+        } finally {
+          gpu.renderer.setPixelRatio(pixelRatio)
+          gpu.renderer.setSize(logicalWidth, logicalHeight, false)
+          view.scene.background = background
+          draw()
+        }
       },
       simulateDeviceLoss() {
         gpu.device.destroy()
