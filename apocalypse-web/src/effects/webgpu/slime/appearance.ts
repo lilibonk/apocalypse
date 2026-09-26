@@ -6,11 +6,11 @@ export const SLIME_RECIPE = {
   heightSegments: 64,
   bubbleCount: 116,
   maxPixelRatio: 2,
-  viewHeight: 4.4,
-  roughness: 0.018,
-  transmission: 1,
-  thickness: 2.4,
-  ior: 1.46,
+  viewHeight: 4.35,
+  roughness: 0.48,
+  transmission: 0.04,
+  thickness: 1.4,
+  ior: 1.34,
   attenuationDistance: 2.4,
 } as const
 
@@ -24,6 +24,9 @@ export function readSlimeColours(element: Element) {
   return {
     stage: colour('stage'),
     body: colour('body'),
+    cream: colour('cream'),
+    blush: colour('blush'),
+    skinTint: colour('skin-tint'),
     attenuation: colour('attenuation'),
     face: colour('face'),
     light: colour('light'),

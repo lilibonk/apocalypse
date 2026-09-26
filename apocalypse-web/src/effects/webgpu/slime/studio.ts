@@ -33,8 +33,8 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
     studio.add(card)
     cards.push(card)
   }
-  addCard(-4.5, 5, 3, 3.2, 5.5, 12)
-  addCard(4.5, 3, 2, 1.6, 5, 9)
+  addCard(-4.5, 5, 3, 4.8, 6.5, 2.5)
+  addCard(4.5, 3, 2, 3.2, 5, 1.2)
   addCard(-1, 1, -5, 3, 3, 1.2)
   addCard(-6, -0.5, -2, 1.5, 5, -0.45)
   addCard(6, -0.5, -2, 1.5, 5, -0.45)
@@ -42,12 +42,12 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
   const pmrem = new PMREMGenerator(renderer)
   let environment = pmrem.fromScene(studio, 0.015, 0.1, 40, { size: 512 })
   scene.environment = environment.texture
-  scene.environmentIntensity = 0.9
-  const key = new DirectionalLight(colours.light, 1.8)
+  scene.environmentIntensity = 0.4
+  const key = new DirectionalLight(colours.light, 1.0)
   key.position.set(-4, 6, 6)
-  const fill = new DirectionalLight(colours.light, 0.8)
+  const fill = new DirectionalLight(colours.light, 0.25)
   fill.position.set(4, 3, 1)
-  const ambient = new HemisphereLight(colours.light, colours.environment, 1.1)
+  const ambient = new HemisphereLight(colours.light, colours.environment, 1.05)
   scene.add(key, fill, ambient)
 
   const layer = (w: number, h: number, y: number, z: number, order: number) => {
@@ -67,7 +67,7 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
   }
   const shadow = layer(5.5, 3.5, 0.002, 0, -3)
   const projection = layer(4.5, 2.7, 0.005, 0.33, -2)
-  const contact = layer(3.8, 2.3, 0.007, 0.32, -1)
+  const contact = layer(3.6, 2.2, 0.04, 0.1, -1)
   const setLayerColours = (c: SlimeColours) => {
     shadow.material.color.copy(c.shadow)
     projection.material.color.copy(c.body)
@@ -97,12 +97,12 @@ export function createStudio(renderer: Renderer, scene: Scene, colours: SlimeCol
     update(p: Point3) {
       shadow.mesh.position.set(p.x, 0.002, p.z)
       shadow.mesh.scale.setScalar(1 + p.y * 0.16)
-      shadow.material.opacity = 0.22 * Math.max(0.14, 1 - p.y * 0.24)
+      shadow.material.opacity = 0.3 * Math.max(0.14, 1 - p.y * 0.24)
       projection.mesh.position.set(p.x, 0.005, p.z + 0.33)
       projection.mesh.scale.setScalar(1 + p.y * 0.12)
-      projection.material.opacity = 0.48 * 0.95 * Math.exp(-p.y * 4.5)
-      contact.mesh.position.set(p.x, 0.007, p.z + 0.32)
-      contact.material.opacity = 0.36 * 0.85 * Math.exp(-p.y * 5)
+      projection.material.opacity = 0.02 * Math.exp(-p.y * 4.5)
+      contact.mesh.position.set(p.x - 0.5, 0.04, p.z + 0.1)
+      contact.material.opacity = 0.85 * Math.exp(-p.y * 5)
     },
     dispose() {
       if (disposed) return

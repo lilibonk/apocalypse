@@ -4,6 +4,7 @@
  */
 import {
   DynamicDrawUsage,
+  Float32BufferAttribute,
   SphereGeometry,
   Vector3,
   TubeGeometry,
@@ -12,10 +13,10 @@ import {
   ExtrudeGeometry,
   Group,
   MeshPhysicalNodeMaterial,
+  MeshBasicNodeMaterial,
+  MeshSSSNodeMaterial,
   Mesh,
   Sphere,
-  MeshBasicNodeMaterial,
-  BackSide,
   InstancedMesh,
   MeshStandardNodeMaterial,
   Matrix4,
@@ -23,23 +24,17 @@ import {
   Scene,
   NoToneMapping,
   type BufferGeometry,
-  type Texture,
-  type NodeBuilder,
-  type Node,
   type Renderer,
+  type Texture,
 } from 'three/webgpu'
 import {
-  bumpMap,
-  cameraPosition,
+  attribute,
+  float,
   mix,
-  mx_noise_float,
+  normalLocal,
   normalView,
-  normalWorld,
-  pmremTexture,
-  positionLocal,
   positionViewDirection,
-  positionWorld,
-  reflect,
+  texture,
   uniform,
   vec3,
   vec4,
@@ -50,20 +45,23 @@ import { FaceMotion } from './face-motion'
 import { hostPose, poseFacePoint } from './expression'
 import { JellyPhysics } from './physics'
 import { SLIME_RECIPE, type SlimeColours } from './appearance'
-import { frontSurfaceZ as frontAt, radiusAt, restPoint, seededRandom } from './shape'
+import {
+  BODY_WIDTH,
+  BODY_DEPTH,
+  BODY_TOP,
+  CROWN,
+  FACE_LEFT,
+  FACE_RIGHT,
+  FACE_MOUTH,
+  FACE_EYE_RADIUS,
+  frontSurfaceZ as frontAt,
+  radiusAt,
+  restPoint,
+  seededRandom,
+} from './shape'
 import { createStudio } from './studio'
+import { skinUv } from './skin-projection'
 import type { OrbState } from '@/effects/PixelOrb/types'
-
-const WIDTH = 1.66
-const DEPTH = 1.18
-/** Absorption alone cannot illuminate glass on a dark page; retain the approved jade fill. */
-function scatteringColour(colours: SlimeColours) {
-  const dark = colours.stage.r * 0.2126 + colours.stage.g * 0.7152 + colours.stage.b * 0.0722 < 0.05
-  return colours.glow
-    .clone()
-    .multiplyScalar(dark ? 1 : 0)
-    .add(colours.body.clone().multiplyScalar(dark ? 0.2 : 0))
-}
 
 const restVertices = new WeakMap<BufferGeometry, Float32Array>()
 function remember(geometry: BufferGeometry) {
@@ -89,13 +87,13 @@ function makeBody() {
 }
 
 // Sculpted surface patches, not rigid eye meshes. Every point uses the body field.
-function makeEye(cx: number) {
+function makeEye(center: { x: number; y: number }) {
   const geometry = new SphereGeometry(1, 32, 24)
   const p = geometry.attributes.position
   for (let i = 0; i < p.count; i++) {
-    const x = cx + p.getX(i) * 0.128
-    const y = 1.2 + p.getY(i) * 0.137
-    p.setXYZ(i, x, y, frontAt(x, y) + 0.009 + p.getZ(i) * 0.055)
+    const x = center.x + p.getX(i) * FACE_EYE_RADIUS
+    const y = center.y + p.getY(i) * FACE_EYE_RADIUS * 1.18
+    p.setXYZ(i, x, y, frontAt(x, y) + 0.006 + p.getZ(i) * 0.038)
   }
   geometry.computeVertexNormals()
   return geometry
@@ -105,13 +103,36 @@ function makeMouth(open = false) {
   const points = []
   for (let i = 0; i <= 24; i++) {
     const angle = (i / 24 - 0.5) * (open ? Math.PI * 2 : 2.7)
-    const x = (open ? 0.052 : 0.1) * Math.sin(angle)
-    const y = (open ? 1.075 : 1.111) - (open ? 0.065 : 0.076) * Math.cos(angle)
-    points.push(new Vector3(x, y, frontAt(x, y) + 0.023))
+    const localX = (open ? 0.055 : 0.101) * Math.sin(angle)
+    const x = FACE_MOUTH.x + localX
+    const y = FACE_MOUTH.y - 0.065 * Math.cos(angle) + localX * 0.48
+    points.push(new Vector3(x, y, frontAt(x, y) + 0.02))
   }
-  const tube = new TubeGeometry(new CatmullRomCurve3(points), 48, 0.014, 12, false)
-  const caps = [points[0], points[points.length - 1]].map((point) =>
-    new SphereGeometry(0.014, 12, 8).translate(point.x, point.y, point.z),
+  const curve = new CatmullRomCurve3(points)
+  const tube = new TubeGeometry(curve, 48, 0.017, 12, false)
+  if (!open) {
+    const position = tube.attributes.position
+    for (let i = 0; i <= 48; i++) {
+      const center = curve.getPointAt(i / 48)
+      const scale = (0.01 + 0.012 * (i / 48)) / 0.017
+      for (let j = 0; j <= 12; j++) {
+        const index = i * 13 + j
+        position.setXYZ(
+          index,
+          center.x + (position.getX(index) - center.x) * scale,
+          center.y + (position.getY(index) - center.y) * scale,
+          center.z + (position.getZ(index) - center.z) * scale,
+        )
+      }
+    }
+    tube.computeVertexNormals()
+  }
+  const caps = [points[0], points[points.length - 1]].map((point, index) =>
+    new SphereGeometry(open ? 0.014 : index === 0 ? 0.01 : 0.022, 12, 8).translate(
+      point.x,
+      point.y,
+      point.z,
+    ),
   )
   const mouth = mergeGeometries([tube, ...caps])
   if (!mouth) throw new Error('Invalid mouth geometry')
@@ -143,80 +164,125 @@ function makeStarGeometry(outerRadius = 0.052, innerRadius = 0.023, thickness = 
   return geometry
 }
 
-function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeColours) {
+function makeSlime(physics: JellyPhysics, colours: SlimeColours, skinTexture?: Texture) {
   const group = new Group()
-  group.name = 'softie'
-  const gel = new MeshPhysicalNodeMaterial({
-    color: colours.light,
+  group.name = 'apo-milk-cloud'
+  const gel = new MeshSSSNodeMaterial({
+    color: colours.body,
     metalness: 0,
-    roughness: 0.018,
-    transmission: 1,
-    thickness: 2.4,
-    ior: 1.46,
+    roughness: SLIME_RECIPE.roughness,
+    transmission: SLIME_RECIPE.transmission,
+    thickness: SLIME_RECIPE.thickness,
+    ior: SLIME_RECIPE.ior,
     attenuationColor: colours.attenuation.clone(),
-    attenuationDistance: 2.4,
-    clearcoat: 1,
-    clearcoatRoughness: 0.025,
-    specularIntensity: 1,
-    envMapIntensity: 1.1,
+    attenuationDistance: SLIME_RECIPE.attenuationDistance,
+    clearcoat: 0.04,
+    clearcoatRoughness: 0.5,
+    specularIntensity: 0.2,
+    envMapIntensity: 0.28,
   })
-  const tint = uniform(gel.attenuationColor)
-  const scattering = uniform(scatteringColour(colours))
-  gel.emissiveNode = scattering
-  const stageTint = uniform(colours.stage.clone())
-  const facing = normalView.dot(positionViewDirection).abs().clamp(0, 1)
-  // Tint only transmitted light; a short optical path stays clear at the silhouette.
-  gel.thicknessNode = facing.pow(0.55).mul(2.25).add(0.15)
-  // Grazing Fresnel writes a gray stroke the volume cannot tint. Replace only
-  // that limb in the final output; the interior lighting stays clear glass.
-  const limb = facing.smoothstep(0.14, 0.34).oneMinus()
-  const candy = mix(stageTint, tint, 0.7)
-  const setupOutput = gel.setupOutput.bind(gel)
-  gel.setupOutput = function setupOutputRim(builder: NodeBuilder, outputNode: Node) {
-    // NodeMaterial output is RGBA; upstream declarations erase its vector dimension.
-    const rgba = outputNode as Node<'vec4'>
-    const rimmed = mix(rgba, vec4(candy, rgba.a), limb)
-    return setupOutput(builder, rimmed)
-  }
-  // Very shallow surface undulations break up perfectly plastic softbox outlines.
-  gel.normalNode = bumpMap(mx_noise_float(positionLocal.mul(9)), uniform(0.012))
-  gel.clearcoatNormalNode = gel.normalNode
+  // Pigment is bound to the resting skin, so the cream and blush deform with it.
+  const skin = attribute<'vec3'>('skinPosition', 'vec3')
+  const mint = uniform(colours.body.clone())
+  const cream = uniform(colours.cream.clone())
+  const blush = uniform(colours.blush.clone())
+  const skinTint = uniform(colours.skinTint.clone())
+  const patch = (x: number, y: number, width: number, height: number) =>
+    skin.x.sub(x).div(width).pow(2).add(skin.y.sub(y).div(height).pow(2)).negate().exp()
+  const lowerMint = patch(-0.12, 0.37, 1.55, 0.32).mul(0.83)
+  const shoulderMint = skin.y
+    .sub(skin.x.mul(0.18).add(2.04))
+    .div(0.23)
+    .pow(2)
+    .add(skin.x.add(0.4).div(1.1).pow(2))
+    .negate()
+    .exp()
+    .mul(0.52)
+  const sideMint = patch(-1.35, 1.4, 0.3, 0.9).mul(0.35)
+  const creamAmount = float(0.97).sub(lowerMint).sub(shoulderMint).sub(sideMint).clamp(0, 1)
+  const cheek = (x: number, y: number) =>
+    skin.x.sub(x).div(0.34).pow(2).add(skin.y.sub(y).div(0.24).pow(2)).mul(-1.6).exp()
+  const warmth = cheek(FACE_LEFT.x - 0.21, FACE_LEFT.y - 0.18)
+    .add(cheek(FACE_RIGHT.x + 0.2, FACE_RIGHT.y - 0.15))
+    .mul(skin.z.smoothstep(0.3, 0.75))
+    .mul(0.76)
+    .clamp(0, 0.8)
+  gel.colorNode = mix(mix(mint, cream, creamAmount), blush, warmth)
+  gel.thicknessColorNode = mix(mint, cream, 0.75)
+  gel.thicknessDistortionNode = float(0.2)
+  gel.thicknessAmbientNode = float(0.06)
+  gel.thicknessAttenuationNode = float(0.1)
+  gel.thicknessPowerNode = float(2)
+  gel.thicknessScaleNode = float(2.2)
   const body = new Mesh(makeBody(), gel)
-  body.geometry.boundingSphere = new Sphere(new Vector3(0, 1.2, 0), 6)
+  body.geometry.setAttribute(
+    'skinPosition',
+    new Float32BufferAttribute(restVertices.get(body.geometry)!, 3),
+  )
+  if (skinTexture) {
+    const rest = restVertices.get(body.geometry)!
+    const uv = new Float32Array((rest.length / 3) * 2)
+    for (let i = 0; i < rest.length / 3; i++) {
+      const mapped = skinUv(rest[i * 3], rest[i * 3 + 1])
+      uv[i * 2] = mapped.u
+      uv[i * 2 + 1] = mapped.v
+    }
+    body.geometry.setAttribute('uv', new Float32BufferAttribute(uv, 2))
+    body.geometry.setAttribute(
+      'skinNormal',
+      new Float32BufferAttribute(Float32Array.from(body.geometry.attributes.normal.array), 3),
+    )
+    const restNormal = attribute<'vec3'>('skinNormal', 'vec3').normalize()
+    const light = vec3(-0.4, 0.65, 0.65).normalize()
+    const motionShade = normalLocal
+      .normalize()
+      .dot(light)
+      .sub(restNormal.dot(light))
+      .mul(0.3)
+      .add(1)
+      .clamp(0.78, 1.15)
+    const art = texture(skinTexture)
+    gel.transmission = 0
+    gel.outputNode = vec4(
+      mix(cream, art.rgb.mul(skinTint), art.a.smoothstep(0.25, 0.9)).mul(motionShade),
+      1,
+    )
+  }
+  body.geometry.boundingSphere = new Sphere(new Vector3(0, 1.35, 0), 6)
   body.name = 'deformable-gel'
   body.frustumCulled = false
   group.add(body)
 
-  // Render the rear interface into the transmission buffer. The front glass then
-  // refracts its reflections, rather than only sampling the featureless page color.
-  const rearMaterial = new MeshBasicNodeMaterial({
-    side: BackSide,
-    polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
-  })
-  const rearDirection = reflect(positionWorld.sub(cameraPosition).normalize(), normalWorld)
-  const rearReflection = pmremTexture(environment, rearDirection, uniform(0.025)).rgb
-  const rearFresnel = facing.oneMinus().pow(3).mul(0.85).add(0.035)
-  rearMaterial.colorNode = mix(stageTint, rearReflection.mul(tint.rgb.pow(0.3)), rearFresnel)
-  rearMaterial.maskNode = facing.greaterThan(0.12)
-  const rear = new Mesh(body.geometry, rearMaterial)
-  rear.name = 'rear-glass-interface'
-  rear.renderOrder = -1
-  rear.frustumCulled = false
-  group.add(rear)
-
   const black = new MeshPhysicalNodeMaterial({
     color: colours.face,
-    roughness: 0.17,
+    roughness: 0.22,
     metalness: 0,
-    clearcoat: 0.85,
+    clearcoat: 0.6,
     clearcoatRoughness: 0.08,
-    envMapIntensity: 0.45,
+    envMapIntensity: 0.3,
     transparent: true,
     depthWrite: false,
   })
-  const faceParts = [makeEye(-0.41), makeEye(0.41), makeMouth()]
+  const faceParts = [makeEye(FACE_LEFT), makeEye(FACE_RIGHT), makeMouth()]
+  faceParts.forEach((geometry, index) =>
+    geometry.setAttribute(
+      'eyeHighlight',
+      new Float32BufferAttribute(
+        new Float32Array(geometry.attributes.position.count).fill(index < 2 ? 1 : 0),
+        1,
+      ),
+    ),
+  )
+  const eyeLight = uniform(colours.light.clone())
+  black.emissiveNode = eyeLight
+    .mul(
+      normalView
+        .dot(vec3(0.38, 0.52, 0.76).normalize())
+        .max(0)
+        .pow(32),
+    )
+    .mul(attribute('eyeHighlight', 'float'))
+    .mul(1.2)
   const eyeVertices = faceParts[0].attributes.position.count
   const mergedFace = mergeGeometries(faceParts)
   if (!mergedFace) throw new Error('Invalid face geometry')
@@ -240,15 +306,11 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
   face.frustumCulled = false
   group.add(face)
 
-  // Air pockets use faint reflective shells, composited after the refractive gel.
-  // This avoids magnifying small pockets into beads in the screen-space refraction.
+  // Faint air-pocket shells remain visible through the diffuse milk gel.
+  // Density fades toward the opaque crown without stopping their upward motion.
   const bubbleGeometry = new SphereGeometry(1, 12, 8)
-  const bubbleMaterial = new MeshPhysicalNodeMaterial({
+  const bubbleMaterial = new MeshBasicNodeMaterial({
     color: colours.body.clone().lerp(colours.light, 0.65),
-    metalness: 0,
-    roughness: 0.028,
-    clearcoat: 1,
-    envMapIntensity: 1.1,
     transparent: true,
     depthWrite: false,
     depthTest: false,
@@ -263,9 +325,9 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     .abs()
     .oneMinus()
     .pow(3)
-    .mul(0.45)
-    .add(bubbleGlint.mul(0.8))
-    .add(0.008)
+    .mul(0.6)
+    .add(bubbleGlint.mul(0.6))
+    .add(0.04)
     .clamp(0, 1)
   const count = SLIME_RECIPE.bubbleCount
   const bubbles = new InstancedMesh(bubbleGeometry, bubbleMaterial, count)
@@ -276,16 +338,16 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
   const random = seededRandom(71561)
   const bubbleSeeds: BubbleSeed[] = []
   for (let i = 0; i < count; i++) {
-    const y = 0.19 + random() * 1.96
-    const x = (random() * 2 - 1) * WIDTH * radiusAt(y) * 0.89
+    const y = 0.19 + random() ** 2 * 1.96
+    const x = (random() * 2 - 1) * BODY_WIDTH * radiusAt(y) * 0.89
     const front = frontAt(x, y)
     const z = front * (0.15 + random() * 0.8)
-    const size = 0.009 + Math.pow(random(), 2.8) * 0.033
+    const size = 0.012 + Math.pow(random(), 1.5) * 0.029
     const radius = radiusAt(y)
     bubbleSeeds.push({
-      x: x / (WIDTH * radius),
+      x: x / (BODY_WIDTH * radius),
       y,
-      z: Math.min(front - size * 2.3, z) / (DEPTH * radius),
+      z: Math.min(front - size * 2.3, z) / (BODY_DEPTH * radius),
       size,
       phase: random() * Math.PI * 2,
     })
@@ -335,28 +397,25 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     posed,
     bubbleSeeds,
     stars,
-    updateColours(c: SlimeColours, nextEnvironment: Texture) {
-      gel.color.copy(c.light)
+    updateColours(c: SlimeColours) {
+      gel.color.copy(c.body)
       gel.attenuationColor.copy(c.attenuation)
-      scattering.value.copy(scatteringColour(c))
-      stageTint.value.copy(c.stage)
+      mint.value.copy(c.body)
+      cream.value.copy(c.cream)
+      blush.value.copy(c.blush)
+      skinTint.value.copy(c.skinTint)
+      eyeLight.value.copy(c.light)
       black.color.copy(c.face)
       bubbleMaterial.color.copy(c.body).lerp(c.light, 0.65)
       starMaterial.color.copy(c.star)
       starMaterial.emissive.copy(c.starGlow)
-      rearMaterial.colorNode = mix(
-        stageTint,
-        pmremTexture(nextEnvironment, rearDirection, uniform(0.025)).rgb.mul(tint.rgb.pow(0.3)),
-        rearFresnel,
-      )
-      rearMaterial.needsUpdate = true
     },
     update(time: number, host: OrbState = 'idle') {
       group.position.copy(physics.position)
       // A sustained privacy eyelid must read as a dark lid, not a flattened white specular flash.
-      black.roughness = host === 'sleeping' ? 0.65 : 0.17
-      black.clearcoat = host === 'sleeping' ? 0.1 : 0.85
-      black.envMapIntensity = host === 'sleeping' ? 0.12 : 0.45
+      black.roughness = host === 'sleeping' ? 0.7 : 0.22
+      black.clearcoat = host === 'sleeping' ? 0.1 : 0.6
+      black.envMapIntensity = host === 'sleeping' ? 0.12 : 0.3
       const expression = hostPose(faceMotion.update(time), host)
       const restFace = restVertices.get(faceGeometry)!
       for (let i = 0; i < faceDepth.length; i++) {
@@ -404,7 +463,7 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
       } else {
         dizzyStarsGroup.visible = true
         // Anchor to the dynamically deformed crown apex (tuft) of the jelly
-        physics.deform(0, 2.38, 0, crownP)
+        physics.deform(CROWN.x, CROWN.y, CROWN.z, crownP)
         dizzyStarsGroup.position.set(crownP.x, crownP.y + 0.3, crownP.z)
         // Tilted halo plane for cartoon 3D perspective
         dizzyStarsGroup.rotation.x = 0.32 + Math.sin(time * 3.5) * 0.05
@@ -436,13 +495,13 @@ function makeSlime(physics: JellyPhysics, environment: Texture, colours: SlimeCo
     dispose() {
       geometries.forEach((g) => g.dispose())
       gel.dispose()
-      rearMaterial.dispose()
       black.dispose()
       bubbles.dispose()
       bubbleGeometry.dispose()
       bubbleMaterial.dispose()
       starGeometry.dispose()
       starMaterial.dispose()
+      skinTexture?.dispose()
     },
   }
 }
@@ -452,6 +511,7 @@ export function createSlimeScene(
   renderer: Renderer,
   colours: SlimeColours,
   physics = new JellyPhysics(),
+  skinTexture?: Texture,
 ) {
   const scene = new Scene()
   scene.background = null
@@ -461,7 +521,7 @@ export function createSlimeScene(
   camera.position.set(0, 3.05, 9.8)
   camera.lookAt(0, 1.15, 0)
   const studio = createStudio(renderer, scene, colours)
-  const slime = makeSlime(physics, studio.environment, colours)
+  const slime = makeSlime(physics, colours, skinTexture)
   scene.add(slime.group)
   let disposed = false
   return {
@@ -492,19 +552,25 @@ export function createSlimeScene(
       canvasHeight = height,
     ) {
       camera.aspect = width / height
-      const visibleHeight = Math.max(SLIME_RECIPE.viewHeight, 4.45 / camera.aspect)
+      const visibleHeight = Math.max(
+        SLIME_RECIPE.viewHeight,
+        (BODY_WIDTH * 2 + 1.25) / camera.aspect,
+      )
       const distance = visibleHeight / (2 * Math.tan((16 * Math.PI) / 180))
-      camera.position.set(0, 1.1 + distance * 0.15, distance)
-      camera.lookAt(0, 1.1, 0)
+      camera.position.set(0, 1.35 + distance * 0.09, distance)
+      camera.lookAt(0, 1.35, 0)
       camera.setViewOffset(width, height, -left, -top, canvasWidth, canvasHeight)
       camera.updateProjectionMatrix()
       const unit = visibleHeight / height
       const horizontalRoom = Math.min(width / 2 + left, canvasWidth - left - width / 2) * unit
-      physics.setBounds(horizontalRoom - 2.05, 1.1 + visibleHeight / 2 + top * unit - 3.2)
+      physics.setBounds(
+        horizontalRoom - BODY_WIDTH - 0.4,
+        1.35 + visibleHeight / 2 + top * unit - BODY_TOP - 0.4,
+      )
     },
     updateColours(c: SlimeColours) {
       studio.updateColours(c)
-      slime.updateColours(c, studio.environment)
+      slime.updateColours(c)
     },
     dispose() {
       if (disposed) return

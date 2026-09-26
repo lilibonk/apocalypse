@@ -1,4 +1,4 @@
-import { Plane, Raycaster, Triangle, Vector2, Vector3 } from 'three/webgpu'
+import { Plane, Raycaster, Triangle, Vector2, Vector3, type Texture } from 'three/webgpu'
 
 import type { OrbState } from '@/effects/PixelOrb/types'
 
@@ -9,7 +9,8 @@ import { trackFocusOrigin } from './focus'
 import { summarizeFrames, type FrameReport } from './performance'
 import { JellyPhysics, type JellyConfig } from './physics'
 import { createSlimeScene, type SlimeScene } from './scene'
-import { frontSurfaceZ } from './shape'
+import { FACE_LEFT, FACE_RIGHT, frontSurfaceZ } from './shape'
+import { loadMilkCloudSkin } from './skin-texture'
 import { createStrictGpuSession, type StrictGpuSession } from './strict-renderer'
 
 export interface SlimeRuntimeInfo {
@@ -67,6 +68,7 @@ export async function createSlimeRuntime(
 ): Promise<SlimeRuntime> {
   let session: StrictGpuSession | undefined
   let scene: SlimeScene | undefined
+  let pendingSkinTexture: Texture | undefined
   let disposed = false
   let frame = 0
   let previousTime = 0
@@ -97,6 +99,8 @@ export async function createSlimeRuntime(
     physics.endGrab()
     gestures.cancel()
     cleanups.forEach((cleanup) => cleanup())
+    pendingSkinTexture?.dispose()
+    pendingSkinTexture = undefined
     scene?.dispose()
     session?.dispose()
   }
@@ -114,11 +118,24 @@ export async function createSlimeRuntime(
     session = await createStrictGpuSession(canvas, options.signal)
     if (disposed || options.signal.aborted) {
       session.dispose()
+      session = undefined
       throw new DOMException('Slime initialization cancelled', 'AbortError')
     }
     options.signal.throwIfAborted()
+    pendingSkinTexture = await loadMilkCloudSkin()
+    if (disposed || options.signal.aborted) {
+      pendingSkinTexture.dispose()
+      pendingSkinTexture = undefined
+      throw new DOMException('Slime initialization cancelled', 'AbortError')
+    }
     const initialTheme = document.documentElement.className
-    scene = createSlimeScene(session.renderer, readSlimeColours(canvas), physics)
+    scene = createSlimeScene(
+      session.renderer,
+      readSlimeColours(canvas),
+      physics,
+      pendingSkinTexture,
+    )
+    pendingSkinTexture = undefined
     const view = scene
     const gpu = session
     const a = new Vector3()
@@ -301,6 +318,7 @@ export async function createSlimeRuntime(
         cancelAnimationFrame(frame)
         frame = 0
         cancelInput()
+        resetGaze()
         if (benchmarkStarted && benchmarkPhase !== 'complete') {
           benchmarkPhase = 'interrupted'
           benchmarkStarted = 0
@@ -312,6 +330,7 @@ export async function createSlimeRuntime(
         cancelAnimationFrame(frame)
         frame = 0
         cancelInput()
+        resetGaze()
         if (benchmarkStarted && benchmarkPhase !== 'complete') {
           benchmarkPhase = 'interrupted'
           benchmarkStarted = 0
@@ -442,18 +461,17 @@ export async function createSlimeRuntime(
         if (event.key === 'Escape') cancelInput()
       }
       const onGaze = (event: PointerEvent) => {
-        if (
-          !options.gaze ||
-          staticMode ||
-          document.hidden ||
-          event.pointerType !== 'mouse' ||
-          state !== 'idle'
-        )
+        if (!options.gaze) return
+        if (staticMode || document.hidden || event.pointerType !== 'mouse' || state !== 'idle') {
+          resetGaze()
           return
+        }
         const rect = canvas.getBoundingClientRect()
         if (rect.width < 1 || rect.height < 1) return
         const anchor = new Vector3()
-        physics.deform(0, 1.2, frontSurfaceZ(0, 1.2), anchor)
+        const faceX = (FACE_LEFT.x + FACE_RIGHT.x) / 2
+        const faceY = (FACE_LEFT.y + FACE_RIGHT.y) / 2
+        physics.deform(faceX, faceY, frontSurfaceZ(faceX, faceY), anchor)
         anchor.add(view.actor.position).project(view.camera)
         const x = rect.left + ((anchor.x + 1) * rect.width) / 2
         const y = rect.top + ((1 - anchor.y) * rect.height) / 2
@@ -587,13 +605,22 @@ export async function createSlimeRuntime(
       },
       exportPoster() {
         const background = view.scene.background
-        view.scene.background = null
-        gpu.renderer.setClearColor(0, 0)
-        draw()
-        const data = canvas.toDataURL('image/png')
-        view.scene.background = background
-        draw()
-        return data
+        const logicalWidth = canvas.clientWidth
+        const logicalHeight = canvas.clientHeight
+        const pixelRatio = info.dpr
+        try {
+          view.scene.background = null
+          gpu.renderer.setClearColor(0, 0)
+          gpu.renderer.setPixelRatio(SLIME_RECIPE.maxPixelRatio)
+          gpu.renderer.setSize(logicalWidth, logicalHeight, false)
+          draw()
+          return canvas.toDataURL('image/png')
+        } finally {
+          view.scene.background = background
+          gpu.renderer.setPixelRatio(pixelRatio)
+          gpu.renderer.setSize(logicalWidth, logicalHeight, false)
+          draw()
+        }
       },
       simulateDeviceLoss() {
         gpu.device.destroy()

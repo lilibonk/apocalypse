@@ -39,13 +39,16 @@
   --overlay-backdrop-nested: oklch(0.12 0 0 / 0.24);
 
   /* LIL-85: sRGB projection for Three.js, fixed mint (independent of accent presets). */
-  --slime-stage: #f5f3ef;
-  --slime-body: #93dbc4;
-  --slime-attenuation: #81c5b1;
-  --slime-face: #07140f;
+  --slime-stage: #fff7e8;
+  --slime-body: #a9c5ad;
+  --slime-cream: #f9f5dd;
+  --slime-blush: #edaa94;
+  --slime-skin-tint: #fffdf0;
+  --slime-attenuation: #c5dcc5;
+  --slime-face: #4d2d1b;
   --slime-light: #ffffff;
-  --slime-shadow: #496c60;
-  --slime-environment: #c8d4cd;
+  --slime-shadow: #806d47;
+  --slime-environment: #dde1d1;
   --slime-glow: #176b53;
   --slime-star: #ffc820;
   --slime-star-glow: #ffa200;
@@ -80,12 +83,15 @@
 
 .dark {
   --slime-stage: #101314;
-  --slime-body: #91efd0;
-  --slime-attenuation: #45b892;
-  --slime-face: #031610;
-  --slime-light: #effff5;
+  --slime-body: #a1c6b3;
+  --slime-cream: #e1e7cc;
+  --slime-blush: #dc9984;
+  --slime-skin-tint: #e3e8df;
+  --slime-attenuation: #8ab6a1;
+  --slime-face: #291e1a;
+  --slime-light: #fff8e9;
   --slime-shadow: #000000;
-  --slime-environment: #a3c7b9;
+  --slime-environment: #a6bfb0;
   --slime-glow: #39b889;
   --slime-star: #ffdb63;
   --slime-star-glow: #ffb52e;

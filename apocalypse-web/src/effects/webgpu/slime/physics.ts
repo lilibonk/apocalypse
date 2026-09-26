@@ -2,7 +2,7 @@
  * Source: https://github.com/yuanyang749/softie-webgpu/tree/977a60844ac6ffe6824531900cf15bd5403e408f
  * Changes: TypeScript, Apocalypse host/lifecycle integration. See public/licenses/softie-webgpu.txt.
  */
-import type { Point3 } from './shape'
+import { BODY_TOP, surfaceNormal, type Point3 } from './shape'
 export interface JellyConfig {
   stiffness: number
   damping: number
@@ -147,15 +147,8 @@ export class JellyPhysics {
     Object.assign(this._startTarget, worldTarget)
     Object.assign(this._target, worldTarget)
     Object.assign(this._startPosition, this.position)
-    // Ellipsoid gradient approximates the local outward normal, including the tip.
-    const n = this._normal
-    n.x = localPoint.x / (1.58 * 1.58)
-    n.y = (localPoint.y - 1.08) / (1.2 * 1.2)
-    n.z = localPoint.z / (1.15 * 1.15)
-    const length = Math.hypot(n.x, n.y, n.z) || 1
-    n.x /= length
-    n.y /= length
-    n.z /= length
+    // Press into the actual pillow skin, including its concave crown and waist.
+    Object.assign(this._normal, surfaceNormal(localPoint))
   }
 
   moveGrab(worldTarget: Point3) {
@@ -381,7 +374,7 @@ export class JellyPhysics {
       pz += weight * (central * uz + projection * dz)
     }
     py *= this._scaleY
-    const height = py / 2.4
+    const height = py / BODY_TOP
     // Nonlinear height-only shear has determinant one and lets the crown lag the belly.
     const bend = py * (0.3 + height * 0.7)
     out.x = px * this._scaleX + this._shearX.value * bend
