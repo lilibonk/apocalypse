@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bubblePoint, type BubbleSeed } from './ambient-motion'
-import { frontSurfaceZ, radiusAt, seededRandom } from './shape'
+import { BODY_WIDTH, frontSurfaceZ, radiusAt, seededRandom } from './shape'
 const point = () => ({ x: 0, y: 0, z: 0, scale: 0 })
 const seed: BubbleSeed = { x: 0.3, y: 0.6, z: 0.6, size: 0.02, phase: 0.8 }
 describe('作者气泡：上浮、端点缩放与体积约束', () => {
@@ -12,26 +12,31 @@ describe('作者气泡：上浮、端点缩放与体积约束', () => {
     expect(bubblePoint(seed, 0, point())).toEqual(a)
     expect(Math.abs(b.x - a.x)).toBeLessThan(0.1)
   })
+  it('上半部气泡缩小但保持原有上升速度', () => {
+    const lower = bubblePoint({ ...seed, y: 0.5 }, 0, point())
+    const upper = bubblePoint({ ...seed, y: 1.5 }, 0, point())
+    expect(upper.scale).toBeLessThan(lower.scale * 0.1)
+    const lowerNext = bubblePoint({ ...seed, y: 0.5 }, 1, point())
+    const upperNext = bubblePoint({ ...seed, y: 1.5 }, 1, point())
+    expect(upperNext.y - upper.y).toBeCloseTo(lowerNext.y - lower.y)
+  })
   it('长时间漂浮不穿皮，底部/顶端渐隐重生', () => {
     const random = seededRandom(71561)
     let wraps = 0
-    let largestNormalizedRadius = 0
     let minimumClearance = Infinity
     let largestWrapScale = 0
     for (let i = 0; i < 32; i++) {
       const b = {
         ...seed,
         size: 0.009 + random() ** 2.8 * 0.033,
-        x: random() * 0.8,
+        x: (random() * 2 - 1) * 0.8,
+        z: (random() * 2 - 1) * 0.8,
         phase: random() * Math.PI * 2,
       }
       let previous = bubblePoint(b, 0, point())
       for (let t = 1 / 60; t < 120; t += 1 / 60) {
         const p = bubblePoint(b, t, point())
-        largestNormalizedRadius = Math.max(
-          largestNormalizedRadius,
-          Math.hypot(p.x / (1.66 * radiusAt(p.y)), p.z / (1.18 * radiusAt(p.y))),
-        )
+        expect(Math.abs(p.x)).toBeLessThan(BODY_WIDTH * radiusAt(p.y))
         minimumClearance = Math.min(
           minimumClearance,
           frontSurfaceZ(p.x, p.y) - Math.abs(p.z) - p.scale,
@@ -44,7 +49,6 @@ describe('作者气泡：上浮、端点缩放与体积约束', () => {
       }
     }
     expect(wraps).toBeGreaterThan(0)
-    expect(largestNormalizedRadius).toBeLessThan(1)
     expect(minimumClearance).toBeGreaterThan(0)
     expect(largestWrapScale).toBeLessThan(0.015)
   })

@@ -18,7 +18,7 @@ comparison.className = 'slime-comparison'
 root.append(comparison)
 const reference = document.createElement('img')
 reference.src = '/brand/slime/idle.png'
-reference.alt = '第二版青绿史莱姆静态海报（亮色）；作者参考图保留在验收资料中'
+reference.alt = 'Milk Cloud 同源静态海报；设计稿保留在产品验收资料中'
 reference.className = 'slime-preview-canvas'
 comparison.append(reference)
 const canvas = document.createElement('canvas')
@@ -79,12 +79,23 @@ addButton('保持按压', () => {
   runtime?.holdPressure(true)
 })
 addButton('松手', () => runtime?.holdPressure(false))
-addButton('亮色', () => document.documentElement.classList.remove('dark'))
-addButton('暗色', () => document.documentElement.classList.add('dark'))
+const syncReference = () => {
+  const prefix = document.documentElement.classList.contains('dark') ? 'dark-' : ''
+  reference.src = `/brand/slime/${prefix}${state}.png`
+}
+addButton('亮色', () => {
+  document.documentElement.classList.remove('dark')
+  syncReference()
+})
+addButton('暗色', () => {
+  document.documentElement.classList.add('dark')
+  syncReference()
+})
 const states: OrbState[] = ['idle', 'waiting', 'success', 'error', 'sleeping']
 for (const value of states)
   addButton(value, () => {
     state = value
+    syncReference()
     runtime?.setState(value)
   })
 addButton('60 秒性能验证（预热 10 秒）', () => runtime?.startBenchmark())
