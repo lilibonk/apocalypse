@@ -4,17 +4,12 @@
  */
 
 import { ChevronDown, ChevronUp, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { FieldOption, FieldSelect } from '@/components/ui/field-select'
 
 import type { DynaSearchField } from './schema'
 import { useDynaText, useFieldOptions } from './use-dyna'
@@ -33,10 +28,12 @@ export interface DynaSearchProps {
 
 function SearchControl({
   field,
+  id,
   value,
   onChange,
 }: {
   field: DynaSearchField
+  id: string
   value: string
   onChange: (value: string) => void
 }) {
@@ -46,37 +43,37 @@ function SearchControl({
   if (field.type === 'input') {
     return (
       <Input
+        id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={field.placeholder ? t(field.placeholder) : undefined}
         className="w-full sm:w-56"
-        aria-label={field.label ? t(field.label) : field.name}
       />
     )
   }
 
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
-        className="w-full sm:w-56"
-        aria-label={field.label ? t(field.label) : field.name}
-      >
-        <SelectValue placeholder={field.placeholder ? t(field.placeholder) : undefined} />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {t(option.label)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <FieldSelect
+      id={id}
+      value={value}
+      onValueChange={onChange}
+      className="w-full sm:w-56"
+      placeholder={field.placeholder ? t(field.placeholder) : undefined}
+    >
+      <FieldOption value="">{t('全部')}</FieldOption>
+      {options.map((option) => (
+        <FieldOption key={option.value} value={option.value}>
+          {t(option.label)}
+        </FieldOption>
+      ))}
+    </FieldSelect>
   )
 }
 
 export function DynaSearch({ fields, values, onChange, onSearch, onReset }: DynaSearchProps) {
   const t = useDynaText()
   const [expanded, setExpanded] = useState(false)
+  const searchId = useId()
 
   const collapsible = fields.length > COLLAPSED_COUNT
   const visible = collapsible && !expanded ? fields.slice(0, COLLAPSED_COUNT) : fields
@@ -85,33 +82,38 @@ export function DynaSearch({ fields, values, onChange, onSearch, onReset }: Dyna
 
   return (
     <form
-      className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center"
+      className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 sm:flex sm:flex-wrap sm:items-end"
+      aria-label={t('queryFilters')}
       onSubmit={(event) => {
         event.preventDefault()
         onSearch()
       }}
     >
       {visible.map((field) => (
-        <div key={field.name} className="col-span-2 sm:col-auto">
+        <div key={field.name} className="col-span-2 space-y-2 sm:col-auto">
+          <Label htmlFor={`${searchId}-${field.name}`}>
+            {t(field.label ?? field.placeholder ?? 'querySearch')}
+          </Label>
           <SearchControl
+            id={`${searchId}-${field.name}`}
             field={field}
             value={values[field.name] ?? ''}
             onChange={(value) => onChange(field.name, value)}
           />
         </div>
       ))}
-      <Button type="submit" variant="secondary" size="sm">
+      <Button type="submit" variant="secondary">
         <Search className="size-4" />
         {t('查询')}
       </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+      <Button type="button" variant="ghost" onClick={onReset}>
         {t('重置')}
       </Button>
       {collapsible && (
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded ? t('收起') : t('展开')}

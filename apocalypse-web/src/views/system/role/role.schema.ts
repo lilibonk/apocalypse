@@ -19,7 +19,9 @@ export default definePageSchema({
   description: '系统角色的增删改查与授权',
   entityName: '角色',
   createPerm: 'system:role:add',
-  search: [{ name: 'keyword', type: 'input', placeholder: '角色名称 / 标识' }],
+  search: [
+    { name: 'keyword', label: '角色名称 / 标识', type: 'input', placeholder: '角色名称 / 标识' },
+  ],
   columns: [
     { key: 'roleName', title: '角色名称' },
     { key: 'roleKey', title: '角色标识' },

@@ -28,7 +28,13 @@ vi.mock('@/components/dyna', () => ({
   definePageSchema: (schema: unknown) => schema,
 }))
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key.split('.').slice(1).join('.') }),
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) =>
+      String(options?.defaultValue ?? key.split('.').slice(1).join('.')).replace(
+        /\{\{(\w+)\}\}/g,
+        (_, name: string) => String(options?.[name] ?? ''),
+      ),
+  }),
 }))
 vi.mock('@/components/ui/dialog', () => {
   const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>

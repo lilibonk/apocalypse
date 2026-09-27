@@ -107,7 +107,7 @@ function MenuTreeBranch({
                 <Badge variant="outline" className="shrink-0">
                   {node.menuType === 'C' ? labels.directory : labels.menu}
                 </Badge>
-                <Check className={cn('size-4 text-primary', !isSelected && 'opacity-0')} />
+                <Check className={cn('size-4 text-brand-text', !isSelected && 'opacity-0')} />
               </Button>
             </div>
             {hasChildren && isExpanded && (
@@ -272,7 +272,10 @@ export function MenuTreeSelect({
                     {t('common.根节点', { defaultValue: '根节点' })}
                   </span>
                   <Check
-                    className={cn('size-4 text-primary', value !== ROOT_PARENT_ID && 'opacity-0')}
+                    className={cn(
+                      'size-4 text-brand-text',
+                      value !== ROOT_PARENT_ID && 'opacity-0',
+                    )}
                   />
                 </Button>
               )}
@@ -306,7 +309,7 @@ export function MenuTreeSelect({
                           </span>
                         </span>
                         <Check
-                          className={cn('size-4 text-primary', value !== node.id && 'opacity-0')}
+                          className={cn('size-4 text-brand-text', value !== node.id && 'opacity-0')}
                         />
                       </Button>
                     ))

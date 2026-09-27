@@ -12,6 +12,7 @@ export function useDict(type: string) {
   return useQuery({
     queryKey: ['dict', type],
     queryFn: () => getDictDataByType(type),
+    enabled: type.length > 0,
     staleTime: 5 * 60_000,
   })
 }
@@ -29,5 +30,18 @@ export function DictTag({
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground">-</span>
   }
-  return <Badge variant="secondary">{item?.dictLabel ?? String(value)}</Badge>
+  // Only these server-defined dictionaries have shared binary semantics. Custom values stay neutral.
+  const status = String(value)
+  const variant =
+    (type === 'sys_user_status' || type === 'sys_common_status') && status === '1'
+      ? 'success'
+      : type === 'sys_common_status' && status === '0'
+        ? 'destructive'
+        : 'secondary'
+  return (
+    <Badge variant={variant}>
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {item?.dictLabel ?? String(value)}
+    </Badge>
+  )
 }

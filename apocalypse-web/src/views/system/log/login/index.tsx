@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { summarizeUserAgent } from '@/lib/user-agent'
+import { useResourceDenial } from '@/lib/query/use-resource-denial'
 
 import { pageLoginLogs, type LoginLogRow } from './login-log.api'
 
@@ -40,7 +41,7 @@ const columns: DynaColumn[] = [
 ]
 
 const searchFields: DynaSearchField[] = [
-  { name: 'keyword', type: 'input', placeholder: '用户名 / IP' },
+  { name: 'keyword', label: '用户名 / IP', type: 'input', placeholder: '用户名 / IP' },
 ]
 
 export default function LoginLogPage() {
@@ -53,9 +54,14 @@ export default function LoginLogPage() {
 
   const keyword = appliedSearch.keyword ?? ''
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'logs', 'login', page, pageSize, keyword],
     queryFn: () => pageLoginLogs(page, pageSize, keyword),
+  })
+  useResourceDenial({
+    errors: [error],
+    clear: { queryKey: ['system', 'logs', 'login'] },
+    reset: () => setDetail(null),
   })
   const rows = useMemo(
     () =>
@@ -67,12 +73,12 @@ export default function LoginLogPage() {
   )
 
   return (
-    <div className="w-full space-y-4 p-4 sm:p-6">
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {t('common.登录日志', { defaultValue: '登录日志' })}
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t('common.系统登录成功与失败记录（只读）', {
             defaultValue: '系统登录成功与失败记录（只读）',
           })}
@@ -98,6 +104,15 @@ export default function LoginLogPage() {
         columns={columns}
         rows={rows}
         loading={isLoading}
+        error={error}
+        refreshing={isFetching}
+        onRetry={() => void refetch()}
+        filtered={keyword.trim().length > 0}
+        onResetFilters={() => {
+          setDraftSearch({})
+          setAppliedSearch({})
+          setPage(1)
+        }}
         rowKey="id"
         actions={(row) => (
           <Button
@@ -122,27 +137,29 @@ export default function LoginLogPage() {
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>登录详情</DialogTitle>
+            <DialogTitle>{t('common.loginDetails')}</DialogTitle>
             <DialogDescription>
-              {detail ? `${detail.username} · ${detail.ip ?? '未知 IP'}` : ''}
+              {detail ? `${detail.username} · ${detail.ip ?? t('common.unknownIp')}` : ''}
             </DialogDescription>
           </DialogHeader>
           {detail && (
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="rounded-md border border-border p-3">
-                <dt className="text-muted-foreground">登录时间</dt>
+                <dt className="text-muted-foreground">
+                  {t('dyna.登录时间', { defaultValue: '登录时间' })}
+                </dt>
                 <dd className="mt-1 font-medium">{detail.loginTime.replace('T', ' ')}</dd>
               </div>
               <div className="rounded-md border border-border p-3">
-                <dt className="text-muted-foreground">结果</dt>
+                <dt className="text-muted-foreground">{t('common.queryResult')}</dt>
                 <dd className="mt-1 font-medium">{detail.message ?? '-'}</dd>
               </div>
               <div className="rounded-md border border-border p-3 sm:col-span-2">
-                <dt className="text-muted-foreground">设备摘要</dt>
+                <dt className="text-muted-foreground">{t('common.deviceSummary')}</dt>
                 <dd className="mt-1 font-medium">{summarizeUserAgent(detail.userAgent)}</dd>
               </div>
               <div className="rounded-md border border-border p-3 sm:col-span-2">
-                <dt className="text-muted-foreground">原始 User Agent</dt>
+                <dt className="text-muted-foreground">{t('common.rawUserAgent')}</dt>
                 <dd className="mt-1 break-all font-mono text-xs">{detail.userAgent ?? '-'}</dd>
               </div>
             </dl>

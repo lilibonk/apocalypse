@@ -61,6 +61,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
       description={t('common.搜索菜单与操作', { defaultValue: '搜索菜单与操作' })}
     >
       <CommandInput
+        aria-label={t('common.搜索菜单与操作', { defaultValue: '搜索菜单与操作' })}
         placeholder={t('common.搜索菜单或操作…', { defaultValue: '搜索菜单或操作…' })}
       />
       <CommandList>

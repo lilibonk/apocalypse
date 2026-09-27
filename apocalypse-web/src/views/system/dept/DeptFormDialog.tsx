@@ -146,7 +146,7 @@ export function DeptFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader data-pixel-dialog-stage="header">
+        <DialogHeader>
           <DialogTitle>
             {editing
               ? t('common.编辑部门', { defaultValue: '编辑部门' })
@@ -161,9 +161,9 @@ export function DeptFormDialog({
               : t('common.创建新的部门', { defaultValue: '创建新的部门' })}
           </DialogDescription>
         </DialogHeader>
-        <div data-pixel-dialog-stage="body">
+        <div>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
                 name="parentId"
@@ -198,7 +198,7 @@ export function DeptFormDialog({
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="leader"
@@ -287,7 +287,7 @@ export function DeptFormDialog({
                   </FormItem>
                 )}
               />
-              <div data-pixel-dialog-stage="footer">
+              <div className="border-t border-border pt-4">
                 <DialogFooter>
                   <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                     {t('common.取消', { defaultValue: '取消' })}

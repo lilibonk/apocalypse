@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useForm, type Control, type Resolver } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   Dialog,
   DialogContent,
@@ -27,14 +28,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { FieldOption, FieldSelect } from '@/components/ui/field-select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { PixelScale } from '@/effects/PixelWave'
@@ -84,20 +79,25 @@ function FieldControl({
         const controlElement = (() => {
           switch (field.type) {
             case 'input':
-            case 'date':
-            case 'datetime':
               return (
                 <Input
                   {...controller}
                   value={text}
-                  type={
-                    field.type === 'input'
-                      ? 'text'
-                      : field.type === 'date'
-                        ? 'date'
-                        : 'datetime-local'
-                  }
+                  type="text"
                   placeholder={field.placeholder ? t(field.placeholder) : undefined}
+                  disabled={disabled}
+                />
+              )
+            case 'date':
+            case 'datetime':
+              return (
+                <DatePicker
+                  value={text}
+                  onValueChange={controller.onChange}
+                  onBlur={controller.onBlur}
+                  ref={controller.ref}
+                  mode={field.type === 'date' ? 'date' : 'datetime-local'}
+                  aria-label={t(field.label)}
                   disabled={disabled}
                 />
               )
@@ -134,22 +134,23 @@ function FieldControl({
             case 'select':
             case 'dict':
               return (
-                <Select value={text} onValueChange={controller.onChange} disabled={disabled}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={field.placeholder ? t(field.placeholder) : undefined}
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {t(option.label)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FieldSelect
+                  value={text}
+                  onValueChange={controller.onChange}
+                  onBlur={controller.onBlur}
+                  ref={controller.ref}
+                  disabled={disabled}
+                  placeholder={field.placeholder ? t(field.placeholder) : undefined}
+                >
+                  <FieldOption value="" disabled={field.required}>
+                    {t('queryUnselected')}
+                  </FieldOption>
+                  {options.map((option) => (
+                    <FieldOption key={option.value} value={option.value}>
+                      {t(option.label)}
+                    </FieldOption>
+                  ))}
+                </FieldSelect>
               )
             case 'radio':
               return (
@@ -198,11 +199,7 @@ function FieldControl({
                 </>
               )}
             </FormLabel>
-            {field.type === 'select' || field.type === 'dict' ? (
-              controlElement
-            ) : (
-              <FormControl>{controlElement}</FormControl>
-            )}
+            <FormControl>{controlElement}</FormControl>
             {(field.help || field.minLength !== undefined || field.maxLength !== undefined) && (
               <FormDescription>
                 {field.help
@@ -276,7 +273,7 @@ export function DynaForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent ref={dialogRef} onOpenAutoFocus={handleOpenAutoFocus}>
-        <DialogHeader data-pixel-dialog-stage="header">
+        <DialogHeader>
           <DialogTitle>
             {mode === 'edit' ? t(config.editTitle ?? '编辑') : t(config.createTitle ?? '新增')}
           </DialogTitle>
@@ -289,11 +286,11 @@ export function DynaForm({
             onSubmit={form.handleSubmit((values) =>
               onSubmit(formValuesToBody(fields, values, mode)),
             )}
-            className="grid grid-cols-2 gap-4"
+            className="grid grid-cols-2 gap-6"
           >
-            <div data-pixel-dialog-stage="body" className="col-span-2 grid grid-cols-2 gap-4">
+            <div className="col-span-2 grid grid-cols-1 gap-5 sm:grid-cols-2">
               {fields.map((field) => (
-                <div key={field.name} className={field.span === 1 ? '' : 'col-span-2'}>
+                <div key={field.name} className={field.span === 1 ? '' : 'sm:col-span-2'}>
                   <FieldControl
                     field={field}
                     control={form.control}
@@ -302,7 +299,7 @@ export function DynaForm({
                 </div>
               ))}
             </div>
-            <div data-pixel-dialog-stage="footer" className="col-span-2">
+            <div className="col-span-2 border-t border-border pt-4">
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                   {t('取消')}

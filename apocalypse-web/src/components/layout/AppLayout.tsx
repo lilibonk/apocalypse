@@ -90,7 +90,7 @@ export function AppLayout() {
 
   return (
     // fixedHeader=on：壳固定、仅内容区滚动；off：整页随窗口滚动（侧栏 sticky 保持可见）
-    <div className={cn('flex bg-background', fixedHeader ? 'h-svh overflow-hidden' : 'min-h-svh')}>
+    <div className={cn('flex bg-background', fixedHeader ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
       <a
         href="#main-content"
         className="fixed top-2 left-2 z-[60] -translate-y-16 rounded-md bg-background px-3 py-2 text-sm font-medium shadow-md transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-ring"
@@ -101,17 +101,17 @@ export function AppLayout() {
         <aside
           data-slot="app-sidebar"
           className={cn(
-            'hidden shrink-0 flex-col border-r border-border bg-muted/20 transition-[width] md:flex',
-            collapsed ? 'w-24' : 'w-56',
-            !fixedHeader && 'sticky top-0 h-svh',
+            'navigation-surface hidden shrink-0 flex-col border-r border-border-subtle transition-[width] md:flex',
+            collapsed ? 'w-20' : 'w-60',
+            !fixedHeader && 'sticky top-0 h-dvh',
           )}
         >
           <div
             className={cn(
-              'shrink-0 border-b border-border',
+              'shrink-0',
               collapsed
                 ? 'grid h-16 w-full place-items-center'
-                : 'flex h-20 items-center gap-3 px-4',
+                : 'flex h-16 items-center gap-3 px-5',
             )}
           >
             <BrandSignature compact={collapsed} />
@@ -152,7 +152,9 @@ export function AppLayout() {
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent side="left" className="w-72 gap-0 p-0 md:hidden">
           <SheetHeader className="border-b border-border px-4 py-4 text-left">
-            <SheetTitle className="sr-only">导航</SheetTitle>
+            <SheetTitle className="sr-only">
+              {t('common.菜单', { defaultValue: '菜单' })}
+            </SheetTitle>
             <BrandSignature />
           </SheetHeader>
           <div

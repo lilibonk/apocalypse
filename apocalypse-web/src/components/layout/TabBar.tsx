@@ -30,11 +30,11 @@ export function TabBar() {
   if (tabs.length === 0) return null
 
   return (
-    <div className="flex h-9 shrink-0 border-b border-border">
+    <div className="flex h-11 shrink-0 border-b border-border-subtle bg-background">
       <div
         role="tablist"
         aria-label={t('common.已打开页面', { defaultValue: '已打开页面' })}
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-3"
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-4 sm:px-6"
       >
         {tabs.map((tab, index) => {
           const active = tab.key === activeKey
@@ -61,9 +61,9 @@ export function TabBar() {
             <div
               key={tab.key}
               className={cn(
-                'group flex h-7 items-center rounded-md border border-transparent text-xs whitespace-nowrap transition-colors',
+                'group flex h-8 items-center rounded-lg border border-transparent text-xs whitespace-nowrap transition-colors',
                 active
-                  ? 'border-border bg-muted text-foreground'
+                  ? 'border-border-subtle bg-card font-medium text-foreground shadow-xs'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
@@ -89,7 +89,7 @@ export function TabBar() {
                   type="button"
                   aria-label={t('common.closeTab', { title })}
                   className={cn(
-                    'mr-0.5 inline-flex size-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+                    'mr-0.5 inline-flex size-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
                     active && 'opacity-60',
                   )}
                   onClick={(event) => {

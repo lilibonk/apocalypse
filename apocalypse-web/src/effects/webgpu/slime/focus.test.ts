@@ -34,9 +34,9 @@ describe('人工验收回归：指针不显示键盘焦点框', () => {
     expect(css).toMatch(/outline:.*solid var\(--ring\)/)
     expect(css).toContain('user-select: none')
   })
-  it('登录桌面/移动保留 gaze，但都不能挂载 PixelWave', () => {
+  it('登录桌面保留 gaze、移动使用紧凑静态角色，均不挂载 PixelWave', () => {
     expect(login).not.toMatch(/<PixelWave[\s>]/)
     expect(login).toMatch(/<PixelOrb[^>]*size=\{384\} gaze/)
-    expect(login).toMatch(/<PixelOrb[^>]*size=\{256\} gaze/)
+    expect(login).toMatch(/<PixelOrb[^>]*size=\{64\}\s*\/>/)
   })
 })

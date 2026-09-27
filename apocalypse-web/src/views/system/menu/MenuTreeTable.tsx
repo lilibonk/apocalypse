@@ -54,6 +54,8 @@ export function MenuTreeTable({
   onCreateChild,
   onEdit,
   onDelete,
+  filtering,
+  onResetFilters,
 }: {
   tree: MenuNode[]
   isLoading: boolean
@@ -62,6 +64,8 @@ export function MenuTreeTable({
   onCreateChild: (node: MenuNode) => void
   onEdit: (node: MenuNode) => void
   onDelete: (node: MenuNode) => void
+  filtering: boolean
+  onResetFilters: () => void
 }) {
   const { t } = useTranslation()
   const rows = flattenVisible(tree, collapsed)
@@ -101,7 +105,18 @@ export function MenuTreeTable({
           {!isLoading && rows.length === 0 && (
             <TableRow>
               <TableCell colSpan={COLUMN_COUNT} className="h-32 text-center text-muted-foreground">
-                {t('common.暂无数据', { defaultValue: '暂无数据' })}
+                <div className="space-y-3 py-6">
+                  <p>
+                    {filtering
+                      ? t('dyna.queryNoMatches')
+                      : t('common.暂无数据', { defaultValue: '暂无数据' })}
+                  </p>
+                  {filtering && (
+                    <Button variant="outline" size="sm" onClick={onResetFilters}>
+                      {t('dyna.queryClearFilters')}
+                    </Button>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           )}
@@ -121,6 +136,7 @@ export function MenuTreeTable({
                         variant="ghost"
                         size="icon"
                         className="size-6 shrink-0"
+                        aria-expanded={!isCollapsed}
                         aria-label={
                           isCollapsed
                             ? t('common.展开', { defaultValue: '展开' })

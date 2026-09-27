@@ -28,6 +28,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  "exclude": ["src/effects/PixelBean/png.ts", "src/effects/PixelBean/__tests__/dump-atlas.test.ts"]
+  "include": ["src"]
 }

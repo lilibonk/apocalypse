@@ -88,7 +88,7 @@ export function MenuIconPicker({
               </span>
               <Check
                 className={cn(
-                  'absolute top-2 right-2 size-3.5 text-primary',
+                  'absolute top-2 right-2 size-3.5 text-brand-text',
                   value ? 'opacity-0' : 'opacity-100',
                 )}
               />
@@ -104,7 +104,7 @@ export function MenuIconPicker({
                 <span className="max-w-full truncate text-xs">{iconName}</span>
                 <Check
                   className={cn(
-                    'absolute top-2 right-2 size-3.5 text-primary',
+                    'absolute top-2 right-2 size-3.5 text-brand-text',
                     value === iconName ? 'opacity-100' : 'opacity-0',
                   )}
                 />

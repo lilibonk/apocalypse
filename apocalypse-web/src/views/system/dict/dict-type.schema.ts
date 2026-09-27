@@ -19,7 +19,9 @@ export default definePageSchema({
   description: '字典类型的增删改查',
   entityName: '字典类型',
   createPerm: 'system:dict:add',
-  search: [{ name: 'keyword', type: 'input', placeholder: '类型码 / 名称' }],
+  search: [
+    { name: 'keyword', label: '类型码 / 名称', type: 'input', placeholder: '类型码 / 名称' },
+  ],
   columns: [
     { key: 'dictType', title: '类型码' },
     { key: 'dictName', title: '字典名称' },

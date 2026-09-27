@@ -3,7 +3,6 @@ import { XIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
-import { PixelDialogMotion } from '@/components/motion/PixelDialogMotion'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
@@ -60,8 +59,7 @@ function DialogContent({
       {showCloseButton && (
         <DialogPrimitive.Close
           data-slot="dialog-close"
-          data-pixel-dialog-stage="header"
-          className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+          className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
         >
           <XIcon />
           <span className="sr-only">{t('common.关闭', { defaultValue: '关闭' })}</span>
@@ -72,20 +70,20 @@ function DialogContent({
 
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay data-depth={depth} data-motion-preset="orchestrated" />
+      <DialogOverlay data-depth={depth} data-motion-preset="surface" />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-depth={depth}
-        data-motion-preset="orchestrated"
+        data-motion-preset="surface"
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-lg',
+          'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating outline-none sm:max-w-lg',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
-        <PixelDialogMotion>{surfaceChildren}</PixelDialogMotion>
+        {surfaceChildren}
       </DialogPrimitive.Content>
     </DialogPortal>
   )
@@ -95,8 +93,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-header"
-      data-pixel-dialog-stage="header"
-      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
+      className={cn('flex flex-col gap-2 pr-8 text-left', className)}
       {...props}
     />
   )
@@ -114,7 +111,6 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      data-pixel-dialog-stage="footer"
       className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
       {...props}
     >
@@ -132,7 +128,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-none font-semibold', className)}
+      className={cn('text-lg leading-snug font-semibold tracking-tight', className)}
       {...props}
     />
   )

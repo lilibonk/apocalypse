@@ -631,7 +631,7 @@ function DataImportPage() {
                     </CardHeader>
                     <CardContent className="space-y-2 px-4 sm:px-6">
                       {selected.validation.valid ? (
-                        <div className="flex items-center gap-2 text-sm text-emerald-600">
+                        <div className="flex items-center gap-2 text-sm text-success-foreground">
                           <ShieldCheck className="size-4" />
                           {t('imports.validationPassed')}
                         </div>

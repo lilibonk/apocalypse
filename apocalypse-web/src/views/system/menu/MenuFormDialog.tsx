@@ -199,7 +199,7 @@ export function MenuFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader data-pixel-dialog-stage="header">
+        <DialogHeader>
           <DialogTitle>
             {isEdit
               ? t('common.编辑菜单', { defaultValue: '编辑菜单' })
@@ -224,12 +224,12 @@ export function MenuFormDialog({
             onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
             className="grid grid-cols-2 gap-4"
           >
-            <div data-pixel-dialog-stage="body" className="col-span-2 grid grid-cols-2 gap-4">
+            <div className="col-span-2 grid grid-cols-1 gap-5 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="parentId"
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem className="sm:col-span-2">
                     <FormLabel>{t('common.上级菜单', { defaultValue: '上级菜单' })}</FormLabel>
                     <FormControl>
                       <MenuTreeSelect
@@ -273,13 +273,13 @@ export function MenuFormDialog({
                 control={form.control}
                 name="menuType"
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem className="sm:col-span-2">
                     <FormLabel>{t('common.菜单类型', { defaultValue: '菜单类型' })}</FormLabel>
                     <FormControl>
                       <RadioGroup
                         value={field.value}
                         onValueChange={field.onChange}
-                        className="flex items-center gap-4"
+                        className="flex flex-wrap items-center gap-4"
                       >
                         {MENU_TYPE_OPTIONS.map((option) => (
                           <FormItem key={option.value} className="flex items-center gap-1.5">
@@ -390,7 +390,7 @@ export function MenuFormDialog({
                 control={form.control}
                 name="remark"
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem className="sm:col-span-2">
                     <FormLabel>{t('common.备注', { defaultValue: '备注' })}</FormLabel>
                     <FormControl>
                       <Textarea rows={2} {...field} />
@@ -400,7 +400,7 @@ export function MenuFormDialog({
                 )}
               />
             </div>
-            <div data-pixel-dialog-stage="footer" className="col-span-2">
+            <div className="col-span-2 border-t border-border pt-4">
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                   {t('common.取消', { defaultValue: '取消' })}

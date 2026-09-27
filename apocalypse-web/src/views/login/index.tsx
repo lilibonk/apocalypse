@@ -35,6 +35,7 @@ import { TaglineReveal } from './TaglineReveal'
 
 export default function LoginPage() {
   const { t } = useTranslation()
+  const { t: pageT } = useTranslation('login-page')
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((state) => state.login)
@@ -93,76 +94,47 @@ export default function LoginPage() {
   })
 
   return (
-    <div className="relative grid min-h-svh bg-background lg:grid-cols-[3fr_2fr]">
-      {/* 品牌舞台（≥lg）：纯背景 + 透明 WebGPU 软体角色。 */}
-      <section className="brand-slime-stage relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between lg:p-10">
-        <header className="relative z-10 flex items-start justify-between">
+    <div className="relative grid min-h-svh gap-6 bg-background p-4 sm:p-6 lg:grid-cols-2 lg:gap-0">
+      {/* 实色品牌舞台保留独立 Milk Cloud 接口；正文不叠加玻璃。 */}
+      <section className="brand-slime-stage relative hidden min-w-0 overflow-hidden rounded-panel lg:flex lg:flex-col lg:justify-between lg:p-8 xl:p-10">
+        <header className="relative z-10">
           <BrandSignature />
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span className="size-2 bg-primary" />
-            {t('login.signal')}
-          </div>
         </header>
 
-        <div className="relative z-10 flex flex-col items-center gap-4 py-4 2xl:flex-row 2xl:gap-8">
-          <div className="flex flex-col items-center">
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 py-4">
+          <div className="group/mascot flex flex-col items-center">
             <PixelOrb state={displayState} size={384} gaze />
-            <p className="text-xs text-muted-foreground">{t('brandSlime.hint')}</p>
+            <p className="invisible text-xs text-muted-foreground group-has-[[data-backend=webgpu]]/mascot:visible">
+              {t('brandSlime.hint')}
+            </p>
           </div>
 
-          <div className="max-w-lg text-center 2xl:text-left">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              {t('login.stageIndex')}
-            </p>
-            <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-tight text-balance 2xl:text-4xl">
+          <div className="max-w-lg text-center">
+            <p className="text-2xl font-semibold leading-tight tracking-tight text-balance xl:text-3xl">
               <TaglineReveal text={t('login.tagline')} animate={motionEnabled && !reducedMotion} />
-            </h1>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground 2xl:mx-0">
-              {t('login.stageDesc')}
             </p>
-
-            <dl className="mt-6 grid grid-cols-3 border-y border-border py-4 text-left">
-              {(['architecture', 'runtime', 'interface'] as const).map((item) => (
-                <div key={item} className="border-l border-border pl-4 first:border-l-0 first:pl-0">
-                  <dt className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {t(`login.${item}Label`)}
-                  </dt>
-                  <dd className="mt-2 text-xs font-medium">{t(`login.${item}Value`)}</dd>
-                </div>
-              ))}
-            </dl>
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+              {pageT('description')}
+            </p>
           </div>
         </div>
 
-        <footer className="relative z-10 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span>{t('login.stageMeta')}</span>
-          <span>CONSOLE / 01</span>
+        <footer className="relative z-10 pt-4 text-xs text-muted-foreground">
+          {pageT('workspace')}
         </footer>
       </section>
 
-      {/* 表单面板（右）：克制数据表面，保持功能优先 */}
-      <section className="relative flex items-center justify-center bg-background px-6 py-12 sm:px-10">
+      <section className="relative flex min-w-0 items-center justify-center px-2 py-6 sm:px-8 lg:px-12">
         <div className="w-full max-w-sm">
-          {/* 移动端紧凑品牌头（<lg 时舞台隐藏） */}
-          <div className="brand-slime-stage relative -mx-6 mb-8 overflow-hidden border-b border-border px-6 py-6 sm:-mx-10 sm:px-10 lg:hidden">
-            <div className="relative z-10 flex flex-col items-center gap-5 text-center">
-              <BrandSignature className="self-start text-left" />
-              <PixelOrb state={displayState} size={256} gaze />
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                  {t('login.edition')}
-                </p>
-                <p className="mt-2 text-base font-semibold">{t('login.tagline')}</p>
-              </div>
-            </div>
+          {/* 紧凑移动品牌头让输入与提交先进入视野，小角色沿原接口静态降级。 */}
+          <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
+            <BrandSignature />
+            <PixelOrb state={displayState} size={64} />
           </div>
 
-          <div className="mb-10 border-l-2 border-primary pl-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              {t('login.accessIndex')}
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">{t('login.welcome')}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{t('login.subtitle')}</p>
+          <div className="mb-8 space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">{t('login.welcome')}</h1>
+            <p className="text-sm text-muted-foreground">{pageT('subtitle')}</p>
           </div>
 
           <Form {...form}>
@@ -176,8 +148,8 @@ export default function LoginPage() {
                     <FormControl>
                       <Input
                         autoComplete="username"
-                        placeholder="admin"
-                        className="h-11"
+                        placeholder={pageT('usernamePlaceholder')}
+                        className="h-11 bg-card"
                         {...field}
                       />
                     </FormControl>
@@ -195,7 +167,7 @@ export default function LoginPage() {
                       <Input
                         type="password"
                         autoComplete="current-password"
-                        className="h-11"
+                        className="h-11 bg-card"
                         {...field}
                         onFocus={() => setPasswordFocused(true)}
                         onBlur={() => {
@@ -215,54 +187,58 @@ export default function LoginPage() {
             </form>
           </Form>
 
-          <p className="mt-5 text-xs leading-5 text-muted-foreground">{t('login.accessNote')}</p>
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">{pageT('accessNote')}</p>
 
           {/* 登录前可直接修正全局主题与语言，避免登出后落入不可调整的外观状态。 */}
-          <div className="mt-10 space-y-4 border-t border-border pt-4 text-xs text-muted-foreground">
-            <div className="flex items-center justify-between gap-4">
-              <span>{t('common.主题', { defaultValue: '主题' })}</span>
-              <div className="flex items-center gap-2">
-                {(['light', 'dark', 'system'] as ThemeMode[]).map((mode, index) => (
-                  <span key={mode} className="flex items-center gap-2">
-                    {index > 0 && <span className="text-border">/</span>}
-                    <button
-                      type="button"
-                      aria-pressed={theme === mode}
-                      onClick={() => setTheme(mode)}
-                      className={cn(
-                        'transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        theme === mode && 'font-medium text-foreground',
-                      )}
-                    >
-                      {mode === 'light'
-                        ? t('common.浅色', { defaultValue: '浅色' })
-                        : mode === 'dark'
-                          ? t('common.深色', { defaultValue: '深色' })
-                          : t('common.跟随系统', { defaultValue: '跟随系统' })}
-                    </button>
-                  </span>
+          <div className="mt-8 space-y-3 border-t border-border pt-5 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{pageT('theme')}</span>
+              <div
+                role="group"
+                aria-label={pageT('theme')}
+                className="flex items-center gap-1 rounded-lg bg-muted p-1"
+              >
+                {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={theme === mode}
+                    onClick={() => setTheme(mode)}
+                    className={cn(
+                      'min-h-9 rounded-md px-3 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      theme === mode && 'bg-card font-medium text-foreground shadow-sm',
+                    )}
+                  >
+                    {mode === 'light'
+                      ? t('common.浅色', { defaultValue: '浅色' })
+                      : mode === 'dark'
+                        ? t('common.深色', { defaultValue: '深色' })
+                        : t('common.跟随系统', { defaultValue: '跟随系统' })}
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <span className="font-mono text-[10px] uppercase tracking-widest">APOCALYPSE</span>
-              <div className="flex items-center gap-2">
-                {(['zh', 'en'] as Language[]).map((lang, index) => (
-                  <span key={lang} className="flex items-center gap-2">
-                    {index > 0 && <span className="text-border">/</span>}
-                    <button
-                      type="button"
-                      aria-pressed={language === lang}
-                      onClick={() => setLanguage(lang)}
-                      className={cn(
-                        'transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        language === lang && 'font-medium text-foreground',
-                      )}
-                    >
-                      {lang === 'zh' ? '中文' : 'English'}
-                    </button>
-                  </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{pageT('language')}</span>
+              <div
+                role="group"
+                aria-label={pageT('language')}
+                className="flex items-center gap-1 rounded-lg bg-muted p-1"
+              >
+                {(['zh', 'en'] as Language[]).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    aria-pressed={language === lang}
+                    onClick={() => setLanguage(lang)}
+                    className={cn(
+                      'min-h-9 rounded-md px-3 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      language === lang && 'bg-card font-medium text-foreground shadow-sm',
+                    )}
+                  >
+                    {lang === 'zh' ? '中文' : 'English'}
+                  </button>
                 ))}
               </div>
             </div>

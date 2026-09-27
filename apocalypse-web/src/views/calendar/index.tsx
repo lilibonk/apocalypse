@@ -201,7 +201,7 @@ function CalendarOverviewPage() {
                                 {secondary || '—'}
                               </span>
                               <span
-                                className="mt-1 block w-full truncate text-xs font-medium text-primary"
+                                className="mt-1 block w-full truncate text-xs font-medium text-brand-text"
                                 title={label}
                               >
                                 {label}

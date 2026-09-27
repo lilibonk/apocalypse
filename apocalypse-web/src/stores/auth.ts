@@ -172,7 +172,9 @@ export const useAuthStore = create<AuthState>()(
             })
             refreshingToken = undefined
             await get().ensureMe()
-            return get().sessionEpoch === sessionEpoch && get().meLoaded
+            // RequireAuth may start a newer /me when the rotated tokens reach its effect.
+            // A superseded bootstrap returning does not mean the current one has failed.
+            return await waitForCurrentUser(sessionEpoch, tokens.accessToken)
           } catch {
             if (get().sessionEpoch === sessionEpoch) get().clearSession()
             return false
@@ -196,6 +198,26 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 )
+
+/** Wait for the latest same-token bootstrap, or stop when that identity/token is replaced. */
+function waitForCurrentUser(sessionEpoch: number, accessToken: string): Promise<boolean> {
+  const outcome = () => {
+    const state = useAuthStore.getState()
+    if (state.sessionEpoch !== sessionEpoch || state.tokens?.accessToken !== accessToken)
+      return false
+    return state.meLoaded ? true : undefined
+  }
+  const current = outcome()
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const unsubscribe = useAuthStore.subscribe(() => {
+      const result = outcome()
+      if (result === undefined) return
+      unsubscribe()
+      resolve(result)
+    })
+  })
+}
 
 // client ↔ store 解耦接线（模块加载即完成一次）
 configureClient({

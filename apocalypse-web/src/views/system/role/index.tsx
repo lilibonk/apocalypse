@@ -26,8 +26,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, request } from '@/lib/api/client'
+import { isResourceDenied } from '@/lib/query/use-resource-denial'
 import {
   normalizeMenuNode,
   type MenuNode,
@@ -199,7 +201,10 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
     queryFn: () => request<RawMenuNode[]>('/system/menus/tree'),
     enabled: open,
   })
-  const tree = useMemo(() => (treeQuery.data ?? []).map(normalizeMenuNode), [treeQuery.data])
+  const tree = useMemo(
+    () => (isResourceDenied(treeQuery.error) ? [] : (treeQuery.data ?? []).map(normalizeMenuNode)),
+    [treeQuery.data, treeQuery.error],
+  )
   const visibleTree = useMemo(() => filterTree(tree, keyword), [keyword, tree])
 
   const currentQuery = useQuery({
@@ -214,7 +219,7 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
     setKeyword('')
     setExpanded(new Set())
   }
-  if (open && currentQuery.data && echoedRoleId !== roleId) {
+  if (open && currentQuery.data && !currentQuery.isError && echoedRoleId !== roleId) {
     const current = new Set(currentQuery.data.map(String))
     setEchoedRoleId(roleId)
     setInitialSelected(current)
@@ -305,8 +310,11 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
   const changed = addedIds.length > 0 || removedIds.length > 0
 
   const saveMutation = useMutation({
-    mutationFn: (menuIds: string[]) =>
-      request<void>(`/system/roles/${roleId}/menus`, { method: 'PUT', body: menuIds }),
+    mutationFn: (menuIds: string[]) => {
+      if (treeQuery.isError || currentQuery.isError)
+        throw new ApiError(-1, t('common.权限数据加载失败', { defaultValue: '权限数据加载失败' }))
+      return request<void>(`/system/roles/${roleId}/menus`, { method: 'PUT', body: menuIds })
+    },
     onSuccess: () => {
       toast.success(t('common.菜单授权已保存', { defaultValue: '菜单授权已保存' }))
       void queryClient.invalidateQueries({ queryKey: ['system', 'roles', roleId, 'menus'] })
@@ -331,18 +339,26 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
         {confirming ? (
           <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
             <div>
-              <h3 className="text-sm font-semibold">确认权限变更</h3>
+              <h3 className="text-sm font-semibold">
+                {t('common.确认权限变更', { defaultValue: '确认权限变更' })}
+              </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                保存后将立即影响该角色下用户可访问的菜单与操作。
+                {t('common.保存后将立即影响该角色下用户可访问的菜单与操作。', {
+                  defaultValue: '保存后将立即影响该角色下用户可访问的菜单与操作。',
+                })}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">新增授权</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('common.新增授权', { defaultValue: '新增授权' })}
+                </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">{addedIds.length}</p>
               </div>
               <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">移除授权</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('common.移除授权', { defaultValue: '移除授权' })}
+                </p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-destructive">
                   {removedIds.length}
                 </p>
@@ -350,22 +366,41 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
             </div>
             {selected.size === 0 && (
               <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                本次保存会清空该角色的全部菜单权限。
+                {t('common.本次保存会清空该角色的全部菜单权限。', {
+                  defaultValue: '本次保存会清空该角色的全部菜单权限。',
+                })}
               </p>
             )}
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Input
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-                placeholder="搜索菜单名称或权限标识"
-                className="sm:max-w-xs"
-              />
-              <div className="flex gap-2">
-                <Badge variant="outline">当前 {initialSelected.size}</Badge>
-                <Badge variant="outline">已选 {selected.size}</Badge>
+            <div className="flex flex-col gap-3 rounded-xl bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-2 sm:max-w-xs">
+                <Label htmlFor="grant-menu-search">
+                  {t('common.搜索菜单与操作', { defaultValue: '搜索菜单与操作' })}
+                </Label>
+                <Input
+                  id="grant-menu-search"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  placeholder={t('common.搜索菜单名称、路由或权限', {
+                    defaultValue: '搜索菜单名称、路由或权限',
+                  })}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {t('common.grantCurrentCount', {
+                    count: initialSelected.size,
+                    defaultValue: '当前 {{count}}',
+                  })}
+                </Badge>
+                <Badge variant="outline">
+                  {t('common.grantSelectedCount', {
+                    count: selected.size,
+                    defaultValue: '已选 {{count}}',
+                  })}
+                </Badge>
                 <Button
                   type="button"
                   variant="ghost"
@@ -399,38 +434,48 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
                   )}
                 </p>
               )}
-              {visibleTree.map((node) => (
-                <MenuChecklist
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  selected={selected}
-                  expanded={expanded}
-                  forceExpanded={keyword.trim().length > 0}
-                  onToggle={toggle}
-                  onToggleExpanded={toggleExpanded}
-                  nodeById={nodeById}
-                />
-              ))}
-              {!treeQuery.isLoading && visibleTree.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">没有匹配的菜单</p>
-              )}
+              {!isResourceDenied(currentQuery.error) &&
+                visibleTree.map((node) => (
+                  <MenuChecklist
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    selected={selected}
+                    expanded={expanded}
+                    forceExpanded={keyword.trim().length > 0}
+                    onToggle={toggle}
+                    onToggleExpanded={toggleExpanded}
+                    nodeById={nodeById}
+                  />
+                ))}
+              {!treeQuery.isLoading &&
+                !treeQuery.isError &&
+                !currentQuery.isError &&
+                visibleTree.length === 0 && (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {t('common.没有匹配结果', { defaultValue: '没有匹配结果' })}
+                  </p>
+                )}
             </div>
-            <p className="text-xs text-muted-foreground">权限树全量加载，不分页</p>
+            <p className="text-xs text-muted-foreground">
+              {t('common.树形数据全量加载，不分页', { defaultValue: '树形数据全量加载，不分页' })}
+            </p>
           </div>
         )}
         <DialogFooter>
           {confirming ? (
             <>
               <Button variant="ghost" onClick={() => setConfirming(false)}>
-                返回修改
+                {t('common.返回修改', { defaultValue: '返回修改' })}
               </Button>
               <Button
                 variant={removedIds.length > 0 ? 'destructive' : 'default'}
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || treeQuery.isError || currentQuery.isError}
                 onClick={() => saveMutation.mutate([...selected])}
               >
-                {saveMutation.isPending ? '保存中…' : '确认并保存'}
+                {saveMutation.isPending
+                  ? t('common.保存中…', { defaultValue: '保存中…' })
+                  : t('common.确认并保存', { defaultValue: '确认并保存' })}
               </Button>
             </>
           ) : (
@@ -439,10 +484,16 @@ function GrantMenusDialog({ role, onClose }: { role: GrantTarget | null; onClose
                 {t('common.取消', { defaultValue: '取消' })}
               </Button>
               <Button
-                disabled={!changed || treeQuery.isLoading || currentQuery.isLoading}
+                disabled={
+                  !changed ||
+                  treeQuery.isLoading ||
+                  currentQuery.isLoading ||
+                  treeQuery.isError ||
+                  currentQuery.isError
+                }
                 onClick={() => setConfirming(true)}
               >
-                查看变更并继续
+                {t('common.查看变更并继续', { defaultValue: '查看变更并继续' })}
               </Button>
             </>
           )}
@@ -488,6 +539,7 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
     setSelected(new Set(assignedQuery.data))
   }
   const assignmentsReady = initialized && assignedQuery.isSuccess && !assignedQuery.isFetching
+  const candidates = isResourceDenied(usersQuery.error) ? undefined : usersQuery.data
 
   const toggle = (userId: string, checked: boolean) => {
     if (!assignmentsReady) return
@@ -504,7 +556,13 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
 
   const saveMutation = useMutation({
     mutationFn: (userIds: string[]) => {
-      if (!assignmentsReady) throw new ApiError(-1, '请等待已分配用户完整加载后再保存')
+      if (!assignmentsReady)
+        throw new ApiError(
+          -1,
+          t('common.请等待已分配用户完整加载后再保存', {
+            defaultValue: '请等待已分配用户完整加载后再保存',
+          }),
+        )
       return request<void>(`/system/roles/${roleId}/users`, { method: 'PUT', body: userIds })
     },
     onSuccess: () => {
@@ -531,14 +589,23 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
         </DialogHeader>
         {assignedQuery.isFetching && (
           <p role="status" className="text-sm text-muted-foreground">
-            正在完整加载已分配用户，完成后可编辑和保存…
+            {t('common.正在完整加载已分配用户，完成后可编辑和保存…', {
+              defaultValue: '正在完整加载已分配用户，完成后可编辑和保存…',
+            })}
           </p>
         )}
         {assignedQuery.isError && (
           <div role="alert" className="space-y-2 text-sm text-destructive">
-            <p>{errorText(assignedQuery.error, '已分配用户加载失败，暂不能保存')}</p>
+            <p>
+              {errorText(
+                assignedQuery.error,
+                t('common.已分配用户加载失败，暂不能保存', {
+                  defaultValue: '已分配用户加载失败，暂不能保存',
+                }),
+              )}
+            </p>
             <Button variant="outline" size="sm" onClick={() => void assignedQuery.refetch()}>
-              重试加载已分配用户
+              {t('common.重试加载已分配用户', { defaultValue: '重试加载已分配用户' })}
             </Button>
           </div>
         )}
@@ -556,16 +623,16 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
                 )}
               </p>
               <Button variant="outline" size="sm" onClick={() => void usersQuery.refetch()}>
-                重试加载候选用户
+                {t('common.重试加载候选用户', { defaultValue: '重试加载候选用户' })}
               </Button>
             </div>
           )}
-          {usersQuery.data?.list.length === 0 && (
+          {!usersQuery.isError && candidates?.list.length === 0 && (
             <p className="text-sm text-muted-foreground">
               {t('common.暂无用户', { defaultValue: '暂无用户' })}
             </p>
           )}
-          {usersQuery.data?.list.map((user) => (
+          {candidates?.list.map((user) => (
             <label key={user.id} className="flex items-center gap-2 py-0.5 text-sm">
               <input
                 type="checkbox"
@@ -581,8 +648,19 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            第 {page} 页，共 {usersQuery.data?.total ?? 0} 名候选用户；
-            {assignmentsReady ? `已选 ${selected.size} 人（含其他页）` : '已分配用户尚未完整加载'}
+            {candidates
+              ? t('common.grantCandidatePage', {
+                  page,
+                  total: candidates.total,
+                  defaultValue: '第 {{page}} 页，共 {{total}} 名候选用户；',
+                })
+              : t('common.候选用户尚未加载；', { defaultValue: '候选用户尚未加载；' })}
+            {assignmentsReady
+              ? t('common.grantSelectedUsers', {
+                  count: selected.size,
+                  defaultValue: '已选 {{count}} 人（含其他页）',
+                })
+              : t('common.已分配用户尚未完整加载', { defaultValue: '已分配用户尚未完整加载' })}
           </p>
           <div className="flex gap-2">
             <Button
@@ -591,7 +669,7 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
               disabled={page === 1 || usersQuery.isFetching || saveMutation.isPending}
               onClick={() => setPage((current) => current - 1)}
             >
-              上一页
+              {t('dyna.上一页', { defaultValue: '上一页' })}
             </Button>
             <Button
               variant="outline"
@@ -604,7 +682,7 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
               }
               onClick={() => setPage((current) => current + 1)}
             >
-              下一页
+              {t('dyna.下一页', { defaultValue: '下一页' })}
             </Button>
           </div>
         </div>

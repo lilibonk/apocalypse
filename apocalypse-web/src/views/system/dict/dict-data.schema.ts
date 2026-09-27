@@ -20,7 +20,7 @@ export default definePageSchema({
   description: '字典数据的增删改查',
   entityName: '字典数据',
   createPerm: 'system:dict:add',
-  search: [{ name: 'dictType', type: 'input', placeholder: '输入类型码过滤' }],
+  search: [{ name: 'dictType', label: '类型码', type: 'input', placeholder: '输入类型码过滤' }],
   columns: [
     { key: 'dictType', title: '类型码' },
     { key: 'dictLabel', title: '字典标签' },

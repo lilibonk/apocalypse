@@ -21,13 +21,10 @@ export function CalendarPageFrame({
   children: ReactNode
 }) {
   return (
-    <div
-      data-slot="calendar-page"
-      className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6"
-    >
-      <header className="border-b border-border pb-5">
+    <div data-slot="calendar-page" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <header>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             {description}
           </p>
@@ -36,7 +33,7 @@ export function CalendarPageFrame({
       {actions && (
         <div
           data-slot="calendar-toolbar"
-          className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/40 p-4"
+          className="flex flex-wrap items-end gap-3 rounded-xl border border-border-subtle bg-card p-4"
         >
           {actions}
         </div>
@@ -93,10 +90,24 @@ export function CalendarPicker({
 
 export function StateBadge({ value }: { value: string }) {
   const { t } = useTranslation('calendar')
-  const destructive = ['OPEN', 'NEEDS_REVIEW', 'CANCELLED', 'ARCHIVED'].includes(value)
+  const destructive = ['ERROR', 'FAILED', 'REJECTED'].includes(value)
+  const warning = ['OPEN', 'NEEDS_REVIEW'].includes(value)
+  const success = ['ACTIVE', 'PUBLISHED', 'APPROVED', 'VALIDATED'].includes(value)
   const secondary = ['DRAFT', 'WITHDRAWN', 'INACTIVE', 'UNPUBLISHED'].includes(value)
   return (
-    <Badge variant={destructive ? 'destructive' : secondary ? 'secondary' : 'outline'}>
+    <Badge
+      variant={
+        destructive
+          ? 'destructive'
+          : warning
+            ? 'warning'
+            : success
+              ? 'success'
+              : secondary
+                ? 'secondary'
+                : 'outline'
+      }
+    >
       {t(`states.${value}`, { defaultValue: t('unknownState') })}
     </Badge>
   )
@@ -152,7 +163,7 @@ export function FieldPair({
         <div className="text-xs text-muted-foreground">{t('systemBaseline')}</div>
         <div className="mt-1 text-sm">{baseline || '—'}</div>
       </div>
-      <div className={cn(changed && 'text-primary')}>
+      <div className={cn(changed && 'text-brand-text')}>
         <div className="text-xs text-muted-foreground">{t('effectiveValue')}</div>
         <div className="mt-1 text-sm font-medium">{effective || '—'}</div>
       </div>

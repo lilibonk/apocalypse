@@ -6,7 +6,7 @@
  */
 
 import { ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MotionCollapse } from '@/components/MotionCollapse'
@@ -52,6 +52,7 @@ function OptionRow<T extends string>({
         <button
           key={option}
           type="button"
+          aria-pressed={option === value}
           onClick={() => onChange(option)}
           className={cn(
             'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
@@ -68,9 +69,12 @@ function OptionRow<T extends string>({
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const titleId = useId()
   return (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">{title}</Label>
+    <div role="group" aria-labelledby={titleId} className="space-y-2">
+      <Label id={titleId} className="text-xs text-muted-foreground">
+        {title}
+      </Label>
       {children}
     </div>
   )
@@ -103,7 +107,7 @@ export function SettingsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-80 overflow-y-auto">
+      <SheetContent side="right" className="w-full overflow-y-auto sm:w-96">
         <SheetHeader>
           <SheetTitle>{ct('界面设置')}</SheetTitle>
           <SheetDescription>
@@ -111,7 +115,7 @@ export function SettingsDrawer({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-5 px-4 pb-6">
+        <div className="space-y-6 px-6 pb-6">
           <Section title={ct('主题')}>
             <OptionRow<ThemeMode>
               value={settings.theme}

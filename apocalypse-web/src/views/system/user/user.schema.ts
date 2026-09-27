@@ -19,7 +19,9 @@ export default definePageSchema({
   description: '系统用户的增删改查',
   entityName: '用户',
   createPerm: 'system:user:add',
-  search: [{ name: 'keyword', type: 'input', placeholder: '用户名 / 昵称' }],
+  search: [
+    { name: 'keyword', label: '用户名 / 昵称', type: 'input', placeholder: '用户名 / 昵称' },
+  ],
   columns: [
     { key: 'username', title: '用户名' },
     { key: 'nickname', title: '昵称' },

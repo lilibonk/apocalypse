@@ -17,7 +17,9 @@ export default definePageSchema({
   description: '系统参数的增删改查',
   entityName: '参数',
   createPerm: 'system:config:add',
-  search: [{ name: 'keyword', type: 'input', placeholder: '参数键 / 名称' }],
+  search: [
+    { name: 'keyword', label: '参数键 / 名称', type: 'input', placeholder: '参数键 / 名称' },
+  ],
   columns: [
     { key: 'configKey', title: '参数键' },
     { key: 'configName', title: '参数名称' },

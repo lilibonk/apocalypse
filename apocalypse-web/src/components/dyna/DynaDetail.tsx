@@ -57,12 +57,9 @@ export function DynaDetail({
           {description && <DialogDescription>{t(description)}</DialogDescription>}
         </DialogHeader>
         {record && (
-          <dl className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-2">
+          <dl className="grid gap-x-6 gap-y-5 rounded-xl bg-muted/30 p-5 sm:grid-cols-2">
             {fields.map((field) => (
-              <div
-                key={field.key}
-                className="border-b border-border p-4 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(even)]:border-l"
-              >
+              <div key={field.key} className="min-w-0">
                 <dt className="text-xs text-muted-foreground">{t(field.title)}</dt>
                 <dd className="mt-1.5 min-w-0 break-all text-sm font-medium">
                   <DetailValue field={field} record={record} />

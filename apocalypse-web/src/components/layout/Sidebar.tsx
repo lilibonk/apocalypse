@@ -50,8 +50,8 @@ function MenuItemLink({
       end
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-        isActive && 'bg-accent font-medium text-foreground',
+        'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        isActive && 'bg-primary/15 font-semibold text-brand-text',
         collapsed && 'justify-center px-0',
         !collapsed && depth > 0 && 'ml-4',
       )}
@@ -120,7 +120,7 @@ function MenuGroup({
         aria-expanded={open}
         aria-controls={contentId}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+          'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           activeBranch && 'text-foreground',
           depth > 0 && 'ml-4',
         )}
@@ -165,14 +165,14 @@ export function Sidebar({ menus, collapsed }: { menus: MenuNode[]; collapsed: bo
     .sort((a, b) => a.sort - b.sort)
 
   return (
-    <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+    <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
       <Tooltip>
         <TooltipTrigger asChild>
           <NavLink
             to="/dashboard"
             className={cn(
-              'mb-2 flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-              pathname === '/dashboard' && 'bg-accent font-medium text-foreground',
+              'mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              pathname === '/dashboard' && 'bg-primary/15 font-semibold text-brand-text',
               collapsed && 'justify-center px-0',
             )}
           >

@@ -1,6 +1,6 @@
 /**
  * 界面设置：主题 / accent / 密度 / 布局变体 / 多页签 / 内容宽度 / 固定顶栏 /
- * 灰度模式 / 动画 / 语言 / 吉祥物皮肤。
+ * 灰度模式 / 动画 / 语言。
  *
  * 核心设计 ——「产品设置 + 开发态能力实验室」：
  * CAPABILITY_META 登记全部能力项及其默认 exposed；exposed=false 的能力
@@ -11,19 +11,14 @@
  *
  * DOM 生效点在 app/providers.tsx（dark class / data-accent / data-density /
  * data-gray / data-motion）。
- *
- * 皮肤 ↔ 品牌主色：v4↔periwinkle、v3↔mint（DEFINITION.md §2）。setMascotSkin
- * 必写对应 accent；setAccent(mint|periwinkle) 必写对应皮肤。
  */
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-import type { SkinId } from '@/effects/PixelOrb/types'
-
 /**
  * accent 预设（色板定义在 design/tokens.css 的 [data-accent] 组）。
- * mint 为 Mint Bonk 品牌默认（v3）；periwinkle 与 v4 皮肤联动。见 DEFINITION.md §2。
+ * 产品固定使用 mint；开发态强调色实验不改变角色材质。
  */
 export const ACCENTS = [
   'periwinkle',
@@ -37,18 +32,6 @@ export const ACCENTS = [
   'mono',
 ] as const
 export type Accent = (typeof ACCENTS)[number]
-
-/** 皮肤 → 品牌 accent。切皮肤必切这一对。 */
-export const SKIN_ACCENT = { v3: 'mint', v4: 'periwinkle' } as const satisfies Record<
-  SkinId,
-  Accent
->
-
-/** 品牌 accent → 皮肤。其它 accent 不在此表，切它们不改皮肤。 */
-export const ACCENT_SKIN: Partial<Record<Accent, SkinId>> = {
-  mint: 'v3',
-  periwinkle: 'v4',
-}
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Density = 'compact' | 'comfortable'
@@ -69,7 +52,6 @@ export type CapabilityKey =
   | 'grayMode'
   | 'motion'
   | 'pixelWave'
-  | 'mascot'
   | 'language'
 
 interface CapabilityMeta {
@@ -90,7 +72,6 @@ export const CAPABILITY_META: CapabilityMeta[] = [
   { key: 'grayMode', label: '灰色模式', exposed: true },
   { key: 'motion', label: '动画', exposed: true },
   { key: 'pixelWave', label: '像素浪潮', exposed: true },
-  { key: 'mascot', label: '吉祥物', exposed: true },
   { key: 'language', label: '语言', exposed: true },
 ]
 
@@ -109,7 +90,6 @@ interface SettingsState {
   grayMode: boolean
   motionEnabled: boolean
   pixelWaveEnabled: boolean
-  mascotSkin: SkinId
   language: Language
 
   setTheme: (theme: ThemeMode) => void
@@ -122,7 +102,6 @@ interface SettingsState {
   setGrayMode: (enabled: boolean) => void
   setMotionEnabled: (enabled: boolean) => void
   setPixelWaveEnabled: (enabled: boolean) => void
-  setMascotSkin: (mascotSkin: SkinId) => void
   setLanguage: (language: Language) => void
 }
 
@@ -137,7 +116,6 @@ export const DEFAULT_SETTINGS = {
   grayMode: false,
   motionEnabled: true,
   pixelWaveEnabled: false,
-  mascotSkin: 'v3' as SkinId,
   language: 'zh' as Language,
 }
 
@@ -146,10 +124,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       ...DEFAULT_SETTINGS,
       setTheme: (theme) => set({ theme }),
-      setAccent: (accent) => {
-        const mascotSkin = ACCENT_SKIN[accent]
-        set(mascotSkin ? { accent, mascotSkin } : { accent })
-      },
+      setAccent: (accent) => set({ accent }),
       setDensity: (density) => set({ density }),
       setLayout: (layout) => set({ layout }),
       setTabsEnabled: (tabsEnabled) => set({ tabsEnabled }),
@@ -158,30 +133,36 @@ export const useSettingsStore = create<SettingsState>()(
       setGrayMode: (grayMode) => set({ grayMode }),
       setMotionEnabled: (motionEnabled) => set({ motionEnabled }),
       setPixelWaveEnabled: (pixelWaveEnabled) => set({ pixelWaveEnabled }),
-      setMascotSkin: (mascotSkin) => set({ mascotSkin, accent: SKIN_ACCENT[mascotSkin] }),
       setLanguage: (language) => set({ language }),
     }),
     {
       name: 'apocalypse.settings',
-      version: 4,
-      // v2：默认皮肤 v3 → v4
-      // v3：v4 默认 accent mint（历史分裂）→ periwinkle，与皮肤对齐（DEFINITION §2）
-      // v4：品牌主形象改为薄荷色 Mint Bonk，默认重置为 v3 + mint。
+      version: 5,
+      // v5 退役皮肤字段；保留 v4 的用户偏好与更早版本已经约定的 mint 迁移。
       migrate: (persisted, version) => {
-        if (!(persisted && typeof persisted === 'object')) {
-          return persisted as SettingsState
+        if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+          return DEFAULT_SETTINGS
         }
-        const state = persisted as SettingsState
-        if (version < 2 && state.mascotSkin === 'v3') state.mascotSkin = 'v4'
-        if (version < 3 && state.mascotSkin === 'v4' && state.accent === 'mint') {
-          state.accent = 'periwinkle'
+        const state = { ...DEFAULT_SETTINGS, ...persisted } as typeof DEFAULT_SETTINGS & {
+          mascotSkin?: unknown
         }
-        if (version < 4) {
-          state.mascotSkin = 'v3'
-          state.accent = 'mint'
-        }
+        delete state.mascotSkin
+        if (version < 4) state.accent = 'mint'
         return state
       },
+      partialize: (state) => ({
+        theme: state.theme,
+        accent: state.accent,
+        density: state.density,
+        layout: state.layout,
+        tabsEnabled: state.tabsEnabled,
+        contentWidth: state.contentWidth,
+        fixedHeader: state.fixedHeader,
+        grayMode: state.grayMode,
+        motionEnabled: state.motionEnabled,
+        pixelWaveEnabled: state.pixelWaveEnabled,
+        language: state.language,
+      }),
     },
   ),
 )
@@ -211,8 +192,6 @@ export function useSettings() {
       labEnabled && isCapabilityExposed('motion')
         ? state.motionEnabled
         : DEFAULT_SETTINGS.motionEnabled,
-    mascotSkin:
-      labEnabled && isCapabilityExposed('mascot') ? state.mascotSkin : DEFAULT_SETTINGS.mascotSkin,
     pixelWaveEnabled:
       labEnabled && isCapabilityExposed('pixelWave') && state.pixelWaveEnabled === true,
     language: isCapabilityExposed('language') ? state.language : DEFAULT_SETTINGS.language,

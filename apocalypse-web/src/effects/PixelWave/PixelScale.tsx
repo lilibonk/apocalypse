@@ -1,8 +1,8 @@
 /**
- * PixelScale —— PixelWave 家族的一维像素音阶。
+ * PixelScale —— 保留原调用接口的轻量等待音阶。
  *
  * 用于路由加载、按钮等待和确定/不确定进度；不进入表格正文。动画仅改变
- * transform / opacity，并以 CSS steps() 量化，保持 4px 像素语言。系统
+ * transform / opacity，以连续曲线和圆润柱形提供轻快反馈。系统
  * prefers-reduced-motion 与 html[data-motion='off'] 由 tokens.css 统一降级。
  */
 
@@ -71,7 +71,7 @@ export function PixelScale({
       data-variant={variant}
       data-active={active}
       className={cn(
-        'inline-flex shrink-0 items-end justify-center overflow-hidden',
+        'inline-flex shrink-0 items-center justify-center overflow-hidden',
         WRAP_CLASS[variant],
         className,
       )}
@@ -86,7 +86,7 @@ export function PixelScale({
             key={index}
             data-slot="pixel-scale-bar"
             className={cn(
-              'h-full origin-bottom',
+              'h-full origin-center rounded-full',
               BAR_CLASS[variant],
               tone === 'current' ? 'bg-current' : 'bg-primary',
             )}

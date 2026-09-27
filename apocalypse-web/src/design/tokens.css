@@ -4,7 +4,7 @@
  * 规则（见 AGENTS.md 与 src/design/DEFINITION.md）：
  * - 组件禁止写死颜色与间距像素值，一律引用本文件的 CSS 变量或 Tailwind 语义类
  *   （bg-background / text-muted-foreground / border-border / bg-primary ...）。
- * - 中性灰阶为骨架，品牌色单点 accent：--brand 驱动 --primary / --ring，
+ * - 中性灰阶为骨架，品牌填充 --brand 驱动 --primary，可读强调 --brand-text 驱动 --ring，
  *   切 accent 预设即切换 --brand 变量组（html[data-accent="..."]）。
  * - 暗色为一等公民：.dark 组必须同步维护。
  * - 密度通过 --spacing 缩放实现（Tailwind v4 间距工具全部派生自该变量）。
@@ -12,31 +12,44 @@
 
 :root {
   /* 中性灰阶（骨架色，明暗共用命名，值分主题） */
-  --background: oklch(0.985 0.003 95);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.998 0.001 95);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(0.998 0.001 95);
-  --popover-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.955 0.004 95);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.958 0.004 95);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.955 0.004 95); /* shadcn 语义：弱强调悬停面，不是品牌色 */
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --background: oklch(0.972 0.002 260);
+  --foreground: oklch(0.22 0.008 260);
+  --card: oklch(0.995 0.001 260);
+  --card-foreground: oklch(0.22 0.008 260);
+  --popover: oklch(0.998 0.001 260);
+  --popover-foreground: oklch(0.22 0.008 260);
+  --secondary: oklch(0.946 0.004 260);
+  --secondary-foreground: oklch(0.28 0.008 260);
+  --muted: oklch(0.952 0.003 260);
+  --muted-foreground: oklch(0.5 0.008 260);
+  --accent: oklch(0.936 0.005 260); /* shadcn 语义：弱强调悬停面，不是品牌色 */
+  --accent-foreground: oklch(0.25 0.008 260);
+  --destructive: oklch(0.54 0.215 27.325);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.89 0.005 95);
-  --input: oklch(0.89 0.005 95);
-  --ring: var(--brand);
+  --success: oklch(0.947 0.035 157);
+  --success-foreground: oklch(0.4 0.09 157);
+  --warning: oklch(0.965 0.05 85);
+  --warning-foreground: oklch(0.43 0.085 65);
+  --info: oklch(0.952 0.028 250);
+  --info-foreground: oklch(0.43 0.115 250);
+  --border: oklch(0.875 0.005 260);
+  --border-subtle: oklch(0.923 0.003 260);
+  --input: oklch(0.83 0.005 260);
+  --ring: var(--brand-text);
 
   /* 正式产品固定 mint；其余预设只供开发态外观实验室验证。 */
   --brand: oklch(0.777 0.152 181.9);
   --brand-foreground: oklch(0.21 0.02 190);
+  --brand-text: oklch(0.44 0.085 181.9);
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
-  --overlay-backdrop: oklch(0.12 0 0 / 0.52);
-  --overlay-backdrop-nested: oklch(0.12 0 0 / 0.24);
+  --surface-navigation: oklch(0.961 0.004 260);
+  --surface-navigation-glass: oklch(0.972 0.003 260 / 0.88);
+  --navigation-blur: 20px;
+  --shadow-surface: 0 1px 2px oklch(0.2 0.008 260 / 0.035);
+  --shadow-floating: 0 16px 48px oklch(0.2 0.008 260 / 0.12), 0 2px 8px oklch(0.2 0.008 260 / 0.06);
+  --overlay-backdrop: oklch(0.16 0.008 260 / 0.34);
+  --overlay-backdrop-nested: oklch(0.16 0.008 260 / 0.18);
 
   /* LIL-85: sRGB projection for Three.js, fixed mint (independent of accent presets). */
   --slime-stage: #fff7e8;
@@ -53,30 +66,26 @@
   --slime-star: #ffc820;
   --slime-star-glow: #ffa200;
 
-  /* 圆角与排版。--radius-brand 供品牌表面（登录/空态/像素进度），数据表面仍走 --radius */
+  /* 控件与内容面板各有稳定尺度，兼容旧 --radius / --radius-brand 入口。 */
   --radius: 0.625rem;
-  --radius-brand: 0px;
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-brand: var(--radius-panel);
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC',
     'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
-  /* 青春像素动效节拍：短时、高帧率，连续几何承载手感，离散像素帧承载风格。 */
-  --motion-duration-feedback: 100ms;
-  --motion-duration-exit: 120ms;
-  --motion-duration-enter: 200ms;
-  --motion-duration-layer: 180ms;
-  --motion-duration-standard: 180ms;
-  --motion-duration-panel-exit: 160ms;
-  --motion-duration-panel: 300ms;
-  --motion-duration-dialog-reveal: 500ms;
-  --motion-dialog-surface-at: 20ms;
-  --motion-dialog-header-at: 100ms;
-  --motion-dialog-body-at: 150ms;
-  --motion-dialog-footer-at: 220ms;
+  /* 与 motion.ts 同源：完整表面同步进入，内容不等待分段揭示。 */
+  --motion-duration-feedback: 120ms;
+  --motion-duration-exit: 160ms;
+  --motion-duration-enter: 180ms;
+  --motion-duration-layer: 220ms;
+  --motion-duration-standard: 200ms;
+  --motion-duration-panel-exit: 180ms;
+  --motion-duration-panel: 280ms;
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
-  --motion-ease-reveal: linear;
 
   color-scheme: light;
 }
@@ -95,26 +104,38 @@
   --slime-glow: #39b889;
   --slime-star: #ffdb63;
   --slime-star-glow: #ffb52e;
-  --background: oklch(0.18 0.004 260);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.215 0.004 260);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.235 0.004 260);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.27 0.004 260);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.255 0.004 260);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.28 0.004 260);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.19 0.006 260);
+  --foreground: oklch(0.962 0.003 260);
+  --card: oklch(0.235 0.006 260);
+  --card-foreground: oklch(0.962 0.003 260);
+  --popover: oklch(0.268 0.006 260);
+  --popover-foreground: oklch(0.962 0.003 260);
+  --secondary: oklch(0.295 0.006 260);
+  --secondary-foreground: oklch(0.94 0.003 260);
+  --muted: oklch(0.27 0.006 260);
+  --muted-foreground: oklch(0.745 0.008 260);
+  --accent: oklch(0.315 0.008 260);
+  --accent-foreground: oklch(0.962 0.003 260);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.34 0.004 260);
-  --input: oklch(0.32 0.004 260);
-  --ring: var(--brand);
+  --destructive-foreground: oklch(0.2 0.008 22);
+  --success: oklch(0.3 0.04 157);
+  --success-foreground: oklch(0.86 0.105 157);
+  --warning: oklch(0.32 0.045 75);
+  --warning-foreground: oklch(0.88 0.12 85);
+  --info: oklch(0.3 0.04 250);
+  --info-foreground: oklch(0.85 0.085 250);
+  --border: oklch(0.37 0.006 260);
+  --border-subtle: oklch(0.315 0.006 260);
+  --input: oklch(0.43 0.008 260);
+  --ring: var(--brand-text);
 
   --brand: oklch(0.855 0.138 181.1);
   --brand-foreground: oklch(0.21 0.02 190);
+  --brand-text: oklch(0.83 0.12 181.1);
+  --surface-navigation: oklch(0.218 0.007 260);
+  --surface-navigation-glass: oklch(0.235 0.007 260 / 0.9);
+  --shadow-surface: 0 1px 2px oklch(0.08 0 0 / 0.16);
+  --shadow-floating: 0 16px 48px oklch(0.08 0 0 / 0.36), 0 2px 8px oklch(0.08 0 0 / 0.24);
   --overlay-backdrop: oklch(0.08 0 0 / 0.56);
   --overlay-backdrop-nested: oklch(0.08 0 0 / 0.28);
 
@@ -125,83 +146,101 @@
 
 /* 品牌色：periwinkle 长春花蓝（v4 默认，对齐 skins/v4.ts fill #8d92e6） */
 :root[data-accent='periwinkle'] {
+  --brand-text: oklch(0.43 0.13 280.1);
   --brand: oklch(0.69 0.123 280.1);
   --brand-foreground: oklch(0.21 0.04 280);
 }
 .dark[data-accent='periwinkle'] {
+  --brand-text: oklch(0.82 0.1 281.2);
   --brand: oklch(0.8 0.097 281.2);
   --brand-foreground: oklch(0.21 0.04 280);
 }
 
 /* 品牌色：mint-teal #2DD4BF 系（与 v3 皮肤联动；浅色底需深前景保证对比度） */
 :root[data-accent='mint'] {
+  --brand-text: oklch(0.44 0.085 181.9);
   --brand: oklch(0.777 0.152 181.9);
   --brand-foreground: oklch(0.21 0.02 190);
 }
 .dark[data-accent='mint'] {
+  --brand-text: oklch(0.83 0.12 181.1);
   --brand: oklch(0.855 0.138 181.1);
   --brand-foreground: oklch(0.21 0.02 190);
 }
 
 :root[data-accent='violet'] {
+  --brand-text: oklch(0.43 0.18 293.009);
   --brand: oklch(0.541 0.281 293.009);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='violet'] {
+  --brand-text: oklch(0.8 0.15 292.717);
   --brand: oklch(0.606 0.25 292.717);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='blue'] {
+  --brand-text: oklch(0.42 0.145 262.881);
   --brand: oklch(0.546 0.245 262.881);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='blue'] {
+  --brand-text: oklch(0.8 0.1 259.815);
   --brand: oklch(0.623 0.214 259.815);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='green'] {
+  --brand-text: oklch(0.4 0.09 155);
   --brand: oklch(0.648 0.18 155);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='green'] {
+  --brand-text: oklch(0.82 0.12 162);
   --brand: oklch(0.696 0.17 162);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='orange'] {
+  --brand-text: oklch(0.43 0.125 41.116);
   --brand: oklch(0.646 0.222 41.116);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='orange'] {
+  --brand-text: oklch(0.82 0.135 47.604);
   --brand: oklch(0.705 0.213 47.604);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='rose'] {
+  --brand-text: oklch(0.43 0.152 17.585);
   --brand: oklch(0.586 0.253 17.585);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='rose'] {
+  --brand-text: oklch(0.8 0.13 16.439);
   --brand: oklch(0.645 0.246 16.439);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='cyan'] {
+  --brand-text: oklch(0.42 0.085 221.723);
   --brand: oklch(0.609 0.126 221.723);
   --brand-foreground: oklch(0.98 0 0);
 }
 .dark[data-accent='cyan'] {
+  --brand-text: oklch(0.82 0.105 215.221);
   --brand: oklch(0.715 0.143 215.221);
   --brand-foreground: oklch(0.98 0 0);
 }
 
 :root[data-accent='mono'] {
+  --brand-text: oklch(0.24 0 0);
   --brand: oklch(0.205 0 0);
   --brand-foreground: oklch(0.985 0 0);
 }
 .dark[data-accent='mono'] {
+  --brand-text: oklch(0.9 0 0);
   --brand: oklch(0.922 0 0);
   --brand-foreground: oklch(0.205 0 0);
 }
@@ -210,12 +249,14 @@
 
 html[data-density='compact'] {
   --spacing: 0.21875rem; /* 0.25rem 的 87.5% */
-  font-size: 13.5px;
 }
 
 html[data-density='comfortable'] {
   --spacing: 0.25rem;
-  font-size: 14px;
+}
+
+html {
+  font-size: 16px;
 }
 
 /* ---- 灰度模式（开发态外观实验室） ---- */
@@ -224,144 +265,81 @@ html[data-gray='on'] {
   filter: grayscale(1);
 }
 
-/* ---- Mint Bonk：批准设计稿状态帧的轻量整像素位移 ---- */
+/* ---- 轻量等待反馈：保留 PixelScale 接口，连续圆润节奏 ---- */
 
-@keyframes mint-bonk-idle {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(0, -2px, 0);
-  }
-}
-
-@keyframes mint-bonk-waiting {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  45% {
-    transform: translate3d(0, -2px, 0);
-  }
-  55% {
-    transform: translate3d(0, -1px, 0);
-  }
-}
-
-@keyframes mint-bonk-success {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  42% {
-    transform: translate3d(0, -4px, 0);
-  }
-  68% {
-    transform: translate3d(0, 1px, 0);
-  }
-}
-
-@keyframes mint-bonk-error {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  28% {
-    transform: translate3d(-2px, 0, 0);
-  }
-  56% {
-    transform: translate3d(2px, 0, 0);
-  }
-}
-
-@keyframes mint-bonk-sleeping {
-  0%,
-  100% {
-    transform: translate3d(0, 1px, 0);
-  }
-  50% {
-    transform: translate3d(0, -1px, 0);
-  }
-}
-
-[data-mascot='mint-bonk'][data-motion='on'][data-state='idle'] [data-slot='mint-bonk-frame'] {
-  animation: mint-bonk-idle 2200ms ease-in-out infinite;
-}
-
-[data-mascot='mint-bonk'][data-motion='on'][data-state='waiting'] [data-slot='mint-bonk-frame'] {
-  animation: mint-bonk-waiting 920ms steps(3, end) infinite;
-}
-
-[data-mascot='mint-bonk'][data-motion='on'][data-state='success'] [data-slot='mint-bonk-frame'] {
-  animation: mint-bonk-success 760ms var(--motion-ease-enter) infinite;
-}
-
-[data-mascot='mint-bonk'][data-motion='on'][data-state='error'] [data-slot='mint-bonk-frame'] {
-  animation: mint-bonk-error 420ms steps(2, end) 2;
-}
-
-[data-mascot='mint-bonk'][data-motion='on'][data-state='sleeping'] [data-slot='mint-bonk-frame'] {
-  animation: mint-bonk-sleeping 2800ms ease-in-out infinite;
-}
-
-[data-mascot='mint-bonk'] [data-slot='mint-bonk-gaze-glint'] {
-  transform: translate3d(var(--mint-bonk-gaze-x, 0), var(--mint-bonk-gaze-y, 0), 0);
-  transition: transform 80ms linear;
-  will-change: transform;
-}
-
-/* ---- PixelWave 家族：一维像素音阶（路由 / 按钮 / 进度反馈） ---- */
-
-@keyframes pixel-scale-pulse {
+@keyframes loading-scale-pulse {
   0%,
   100% {
     transform: scaleY(var(--pixel-scale-level));
-    opacity: 0.32;
+    opacity: 0.45;
   }
-  24% {
-    transform: scaleY(0.5);
-    opacity: 0.56;
-  }
-  48% {
+  50% {
     transform: scaleY(1);
     opacity: 1;
-  }
-  72% {
-    transform: scaleY(0.66);
-    opacity: 0.68;
   }
 }
 
 [data-effect='pixel-wave'][data-appearance='scale'] {
-  --pixel-scale-duration: 780ms;
-  --pixel-scale-stagger: -48ms;
+  --pixel-scale-duration: 1100ms;
+  --pixel-scale-stagger: -64ms;
 }
 
 [data-effect='pixel-wave'][data-appearance='scale'][data-variant='inline'] {
-  --pixel-scale-duration: 640ms;
-  --pixel-scale-stagger: -40ms;
+  --pixel-scale-duration: 900ms;
+  --pixel-scale-stagger: -56ms;
 }
 
 [data-effect='pixel-wave'][data-appearance='scale'][data-variant='page'] {
-  --pixel-scale-duration: 880ms;
-  --pixel-scale-stagger: -52ms;
+  --pixel-scale-duration: 1200ms;
+  --pixel-scale-stagger: -72ms;
 }
 
 [data-effect='pixel-wave'][data-appearance='scale'] [data-slot='pixel-scale-bar'] {
   transform: scaleY(var(--pixel-scale-level));
-  opacity: 0.32;
+  opacity: 0.45;
 }
 
 [data-effect='pixel-wave'][data-appearance='scale'][data-active='true']
   [data-slot='pixel-scale-bar'] {
-  animation: pixel-scale-pulse var(--pixel-scale-duration) steps(4, end) infinite;
+  animation: loading-scale-pulse var(--pixel-scale-duration) ease-in-out infinite;
   animation-delay: calc(var(--pixel-scale-index) * var(--pixel-scale-stagger));
 }
 
-/* ---- 青春像素 UI 动效（页面由 design/motion.ts 投影同一组数值） ---- */
+/* ---- 导航材质：实色基线、能力增强、减少透明度与高对比回退 ---- */
 
-@keyframes pixel-overlay-enter {
+.navigation-surface {
+  background: var(--surface-navigation);
+}
+
+@supports (backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)) {
+  .navigation-surface {
+    background: var(--surface-navigation-glass);
+    -webkit-backdrop-filter: blur(var(--navigation-blur));
+    backdrop-filter: blur(var(--navigation-blur));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .navigation-surface {
+    background: var(--surface-navigation);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .navigation-surface {
+    background: Canvas;
+    color: CanvasText;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+}
+
+/* ---- 整体表面动效：标题、正文和操作共用同一个可见层 ---- */
+
+@keyframes surface-overlay-enter {
   from {
     opacity: 0;
   }
@@ -370,7 +348,7 @@ html[data-gray='on'] {
   }
 }
 
-@keyframes pixel-overlay-exit {
+@keyframes surface-overlay-exit {
   from {
     opacity: 1;
   }
@@ -379,146 +357,107 @@ html[data-gray='on'] {
   }
 }
 
-@keyframes pixel-layer-exit {
-  0% {
+@keyframes surface-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--spacing) * 2)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes surface-dialog-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes surface-float-enter {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
     opacity: 1;
     scale: 1;
   }
-  24% {
-    scale: 1.008;
-  }
-  100% {
-    opacity: 0;
-    scale: 0.88;
-  }
 }
 
-@keyframes pixel-float-enter {
-  0% {
-    opacity: 0;
-    scale: 0.82;
-  }
-  56% {
+@keyframes surface-float-exit {
+  from {
     opacity: 1;
-    scale: 1.04;
+    scale: 1;
   }
-  78% {
+  to {
+    opacity: 0;
     scale: 0.98;
   }
-  100% {
-    opacity: 1;
-    scale: 1;
-  }
 }
 
-@keyframes pixel-float-exit {
+@keyframes surface-sheet-enter-right {
   from {
-    opacity: 1;
-    scale: 1;
+    translate: 100% 0;
   }
   to {
-    opacity: 0;
-    scale: 0.88;
-  }
-}
-
-@keyframes pixel-sheet-enter-right {
-  0% {
-    opacity: 0.6;
-    translate: 104% 0;
-  }
-  62% {
-    opacity: 1;
-    translate: -2% 0;
-  }
-  82% {
-    translate: 1% 0;
-  }
-  100% {
-    opacity: 1;
     translate: 0 0;
   }
 }
 
-@keyframes pixel-sheet-enter-left {
-  0% {
-    opacity: 0.6;
-    translate: -104% 0;
+@keyframes surface-sheet-enter-left {
+  from {
+    translate: -100% 0;
   }
-  62% {
-    opacity: 1;
-    translate: 2% 0;
-  }
-  82% {
-    translate: -1% 0;
-  }
-  100% {
-    opacity: 1;
+  to {
     translate: 0 0;
   }
 }
 
-@keyframes pixel-sheet-enter-top {
-  0% {
-    opacity: 0.6;
-    translate: 0 -104%;
+@keyframes surface-sheet-enter-top {
+  from {
+    translate: 0 -100%;
   }
-  62% {
-    opacity: 1;
-    translate: 0 2%;
-  }
-  82% {
-    translate: 0 -1%;
-  }
-  100% {
-    opacity: 1;
+  to {
     translate: 0 0;
   }
 }
 
-@keyframes pixel-sheet-enter-bottom {
-  0% {
-    opacity: 0.6;
-    translate: 0 104%;
+@keyframes surface-sheet-enter-bottom {
+  from {
+    translate: 0 100%;
   }
-  62% {
-    opacity: 1;
-    translate: 0 -2%;
-  }
-  82% {
-    translate: 0 1%;
-  }
-  100% {
-    opacity: 1;
+  to {
     translate: 0 0;
   }
 }
 
-@keyframes pixel-sheet-exit-right {
+@keyframes surface-sheet-exit-right {
   to {
-    opacity: 0;
-    translate: 104% 0;
+    translate: 100% 0;
   }
 }
 
-@keyframes pixel-sheet-exit-left {
+@keyframes surface-sheet-exit-left {
   to {
-    opacity: 0;
-    translate: -104% 0;
+    translate: -100% 0;
   }
 }
 
-@keyframes pixel-sheet-exit-top {
+@keyframes surface-sheet-exit-top {
   to {
-    opacity: 0;
-    translate: 0 -104%;
+    translate: 0 -100%;
   }
 }
 
-@keyframes pixel-sheet-exit-bottom {
+@keyframes surface-sheet-exit-bottom {
   to {
-    opacity: 0;
-    translate: 0 104%;
+    translate: 0 100%;
   }
 }
 
@@ -535,13 +474,13 @@ html[data-gray='on'] {
 [data-slot='dialog-overlay'][data-state='open'],
 [data-slot='alert-dialog-overlay'][data-state='open'],
 [data-slot='sheet-overlay'][data-state='open'] {
-  animation: pixel-overlay-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
+  animation: surface-overlay-enter var(--motion-duration-layer) var(--motion-ease-enter) both;
 }
 
 [data-slot='dialog-overlay'][data-state='closed'],
 [data-slot='alert-dialog-overlay'][data-state='closed'],
 [data-slot='sheet-overlay'][data-state='closed'] {
-  animation: pixel-overlay-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
+  animation: surface-overlay-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
 [data-slot='dialog-content'],
@@ -550,68 +489,20 @@ html[data-gray='on'] {
   isolation: isolate;
 }
 
-[data-slot='dialog-overlay'][data-motion-preset='orchestrated'][data-state='open'],
-[data-slot='alert-dialog-overlay'][data-motion-preset='orchestrated'][data-state='open'],
-[data-slot='dialog-content'][data-motion-preset='orchestrated'][data-state='open'],
-[data-slot='alert-dialog-content'][data-motion-preset='orchestrated'][data-state='open'] {
-  animation: none;
-  opacity: 0;
-}
-
-:is(
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content']
-  )[data-motion-preset='orchestrated'][data-state='open'] {
-  transform: translateY(calc(var(--spacing) * 2)) scale(0.965);
-}
-
-:is(
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='sheet-content']
-  )[data-motion-preset='orchestrated'][data-state='open']
-  [data-pixel-dialog-stage],
-:is(
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='sheet-content']
-  )[data-motion-preset='orchestrated'][data-state='open']
-  [data-slot='pixel-dialog-motion']
-  > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
-  clip-path: polygon(
-    0% 0%,
-    0% 0%,
-    0% 12.5%,
-    0% 12.5%,
-    0% 25%,
-    0% 25%,
-    0% 37.5%,
-    0% 37.5%,
-    0% 50%,
-    0% 50%,
-    0% 62.5%,
-    0% 62.5%,
-    0% 75%,
-    0% 75%,
-    0% 87.5%,
-    0% 87.5%,
-    0% 100%,
-    0% 100%,
-    0% 100%
-  );
-  opacity: 0;
+[data-slot='dialog-content'][data-state='open'],
+[data-slot='alert-dialog-content'][data-state='open'] {
+  animation: surface-dialog-enter var(--motion-duration-layer) var(--motion-ease-enter) both;
 }
 
 [data-slot='dialog-content'][data-state='closed'],
 [data-slot='alert-dialog-content'][data-state='closed'] {
-  animation: pixel-layer-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
+  animation: surface-dialog-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
 body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
   [data-slot='dialog-content'][data-depth='root'][data-state='open'] {
-  /* 覆盖根弹框 enter 动画的 `both` 填充态，确保二级弹层出现时真的后退。 */
   opacity: 0.72 !important;
-  scale: 0.97 !important;
+  scale: 0.98 !important;
   transition-duration: var(--motion-duration-feedback);
   transition-property: opacity, scale;
   transition-timing-function: var(--motion-ease-enter);
@@ -630,35 +521,35 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 }
 
 [data-slot='sheet-content'][data-side='right'][data-state='open'] {
-  animation-name: pixel-sheet-enter-right;
+  animation-name: surface-sheet-enter-right;
 }
 
 [data-slot='sheet-content'][data-side='right'][data-state='closed'] {
-  animation-name: pixel-sheet-exit-right;
+  animation-name: surface-sheet-exit-right;
 }
 
 [data-slot='sheet-content'][data-side='left'][data-state='open'] {
-  animation-name: pixel-sheet-enter-left;
+  animation-name: surface-sheet-enter-left;
 }
 
 [data-slot='sheet-content'][data-side='left'][data-state='closed'] {
-  animation-name: pixel-sheet-exit-left;
+  animation-name: surface-sheet-exit-left;
 }
 
 [data-slot='sheet-content'][data-side='top'][data-state='open'] {
-  animation-name: pixel-sheet-enter-top;
+  animation-name: surface-sheet-enter-top;
 }
 
 [data-slot='sheet-content'][data-side='top'][data-state='closed'] {
-  animation-name: pixel-sheet-exit-top;
+  animation-name: surface-sheet-exit-top;
 }
 
 [data-slot='sheet-content'][data-side='bottom'][data-state='open'] {
-  animation-name: pixel-sheet-enter-bottom;
+  animation-name: surface-sheet-enter-bottom;
 }
 
 [data-slot='sheet-content'][data-side='bottom'][data-state='closed'] {
-  animation-name: pixel-sheet-exit-bottom;
+  animation-name: surface-sheet-exit-bottom;
 }
 
 [data-slot='tooltip-content'][data-state='delayed-open'],
@@ -667,7 +558,7 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 [data-slot='popover-content'][data-state='open'],
 [data-slot='dropdown-menu-content'][data-state='open'],
 [data-slot='dropdown-menu-sub-content'][data-state='open'] {
-  animation: pixel-float-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
+  animation: surface-float-enter var(--motion-duration-enter) var(--motion-ease-enter) both;
 }
 
 [data-slot='tooltip-content'][data-state='closed'],
@@ -675,7 +566,7 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 [data-slot='popover-content'][data-state='closed'],
 [data-slot='dropdown-menu-content'][data-state='closed'],
 [data-slot='dropdown-menu-sub-content'][data-state='closed'] {
-  animation: pixel-float-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
+  animation: surface-float-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
 [data-slot='app-sidebar'] {
@@ -704,6 +595,18 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
 
 [data-slot='command-list']::-webkit-scrollbar-thumb {
   background: var(--border);
+  border-radius: var(--radius-control);
+}
+
+/* 触屏命中区不随 compact 缩小，视觉图标仍保留自己的尺寸。 */
+@media (pointer: coarse) {
+  [data-slot='button'],
+  [data-slot='select-trigger'],
+  [data-slot='dialog-close'],
+  [data-slot='sheet-close'] {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
@@ -734,8 +637,7 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
   }
 }
 
-/* ---- 动效治理：全局兜底降级（白名单场景见 AGENTS.md「动效治理」） ---- */
-
+/* 动效关闭后立即显示最终表面，既不裁切内容，也不依赖 JS 结束回调。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -746,29 +648,18 @@ body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
     scroll-behavior: auto !important;
   }
 
-  :is(
-      [data-slot='dialog-overlay'],
-      [data-slot='alert-dialog-overlay'],
-      [data-slot='dialog-content'],
-      [data-slot='alert-dialog-content'],
-      [data-slot='sheet-content']
-    )[data-motion-preset='orchestrated'][data-state='open'],
-  :is(
-      [data-slot='dialog-content'],
-      [data-slot='alert-dialog-content'],
-      [data-slot='sheet-content']
-    )[data-motion-preset='orchestrated'][data-state='open']
-    [data-pixel-dialog-stage],
-  :is(
-      [data-slot='dialog-content'],
-      [data-slot='alert-dialog-content'],
-      [data-slot='sheet-content']
-    )[data-motion-preset='orchestrated'][data-state='open']
-    [data-slot='pixel-dialog-motion']
-    > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
-    clip-path: none !important;
-    transform: none !important;
+  [data-motion-preset='surface'][data-state='open'] {
+    animation: none !important;
     opacity: 1 !important;
+    transform: none !important;
+  }
+
+  [data-slot='sheet-content'][data-state='open'] {
+    translate: 0 0 !important;
+  }
+
+  [data-appearance='scale'] [data-slot='pixel-scale-bar'] {
+    animation: none !important;
   }
 }
 
@@ -778,32 +669,19 @@ html[data-motion='off'] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
-html[data-motion='off']
-  :is(
-    [data-slot='dialog-overlay'],
-    [data-slot='alert-dialog-overlay'],
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='sheet-content']
-  )[data-motion-preset='orchestrated'][data-state='open'],
-html[data-motion='off']
-  :is(
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='sheet-content']
-  )[data-motion-preset='orchestrated'][data-state='open']
-  [data-pixel-dialog-stage],
-html[data-motion='off']
-  :is(
-    [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='sheet-content']
-  )[data-motion-preset='orchestrated'][data-state='open']
-  [data-slot='pixel-dialog-motion']
-  > :not([data-pixel-dialog-stage]):not(:has([data-pixel-dialog-stage])) {
-  clip-path: none !important;
-  transform: none !important;
+html[data-motion='off'] [data-motion-preset='surface'][data-state='open'] {
+  animation: none !important;
   opacity: 1 !important;
+  transform: none !important;
+}
+
+html[data-motion='off'] [data-slot='sheet-content'][data-state='open'] {
+  translate: 0 0 !important;
+}
+
+html[data-motion='off'] [data-appearance='scale'] [data-slot='pixel-scale-bar'] {
+  animation: none !important;
 }

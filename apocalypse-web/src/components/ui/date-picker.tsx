@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover } from 'radix-ui'
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type ComponentProps, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -11,11 +11,22 @@ import { dateCells, localToday, moveDate, moveMonth, validDate } from './date-pi
 
 type Mode = 'date' | 'month' | 'datetime-local'
 
+type DatePickerProps = Omit<
+  ComponentProps<'button'>,
+  'value' | 'defaultValue' | 'onChange' | 'children'
+> & {
+  value: string
+  onValueChange: (value: string) => void
+  mode?: Mode
+  allowClear?: boolean
+  min?: string
+  max?: string
+}
+
 /** Local wall-clock strings only: selection never converts a business date to another time zone. */
 export function DatePicker({
   value,
   onValueChange,
-  id,
   mode = 'date',
   disabled,
   allowClear = true,
@@ -23,18 +34,8 @@ export function DatePicker({
   max = '9999-12-31',
   className,
   'aria-label': ariaLabel,
-}: {
-  value: string
-  onValueChange: (value: string) => void
-  id?: string
-  mode?: Mode
-  disabled?: boolean
-  allowClear?: boolean
-  min?: string
-  max?: string
-  className?: string
-  'aria-label'?: string
-}) {
+  ...triggerProps
+}: DatePickerProps) {
   const { t, i18n } = useTranslation()
   const label = ariaLabel ?? t(`dateControl.${mode}`)
   const locale = i18n.resolvedLanguage ?? i18n.language
@@ -110,11 +111,11 @@ export function DatePicker({
     >
       <Popover.Trigger asChild>
         <Button
-          id={id}
+          {...triggerProps}
           type="button"
           variant="outline"
           disabled={disabled}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel ?? label}
           data-slot="date-picker-trigger"
           className={cn(
             'w-full min-w-0 justify-between font-normal tabular-nums',
@@ -133,7 +134,7 @@ export function DatePicker({
           align="start"
           sideOffset={6}
           collisionPadding={12}
-          className="z-50 w-80 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-popover-content-available-height)] overflow-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg outline-none"
+          className="z-50 w-80 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-popover-content-available-height)] overflow-auto rounded-panel border border-border-subtle bg-popover p-3 text-popover-foreground shadow-floating outline-none"
           onOpenAutoFocus={(event) => {
             if (mode !== 'month') {
               event.preventDefault()
@@ -248,12 +249,12 @@ export function DatePicker({
                               mode === 'datetime-local' ? setCursor(date) : commit(date)
                             }
                             className={cn(
-                              'flex aspect-square w-full items-center justify-center rounded-md text-sm tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40',
+                              'flex aspect-square w-full items-center justify-center rounded-control text-sm tabular-nums outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40',
                               date === cursor &&
                                 'bg-primary text-primary-foreground hover:bg-primary/90',
                               date === localToday() &&
                                 date !== cursor &&
-                                'font-semibold text-primary',
+                                'font-semibold text-brand-text',
                             )}
                           >
                             {Number(date.slice(8))}

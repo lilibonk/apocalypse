@@ -3,7 +3,6 @@ import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
-import { PixelDialogMotion } from '@/components/motion/PixelDialogMotion'
 import { cn } from '@/lib/utils'
 import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
 
@@ -55,36 +54,35 @@ function SheetContent({
   )
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay data-motion-preset="surface" />
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}
-        data-motion-preset="orchestrated"
+        data-motion-preset="surface"
         className={cn(
-          'fixed z-50 flex flex-col gap-4 bg-background shadow-lg',
-          side === 'right' && 'inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm',
-          side === 'left' && 'inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm',
-          side === 'top' && 'inset-x-0 top-0 h-auto border-b',
-          side === 'bottom' && 'inset-x-0 bottom-0 h-auto border-t',
+          'fixed z-50 flex max-h-dvh flex-col gap-4 overflow-y-auto border-border-subtle bg-popover text-popover-foreground shadow-floating outline-none',
+          side === 'right' &&
+            'inset-y-0 right-0 h-full w-full border-l sm:max-w-sm sm:rounded-l-panel',
+          side === 'left' &&
+            'inset-y-0 left-0 h-full w-full border-r sm:max-w-sm sm:rounded-r-panel',
+          side === 'top' && 'inset-x-0 top-0 h-auto rounded-b-panel border-b',
+          side === 'bottom' && 'inset-x-0 bottom-0 h-auto rounded-t-panel border-t',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
-        <PixelDialogMotion animateSurface={false}>
-          {children}
-          {showCloseButton && (
-            <SheetPrimitive.Close
-              data-slot="sheet-close"
-              data-pixel-dialog-stage="header"
-              className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary"
-            >
-              <XIcon className="size-4" />
-              <span className="sr-only">{t('common.关闭', { defaultValue: '关闭' })}</span>
-            </SheetPrimitive.Close>
-          )}
-        </PixelDialogMotion>
+        {children}
+        {showCloseButton && (
+          <SheetPrimitive.Close
+            data-slot="sheet-close"
+            className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none"
+          >
+            <XIcon className="size-4" />
+            <span className="sr-only">{t('common.关闭', { defaultValue: '关闭' })}</span>
+          </SheetPrimitive.Close>
+        )}
       </SheetPrimitive.Content>
     </SheetPortal>
   )
@@ -94,8 +92,10 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
-      data-pixel-dialog-stage="header"
-      className={cn('flex flex-col gap-1.5 p-4', className)}
+      className={cn(
+        'flex shrink-0 flex-col gap-1.5 border-b border-border-subtle p-6 pr-14',
+        className,
+      )}
       {...props}
     />
   )
@@ -105,8 +105,10 @@ function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
-      data-pixel-dialog-stage="footer"
-      className={cn('mt-auto flex flex-col gap-2 p-4', className)}
+      className={cn(
+        'mt-auto flex shrink-0 flex-col gap-2 border-t border-border-subtle p-6',
+        className,
+      )}
       {...props}
     />
   )

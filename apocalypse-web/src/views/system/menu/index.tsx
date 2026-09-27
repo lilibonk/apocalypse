@@ -21,8 +21,11 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Perm } from '@/components/Perm'
+import { DynaQueryFeedback } from '@/components/dyna'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
 import { cn } from '@/lib/utils'
 
 import { getMenuTree } from './menu.api'
@@ -63,11 +66,23 @@ export default function MenuPage() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<MenuFilter>('ALL')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'menus', 'tree'],
     queryFn: getMenuTree,
   })
-  const tree = useMemo(() => (data ?? []).map(normalizeMenuTreeNode), [data])
+  useResourceDenial({
+    errors: [error],
+    clear: { queryKey: ['system', 'menus', 'tree'] },
+    reset: () => {
+      setFormPayload(null)
+      setDeleting(null)
+    },
+  })
+  const canShowTree = data !== undefined && !isResourceDenied(error)
+  const tree = useMemo(
+    () => (canShowTree ? data : [])?.map(normalizeMenuTreeNode) ?? [],
+    [data, canShowTree],
+  )
   const allNodes = useMemo(() => flattenTree(tree), [tree])
   const expandableIds = useMemo(
     () => allNodes.filter((node) => node.children.length > 0).map((node) => node.id),
@@ -106,13 +121,13 @@ export default function MenuPage() {
   const collapseAll = () => setExpanded(new Set())
 
   return (
-    <div className="w-full space-y-4 p-4 sm:p-6">
-      <div className="flex items-baseline justify-between">
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-semibold tracking-tight">
             {t('common.菜单管理', { defaultValue: '菜单管理' })}
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             {t('common.系统菜单（目录 / 菜单 / 按钮）的维护', {
               defaultValue: '系统菜单（目录 / 菜单 / 按钮）的维护',
             })}
@@ -136,112 +151,138 @@ export default function MenuPage() {
         })}
       </p>
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex flex-col gap-3 border-b border-border p-3 xl:flex-row xl:items-center">
-          <div className="relative min-w-0 flex-1 xl:max-w-md">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('common.搜索菜单名称、路由或权限', {
-                defaultValue: '搜索菜单名称、路由或权限',
-              })}
-              className="pl-9"
-            />
-          </div>
-          <div
-            role="group"
-            aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
-            className="flex items-center rounded-md border border-border p-0.5"
-          >
-            {(
-              [
-                ['ALL', '全部'],
-                ['C', '目录'],
-                ['M', '菜单'],
-                ['F', '按钮'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={typeFilter === value}
-                onClick={() => setTypeFilter(value)}
-                className={cn(
-                  'rounded px-3 py-1.5 text-xs transition-colors',
-                  typeFilter === value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-              >
-                {t(`dyna.${label}`, { defaultValue: label })}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={filtering}
-              onClick={() => setExpanded(new Set(expandableIds))}
-            >
-              <ChevronsUpDown className="size-4" />
-              {t('common.全部展开', { defaultValue: '全部展开' })}
-            </Button>
-            <Button variant="ghost" size="sm" disabled={filtering} onClick={collapseAll}>
-              <ChevronsDownUp className="size-4" />
-              {t('common.全部折叠', { defaultValue: '全部折叠' })}
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 border-b border-border bg-muted/20">
-          {[
-            { type: 'C', label: '目录', icon: FolderTree, count: typeCounts.C },
-            { type: 'M', label: '菜单', icon: PanelTop, count: typeCounts.M },
-            { type: 'F', label: '按钮', icon: MousePointerClick, count: typeCounts.F },
-          ].map((item, index) => (
-            <div
-              key={item.type}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3',
-                index > 0 && 'border-l border-border',
-              )}
-            >
-              <item.icon className="size-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
-                {t(`dyna.${item.label}`, { defaultValue: item.label })}
-              </span>
-              <strong className="ml-auto font-mono text-sm font-semibold">{item.count}</strong>
+      <DynaQueryFeedback
+        error={error}
+        hasData={canShowTree}
+        refreshing={isFetching}
+        onRetry={() => void refetch()}
+      />
+      {(!error || canShowTree) && (
+        <section
+          className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          aria-busy={isFetching}
+        >
+          <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 xl:flex-row xl:items-end">
+            <div className="min-w-0 flex-1 space-y-2 xl:max-w-md">
+              <Label htmlFor="menu-search">{t('dyna.querySearch')}</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="menu-search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('common.搜索菜单名称、路由或权限', {
+                    defaultValue: '搜索菜单名称、路由或权限',
+                  })}
+                  className="pl-9"
+                />
+              </div>
             </div>
-          ))}
-        </div>
+            <div
+              role="group"
+              aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
+              className="flex items-center rounded-lg bg-muted p-1"
+            >
+              {(
+                [
+                  ['ALL', '全部'],
+                  ['C', '目录'],
+                  ['M', '菜单'],
+                  ['F', '按钮'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={typeFilter === value}
+                  onClick={() => setTypeFilter(value)}
+                  className={cn(
+                    'rounded-md px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                    typeFilter === value
+                      ? 'bg-card font-medium text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )}
+                >
+                  {t(`dyna.${label}`, { defaultValue: label })}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={filtering}
+                onClick={() => setExpanded(new Set(expandableIds))}
+              >
+                <ChevronsUpDown className="size-4" />
+                {t('common.全部展开', { defaultValue: '全部展开' })}
+              </Button>
+              <Button variant="ghost" size="sm" disabled={filtering} onClick={collapseAll}>
+                <ChevronsDownUp className="size-4" />
+                {t('common.全部折叠', { defaultValue: '全部折叠' })}
+              </Button>
+            </div>
+          </div>
 
-        <MenuTreeTable
-          tree={filteredTree}
-          isLoading={isLoading}
-          collapsed={effectiveCollapsed}
-          onToggle={toggle}
-          onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-          onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-          onDelete={setDeleting}
-        />
+          {canShowTree && (
+            <div className="grid grid-cols-3 border-b border-border bg-muted/20">
+              {[
+                { type: 'C', label: '目录', icon: FolderTree, count: typeCounts.C },
+                { type: 'M', label: '菜单', icon: PanelTop, count: typeCounts.M },
+                { type: 'F', label: '按钮', icon: MousePointerClick, count: typeCounts.F },
+              ].map((item, index) => (
+                <div
+                  key={item.type}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3',
+                    index > 0 && 'border-l border-border',
+                  )}
+                >
+                  <item.icon className="size-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    {t(`dyna.${item.label}`, { defaultValue: item.label })}
+                  </span>
+                  <strong className="ml-auto text-sm font-semibold tabular-nums">
+                    {item.count}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          <span>
-            {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
-              defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
-              visible: filteredNodes.length,
-              total: allNodes.length,
-            })}
-          </span>
-          <span>
-            {t('common.树形数据全量加载，不分页', {
-              defaultValue: '树形数据全量加载，不分页',
-            })}
-          </span>
-        </footer>
-      </section>
+          <MenuTreeTable
+            tree={filteredTree}
+            isLoading={isLoading}
+            collapsed={effectiveCollapsed}
+            onToggle={toggle}
+            onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+            onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+            onDelete={setDeleting}
+            filtering={filtering}
+            onResetFilters={() => {
+              setQuery('')
+              setTypeFilter('ALL')
+            }}
+          />
+
+          {canShowTree && (
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              <span>
+                {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
+                  defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
+                  visible: filteredNodes.length,
+                  total: allNodes.length,
+                })}
+              </span>
+              <span>
+                {t('common.树形数据全量加载，不分页', {
+                  defaultValue: '树形数据全量加载，不分页',
+                })}
+              </span>
+            </footer>
+          )}
+        </section>
+      )}
 
       <MenuFormDialog
         open={formPayload !== null}

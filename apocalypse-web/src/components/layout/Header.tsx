@@ -74,7 +74,7 @@ export function Header({
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
+    <header className="navigation-surface flex h-14 shrink-0 items-center gap-2 border-b border-border-subtle px-4 sm:px-6">
       <Button
         variant="ghost"
         size="icon"
@@ -124,12 +124,12 @@ export function Header({
         variant="outline"
         size="sm"
         aria-label={t('common.搜索', { defaultValue: '搜索' })}
-        className="gap-2 text-muted-foreground max-sm:size-9 max-sm:px-0"
+        className="gap-2 border-border-subtle bg-card/60 text-muted-foreground max-sm:size-11 max-sm:px-0"
         onClick={onOpenCommand}
       >
         <Search className="size-3.5" />
         <span className="hidden sm:inline">{t('common.搜索', { defaultValue: '搜索' })}</span>
-        <kbd className="pointer-events-none hidden rounded border border-border bg-muted px-1.5 font-mono text-[10px] sm:inline">
+        <kbd className="pointer-events-none hidden rounded border border-border-subtle bg-muted px-1.5 font-mono text-xs sm:inline">
           ⌘K
         </kbd>
       </Button>
@@ -154,7 +154,12 @@ export function Header({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            aria-label={t('common.accountMenu', { name: user?.nickname ?? user?.username ?? '?' })}
+          >
             <Avatar size="sm">
               <AvatarFallback className="bg-primary text-xs text-primary-foreground">
                 {(user?.nickname ?? user?.username ?? '?').slice(0, 1).toUpperCase()}

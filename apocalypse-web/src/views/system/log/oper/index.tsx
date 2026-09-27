@@ -1,5 +1,5 @@
 /**
- * 操作日志（只读页，逃逸舱手写）：DynaSearch + DynaTable + 页面局部详情 Dialog。
+ * 操作日志（只读页，逃逸舱手写）：DynaSearch + DynaTable + 长审计详情 Sheet。
  * 端点 GET /system/logs/oper?page&size&keyword（直接拼 query，无 /page 后缀）。
  * 状态列走字典 sys_common_status（成功 1 / 失败 0）；耗时列在行数据侧格式化为 `xx ms`。
  */
@@ -12,12 +12,13 @@ import { useTranslation } from 'react-i18next'
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { useResourceDenial } from '@/lib/query/use-resource-denial'
 
 import { pageOperLogs, type OperLogRow } from './oper-log.api'
 
@@ -40,7 +41,7 @@ const columns: DynaColumn[] = [
 ]
 
 const searchFields: DynaSearchField[] = [
-  { name: 'keyword', type: 'input', placeholder: '模块 / 操作人' },
+  { name: 'keyword', label: '模块 / 操作人', type: 'input', placeholder: '模块 / 操作人' },
 ]
 
 /** 详情字段块：长 JSON 用 pre 折行展示，空值显示 -。 */
@@ -65,9 +66,14 @@ export default function OperLogPage() {
 
   const keyword = appliedSearch.keyword ?? ''
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'logs', 'oper', page, pageSize, keyword],
     queryFn: () => pageOperLogs(page, pageSize, keyword),
+  })
+  useResourceDenial({
+    errors: [error],
+    clear: { queryKey: ['system', 'logs', 'oper'] },
+    reset: () => setDetail(null),
   })
 
   // DynaTable 文本列只做 String()，耗时 `xx ms` 的格式化在行数据侧完成（costTime → costTimeText）
@@ -81,12 +87,12 @@ export default function OperLogPage() {
   )
 
   return (
-    <div className="w-full space-y-4 p-4 sm:p-6">
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {t('common.操作日志', { defaultValue: '操作日志' })}
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t('common.系统操作审计记录（只读）', { defaultValue: '系统操作审计记录（只读）' })}
         </p>
       </div>
@@ -110,6 +116,15 @@ export default function OperLogPage() {
         columns={columns}
         rows={rows}
         loading={isLoading}
+        error={error}
+        refreshing={isFetching}
+        onRetry={() => void refetch()}
+        filtered={keyword.trim().length > 0}
+        onResetFilters={() => {
+          setDraftSearch({})
+          setAppliedSearch({})
+          setPage(1)
+        }}
         rowKey="id"
         actions={(row) => (
           <Button
@@ -131,16 +146,16 @@ export default function OperLogPage() {
         }}
       />
 
-      <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</DialogTitle>
-            <DialogDescription>
+      <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
+        <SheetContent className="sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</SheetTitle>
+            <SheetDescription>
               {detail ? `${detail.title ?? '-'} · ${detail.operName ?? '-'}` : ''}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           {detail && (
-            <div className="space-y-3">
+            <div className="min-h-0 space-y-5 overflow-y-auto px-4 pb-6">
               <DetailBlock
                 label={t('common.请求方法', { defaultValue: '请求方法' })}
                 value={detail.method}
@@ -159,8 +174,8 @@ export default function OperLogPage() {
               />
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

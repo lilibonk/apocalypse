@@ -1,6 +1,6 @@
 /**
- * 路由加载：PixelWave 家族的一维 PixelScale 音阶。
- * 16 根离散高度像素柱以 steps() 传播，替代高成本 Canvas 条带；保留 h-64 / className 契约。
+ * 路由加载：轻量、连续的 PixelScale 等待反馈。
+ * 保留 h-64 / className 与可访问加载状态，不创建 Canvas 或额外时间轴。
  */
 
 import { useTranslation } from 'react-i18next'

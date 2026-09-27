@@ -12,9 +12,10 @@
  * CI 已有 schema.test.ts 全量校验，这里是页面级兜底。
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, Pencil, Plus, Power, Trash2 } from 'lucide-react'
+import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Eye, Pencil, Plus, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
@@ -36,7 +37,8 @@ import type { PageResult } from '@/lib/api/types'
 import { ModuleAccess } from '@/lib/query/ModuleAccess'
 import type { ModuleOperation, ModuleScope } from '@/lib/query/module-scope'
 import { useModuleMutation } from '@/lib/query/use-module-mutation'
-import { useResourceDenial } from '@/lib/query/use-resource-denial'
+import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
+import { useAuthStore } from '@/stores/auth'
 import { createDynaQueries } from './dyna-queries'
 
 import { DynaDetail } from './DynaDetail'
@@ -87,11 +89,23 @@ export interface ScopedDynaAction {
 }
 
 export function DynaPage(props: DynaPageProps) {
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
   const queries = useMemo(
     () => createDynaQueries(props.schema, props.queryScope),
     [props.schema, props.queryScope],
   )
-  const content = <DynaPageContent {...props} queries={queries} />
+  const content = (
+    <DynaPageContent
+      key={JSON.stringify([
+        sessionEpoch,
+        props.queryScope?.moduleKey,
+        props.schema.endpoint,
+        props.schema.key,
+      ])}
+      {...props}
+      queries={queries}
+    />
+  )
   return props.queryScope ? (
     <ModuleAccess scope={props.queryScope}>{content}</ModuleAccess>
   ) : (
@@ -106,6 +120,7 @@ function DynaPageContent({
   queries,
 }: DynaPageProps & { queries: ReturnType<typeof createDynaQueries> }) {
   const t = useDynaText()
+  const { t: commonText } = useTranslation()
   const queryClient = useQueryClient()
 
   const validation = useMemo(() => validatePageSchema(schema), [schema])
@@ -122,8 +137,9 @@ function DynaPageContent({
   const [viewing, setViewing] = useState<Row | null>(null)
   const [deleting, setDeleting] = useState<Row | null>(null)
   const [toggling, setToggling] = useState<ToggleState | null>(null)
+  const [mutationDenial, setMutationDenial] = useState<ApiError | null>(null)
 
-  const { data, isLoading, error } = useQuery<PageResult<Row>>(
+  const { data, isLoading, isFetching, error, refetch } = useQuery<PageResult<Row>>(
     queries.list(
       {
         schemaKey: schema.key,
@@ -137,8 +153,8 @@ function DynaPageContent({
   )
 
   const invalidate = () => queryClient.invalidateQueries(queries.filter())
-  const onDenied = useResourceDenial({
-    errors: queryScope ? [error] : [],
+  const resourceDenial = useResourceDenial({
+    errors: [error],
     clear: queries.filter(),
     reset: () => {
       setDialog(null)
@@ -147,6 +163,24 @@ function DynaPageContent({
       setToggling(null)
     },
   })
+  const onDenied = {
+    isCurrent: resourceDenial.isCurrent,
+    handle: (error: Error) => {
+      if (!isResourceDenied(error)) return
+      setMutationDenial(error)
+      resourceDenial.handle(error)
+    },
+  }
+  const retryList = async () => {
+    const denied = mutationDenial
+    const result = await refetch()
+    // Cache clearing is not a successful empty result; keep the denial until recovery.
+    // A newer denial must not be cleared by an older in-flight retry.
+    if (result.isSuccess) setMutationDenial((current) => (current === denied ? null : current))
+  }
+  // A newer denial cancels an older retry; that cancellation must not hide the real cause.
+  const feedbackError =
+    mutationDenial && isCancelledError(error) ? mutationDenial : (error ?? mutationDenial)
   const localKey = JSON.stringify([
     page,
     pageSize,
@@ -158,7 +192,7 @@ function DynaPageContent({
   ])
 
   const saveMutation = useModuleMutation(queryScope, {
-    onDenied: queryScope ? onDenied : undefined,
+    onDenied,
     localKey,
     mutationFn: (run, input: { body: Row; mode: 'create' | 'edit'; id?: string }) =>
       input.mode === 'create'
@@ -173,7 +207,7 @@ function DynaPageContent({
   })
 
   const deleteMutation = useModuleMutation(queryScope, {
-    onDenied: queryScope ? onDenied : undefined,
+    onDenied,
     localKey,
     mutationFn: (run, id: string) => run(queries.remove, id),
     onSuccess: () => {
@@ -185,7 +219,7 @@ function DynaPageContent({
   })
 
   const toggleMutation = useModuleMutation(queryScope, {
-    onDenied: queryScope ? onDenied : undefined,
+    onDenied,
     localKey,
     mutationFn: (run, input: { id: string; body: Row; action: DynaStatusToggleAction }) => {
       const operation = queries.toggles.get(input.action)
@@ -201,7 +235,7 @@ function DynaPageContent({
   })
 
   const customMutation = useModuleMutation(queryScope, {
-    onDenied: queryScope ? onDenied : undefined,
+    onDenied,
     localKey,
     mutationFn: (run, input: { action: ScopedDynaAction; row: Row }) =>
       run(input.action.operation, input.row),
@@ -240,7 +274,9 @@ function DynaPageContent({
     <>
       {(schema.rowActions ?? []).map((action) => {
         if (action.kind === 'view') {
-          const label = t(action.label ?? '查看')
+          const label = action.label
+            ? t(action.label)
+            : commonText('common.查看', { defaultValue: '查看' })
           const button = (
             <Tooltip key="view">
               <TooltipTrigger asChild>
@@ -384,22 +420,33 @@ function DynaPageContent({
     : ''
 
   return (
-    <div className="w-full space-y-4 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t(schema.title)}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t(schema.title)}</h1>
           {schema.description && (
-            <p className="mt-0.5 text-sm text-muted-foreground">{t(schema.description)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t(schema.description)}</p>
           )}
         </div>
-        {schema.createPerm && schema.form && (
-          <Perm perm={schema.createPerm}>
-            <Button size="sm" onClick={() => setDialog({ mode: 'create', row: null })}>
-              <Plus className="size-4" />
-              {schema.createLabel ? t(schema.createLabel) : t('create', { entity })}
-            </Button>
-          </Perm>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t('queryRefresh')}
+            onClick={() => void retryList()}
+            disabled={isFetching}
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+          {schema.createPerm && schema.form && (
+            <Perm perm={schema.createPerm}>
+              <Button onClick={() => setDialog({ mode: 'create', row: null })}>
+                <Plus className="size-4" />
+                {schema.createLabel ? t(schema.createLabel) : t('create', { entity })}
+              </Button>
+            </Perm>
+          )}
+        </div>
       </div>
 
       {schema.search && schema.search.length > 0 && (
@@ -423,6 +470,15 @@ function DynaPageContent({
         columns={schema.columns}
         rows={data?.list}
         loading={isLoading}
+        error={feedbackError}
+        refreshing={isFetching}
+        onRetry={() => void retryList()}
+        filtered={Object.values(appliedSearch).some((value) => value.trim().length > 0)}
+        onResetFilters={() => {
+          setDraftSearch({})
+          setAppliedSearch({})
+          setPage(1)
+        }}
         rowKey={rowKey}
         actions={(schema.rowActions ?? []).length > 0 ? renderActions : undefined}
         page={page}
