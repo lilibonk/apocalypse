@@ -52,6 +52,7 @@ export default definePageSchema({
         required: true,
         minLength: 8,
         maxLength: 64,
+        maxUtf8Bytes: 72,
         hideInEdit: true,
       },
       { name: 'nickname', label: '昵称', type: 'input', maxLength: 64 },

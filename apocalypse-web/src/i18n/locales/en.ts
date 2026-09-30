@@ -373,6 +373,8 @@ export const en = {
       msgMax: '{{label}} must be at most {{max}}',
       msgMaxLen: '{{label}} must be at most {{max}} characters',
       msgMinLen: '{{label}} must be at least {{min}} characters',
+      msgMaxBytes: '{{label}} must be at most {{max}} UTF-8 bytes',
+      unknownOption: 'Unknown option',
       每页: 'Rows per page',
       每页条数: 'Rows per page',
       条: 'rows',

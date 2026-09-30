@@ -4,6 +4,8 @@
  * 提交时非适用字段一律置空，避免改了类型后残留旧值。
  */
 
+import { submitForm } from '@/lib/form-submit'
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
@@ -221,7 +223,12 @@ export function MenuFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
+            onSubmit={(event) =>
+              submitForm(
+                form.handleSubmit((values) => saveMutation.mutate(values))(event),
+                t('common.保存失败', { defaultValue: '保存失败' }),
+              )
+            }
             className="grid grid-cols-2 gap-4"
           >
             <div className="col-span-2 grid grid-cols-1 gap-5 sm:grid-cols-2">

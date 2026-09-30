@@ -41,10 +41,10 @@ vi.mock('react-i18next', async (importOriginal) => ({
 }))
 
 describe('calendar scoped management controls', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     const client = new QueryClient()
-    accessLifecycle.reset(0, client)
-    accessLifecycle.accept(
+    await accessLifecycle.reset(0, client)
+    await accessLifecycle.accept(
       0,
       [
         normalizeMenuNode({

@@ -29,7 +29,8 @@ export type DynaValidatorMessage = (
     | 'msgMin'
     | 'msgMax'
     | 'msgMaxLen'
-    | 'msgMinLen',
+    | 'msgMinLen'
+    | 'msgMaxBytes',
   params: Record<string, string | number>,
 ) => string
 
@@ -86,6 +87,13 @@ export function buildFormValidator(fields: DynaFormField[], msg: DynaValidatorMe
             (v) => v === '' || v.length >= (field.minLength ?? 0),
             msg('msgMinLen', { label, min: field.minLength }),
           )
+    }
+    if (field.maxUtf8Bytes !== undefined) {
+      shape[name] = rule.refine(
+        (value) => new TextEncoder().encode(value).length <= field.maxUtf8Bytes!,
+        msg('msgMaxBytes', { label, max: field.maxUtf8Bytes }),
+      )
+      continue
     }
     shape[name] = rule
   }

@@ -26,4 +26,6 @@ public class SysRoleEntity extends BaseEntity {
   private Integer sort;
 
   private Integer status;
+
+  private String dataScope;
 }

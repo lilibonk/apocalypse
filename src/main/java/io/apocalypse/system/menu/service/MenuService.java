@@ -5,6 +5,7 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.framework.capability.CapabilityRegistry;
 import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.menu.dto.request.MenuSaveReq;
 import io.apocalypse.system.menu.dto.response.MenuTreeNode;
 import io.apocalypse.system.menu.entity.SysMenuEntity;
@@ -28,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MenuService {
+
+  private final DataScopeService dataScopeService;
 
   private final SysMenuMapper sysMenuMapper;
 
@@ -70,6 +73,7 @@ public class MenuService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public Long create(MenuSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:menu:add");
     validateParent(null, req.parentId());
     SysMenuEntity entity = new SysMenuEntity();
     applyReq(entity, req);
@@ -83,6 +87,7 @@ public class MenuService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, MenuSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:menu:edit");
     SysMenuEntity entity = requireById(id);
     validateParent(id, req.parentId());
     applyReq(entity, req);
@@ -94,6 +99,7 @@ public class MenuService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void delete(Long id) {
+    dataScopeService.requireGlobalWrite("system:menu:remove");
     requireById(id);
     if (!sysMenuMapper.selectByParentId(id).isEmpty()) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "存在子菜单，不允许删除");

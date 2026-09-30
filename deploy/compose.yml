@@ -1,0 +1,200 @@
+# Single-host reference; runtime files are prepared outside the checkout.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /opt/apocalypse/postgres-entrypoint.sh]
+    command: [postgres]
+    environment:
+      POSTGRES_DB: apocalypse
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets:
+      - db_admin_password
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - type: bind
+        source: ./postgres-entrypoint.sh
+        target: /opt/apocalypse/postgres-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./init-db.sh
+        target: /docker-entrypoint-initdb.d/10-application-role.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d apocalypse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  redis:
+    image: redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /opt/apocalypse/redis-entrypoint.sh]
+    secrets: [redis_password]
+    volumes:
+      - redis_data:/data
+      - type: bind
+        source: ./redis-entrypoint.sh
+        target: /opt/apocalypse/redis-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs: [/run/redis-private:mode=0700]
+    networks: [data]
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli ping | grep -qx PONG',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  backend:
+    image: eclipse-temurin:25.0.4.1_1-jre-noble@sha256:08c5df59d84343e310567081253611b244bb7a1329930eb09d6923f6fa66dffa
+    pull_policy: never
+    restart: unless-stopped
+    user: "${APP_UID:?Set APP_UID to the owner of the secret files}:${APP_GID:?Set APP_GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    working_dir: /app
+    command: [java, -XX:MaxRAMPercentage=65.0, -jar, /app/backend.jar]
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+      DB_URL: jdbc:postgresql://postgres:5432/apocalypse
+      DB_USERNAME: apocalypse
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      APOCALYPSE_CAPABILITIES_CALENDAR_ENABLED: "false"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the exact HTTPS frontend origin}
+    secrets:
+      - source: db_password
+        target: DB_PASSWORD
+      - source: jwt_secret
+        target: JWT_SECRET
+      - source: redis_password
+        target: spring.data.redis.password
+      - source: bootstrap_admin_password
+        target: apocalypse.security.bootstrap.admin-password
+    volumes:
+      - type: bind
+        source: ${DEPLOY_RUNTIME_DIR:?Set DEPLOY_RUNTIME_DIR}/artifacts/backend.jar
+        target: /app/backend.jar
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./backend-health.sh
+        target: /opt/apocalypse/backend-health.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs: ["/tmp:mode=1777,size=128m"]
+    mem_limit: 1536m
+    stop_grace_period: 45s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [application, data]
+    healthcheck:
+      test: [CMD, bash, /opt/apocalypse/backend-health.sh]
+      interval: 5s
+      timeout: 4s
+      start_period: 90s
+      retries: 12
+    logging: *logging
+
+  frontend:
+    image: nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: [nginx, -g, "daemon off;"]
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "${HTTPS_BIND:-127.0.0.1}:${HTTPS_PORT:-8443}:8443"
+    volumes:
+      - type: bind
+        source: ./nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DEPLOY_RUNTIME_DIR}/artifacts/frontend
+        target: /usr/share/nginx/html
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DEPLOY_RUNTIME_DIR}/tls/server.crt
+        target: /etc/nginx/tls/server.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DEPLOY_RUNTIME_DIR}/tls/server.key
+        target: /etc/nginx/tls/server.key
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs: [/var/cache/nginx:mode=0755, /var/run:mode=0755, /tmp:mode=1777]
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [ingress, application]
+    healthcheck:
+      # Process/static readiness only. External TLS + API checks are separate.
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8081/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *logging
+
+secrets:
+  db_admin_password:
+    file: ${DEPLOY_RUNTIME_DIR}/secrets/db-admin-password
+  db_password:
+    file: ${DEPLOY_RUNTIME_DIR}/secrets/db-password
+  jwt_secret:
+    file: ${DEPLOY_RUNTIME_DIR}/secrets/jwt-secret
+  redis_password:
+    file: ${DEPLOY_RUNTIME_DIR}/secrets/redis-password
+  bootstrap_admin_password:
+    file: ${DEPLOY_RUNTIME_DIR}/secrets/bootstrap-admin-password
+
+networks:
+  ingress: {}
+  application:
+    internal: true
+  data:
+    internal: true
+
+volumes:
+  postgres_data: {}
+  redis_data: {}

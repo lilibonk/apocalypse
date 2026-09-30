@@ -36,8 +36,7 @@ public class OpenApiConfig {
   }
 
   @Bean
-  public OpenAPI apocalypseOpenAPI(
-      @Value("${spring.application.version:0.0.1-SNAPSHOT}") String version) {
+  public OpenAPI apocalypseOpenAPI(@Value("${spring.application.version:unknown}") String version) {
     return new OpenAPI()
         .info(new Info().title("Apocalypse API").version(version))
         .components(

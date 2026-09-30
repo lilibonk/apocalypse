@@ -225,7 +225,7 @@ function probe(generation: string, id = '1') {
 }
 
 async function run() {
-  accessLifecycle.reset(principal, client)
+  await accessLifecycle.reset(principal, client)
   await i18n.changeLanguage('zh')
   await authorize()
   const calendar = calendarQueries.contexts({})

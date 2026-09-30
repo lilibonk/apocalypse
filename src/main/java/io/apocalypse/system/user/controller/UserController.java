@@ -5,6 +5,7 @@ import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.log.OperLog;
 import io.apocalypse.framework.security.SecurityUtils;
+import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.user.dto.request.ResetPasswordReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
@@ -61,6 +62,12 @@ public class UserController {
           int size,
       @RequestParam(required = false) String keyword) {
     return userService.page(page, size, keyword);
+  }
+
+  @GetMapping("/department-options")
+  @PreAuthorize("hasAuthority('system:user:add') or hasAuthority('system:user:edit')")
+  public List<DeptTreeNode> departmentOptions(@RequestParam String operation) {
+    return userService.departmentOptions(operation);
   }
 
   /** 详情。 */

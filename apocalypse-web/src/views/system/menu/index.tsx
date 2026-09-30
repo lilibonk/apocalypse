@@ -2,7 +2,7 @@
  * 菜单管理（手写树页）：菜单树（目录/菜单/按钮）的增删改查。
  *
  * 树形展示 + 上级树选择越出标准 CRUD 模式（DynaTable 无树能力），
- * 按 AGENTS.md §4 逃逸舱原则手写；交互/视觉对齐 golden sample（views/_dev/user-handwritten.tsx）。
+ * 使用独立页面实现树交互；交互/视觉对齐现有手写页面（views/_dev/user-handwritten.tsx）。
  * 后端契约注意点集中在 ./menu.types.ts（响应字段是 type 而非 menuType；visible/status 已随树返回）。
  */
 

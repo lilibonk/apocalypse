@@ -50,12 +50,16 @@ export interface DynaFormField {
   help?: string
   /** select / radio 必填：静态选项。 */
   options?: DynaOption[]
+  /** Backend business labels (e.g. department names) remain raw. */
+  translateOptions?: boolean
   /** dict 必填：后端字典类型（react-query 调 /system/dict/data/type/{type}）。 */
   dictType?: string
   /** select / dict / radio 提交值类型：默认 string；'number' 时提交前 Number()（如状态位）。 */
   valueType?: 'string' | 'number'
   minLength?: number
   maxLength?: number
+  /** UTF-8 byte budget (e.g. bcrypt accepts at most 72 bytes). */
+  maxUtf8Bytes?: number
   /** number 字段的数值范围（校验用，表单内仍以 string 承载输入）。 */
   min?: number
   max?: number
@@ -91,6 +95,8 @@ export interface DynaColumn {
   dictType?: string
   /** 数据密集型日志页可将最多两列固定在操作列左侧。 */
   sticky?: 'right'
+  /** Static enum label mapping; values remain unchanged in the row/API. */
+  options?: DynaOption[]
 }
 
 /** 行操作：编辑（打开 DynaForm）。 */
@@ -234,10 +240,12 @@ const formFieldSchema = z
     placeholder: z.string().optional(),
     help: z.string().optional(),
     options: z.array(optionSchema).optional(),
+    translateOptions: z.boolean().optional(),
     dictType: z.string().min(1).optional(),
     valueType: z.enum(['string', 'number']).optional(),
     minLength: z.number().int().positive().optional(),
     maxLength: z.number().int().positive().optional(),
+    maxUtf8Bytes: z.number().int().positive().optional(),
     min: z.number().optional(),
     max: z.number().optional(),
     defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
@@ -287,6 +295,7 @@ const columnSchema = z
     type: z.enum(['text', 'dict', 'datetime']).optional(),
     dictType: z.string().min(1).optional(),
     sticky: z.literal('right').optional(),
+    options: z.array(optionSchema).optional(),
   })
   .check((ctx) => {
     const column = ctx.value

@@ -173,7 +173,7 @@ function deny(error: ApiError, queryScope?: ModuleScope) {
   return renderPage(queryScope)!
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   mountKey = null
   harness.principalEpoch = 1
@@ -284,14 +284,14 @@ describe('Dyna mutation denial recovery', () => {
       icon: null,
       sort: 0,
     })
-    accessLifecycle.reset(1, client)
-    accessLifecycle.accept(1, [menu], ['system:user:list'], client)
+    await accessLifecycle.reset(1, client)
+    await accessLifecycle.accept(1, [menu], ['system:user:list'], client)
     seed(scope)
     deny(new ApiError(40300, 'Former module context'), scope)
 
     await accessLifecycle.accept(1, [], [], client)
     expect(renderPage(scope)).toBeNull()
-    accessLifecycle.accept(1, [menu], ['system:user:list'], client)
+    await accessLifecycle.accept(1, [menu], ['system:user:list'], client)
     seed(scope)
     const restored = renderPage(scope)!
     expect(restored.table.error).toBeNull()

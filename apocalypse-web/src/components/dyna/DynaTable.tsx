@@ -56,6 +56,7 @@ export interface DynaTableProps {
 }
 
 function CellValue({ column, row }: { column: DynaColumn; row: Record<string, unknown> }) {
+  const t = useDynaText()
   const raw = row[column.key]
 
   if (column.type === 'dict' && column.dictType) {
@@ -68,6 +69,10 @@ function CellValue({ column, row }: { column: DynaColumn; row: Record<string, un
     return (
       <span className="text-muted-foreground">{String(raw).replace('T', ' ').slice(0, 19)}</span>
     )
+  }
+  if (column.options) {
+    const option = column.options.find((option) => option.value === String(raw))
+    return <>{option ? t(option.label) : t('unknownOption')}</>
   }
   return <>{String(raw)}</>
 }

@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 日志落库监听（AGENTS.md 约定：登录/操作日志一律事件驱动——framework 发事件、本域监听落库）。 {@code @ApplicationModuleListener} =
- * 事务提交后异步消费 + event_publication 留痕。监听器不吞异常：失败事件保持未完成并由 Modulith 重投；日志表以 event_id 唯一键保证重复投递幂等。
+ * 日志落库监听：framework 发布登录与操作日志事件，本域监听落库。{@code @ApplicationModuleListener} = 事务提交后异步消费 +
+ * event_publication 留痕。监听器不吞异常：失败事件保持未完成并由 Modulith 重投；日志表以 event_id 唯一键保证重复投递幂等。
  */
 @Component
 @RequiredArgsConstructor

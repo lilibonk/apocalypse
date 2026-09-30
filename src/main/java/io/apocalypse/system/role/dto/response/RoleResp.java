@@ -9,4 +9,5 @@ public record RoleResp(
     String roleKey,
     Integer sort,
     Integer status,
-    @Schema(nullable = true) String remark) {}
+    @Schema(nullable = true) String remark,
+    @Schema(allowableValues = {"ALL", "DEPT", "DEPT_AND_CHILDREN"}) String dataScope) {}

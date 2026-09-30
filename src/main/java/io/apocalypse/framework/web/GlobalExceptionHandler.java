@@ -15,13 +15,14 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 全局异常处理器：统一将异常转换为 {@link R} 响应（HTTP 200，业务码区分错误）。 约定见 AGENTS.md——Controller 不手写 try-catch，业务错误抛
- * {@link BizException}。
+ * 全局异常处理器：统一将异常转换为 {@link R} 响应（HTTP 200，业务码区分错误）。Controller 不手写 try-catch，业务错误抛 {@link
+ * BizException}。
  */
 @Slf4j
 @RestControllerAdvice
@@ -68,9 +69,9 @@ public class GlobalExceptionHandler {
     return R.fail(ErrorCode.UNAUTHORIZED);
   }
 
-  /** 静态资源/路径不存在（Spring 6.1+ 默认抛 NoResourceFoundException）。 */
-  @ExceptionHandler(NoResourceFoundException.class)
-  public R<Void> handleNoResourceFound(NoResourceFoundException e) {
+  /** 无匹配路由或资源；生产关闭静态映射后也保持相同的 NOT_FOUND 契约。 */
+  @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+  public R<Void> handleNotFound(Exception e) {
     return R.fail(ErrorCode.NOT_FOUND);
   }
 

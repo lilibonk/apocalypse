@@ -20,7 +20,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 分层规则测试（AGENTS.md 红线 3/5 的执法者）。只分析主代码，不依赖容器，可独立运行。 */
+/** 分层规则测试。只分析主代码，不依赖容器，可独立运行。 */
 @AnalyzeClasses(
     packages = "io.apocalypse",
     importOptions = {

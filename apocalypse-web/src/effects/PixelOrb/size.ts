@@ -29,7 +29,7 @@ export function nearestOrbSize(size: number): number {
  */
 export function orbUnit(size: number): number {
   if (isValidOrbSize(size)) return size / ORB_GRID
-  const message = `PixelOrb size 必须是 384/256/128/64/32 之一，收到 ${size}。见 docs/brand-slime/solution-fit.md`
+  const message = `PixelOrb size 必须是 384/256/128/64/32 之一，收到 ${size}。`
   if (import.meta.env.DEV) {
     throw new Error(message)
   }

@@ -1,5 +1,5 @@
 /**
- * PixelWave 双场纯函数契约（v2.11，docs/pixel-wave-spec.md §23）：
+ * PixelWave 双场纯函数契约：
  * cellHash 确定性与值域、squareCoord 方形环坐标（切比雪夫距离）、equalDivision
  * 等分切割、fireBase/fireWaveIndex/cellLit 点火时序（从左下角开始、方形环
  * 传导、停留后恢复）、场计算推进方向与密度有界、typeHue 确定性与包裹、

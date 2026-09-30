@@ -4,7 +4,7 @@
 spring:
   application:
     name: apocalypse
-    version: 0.0.1-SNAPSHOT
+    version: test
   profiles:
     active: dev
 

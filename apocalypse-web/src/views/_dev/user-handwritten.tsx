@@ -6,6 +6,8 @@
  * 需要越出标准 CRUD 模式时，以此为底本复制到手写页面（逃逸舱）。
  */
 
+import { submitForm } from '@/lib/form-submit'
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
@@ -311,7 +313,12 @@ export default function UserPageHandwritten() {
           </DialogHeader>
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}
+              onSubmit={(event) =>
+                submitForm(
+                  form.handleSubmit((values) => saveMutation.mutate(values))(event),
+                  '保存失败',
+                )
+              }
               className="space-y-4"
             >
               <FormField

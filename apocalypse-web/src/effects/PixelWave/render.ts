@@ -1,5 +1,5 @@
 /**
- * PixelWave Canvas 渲染（v2.10，docs/pixel-wave-spec.md §22）。
+ * PixelWave Canvas 渲染。
  *
  * 只画 ON 格，表达为**彩色淡流光**：方块本体即页面背景（白底白块 / 黑底黑块，
  * 透明即底色），每格绘制 ① 柔和半透彩色软填充（alpha = WAVE_FILL_ALPHA，统一

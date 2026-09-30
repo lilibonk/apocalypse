@@ -1,4 +1,4 @@
-/** Explicit local-only acceptance build; normal `pnpm build` does not publish this document. */
+/** Separate brand preview fixture; normal `pnpm build` does not include it. */
 import path from 'node:path'
 
 import { defineConfig, mergeConfig } from 'vite'
@@ -10,7 +10,7 @@ export default mergeConfig(
   defineConfig({
     build: {
       outDir: 'dist-brand-qa',
-      rollupOptions: { input: path.resolve(__dirname, 'docs/brand-slime/preview.html') },
+      rollupOptions: { input: path.resolve(__dirname, 'test-fixtures/brand-slime.html') },
     },
   }),
 )

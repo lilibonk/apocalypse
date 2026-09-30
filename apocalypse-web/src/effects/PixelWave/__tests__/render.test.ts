@@ -1,5 +1,5 @@
 /**
- * PixelWave 渲染契约（v2.9，docs/pixel-wave-spec.md §21）：
+ * PixelWave 渲染契约：
  * 只画 ON 格（field === 1），每格 = 半透软填充（alpha = WAVE_FILL_ALPHA）+
  * 4 条淡彩边框（alpha = WAVE_BORDER_ALPHA，厚度 blockSize/10 夹下限 2）；
  * 按 hue 道分桶设色（每道至多一次 fillStyle 赋值）、空道不设色不绘制、

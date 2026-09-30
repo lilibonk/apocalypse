@@ -33,7 +33,7 @@ describe('menu access reconciliation after /me', () => {
     const client = new QueryClient()
     const retain = useTabsStore.getState().retainAllowed
     const lifecycle = new AccessLifecycle()
-    lifecycle.accept(0, calendarMenus, ['read'], client)
+    await lifecycle.accept(0, calendarMenus, ['read'], client)
     const lease = lifecycle.capture('calendar', ['read'])
     const key = ['module', 'calendar', lease.key, 'days']
     client

@@ -25,6 +25,7 @@ export interface DynaDetailProps {
 }
 
 function DetailValue({ field, record }: { field: DynaColumn; record: Record<string, unknown> }) {
+  const t = useDynaText()
   const raw = record[field.key]
 
   if (field.type === 'dict' && field.dictType) {
@@ -35,6 +36,10 @@ function DetailValue({ field, record }: { field: DynaColumn; record: Record<stri
   }
   if (field.type === 'datetime') {
     return <>{String(raw).replace('T', ' ').slice(0, 19)}</>
+  }
+  if (field.options) {
+    const option = field.options.find((option) => option.value === String(raw))
+    return <>{option ? t(option.label) : t('unknownOption')}</>
   }
   return <>{String(raw)}</>
 }

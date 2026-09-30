@@ -1,0 +1,1 @@
+Test-only classpath resource. Production must not serve this file, even to authenticated users.

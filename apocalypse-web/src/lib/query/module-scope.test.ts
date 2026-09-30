@@ -23,10 +23,10 @@ const menus = ['calendar', 'fixture'].map((moduleKey) =>
   }),
 )
 let client: QueryClient
-beforeEach(() => {
+beforeEach(async () => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 60_000 } } })
-  accessLifecycle.reset(0, client)
-  accessLifecycle.accept(0, menus, [...calendarScope.requiredPerms, 'fixture:list'], client)
+  await accessLifecycle.reset(0, client)
+  await accessLifecycle.accept(0, menus, [...calendarScope.requiredPerms, 'fixture:list'], client)
 })
 afterEach(() => client.clear())
 
@@ -71,7 +71,7 @@ describe('single query ownership', () => {
     resource.setData(client, captured, { id: '1' }, { id: '1', name: 'Updated' })
     expect(client.getQueryData(options.queryKey)?.name).toBe('Updated')
     await accessLifecycle.accept(0, [], [], client)
-    accessLifecycle.accept(0, menus, ['fixture:list'], client)
+    await accessLifecycle.accept(0, menus, ['fixture:list'], client)
     expect(() =>
       resource.setData(client, captured, { id: '1' }, { id: '1', name: 'Old' }),
     ).toThrow()

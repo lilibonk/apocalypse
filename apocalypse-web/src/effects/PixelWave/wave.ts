@@ -1,5 +1,5 @@
 /**
- * PixelWave 双场计算（v2.11，docs/pixel-wave-spec.md §23）。
+ * PixelWave 双场计算。
  *
  * flowlight：保留稀疏方形环 + 对角走廊，服务加载与空状态。
  * letterpress：登录专用完整网格，从随机角点发射欧氏波前，快速指数抬升后以

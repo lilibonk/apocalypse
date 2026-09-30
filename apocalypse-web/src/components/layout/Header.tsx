@@ -107,9 +107,9 @@ export function Header({
               variant="ghost"
               size="sm"
               className="gap-1.5 text-muted-foreground"
-              onClick={() =>
-                menu.path && navigate(menu.path.startsWith('/') ? menu.path : `/${menu.path}`)
-              }
+              onClick={() => {
+                if (menu.path) navigate(menu.path.startsWith('/') ? menu.path : `/${menu.path}`)
+              }}
             >
               <MenuIcon name={menu.icon} className="size-3.5" />
               {menuTitle(menu.menuName)}

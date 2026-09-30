@@ -134,6 +134,8 @@ export const zh = {
       msgMax: '{{label}}不能大于 {{max}}',
       msgMaxLen: '{{label}}最长 {{max}} 字符',
       msgMinLen: '{{label}}至少 {{min}} 字符',
+      msgMaxBytes: '{{label}}的 UTF-8 编码不得超过 {{max}} 字节',
+      unknownOption: '未知选项',
       每页: '每页',
       每页条数: '每页条数',
       条: '条',

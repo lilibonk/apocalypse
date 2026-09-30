@@ -5,7 +5,7 @@
  */
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useForm, type Control, type Resolver } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { PixelScale } from '@/effects/PixelWave'
+import { submitForm } from '@/lib/form-submit'
 
 import {
   buildFormValidator,
@@ -52,6 +53,8 @@ export interface DynaFormProps {
   /** 编辑态回填的行数据。 */
   initialRow?: Record<string, unknown> | null
   submitting: boolean
+  submitDisabled?: boolean
+  feedback?: ReactNode
   onOpenChange: (open: boolean) => void
   /** 收到的是已转换的提交 body（空串已剔除、number 已转换）。 */
   onSubmit: (body: Record<string, unknown>) => void
@@ -147,7 +150,7 @@ function FieldControl({
                   </FieldOption>
                   {options.map((option) => (
                     <FieldOption key={option.value} value={option.value}>
-                      {t(option.label)}
+                      {field.translateOptions === false ? option.label : t(option.label)}
                     </FieldOption>
                   ))}
                 </FieldSelect>
@@ -163,7 +166,7 @@ function FieldControl({
                   {options.map((option) => (
                     <label key={option.value} className="flex items-center gap-2 text-sm">
                       <RadioGroupItem value={option.value} />
-                      {t(option.label)}
+                      {field.translateOptions === false ? option.label : t(option.label)}
                     </label>
                   ))}
                 </RadioGroup>
@@ -225,11 +228,18 @@ export function DynaForm({
   open,
   initialRow,
   submitting,
+  submitDisabled = false,
+  feedback,
   onOpenChange,
   onSubmit,
 }: DynaFormProps) {
   const t = useDynaText()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const resetContext = useRef<{
+    open: boolean
+    mode: 'create' | 'edit'
+    row: DynaFormProps['initialRow']
+  } | null>(null)
   const fields = useMemo(() => visibleFields(config.fields, mode), [config.fields, mode])
   // 校验消息走 dyna.msg* 插值模板；label 先翻译再进模板（切语言时随 t 重建校验器）
   const validator = useMemo(
@@ -251,7 +261,11 @@ export function DynaForm({
 
   // 对话框每次打开时按模式重置（新增 → 默认值；编辑 → 行数据回填）
   useEffect(() => {
+    const previous = resetContext.current
+    resetContext.current = { open, mode, row: initialRow }
     if (!open) return
+    // Loading new choices or changing their labels must not erase an in-progress form.
+    if (previous?.open && previous.mode === mode && previous.row === initialRow) return
     form.reset(
       mode === 'edit' && initialRow
         ? rowToFormValues(fields, initialRow)
@@ -281,11 +295,18 @@ export function DynaForm({
             {mode === 'edit' ? t('修改后点击保存生效') : t('填写以下信息完成创建')}
           </DialogDescription>
         </DialogHeader>
+        {feedback}
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit((values) =>
-              onSubmit(formValuesToBody(fields, values, mode)),
-            )}
+            onSubmit={(event) =>
+              submitForm(
+                form.handleSubmit((values) => {
+                  if (!submitDisabled && !submitting)
+                    onSubmit(formValuesToBody(fields, values, mode))
+                })(event),
+                t('保存失败'),
+              )
+            }
             className="grid grid-cols-2 gap-6"
           >
             <div className="col-span-2 grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -304,7 +325,7 @@ export function DynaForm({
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                   {t('取消')}
                 </Button>
-                <Button type="submit" disabled={submitting}>
+                <Button type="submit" disabled={submitting || submitDisabled}>
                   {submitting && <PixelScale variant="inline" tone="current" />}
                   {submitting ? t('保存中…') : t('保存')}
                 </Button>

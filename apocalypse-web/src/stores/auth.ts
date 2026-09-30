@@ -1,26 +1,27 @@
-/**
- * 认证状态：令牌对、当前用户视图（用户/角色/权限/菜单）、登录/登出/刷新。
- *
- * 持久化：仅 tokens 落 localStorage（经 zustand persist，全项目唯一合法入口，
- * 业务代码禁止直接操作 localStorage）。用户视图每次启动经 ensureMe() 重取。
- *
- * 刷新机制：/auth/refresh 旋转换新已联调可用；历史持久化态无 refreshToken 时
- * tryRefresh 短路为 false → 40100 直接登出重登。
- */
-
+/** Browser access is memory-only; HttpOnly refresh rotates under an origin-wide Web Lock. */
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 import { queryClient } from '@/app/query-client'
 import { ApiError, configureClient } from '@/lib/api/client'
 import * as authApi from '@/lib/api/auth'
 import { normalizeMenuNode, type MenuNode, type TokenPair, type UserInfo } from '@/lib/api/types'
+import {
+  publishBrowserSessionChange,
+  subscribeBrowserSessionChange,
+  subscribeBrowserSessionRestore,
+  supportsBrowserSessionLock,
+  withBrowserSessionLock,
+} from '@/lib/browser-session'
 import { accessLifecycle } from '@/lib/query/access-lease'
 
 let loginSequence = 0
 let meSequence = 0
 let refreshFlight: { epoch: number; promise: Promise<boolean> } | undefined
+let bootstrapFlight: { epoch: number; promise: Promise<void> } | undefined
 let refreshingToken: string | undefined
+// Keep legacy cleanup inside Zustand's storage boundary, with no new persistence writes.
+const legacyAuthStorage = createJSONStorage<Record<string, never>>(() => window.localStorage)
 
 interface AuthState {
   tokens: TokenPair | null
@@ -28,15 +29,16 @@ interface AuthState {
   roles: string[]
   perms: string[]
   menus: MenuNode[]
-  /** 当前用户视图是否已加载（路由守卫据此决定是否等待）。 */
   meLoaded: boolean
-  /** 本地身份代次：阻止上一账户或上一令牌发起的在途请求覆盖当前身份。 */
+  /** Cookie bootstrap must finish before a protected URL redirects to login. */
+  bootstrapped: boolean
+  /** Old account requests and callbacks cannot cross an identity boundary. */
   sessionEpoch: number
-
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
-  /** 仅清理本地状态：供 401/刷新失败兜底，禁止作为产品主动注销动作。 */
+  /** Local invalidation only; never mutates another tab's shared cookie. */
   clearSession: () => void
+  bootstrap: () => Promise<void>
   ensureMe: () => Promise<void>
   hasPerm: (perm: string) => boolean
   tryRefresh: () => Promise<boolean>
@@ -51,39 +53,50 @@ export const useAuthStore = create<AuthState>()(
       perms: [],
       menus: [],
       meLoaded: false,
+      bootstrapped: false,
       sessionEpoch: 0,
 
       async login(username, password) {
         const attempt = ++loginSequence
         const epoch = get().sessionEpoch
-        let tokens: TokenPair
-        try {
-          tokens = await authApi.login(username, password)
-        } catch (error) {
-          if (attempt !== loginSequence || epoch !== get().sessionEpoch) return
-          throw error
-        }
-        if (attempt !== loginSequence || epoch !== get().sessionEpoch) return
-        // Query keys intentionally do not contain user identity. A successful account switch must
-        // therefore remove every query and mutation before the new credentials become active.
-        queryClient.clear()
-        accessLifecycle.reset(epoch + 1, queryClient)
-        set((state) => ({
-          tokens,
-          user: null,
-          roles: [],
-          perms: [],
-          menus: [],
-          meLoaded: false,
-          sessionEpoch: state.sessionEpoch + 1,
-        }))
-        await get().ensureMe()
+        const current = () => attempt === loginSequence && epoch === get().sessionEpoch
+        return withBrowserSessionLock(async () => {
+          if (!current()) return false
+          let tokens: TokenPair
+          try {
+            tokens = await authApi.login(username, password)
+          } catch (error) {
+            if (!current()) return false
+            throw error
+          }
+          if (!current()) return false
+          queryClient.clear()
+          await accessLifecycle.reset(epoch + 1, queryClient)
+          if (!current()) return false
+          set({
+            tokens,
+            user: null,
+            roles: [],
+            perms: [],
+            menus: [],
+            meLoaded: false,
+            bootstrapped: false,
+            sessionEpoch: epoch + 1,
+          })
+          await get().ensureMe()
+          const accepted = await waitForCurrentUser(get().sessionEpoch, tokens.accessToken)
+          if (!accepted) return false
+          set({ bootstrapped: true })
+          publishBrowserSessionChange()
+          return true
+        })
       },
 
       clearSession() {
         loginSequence++
         meSequence++
-        accessLifecycle.reset(get().sessionEpoch + 1, queryClient)
+        // Invalidation and abort are synchronous; QueryClient cancellation handles rejection.
+        void accessLifecycle.reset(get().sessionEpoch + 1, queryClient)
         set((state) => ({
           tokens: null,
           user: null,
@@ -91,6 +104,7 @@ export const useAuthStore = create<AuthState>()(
           perms: [],
           menus: [],
           meLoaded: false,
+          bootstrapped: true,
           sessionEpoch: state.sessionEpoch + 1,
         }))
         queryClient.clear()
@@ -98,17 +112,44 @@ export const useAuthStore = create<AuthState>()(
 
       async logout() {
         const epoch = get().sessionEpoch
+        const sequence = loginSequence
         if (!get().tokens) {
           get().clearSession()
           return
         }
-        try {
-          await authApi.logout()
-        } catch (error) {
-          if (epoch !== get().sessionEpoch) return
-          throw error
+        await withBrowserSessionLock(async () => {
+          if (epoch !== get().sessionEpoch || sequence !== loginSequence) return
+          try {
+            await authApi.logout()
+          } catch (error) {
+            if (epoch !== get().sessionEpoch || sequence !== loginSequence) return
+            // An invalid cookie cannot confirm server revocation, but its identity is unusable.
+            // Clear only this tab; another tab may already own a freshly rotated shared cookie.
+            if (error instanceof ApiError && error.code === 40100) get().clearSession()
+            throw error
+          }
+          if (epoch === get().sessionEpoch && sequence === loginSequence) get().clearSession()
+          // Receivers re-read the current cookie under the lock rather than trusting stale signals.
+          publishBrowserSessionChange()
+        })
+      },
+
+      async bootstrap() {
+        if (get().bootstrapped) return
+        const epoch = get().sessionEpoch
+        if (bootstrapFlight?.epoch === epoch) return bootstrapFlight.promise
+        const sequence = loginSequence
+        const run = async () => {
+          await get().tryRefresh()
+          if (sequence === loginSequence) set({ bootstrapped: true })
         }
-        if (epoch === get().sessionEpoch) get().clearSession()
+        const flight = { epoch, promise: run() }
+        bootstrapFlight = flight
+        try {
+          await flight.promise
+        } finally {
+          if (bootstrapFlight === flight) bootstrapFlight = undefined
+        }
       },
 
       async ensureMe() {
@@ -116,6 +157,7 @@ export const useAuthStore = create<AuthState>()(
         const accessToken = get().tokens?.accessToken
         if (!accessToken || accessToken === refreshingToken) return
         const sequence = ++meSequence
+        const priorUserId = get().user?.id
         const current = () =>
           sequence === meSequence &&
           get().sessionEpoch === sessionEpoch &&
@@ -124,11 +166,27 @@ export const useAuthStore = create<AuthState>()(
           const me = await authApi.fetchCurrentUser()
           if (!current()) return
           const menus = (me.menus ?? []).map(normalizeMenuNode)
-          accessLifecycle.accept(sessionEpoch, menus, me.perms, queryClient)
-          set({ user: me.user, roles: me.roles, perms: me.perms, menus, meLoaded: true })
+          const changedIdentity = priorUserId !== undefined && priorUserId !== me.user.id
+          const nextEpoch = changedIdentity ? sessionEpoch + 1 : sessionEpoch
+          if (changedIdentity) {
+            // Shared cookie may have switched accounts in another tab. Clear ALL ownership first.
+            queryClient.clear()
+            await accessLifecycle.reset(nextEpoch, queryClient)
+            if (!current()) return
+          }
+          await accessLifecycle.accept(nextEpoch, menus, me.perms, queryClient)
+          if (!current()) return
+          set({
+            user: me.user,
+            roles: me.roles,
+            perms: me.perms,
+            menus,
+            meLoaded: true,
+            sessionEpoch: nextEpoch,
+          })
+          if (changedIdentity) publishBrowserSessionChange()
         } catch (error) {
           if (!current()) return
-          // /me does not recurse in the interceptor. One store-owned refresh may bootstrap it.
           if (error instanceof ApiError && error.code === 40100 && !refreshFlight) {
             if (await get().tryRefresh()) return
             if (!current()) return
@@ -143,40 +201,47 @@ export const useAuthStore = create<AuthState>()(
       },
 
       async tryRefresh() {
-        const current = get().tokens
-        if (!current?.refreshToken) return false
-        const refreshToken = current.refreshToken
         const sessionEpoch = get().sessionEpoch
         if (refreshFlight?.epoch === sessionEpoch) return refreshFlight.promise
-        refreshingToken = current.accessToken
+        // Do not rotate or clear the shared cookie without cross-tab mutual exclusion.
+        if (!supportsBrowserSessionLock()) {
+          get().clearSession()
+          return false
+        }
+        const originalToken = get().tokens?.accessToken
+        const sequence = loginSequence
+        const current = () =>
+          get().sessionEpoch === sessionEpoch &&
+          get().tokens?.accessToken === originalToken &&
+          sequence === loginSequence
+        refreshingToken = originalToken
         meSequence++
-        accessLifecycle.pause(queryClient)
+        // Must register single-flight before yielding; pause aborts stale leases synchronously.
+        void accessLifecycle.pause(queryClient)
+        queryClient.clear()
         set({ meLoaded: false })
+        let rotatedAccess: string | undefined
         const run = async () => {
           try {
-            const tokens = await authApi.refreshToken(refreshToken)
-            if (
-              get().sessionEpoch !== sessionEpoch ||
-              get().tokens?.refreshToken !== current.refreshToken
-            ) {
-              return false
-            }
-            // Finish /me bootstrap before making the new authorization generation available.
-            set({
-              tokens,
-              user: null,
-              roles: [],
-              perms: [],
-              menus: [],
-              meLoaded: false,
+            return await withBrowserSessionLock(async () => {
+              if (!current()) return false
+              const tokens = await authApi.refreshToken()
+              if (!current()) return false
+              rotatedAccess = tokens.accessToken
+              // Keep the previous user solely for identity comparison; no authorized UI is mounted.
+              set({ tokens, roles: [], perms: [], menus: [], meLoaded: false })
+              refreshingToken = undefined
+              await get().ensureMe()
+              const epoch = get().sessionEpoch
+              await waitForCurrentUser(epoch, tokens.accessToken)
+              return get().tokens?.accessToken === tokens.accessToken && get().meLoaded
             })
-            refreshingToken = undefined
-            await get().ensureMe()
-            // RequireAuth may start a newer /me when the rotated tokens reach its effect.
-            // A superseded bootstrap returning does not mean the current one has failed.
-            return await waitForCurrentUser(sessionEpoch, tokens.accessToken)
           } catch {
-            if (get().sessionEpoch === sessionEpoch) get().clearSession()
+            if (
+              sequence === loginSequence &&
+              (get().sessionEpoch === sessionEpoch || get().tokens?.accessToken === rotatedAccess)
+            )
+              get().clearSession()
             return false
           }
         }
@@ -194,12 +259,24 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'apocalypse.auth',
-      partialize: (state) => ({ tokens: state.tokens }),
+      version: 1,
+      storage: legacyAuthStorage
+        ? { ...legacyAuthStorage, setItem: (name) => legacyAuthStorage.removeItem(name) }
+        : undefined,
+      // Upgrade discards old JSON refresh/access. Never send it to the new browser endpoints.
+      migrate: () => ({}),
+      merge: (_persisted, current) => current,
+      partialize: () => ({}),
+      onRehydrateStorage: () => () => {
+        // Migration can finish asynchronously and write its empty version metadata afterward.
+        queueMicrotask(() => useAuthStore.persist?.clearStorage())
+      },
     },
   ),
 )
+// The legacy key is deleted through the only authorized storage boundary, Zustand persist.
+useAuthStore.persist?.clearStorage()
 
-/** Wait for the latest same-token bootstrap, or stop when that identity/token is replaced. */
 function waitForCurrentUser(sessionEpoch: number, accessToken: string): Promise<boolean> {
   const outcome = () => {
     const state = useAuthStore.getState()
@@ -219,15 +296,30 @@ function waitForCurrentUser(sessionEpoch: number, accessToken: string): Promise<
   })
 }
 
-// client ↔ store 解耦接线（模块加载即完成一次）
+/** Start once at the application boundary, never from an isolated test fixture import. */
+export function startBrowserSessionSync(): () => void {
+  const stopChanges = subscribeBrowserSessionChange(() => {
+    useAuthStore.getState().clearSession()
+    useAuthStore.setState({ bootstrapped: false })
+    void useAuthStore.getState().bootstrap()
+  })
+  const stopRestoration = subscribeBrowserSessionRestore(() => {
+    const state = useAuthStore.getState()
+    // Reload has its own bootstrap; a pending refresh already owns revalidation.
+    if (state.bootstrapped && state.tokens && state.meLoaded) void state.tryRefresh()
+  })
+  return () => {
+    stopChanges()
+    stopRestoration()
+  }
+}
+
 configureClient({
   getAccessToken: () => useAuthStore.getState().tokens?.accessToken ?? null,
   getPrincipalEpoch: () => useAuthStore.getState().sessionEpoch,
   tryRefresh: () => useAuthStore.getState().tryRefresh(),
   onUnauthorized: () => {
     useAuthStore.getState().clearSession()
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.assign('/login')
-    }
+    if (!window.location.pathname.startsWith('/login')) window.location.assign('/login')
   },
 })

@@ -17,20 +17,24 @@ const tracked = new Set(
 
 const published = [
   "README.md",
-  "AGENTS.md",
+  "CHANGELOG.md",
   "THIRD_PARTY_NOTICES.md",
   "apocalypse-web/README.md",
-  "apocalypse-web/AGENTS.md",
   "apocalypse-web/src/design/DEFINITION.md",
+  "apocalypse-web/src/design/MOTION.md",
   "apocalypse-web/src/effects/README.md",
   "docs/README.md",
   "docs/getting-started.md",
   "docs/module-development.md",
   "docs/operations.md",
+  "docs/deployment.md",
+  "docs/audit-recovery.md",
   "docs/release.md",
-  ...[...tracked]
-    .filter((name) => name.startsWith("docs/calendar/") && name.endsWith(".md"))
-    .sort(),
+  "docs/calendar/README.md",
+  "docs/calendar/api.md",
+  "docs/calendar/configuration.md",
+  "docs/calendar/data-update-sop.md",
+  "docs/calendar/operations-and-retention.md",
 ];
 
 const problems = [];

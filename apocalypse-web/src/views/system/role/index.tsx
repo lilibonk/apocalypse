@@ -40,6 +40,7 @@ import {
 
 import { GRANT_USERS_PAGE_SIZE, loadAssignedUserIds } from './grant-users'
 import schema from './role.schema'
+import { localizeRoleSchema, RoleForm } from './RoleForm'
 
 type Row = Record<string, unknown>
 
@@ -705,6 +706,8 @@ export function GrantUsersDialog({ role, onClose }: { role: GrantTarget; onClose
 }
 
 export default function RolePage() {
+  const { t } = useTranslation('system')
+  const localizedSchema = useMemo(() => localizeRoleSchema(schema, t), [t])
   const [grantingMenus, setGrantingMenus] = useState<GrantTarget | null>(null)
   const [grantingUsers, setGrantingUsers] = useState<GrantTarget | null>(null)
 
@@ -718,7 +721,7 @@ export default function RolePage() {
 
   return (
     <>
-      <DynaPage schema={schema} customActions={customActions} />
+      <DynaPage schema={localizedSchema} customActions={customActions} formComponent={RoleForm} />
       <GrantMenusDialog role={grantingMenus} onClose={() => setGrantingMenus(null)} />
       {grantingUsers && (
         <GrantUsersDialog

@@ -14,8 +14,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -32,8 +36,14 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
 
   @Autowired private PlatformTransactionManager transactionManager;
 
+  @BeforeEach
+  void authenticate() {
+    authenticateAdmin();
+  }
+
   @AfterEach
   void cleanup() {
+    SecurityContextHolder.clearContext();
     jdbcTemplate.update("DELETE FROM sys_dept WHERE dept_name LIKE 'it-dept-hierarchy-%'");
   }
 
@@ -51,6 +61,7 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
               () ->
                   transaction.execute(
                       status -> {
+                        authenticateAdmin();
                         deptService.update(firstId, request(secondId, "concurrent-first"));
                         firstUpdated.countDown();
                         awaitLatch(releaseFirst);
@@ -62,6 +73,7 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
             executor.submit(
                 () -> {
                   try {
+                    authenticateAdmin();
                     deptService.update(secondId, request(firstId, "concurrent-second"));
                     return 0;
                   } catch (BizException exception) {
@@ -80,7 +92,7 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
                               SELECT EXISTS (
                                 SELECT 1 FROM pg_locks
                                 WHERE locktype = 'advisory' AND NOT granted
-                                  AND objid = (hashtext('system-dept-hierarchy')::bigint
+                                  AND objid = (hashtext('system-data-scope')::bigint
                                     & 4294967295)::oid
                               )
                               """,
@@ -168,6 +180,18 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
     deptService.delete(secondRoot);
     deptService.delete(firstRoot);
     assertThat(sysDeptMapper.selectSubTree(secondRoot)).isEmpty();
+  }
+
+  private static void authenticateAdmin() {
+    Jwt jwt =
+        Jwt.withTokenValue("hierarchy-fixture")
+            .header("alg", "HS256")
+            .subject("admin")
+            .claim("uid", 1L)
+            .claim("type", "access")
+            .build();
+    SecurityContextHolder.getContext()
+        .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
   }
 
   private Long create(Long parentId, String name) {
