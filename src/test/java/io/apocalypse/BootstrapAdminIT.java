@@ -15,16 +15,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 固定管理员凭证回归：全量迁移默认禁用已知 V1 凭证，且不覆盖已经人工改密的管理员。 */
+/** 首版管理员基线：空库默认禁用，重复迁移不覆盖人工改密，一次性初始化保持原子性。 */
 class BootstrapAdminIT extends AbstractIntegrationTest {
 
   @Autowired private UserService userService;
 
   @Test
-  void freshMigrationLeavesLegacyAdminDisabled() {
+  void freshBaselineLeavesBootstrapAdminDisabled() {
     String schema = freshSchema("bootstrap_disabled");
     try {
-      migrate(schema, null);
+      migrate(schema);
 
       Integer status =
           jdbcTemplate.queryForObject(
@@ -35,22 +35,42 @@ class BootstrapAdminIT extends AbstractIntegrationTest {
               String.class);
       assertThat(status).isZero();
       assertThat(password).isEqualTo("{bootstrap-disabled}");
+      assertThat(
+              jdbcTemplate.queryForList(
+                  "SELECT version FROM "
+                      + schema
+                      + ".flyway_schema_history WHERE success AND type = 'SQL'",
+                  String.class))
+          .containsExactly("1");
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT data_scope FROM " + schema + ".sys_role WHERE role_key = 'admin'",
+                  String.class))
+          .isEqualTo("ALL");
+      jdbcTemplate.update(
+          "INSERT INTO "
+              + schema
+              + ".sys_role (id, role_name, role_key) VALUES (2, '新角色', 'baseline-default')");
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT data_scope FROM " + schema + ".sys_role WHERE id = 2", String.class))
+          .isEqualTo("DEPT");
     } finally {
       jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
     }
   }
 
   @Test
-  void remediationDoesNotOverwriteChangedAdminPassword() {
+  void repeatedMigrationDoesNotOverwriteChangedAdminPassword() {
     String schema = freshSchema("bootstrap_preserved");
     try {
-      migrate(schema, "6");
+      migrate(schema);
       jdbcTemplate.update(
           "UPDATE "
               + schema
-              + ".sys_user SET password = 'custom-private-hash' WHERE username = 'admin'");
+              + ".sys_user SET password = 'custom-private-hash', status = 1 WHERE username = 'admin'");
 
-      migrate(schema, null);
+      migrate(schema);
 
       String password =
           jdbcTemplate.queryForObject(
@@ -111,17 +131,14 @@ class BootstrapAdminIT extends AbstractIntegrationTest {
     }
   }
 
-  private void migrate(String schema, String target) {
-    var configuration =
-        Flyway.configure()
-            .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas(schema)
-            .defaultSchema(schema)
-            .locations("classpath:db/migration");
-    if (target != null) {
-      configuration.target(target);
-    }
-    configuration.load().migrate();
+  private void migrate(String schema) {
+    Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas(schema)
+        .defaultSchema(schema)
+        .locations("classpath:db/migration")
+        .load()
+        .migrate();
   }
 
   private static String freshSchema(String prefix) {

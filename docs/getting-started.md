@@ -13,6 +13,8 @@ cd apocalypse
 
 在仓库根目录确认 `java -version` 是 25，Docker daemon 已运行。当前 shell 中为 JWT 生成私有签名密钥，并输入符合至少 8 位、同时含字母和数字、最多 72 UTF-8 字节要求的首次管理员密码：
 
+首版只支持空库安装。若本机已有开发期数据库，先停止后端并按[开发库重建](operations.md#开发库重建)清空该开发 Compose 的数据卷，再执行以下启动步骤。
+
 ```bash
 export JWT_SECRET="$(openssl rand -hex 32)"
 printf '首次 admin 密码: '

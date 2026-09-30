@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-/** 部门管理端点。按 V3 菜单种子 perms 鉴权（{@code system:dept:*}），写操作落操作日志。 */
+/** 部门管理端点。按初始基线菜单种子 perms 鉴权（{@code system:dept:*}），写操作落操作日志。 */
 @RestController
 @RequestMapping("/system/depts")
 @RequiredArgsConstructor

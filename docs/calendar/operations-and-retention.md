@@ -35,8 +35,8 @@
 
 ## 迁移与回滚
 
-- Flyway 只向前；Calendar 使用 V8/V9/V10，禁用仍保留 Schema。不能修改已应用脚本、倒退 schema history 或删除 Calendar 表来关闭功能。
-- 现有开发库的历史 V1 checksum 不一致须独立处理：先备份、取得实际 schema/history 与预期文件的差异，人工决定 repair/前向修复/重建可丢弃环境。本项目任务没有执行这些动作。
+- Calendar Schema 包含在首版 V1 初始基线中，禁用仍保留。首版冻结后 Flyway 只向前追加；不能修改已应用发行脚本、倒退 schema history 或删除 Calendar 表来关闭功能。
+- 开发期 V1–V11 的数据库不支持原地迁入首版，须按[开发库重建](../operations.md#开发库重建)重新初始化。不要用 repair 或删除 history 绕过校验。
 - 接入已有非 Flyway 数据库时，基线版本必须根据实际结构核验后显式选定，不能用 `baseline-on-migrate=true` 自动掩盖缺失迁移。
 - 代码回滚与数据回滚分离：优先关闭 capability/排空受影响流量；只回退到能读取当前 Schema/数据版本的已验证制品。未知兼容性不承诺原地代码回退。
 - 错误业务发布使用撤回/新修订/INHERIT，错误年度日别使用新审核发布；不改历史记录、不将数据库备份整体覆盖视为普通业务撤销。

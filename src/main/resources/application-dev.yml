@@ -38,7 +38,7 @@ apocalypse:
       # 本地开发也必须显式注入，禁止所有可部署 profile 共享仓库内固定签名密钥。
       secret: ${JWT_SECRET}
     bootstrap:
-      # 仅首次启用 V7 禁用的 admin；成功后移除此环境变量，后续启动不会重置密码。
+      # 仅首次启用初始基线中禁用的 admin；成功后移除此变量，后续启动不会重置密码。
       admin-password: ${APOCALYPSE_BOOTSTRAP_ADMIN_PASSWORD:}
     cors:
       # 本地前端 Vite 开发服务器（5173 端口）

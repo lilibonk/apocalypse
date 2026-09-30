@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import tools.jackson.databind.JsonNode;
 
-/** V8/V9 可执行证据：12 张业务表、系统根、基线、module_key 与默认关闭行为均来自真实迁移链。 */
+/** 首版 V1 可执行证据：12 张业务表、系统根、日期基线、module_key 与默认关闭行为。 */
 class CalendarSchemaIT extends AbstractIntegrationTest {
 
   private static final List<String> CALENDAR_TABLES =

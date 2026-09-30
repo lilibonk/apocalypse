@@ -183,7 +183,7 @@ class OptionalModuleLifecycleIT {
           var statement = connection.createStatement()) {
         assertThat(
                 statement.executeUpdate(
-                    "UPDATE flyway_schema_history SET checksum = checksum + 1 WHERE version = '10'"))
+                    "UPDATE flyway_schema_history SET checksum = checksum + 1 WHERE version = '1'"))
             .isEqualTo(1);
       }
       for (boolean enabled : new boolean[] {false, true}) {

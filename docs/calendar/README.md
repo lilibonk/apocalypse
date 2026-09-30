@@ -2,7 +2,7 @@
 
 Calendar 是默认关闭的试验模块，业务模型不作为开发其他业务系统的通用模板。目前只维护已有功能和可复现的功能缺陷，不在脚手架交付阶段扩展其业务范围。
 
-Calendar 在编译期存在、由服务端配置启用，**不是运行时安装/卸载的插件**。默认 `APOCALYPSE_CAPABILITIES_CALENDAR_ENABLED=false`；关闭时 HTTP、菜单、权限、facade 和任务 fail-closed，但 Calendar 代码、V8–V10 Flyway 迁移、Schema 及已有数据不会删除。开启或关闭均需重启，不能通过回退迁移脚本停用。前后端复用现有扩展点，不增加远程脚本或联网日期服务。脚手架的总体运行边界见[运行与升级](../operations.md)。
+Calendar 在编译期存在、由服务端配置启用，**不是运行时安装/卸载的插件**。默认 `APOCALYPSE_CAPABILITIES_CALENDAR_ENABLED=false`；关闭时 HTTP、菜单、权限、facade 和任务 fail-closed，但 Calendar 代码、首版初始基线中的 Schema 及已有数据不会删除。开启或关闭均需重启，不能通过回退迁移脚本停用。前后端复用现有扩展点，不增加远程脚本或联网日期服务。脚手架的总体运行边界见[运行与升级](../operations.md)。
 
 | 需要做什么                      | 入口                                          |
 | ------------------------------- | --------------------------------------------- |

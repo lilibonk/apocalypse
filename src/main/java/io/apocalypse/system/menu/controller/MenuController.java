@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 菜单管理端点。 写操作按 V4 种子 perms 鉴权（{@code system:menu:add/edit/remove}），树查询 {@code system:menu:list}。
+ * 菜单管理端点。 写操作按初始基线种子 perms 鉴权（{@code system:menu:add/edit/remove}），树查询 {@code system:menu:list}。
  */
 @RestController
 @RequestMapping("/system/menus")

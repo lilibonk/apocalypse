@@ -120,42 +120,41 @@ class AuditEventIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void migrationAdoptsLegacyModulithPublicationTable() {
-    String schema = "legacy_modulith_" + UUID.randomUUID().toString().replace("-", "");
+  void initialBaselineOwnsPublicationTableAndRepeatedMigrationPreservesEvents() {
+    String schema = "initial_modulith_" + UUID.randomUUID().toString().replace("-", "");
     String jdbcUrl = POSTGRES.getJdbcUrl();
     try {
-      Flyway.configure()
-          .dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())
-          .schemas(schema)
-          .defaultSchema(schema)
-          .locations("classpath:db/migration")
-          .target("4")
-          .load()
-          .migrate();
-      jdbcTemplate.execute(
-          "CREATE TABLE "
+      Flyway flyway =
+          Flyway.configure()
+              .dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())
+              .schemas(schema)
+              .defaultSchema(schema)
+              .locations("classpath:db/migration")
+              .load();
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+      UUID eventId = UUID.randomUUID();
+      jdbcTemplate.update(
+          "INSERT INTO "
               + schema
-              + ".event_publication ("
-              + "id UUID NOT NULL PRIMARY KEY, listener_id TEXT NOT NULL, event_type TEXT NOT NULL, "
-              + "serialized_event TEXT NOT NULL, publication_date TIMESTAMP WITH TIME ZONE NOT NULL, "
-              + "completion_date TIMESTAMP WITH TIME ZONE, status TEXT, completion_attempts INT, "
-              + "last_resubmission_date TIMESTAMP WITH TIME ZONE)");
+              + ".event_publication (id, listener_id, event_type, serialized_event, publication_date)"
+              + " VALUES (?, 'baseline-listener', 'baseline-event', '{}', now())",
+          eventId);
+      assertThat(flyway.migrate().migrationsExecuted).isZero();
+      flyway.validate();
 
-      Flyway.configure()
-          .dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())
-          .schemas(schema)
-          .defaultSchema(schema)
-          .locations("classpath:db/migration")
-          .load()
-          .migrate();
-
-      Integer versionFive =
+      Integer versionOne =
           jdbcTemplate.queryForObject(
               "SELECT COUNT(*) FROM "
                   + schema
-                  + ".flyway_schema_history WHERE version = '5' AND success",
+                  + ".flyway_schema_history WHERE version = '1' AND success",
               Integer.class);
-      assertThat(versionFive).isEqualTo(1);
+      assertThat(versionOne).isEqualTo(1);
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT COUNT(*) FROM " + schema + ".event_publication WHERE id = ?",
+                  Integer.class,
+                  eventId))
+          .isEqualTo(1);
     } finally {
       jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
     }

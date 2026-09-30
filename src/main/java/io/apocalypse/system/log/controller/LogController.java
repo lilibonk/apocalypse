@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-/** 日志查询端点（只读）。按 V3 菜单种子 perms 鉴权（{@code system:log:login} / {@code system:log:oper}）。 */
+/** 日志查询端点（只读）。按初始基线菜单种子 perms 鉴权（{@code system:log:login} / {@code system:log:oper}）。 */
 @Validated
 @RestController
 @RequestMapping("/system/logs")

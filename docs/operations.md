@@ -20,11 +20,22 @@
 
 ## 数据库与升级
 
-Flyway 是唯一 DDL 所有者，启动时会执行 `db/migration` 的全部迁移，`baseline-on-migrate=false`。空库由 V1 起初始化；接入已有库须先备份并核对真实 schema 版本，再显式执行一次 Flyway baseline，不能把自动 baseline 当作兼容方案。已应用脚本不可修改；失败时先分析迁移状态，不通过回退迁移文件停用模块。
+Flyway 是唯一 DDL 所有者，启动时执行 `db/migration`，`baseline-on-migrate=false`。首版只有 `V1__init.sql`，只支持空库安装；开发期 V1–V11 的已有库必须重建，不提供原地升级。首次发行基线冻结后只追加 V2 起的迁移，已应用发行脚本不可修改。已有非 Flyway 业务库的接入属于单独迁移工作，须核对实际结构和数据，不能用自动 baseline 或 repair 掩盖差异。
 
-默认关闭的 Calendar **仍随同一制品发布代码与 V8–V10 迁移**；关闭只收起 HTTP、菜单、权限、facade 运行入口及任务，不删除 Schema、已有数据或角色关系。早期 Order HTTP 已退役，但 V2 `order_info` 和事件兼容桥仍在当前迁移/制品中。详见[Calendar 手册](calendar/README.md)。
+默认关闭的 Calendar **仍随同一制品发布代码与初始基线中的 Schema**；关闭只收起 HTTP、菜单、权限、facade 运行入口及任务，不删除 Schema、已有数据或角色关系。早期 Order HTTP 已退役，但 `order_info` 兼容表、隐藏权限种子和事件桥仍在。详见[Calendar 手册](calendar/README.md)。
 
-V11 新增角色部门数据范围：已有角色保持 `ALL`，新角色默认 `DEPT`。用户列表、详情、写入及部门选项由服务端按操作权限与部门范围判定，不能依赖前端隐藏控件。修改角色授权、用户角色或部门树会使受影响会话失效，须重新获取身份。
+初始基线中的内置管理员角色为 `ALL`，新角色默认 `DEPT`。用户列表、详情、写入及部门选项由服务端按操作权限与部门范围判定，不能依赖前端隐藏控件。修改角色授权、用户角色或部门树会使受影响会话失效，须重新获取身份。
+
+### 开发库重建
+
+旧开发环境切换到首版基线前，先停止连接数据库和 Redis 的本地后端，再从仓库根执行：
+
+```bash
+docker compose down --volumes
+docker compose up -d --wait
+```
+
+此操作永久删除该开发 Compose 项目的 PostgreSQL 和 Redis 数据。只用于可丢弃的开发环境；需要保留的数据应先另行导出，不得对生产库套用。然后按[快速开始](getting-started.md)设置新的私有 JWT 密钥和一次性管理员密码并启动后端；Flyway 会从空库应用一条 V1。成功后移除一次性密码，重启不会重复种子或重置已启用管理员。
 
 浏览器凭据改为内存 access 与同源 HttpOnly/Secure Cookie refresh；升级时清除旧 localStorage 凭据并重新登录。浏览器 POST 要求精确 Origin、CSRF Cookie 与请求头。不支持 Web Locks 的浏览器不自动刷新，过期后重新登录；旧机器客户端 JSON 接口保持兼容。新建及重置密码最多 72 UTF-8 字节，使用带 `{bcrypt}` 前缀的哈希；合法旧 bcrypt 哈希仍可验证。
 

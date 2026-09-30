@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
-/** 字典管理端点。按 V3 菜单种子 perms 鉴权（{@code system:dict:*}），写操作落操作日志。 */
+/** 字典管理端点。按初始基线菜单种子 perms 鉴权（{@code system:dict:*}），写操作落操作日志。 */
 @Validated
 @RestController
 @RequestMapping("/system/dict")

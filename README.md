@@ -7,13 +7,15 @@ Apocalypse 是 Java 25 / Spring Boot 4.1 模块化单体管理后台脚手架。
 - 系统管理：用户、角色及三档部门行级数据范围、菜单/按钮权限、部门、字典、参数、登录/操作审计和在线会话。
 - 基础设施：Spring Security/JWT、浏览器内存 access/HttpOnly refresh 与 CSRF、对象授权约定、MyBatis-Plus、Flyway、PostgreSQL、Redis/Caffeine 两级缓存、OpenAPI、限流和 TraceId。
 - 质量检查：`./mvnw verify` 运行格式、依赖、架构、单元及 Testcontainers 集成检查；前端用 `pnpm check` 运行格式、类型规则、单元测试与构建，`pnpm test:browser` 验证真实 Chromium 交互与权限竞态。
-- 可选能力：Calendar 是默认关闭的试验模块，并非业务系统的通用领域模板。关闭运行入口时，它的代码及 V8–V10 数据库迁移仍在同一制品中；早期 Order 运行 API 已退役，V2 迁移与事件兼容桥仍保留。
+- 可选能力：Calendar 是默认关闭的试验模块，并非业务系统的通用领域模板。关闭运行入口时，它的代码及初始基线中的 Schema 仍在同一制品中；早期 Order 运行 API 已退役，兼容表与事件桥仍保留。
 
 本框架不提供代码生成器。在线任务调度管理平台、公告、多租户及通用文件服务不属于当前发行范围；业务开发使用现有模块入口、DynaLayer 和明确的权限/查询合同。首版支持范围与后续兼容政策以[发行契约](docs/release.md)为准。
 
 ## 本地启动
 
 需要 JDK 25、Docker Compose、Node.js 24 和 pnpm 11.19.0。Maven 使用仓库内的 `./mvnw`；本地 Compose 启动 PostgreSQL 18.6 与 Redis 8.10.1。首次启动须在当前 shell 设置私有 `JWT_SECRET` 和一次性的 `APOCALYPSE_BOOTSTRAP_ADMIN_PASSWORD`，然后启动后端与前端。可直接按[快速开始](docs/getting-started.md)逐步执行；其中包含登录、环境排查和完整检查命令。
+
+首版数据库统一从 `V1__init.sql` 安装，仅支持空库；旧开发库须按[开发库重建](docs/operations.md#开发库重建)清空后重新初始化。首版基线冻结后只追加新迁移。
 
 ## 文档入口
 
