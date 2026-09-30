@@ -196,12 +196,19 @@ class OptionalModuleLifecycleIT {
             .hasStackTraceContaining("Migration checksum mismatch");
       }
     }
-    try (var jar = new JarFile(Path.of("target/apocalypse-0.0.1-SNAPSHOT.jar").toFile())) {
+  }
+
+  @Test
+  void testFixturesAreAbsentFromPackagedJar() throws Exception {
+    String packagedJar = System.getProperty("apocalypse.test.packaged-jar");
+    assertThat(packagedJar).as("Failsafe must identify the current packaged artifact").isNotBlank();
+    try (var jar = new JarFile(Path.of(packagedJar).toFile())) {
       assertThat(jar.stream())
           .noneMatch(
               entry ->
                   entry.getName().contains("io/apocalypse/fixture/")
-                      || entry.getName().contains("classes/fixture/owned.txt"));
+                      || entry.getName().contains("classes/fixture/owned.txt")
+                      || entry.getName().contains("production-static-probe.txt"));
     }
   }
 

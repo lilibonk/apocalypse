@@ -34,8 +34,8 @@ import tools.jackson.databind.node.StringNode;
  * 操作日志切面：采集标题/动作/方法/操作人/IP/参数（脱敏）/结果/异常/耗时，发布 {@link OperLoggedEvent} （Modulith 事务提交后由 system
  * 域异步落库，不拖慢请求）。
  *
- * <p>脱敏规则（AGENTS.md 红线 10）：参数 JSON 中 key 含 password|secret|token|authorization（大小写不敏感）的值 一律替换为
- * {@code ***}；序列化失败的参数记 {@code [unserializable]}；参数与结果整体截断 1000 字符。
+ * <p>脱敏规则：参数 JSON 中 key 含 password|secret|token|authorization（大小写不敏感）的值 一律替换为 {@code ***}；序列化失败的参数记
+ * {@code [unserializable]}；参数与结果整体截断 1000 字符。
  */
 @Slf4j
 @Aspect

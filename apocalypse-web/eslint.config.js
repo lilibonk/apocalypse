@@ -26,6 +26,19 @@ export default tseslint.config([
     },
   },
   {
+    // Existing TypeScript project provides types; preserve the syntax/hook/engine checks above.
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/only-throw-error': 'error',
+    },
+  },
+  {
     files: ['src/views/**/index.tsx'],
     rules: {
       'react-refresh/only-export-components': [
@@ -34,7 +47,7 @@ export default tseslint.config([
       ],
     },
   },
-  // —— AGENTS.md §5「引擎分域」执法（LIL-85：Three.js 仅允许 WebGPU 域）——
+  // —— 动效引擎边界：Three.js 仅允许 WebGPU 域 ——
   // 一库一域，越域即违规：
   //   · GSAP → 仅品牌页（src/views/login/）与 src/effects/gsap/
   //   · Three.js → 仅 src/effects/webgpu/；WebGL / R3F / pixi / ogl 未获批准
@@ -51,7 +64,7 @@ export default tseslint.config([
             {
               group: ['gsap/**', 'three/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
               message:
-                'AGENTS.md §5 引擎分域：GSAP 仅限品牌页/effects/gsap；Three.js 仅限 effects/webgpu；其余目录只消费封装组件。',
+                '引擎分域：GSAP 仅限品牌页/effects/gsap；Three.js 仅限 effects/webgpu；其余目录只消费封装组件。',
             },
           ],
         },
@@ -69,8 +82,7 @@ export default tseslint.config([
           patterns: [
             {
               group: ['three/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
-              message:
-                'AGENTS.md §5 引擎分域：Three.js 仅限 src/effects/webgpu/，本目录只放行 GSAP。',
+              message: '引擎分域：Three.js 仅限 src/effects/webgpu/，本目录只放行 GSAP。',
             },
           ],
         },
@@ -106,8 +118,7 @@ export default tseslint.config([
                 '!three/webgpu',
                 '!three/tsl',
               ],
-              message:
-                'AGENTS.md §5：本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
+              message: '本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
             },
           ],
         },
@@ -144,8 +155,7 @@ export default tseslint.config([
             },
             {
               group: ['gsap/**', '@react-three/**', 'pixi.js/**', 'ogl/**'],
-              message:
-                'AGENTS.md §5：本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
+              message: '本域只允许 Three.js 公共 WebGPU/TSL 入口，不允许 WebGL 或额外引擎。',
             },
           ],
         },

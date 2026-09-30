@@ -31,6 +31,19 @@ logs/
 .verify/
 .git-backups/
 
+### Maintainer guidance and development history (not distributed) ###
+**/AGENTS.md
+/design-qa.md
+/apocalypse-web/design-*.md
+/apocalypse-web/docs/
+/docs/plans/
+/docs/calendar/evidence/
+/docs/calendar/evidence-index.md
+/docs/calendar/verification.md
+/docs/calendar/verify-docs.mjs
+/examples/consumer-probe.patch
+/letterpress-ripples/
+
 ### Local Obsidian vault (private plans and raw QA evidence) ###
 /启示录/
 

@@ -231,6 +231,41 @@ public class AuthService {
     revokeAllSessions(accessToken.getSubject());
   }
 
+  /** 浏览器即使 access 已过期，也可用仍有效的 HttpOnly refresh 持久化注销全部会话。 */
+  @Transactional
+  public void logoutRefresh(String refreshToken) {
+    Jwt jwt;
+    try {
+      jwt = jwtDecoder.decode(refreshToken);
+    } catch (JwtException e) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    if (!TOKEN_TYPE_REFRESH.equals(jwt.getClaimAsString("type"))
+        || !StringUtils.hasText(jwt.getId())
+        || onlineUserRegistry.isBlacklisted(jwt.getId())) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    LoginUserQuery query = loginUserQuery.getIfAvailable();
+    if (query == null) {
+      throw new BizException(ErrorCode.SYSTEM_ERROR.getCode(), "登录能力未接入");
+    }
+    LoginUser user =
+        query
+            .findLoginUserByUsername(jwt.getSubject())
+            .filter(LoginUser::enabled)
+            .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效"));
+    if (claimAsLong(jwt, "cv") != user.versions().credential()) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    // 与 refresh 竞争同一原子消费点；旧 Cookie 的输家不得撤销赢家或覆盖其新 Cookie。
+    if (jwt.getExpiresAt() == null
+        || !onlineUserRegistry.tryBlacklist(
+            jwt.getId(), Duration.between(Instant.now(), jwt.getExpiresAt()))) {
+      throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
+    }
+    revokeAllSessions(user.username());
+  }
+
   private void revokeAllSessions(String username) {
     tokenVersionStore.invalidateCredential(username);
     try {

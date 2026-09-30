@@ -14,7 +14,7 @@
 
 import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, Pencil, Plus, Power, RefreshCw, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -42,7 +42,7 @@ import { useAuthStore } from '@/stores/auth'
 import { createDynaQueries } from './dyna-queries'
 
 import { DynaDetail } from './DynaDetail'
-import { DynaForm } from './DynaForm'
+import { DynaForm, type DynaFormProps } from './DynaForm'
 import { DynaSearch } from './DynaSearch'
 import { DynaTable } from './DynaTable'
 import { validatePageSchema, type DynaPageSchema, type DynaStatusToggleAction } from './schema'
@@ -75,6 +75,8 @@ function errorText(error: unknown, fallback: string): string {
 export interface DynaPageProps {
   schema: DynaPageSchema
   queryScope?: ModuleScope
+  /** Page-owned server option loading; default forms keep the schema renderer. */
+  formComponent?: ComponentType<DynaFormProps>
   /**
    * custom 行操作的 handler 注册表：action.key → 点击回调（拿到整行数据）。
    * 越出标准 CRUD 的行级动作（授权弹窗、跳转等）由页面经此注入；
@@ -118,6 +120,7 @@ function DynaPageContent({
   customActions,
   queryScope,
   queries,
+  formComponent: FormComponent = DynaForm,
 }: DynaPageProps & { queries: ReturnType<typeof createDynaQueries> }) {
   const t = useDynaText()
   const { t: commonText } = useTranslation()
@@ -492,7 +495,7 @@ function DynaPageContent({
       />
 
       {schema.form && (
-        <DynaForm
+        <FormComponent
           config={schema.form}
           mode={dialog?.mode ?? 'create'}
           open={dialog !== null}

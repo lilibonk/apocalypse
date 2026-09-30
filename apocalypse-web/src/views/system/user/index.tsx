@@ -7,7 +7,8 @@
 import { DynaPage } from '@/components/dyna'
 
 import schema from './user.schema'
+import { UserForm } from './UserForm'
 
 export default function UserPage() {
-  return <DynaPage schema={schema} />
+  return <DynaPage schema={schema} formComponent={UserForm} />
 }

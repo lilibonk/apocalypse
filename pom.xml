@@ -13,7 +13,7 @@
 
   <groupId>io.apocalypse</groupId>
   <artifactId>apocalypse</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.1.0-rc.1</version>
   <name>apocalypse</name>
   <description>Apocalypse - Spring Boot 4 modular monolith scaffold (Java 25, Modulith, MyBatis-Plus)</description>
   <licenses>
@@ -33,12 +33,16 @@
     <spring-modulith.version>2.1.0</spring-modulith.version>
     <mybatis-plus.version>3.5.17</mybatis-plus.version>
     <redisson.version>4.7.0</redisson.version>
-    <springdoc.version>3.1.0</springdoc.version>
+    <springdoc.version>3.1.1</springdoc.version>
+    <tomcat.version>11.0.26</tomcat.version>
+    <jackson-bom.version>3.1.6</jackson-bom.version>
+    <jackson-2-bom.version>2.21.6</jackson-2-bom.version>
+    <objenesis.version>3.4</objenesis.version>
     <mapstruct.version>1.6.3</mapstruct.version>
     <lunar-java.version>1.7.7</lunar-java.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
-    <archunit.version>1.5.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
 
     <!-- 插件版本 -->
     <spotless-maven-plugin.version>3.10.0</spotless-maven-plugin.version>
@@ -65,6 +69,28 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- 测试依赖不得把 Redisson/Kryo 的运行时 Objenesis 仲裁回旧版。 -->
+      <dependency>
+        <groupId>org.objenesis</groupId>
+        <artifactId>objenesis</artifactId>
+        <version>${objenesis.version}</version>
+      </dependency>
+      <!-- Modulith 测试传递引入的 ArchUnit 与直接 JUnit 适配器保持同版。 -->
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit-junit5-api</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit-junit5-engine</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -72,7 +98,7 @@
     <!-- ========== Web / 核心 ========== -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -99,7 +125,7 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+      <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
     </dependency>
 
     <!-- ========== 数据层 ========== -->
@@ -142,10 +168,7 @@
       <groupId>com.github.ben-manes.caffeine</groupId>
       <artifactId>caffeine</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-redis</artifactId>
-    </dependency>
+    <!-- Redisson starter 已提供 Spring Data Redis，并排除未使用的 Lettuce/Jedis。 -->
     <dependency>
       <groupId>org.redisson</groupId>
       <artifactId>redisson-spring-boot-starter</artifactId>
@@ -163,7 +186,12 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.modulith</groupId>
+      <artifactId>spring-modulith-events-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.modulith</groupId>
       <artifactId>spring-modulith-docs</artifactId>
+      <scope>test</scope>
     </dependency>
 
     <!-- ========== API 文档 ========== -->
@@ -173,7 +201,7 @@
       <version>${springdoc.version}</version>
     </dependency>
 
-    <!-- ========== 工具（禁用 Hutool，见 AGENTS.md） ========== -->
+    <!-- ========== 工具（Hutool 由 Enforcer 禁止引入） ========== -->
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
@@ -377,6 +405,11 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <apocalypse.test.packaged-jar>${project.build.directory}/${project.build.finalName}.jar</apocalypse.test.packaged-jar>
+          </systemPropertyVariables>
+        </configuration>
         <executions>
           <execution>
             <goals>

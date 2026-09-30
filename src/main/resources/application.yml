@@ -3,8 +3,8 @@
 spring:
   application:
     name: apocalypse
-    # OpenAPI 文档版本号（OpenApiConfig 读取）
-    version: 0.0.1-SNAPSHOT
+    # 使用 Boot parent 已配置的 Maven 资源过滤，与后端制品版本同源。
+    version: "@project.version@"
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
@@ -85,6 +85,17 @@ apocalypse:
   events:
     completed-retention-days: 7
     cleanup-cron: "0 15 3 * * *"
+    recovery:
+      # 仅恢复登录/操作审计；失败记录达到次数上限后保留，见 docs/audit-recovery.md。
+      enabled: ${APOCALYPSE_EVENTS_RECOVERY_ENABLED:true}
+      delay: PT30S
+      initial-delay: PT30S
+      batch-size: 50
+      max-in-flight: 100
+      max-attempts: 5
+      initial-backoff: 1m
+      max-backoff: 15m
+      stale-after: 10m
   audit:
     retention-days: 180
     cleanup-cron: "0 30 3 * * *"

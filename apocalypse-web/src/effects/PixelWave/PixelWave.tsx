@@ -1,5 +1,5 @@
 /**
- * PixelWave —— 连续浪潮·活字浮雕氛围层（v2.11，docs/pixel-wave-spec.md §23）。
+ * PixelWave —— 连续浪潮·活字浮雕氛围层。
  *
  * 纯 Canvas 2D + rAF：默认 flowlight 保留稀疏方形环，登录 letterpress 改为与
  * 研究演示一致的完整 32px 铅字网格：每波从随机角点发射欧氏波前，快速抬升后
@@ -18,7 +18,7 @@
  * 写进 canvas 必须整数格（DEFINITION §1）。组件恒 pointer-events-none；
  * 无任何鼠标涟漪 / 点击脉冲 / 窗口监听（v2.3 移除交互）。
  *
- * 降级（AGENTS.md §5 双开关 + P10）：prefers-reduced-motion 或设置「动画」关闭
+ * 降级：prefers-reduced-motion 或设置「动画」关闭
  * → 零渲染纯背景（清空画布，不起 rAF、不设观察者）；rAF 运行期持续低帧
  * （<30fps 达 2s，见 ../perf.ts）→ 清空画布定格纯背景、停 rAF、console.info 一次。
  */
@@ -309,7 +309,7 @@ export function PixelWave({
         degraded = true
         clearCanvas()
         console.info(
-          `[PixelWave] 持续低帧（约 ${Math.round(fps.fps ?? 0)}fps < 30fps 达 2s），已自动降级为纯背景零渲染（docs/pixel-wave-spec.md §12 P10）`,
+          `[PixelWave] 持续低帧（约 ${Math.round(fps.fps ?? 0)}fps < 30fps 达 2s），已自动降级为纯背景零渲染`,
         )
         return
       }

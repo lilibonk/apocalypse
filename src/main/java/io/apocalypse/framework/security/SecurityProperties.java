@@ -28,6 +28,9 @@ public class SecurityProperties {
   /** CORS 跨域配置。 */
   private Cors cors = new Cors();
 
+  /** 同源浏览器刷新会话；与非浏览器 JSON 令牌接口分开。 */
+  private Browser browser = new Browser();
+
   @Getter
   @Setter
   public static class Jwt {
@@ -65,6 +68,17 @@ public class SecurityProperties {
 
     /** 允许跨域的来源（精确匹配，空列表=不允许任何跨域）。 */
     private List<String> allowedOrigins = new ArrayList<>();
+  }
+
+  @Getter
+  @Setter
+  public static class Browser {
+
+    /** 浏览器认证 POST 的精确 Origin 白名单；空列表拒绝全部。 */
+    private List<String> allowedOrigins = new ArrayList<>();
+
+    /** 仅 dev/test 可以关闭；prod 必须使用 HTTPS 和 Secure cookie。 */
+    private boolean secureCookie = true;
   }
 
   @Getter

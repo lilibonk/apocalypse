@@ -3,6 +3,9 @@ package io.apocalypse.system.dept.service;
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
+import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.authorization.dto.response.DataScopeResp;
+import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.dept.dto.request.DeptSaveReq;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.entity.SysDeptEntity;
@@ -14,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +28,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DeptService {
 
+  private final DataScopeService dataScopeService;
+
   private final SysDeptMapper sysDeptMapper;
+
+  private final TokenVersionStore tokenVersionStore;
 
   /** 全量部门树。 */
   public List<DeptTreeNode> tree() {
@@ -33,18 +41,23 @@ public class DeptService {
 
   /** 新增部门，返回主键。 */
   @Transactional
+  @CacheEvict(cacheNames = "user", allEntries = true)
   public Long create(DeptSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:dept:add");
     sysDeptMapper.lockHierarchy();
     requireParent(req.parentId());
     SysDeptEntity entity = new SysDeptEntity();
     applyReq(entity, req);
     sysDeptMapper.insert(entity);
+    tokenVersionStore.invalidateGlobalAuthorization();
     return entity.getId();
   }
 
   /** 更新部门。新父部门不得为自身或自身子树内的节点（防循环导致递归 CTE 死循环）。 */
   @Transactional
+  @CacheEvict(cacheNames = "user", allEntries = true)
   public void update(Long id, DeptSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:dept:edit");
     sysDeptMapper.lockHierarchy();
     SysDeptEntity entity = requireById(id);
     if (req.parentId() != 0) {
@@ -59,11 +72,14 @@ public class DeptService {
     }
     applyReq(entity, req);
     ConcurrencyGuard.requireSingleRow(sysDeptMapper.updateById(entity));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   /** 删除部门（逻辑删）。存在子部门或挂接用户时不允许删除。 */
   @Transactional
+  @CacheEvict(cacheNames = "user", allEntries = true)
   public void delete(Long id) {
+    dataScopeService.requireGlobalWrite("system:dept:remove");
     sysDeptMapper.lockHierarchy();
     requireById(id);
     if (sysDeptMapper.existsByParentId(id)) {
@@ -73,6 +89,7 @@ public class DeptService {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "部门下存在用户，不允许删除");
     }
     ConcurrencyGuard.requireSingleRow(sysDeptMapper.deleteById(id));
+    tokenVersionStore.invalidateGlobalAuthorization();
   }
 
   private SysDeptEntity requireById(Long id) {
@@ -87,6 +104,20 @@ public class DeptService {
   public void requireExistingId(Long id) {
     if (id != null) {
       requireById(id);
+    }
+  }
+
+  public List<DeptTreeNode> options(DataScopeResp scope) {
+    return buildTree(
+        sysDeptMapper.selectActiveTree().stream()
+            .filter(dept -> scope.permits(dept.getId()))
+            .toList());
+  }
+
+  public void requireActiveId(Long id) {
+    if (id != null
+        && sysDeptMapper.selectActiveTree().stream().noneMatch(dept -> id.equals(dept.getId()))) {
+      throw new BizException(ErrorCode.NOT_FOUND.getCode(), "部门不存在或已停用");
     }
   }
 

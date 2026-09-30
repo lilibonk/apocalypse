@@ -4,6 +4,8 @@
  * 编辑态禁选自身及下级作父部门（后端同样校验，前端提前拦截）。
  */
 
+import { submitForm } from '@/lib/form-submit'
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -163,7 +165,15 @@ export function DeptFormDialog({
         </DialogHeader>
         <div>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <form
+              onSubmit={(event) =>
+                submitForm(
+                  form.handleSubmit(onSubmit)(event),
+                  t('common.保存失败', { defaultValue: '保存失败' }),
+                )
+              }
+              className="space-y-5"
+            >
               <FormField
                 control={form.control}
                 name="parentId"

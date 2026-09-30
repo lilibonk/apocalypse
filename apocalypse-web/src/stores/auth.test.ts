@@ -14,26 +14,39 @@ vi.mock('@/lib/api/auth', () => ({
   refreshToken: refreshRequest,
 }))
 
+// Local store races are isolated here; browser-session.test.ts and Playwright verify Web Locks.
+vi.mock('@/lib/browser-session', () => ({
+  supportsBrowserSessionLock: vi.fn(() => true),
+  withBrowserSessionLock: <T>(task: () => Promise<T>) => task(),
+  publishBrowserSessionChange: vi.fn(),
+  subscribeBrowserSessionChange: vi.fn(() => () => {}),
+  subscribeBrowserSessionRestore: vi.fn(() => () => {}),
+}))
+
 import { queryClient } from '@/app/query-client'
+import { ApiError } from '@/lib/api/client'
 import { accessLifecycle } from '@/lib/query/access-lease'
+import { publishBrowserSessionChange, supportsBrowserSessionLock } from '@/lib/browser-session'
 
 import { useAuthStore } from './auth'
 
 const tokens = {
   accessToken: 'access',
-  refreshToken: 'refresh',
+  refreshToken: null,
   expiresIn: 3600,
   tokenType: 'Bearer',
 }
 
 describe('auth logout state machine', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fetchCurrentUserRequest.mockReset()
     loginRequest.mockReset()
     logoutRequest.mockReset()
     refreshRequest.mockReset()
+    vi.mocked(publishBrowserSessionChange).mockClear()
+    vi.mocked(supportsBrowserSessionLock).mockReturnValue(true)
     queryClient.clear()
-    accessLifecycle.reset(0, queryClient)
+    await accessLifecycle.reset(0, queryClient)
     useAuthStore.setState({
       tokens,
       user: null,
@@ -41,6 +54,7 @@ describe('auth logout state machine', () => {
       perms: [],
       menus: [],
       meLoaded: false,
+      bootstrapped: true,
       sessionEpoch: 0,
     })
   })
@@ -71,6 +85,15 @@ describe('auth logout state machine', () => {
     expect(useAuthStore.getState().tokens).toEqual(tokens)
   })
 
+  it('a server logout failure retains the authenticated identity for retry', async () => {
+    logoutRequest.mockRejectedValue(new ApiError(50000, '注销服务暂不可用'))
+
+    await expect(useAuthStore.getState().logout()).rejects.toMatchObject({ code: 50000 })
+
+    expect(useAuthStore.getState().tokens).toEqual(tokens)
+    expect(publishBrowserSessionChange).not.toHaveBeenCalled()
+  })
+
   it('服务端撤销失败时也保留原账户查询缓存', async () => {
     queryClient.setQueryData(['calendar', 'contexts'], [{ id: 'current-account' }])
     logoutRequest.mockRejectedValue(new Error('注销失败'))
@@ -78,6 +101,91 @@ describe('auth logout state machine', () => {
     await expect(useAuthStore.getState().logout()).rejects.toThrow('注销失败')
 
     expect(queryClient.getQueryData(['calendar', 'contexts'])).toEqual([{ id: 'current-account' }])
+  })
+
+  it('invalid-cookie logout clears local identity and cache without claiming server revocation', async () => {
+    useAuthStore.setState({
+      user: { id: '1', username: 'former', nickname: 'Former account' },
+      roles: ['ROLE_FORMER'],
+      perms: ['system:user:list'],
+      meLoaded: true,
+    })
+    queryClient.setQueryData(['system', 'users'], [{ id: 'former-account-private-row' }])
+    logoutRequest.mockRejectedValue(new ApiError(40100, '刷新凭据无效'))
+
+    await expect(useAuthStore.getState().logout()).rejects.toMatchObject({ code: 40100 })
+
+    expect(useAuthStore.getState()).toMatchObject({
+      tokens: null,
+      user: null,
+      roles: [],
+      perms: [],
+      menus: [],
+      meLoaded: false,
+      bootstrapped: true,
+      sessionEpoch: 1,
+    })
+    expect(queryClient.getQueryData(['system', 'users'])).toBeUndefined()
+    expect(publishBrowserSessionChange).not.toHaveBeenCalled()
+  })
+
+  it('a stale logout 401 cannot clear a newer account or its cache', async () => {
+    let rejectOlder!: (reason: Error) => void
+    logoutRequest.mockImplementationOnce(
+      () => new Promise<void>((_, reject) => (rejectOlder = reject)),
+    )
+    const olderLogout = useAuthStore.getState().logout()
+    const newTokens = { ...tokens, accessToken: 'new-account-access' }
+    loginRequest.mockResolvedValue(newTokens)
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2', username: 'current', nickname: 'Current account' },
+      roles: ['ROLE_CURRENT'],
+      perms: ['system:user:list'],
+      menus: [],
+    })
+    await useAuthStore.getState().login('current', 'test-only-password')
+    queryClient.setQueryData(['system', 'users'], [{ id: 'current-account-row' }])
+    vi.mocked(publishBrowserSessionChange).mockClear()
+
+    rejectOlder(new ApiError(40100, '旧刷新凭据无效'))
+    await expect(olderLogout).resolves.toBeUndefined()
+
+    expect(useAuthStore.getState()).toMatchObject({
+      tokens: newTokens,
+      user: { id: '2' },
+      meLoaded: true,
+      bootstrapped: true,
+    })
+    expect(queryClient.getQueryData(['system', 'users'])).toEqual([{ id: 'current-account-row' }])
+    expect(publishBrowserSessionChange).not.toHaveBeenCalled()
+  })
+
+  it('a logout 401 also respects a newer login attempt before its identity epoch advances', async () => {
+    let rejectLogout!: (reason: Error) => void
+    let finishLogin!: (value: typeof tokens) => void
+    logoutRequest.mockImplementationOnce(
+      () => new Promise<void>((_, reject) => (rejectLogout = reject)),
+    )
+    loginRequest.mockImplementationOnce(
+      () => new Promise<typeof tokens>((resolve) => (finishLogin = resolve)),
+    )
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2', username: 'current', nickname: 'Current account' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    const olderLogout = useAuthStore.getState().logout()
+    const newerLogin = useAuthStore.getState().login('current', 'test-only-password')
+    expect(useAuthStore.getState().sessionEpoch).toBe(0)
+
+    rejectLogout(new ApiError(40100, '旧刷新凭据无效'))
+    await expect(olderLogout).resolves.toBeUndefined()
+    expect(useAuthStore.getState().tokens).toEqual(tokens)
+    expect(publishBrowserSessionChange).not.toHaveBeenCalled()
+    finishLogin({ ...tokens, accessToken: 'accepted-new-login' })
+    await expect(newerLogin).resolves.toBe(true)
+    expect(useAuthStore.getState().user?.id).toBe('2')
   })
 
   it('直接登录切换账户时不复用旧账户缓存', async () => {
@@ -96,6 +204,28 @@ describe('auth logout state machine', () => {
     expect(queryClient.getQueryData(['calendar', 'contexts'])).toBeUndefined()
     expect(useAuthStore.getState().tokens).toEqual(switchedTokens)
     expect(useAuthStore.getState().user?.id).toBe('2')
+  })
+
+  it('a late rejected login cannot surface an error after a newer account wins', async () => {
+    let rejectOlder!: (error: Error) => void
+    loginRequest
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectOlder = reject)))
+      .mockResolvedValueOnce({ ...tokens, accessToken: 'current-account-access' })
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2', username: 'current-account' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    const earlier = useAuthStore.getState().login('older-account', 'test-only-password')
+    await useAuthStore.getState().login('current-account', 'test-only-password')
+    rejectOlder(new Error('obsolete login failure'))
+    await expect(earlier).resolves.toBe(false)
+    expect(useAuthStore.getState()).toMatchObject({
+      user: { id: '2' },
+      meLoaded: true,
+      bootstrapped: true,
+    })
   })
 
   it('账户切换后忽略旧账户晚返回的 ensureMe', async () => {
@@ -164,7 +294,7 @@ describe('auth logout state machine', () => {
 
     await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(true)
 
-    expect(refreshRequest).toHaveBeenCalledWith('refresh')
+    expect(refreshRequest).toHaveBeenCalledWith()
     expect(useAuthStore.getState()).toMatchObject({
       tokens: refreshed,
       user: { id: '1' },
@@ -275,5 +405,86 @@ describe('auth logout state machine', () => {
     expect(await Promise.all([first, second])).toEqual([true, true])
     expect(fetchCurrentUserRequest).toHaveBeenCalledOnce()
     expect(useAuthStore.getState().meLoaded).toBe(true)
+  })
+
+  it('cookie identity rebinding clears all previous-account caches and advances the epoch', async () => {
+    useAuthStore.setState({ user: { id: '1', username: 'old', nickname: 'Old' }, meLoaded: true })
+    queryClient.setQueryData(['system', 'users'], [{ id: 'old-only' }])
+    refreshRequest.mockResolvedValue({ ...tokens, accessToken: 'new-memory-access' })
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2', username: 'new', nickname: 'New' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(true)
+    expect(useAuthStore.getState()).toMatchObject({
+      user: { id: '2' },
+      sessionEpoch: 1,
+      meLoaded: true,
+    })
+    expect(queryClient.getQueryData(['system', 'users'])).toBeUndefined()
+  })
+
+  it('reload bootstraps from cookie without any persisted refresh token and joins concurrent calls', async () => {
+    useAuthStore.setState({ tokens: null, user: null, bootstrapped: false })
+    refreshRequest.mockResolvedValue({ ...tokens, accessToken: 'bootstrap-memory-access' })
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '1', username: 'fixture' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    await Promise.all([useAuthStore.getState().bootstrap(), useAuthStore.getState().bootstrap()])
+    expect(refreshRequest).toHaveBeenCalledOnce()
+    expect(refreshRequest).toHaveBeenCalledWith()
+    expect(useAuthStore.getState()).toMatchObject({
+      user: { id: '1' },
+      bootstrapped: true,
+      meLoaded: true,
+    })
+  })
+
+  it('unsupported Web Locks forces local relogin without any refresh or cookie clearing endpoint', async () => {
+    vi.mocked(supportsBrowserSessionLock).mockReturnValue(false)
+    await expect(useAuthStore.getState().tryRefresh()).resolves.toBe(false)
+    expect(refreshRequest).not.toHaveBeenCalled()
+    expect(logoutRequest).not.toHaveBeenCalled()
+    expect(useAuthStore.getState()).toMatchObject({
+      tokens: null,
+      bootstrapped: true,
+      meLoaded: false,
+    })
+  })
+
+  it('a newer cross-tab bootstrap does not join an invalidated identity flight', async () => {
+    let finishOld!: (value: typeof tokens) => void
+    refreshRequest
+      .mockImplementationOnce(() => new Promise<typeof tokens>((resolve) => (finishOld = resolve)))
+      .mockResolvedValueOnce({ ...tokens, accessToken: 'current-cookie-access' })
+    fetchCurrentUserRequest.mockResolvedValue({
+      user: { id: '2', username: 'current-cookie-user' },
+      roles: [],
+      perms: [],
+      menus: [],
+    })
+    useAuthStore.setState({ tokens: null, user: null, bootstrapped: false })
+    const olderBootstrap = useAuthStore.getState().bootstrap()
+    await vi.waitFor(() => expect(refreshRequest).toHaveBeenCalledOnce())
+
+    // A session-change message invalidates all old ownership before reading today's cookie.
+    useAuthStore.getState().clearSession()
+    useAuthStore.setState({ bootstrapped: false })
+    await useAuthStore.getState().bootstrap()
+    expect(refreshRequest).toHaveBeenCalledTimes(2)
+    expect(useAuthStore.getState()).toMatchObject({
+      user: { id: '2' },
+      bootstrapped: true,
+      meLoaded: true,
+    })
+
+    finishOld({ ...tokens, accessToken: 'obsolete-cookie-access' })
+    await olderBootstrap
+    expect(useAuthStore.getState().tokens?.accessToken).toBe('current-cookie-access')
   })
 })

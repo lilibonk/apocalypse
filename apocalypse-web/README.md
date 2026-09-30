@@ -18,7 +18,7 @@ pnpm dev
 | `pnpm build`  | TypeScript 与 Vite 构建              |
 | `pnpm format` | 格式化本目录文件                     |
 
-`src/lib/api/` 是后端响应和刷新令牌的适配层；`src/routes/` 将后端菜单映射到 `src/views/**` 页面；`src/components/dyna/` 提供标准 CRUD schema 渲染；`src/i18n/` 自动装载模块自己的中英文 locale pack。新业务域的接入步骤见[模块开发](../docs/module-development.md)，代码约束见[前端 AGENTS.md](AGENTS.md)。
+`src/lib/api/` 是后端响应和刷新令牌的适配层；`src/routes/` 将后端菜单映射到 `src/views/**` 页面；`src/components/dyna/` 提供标准 CRUD schema 渲染；`src/i18n/` 自动装载模块自己的中英文 locale pack。新业务域的接入步骤见[模块开发](../docs/module-development.md)，现有 lint、类型和测试检查验证组件及查询边界。
 
 Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/权限开放；前端不设置第二个启停开关。其边界和配置见[Calendar 手册](../docs/calendar/README.md)。
 

@@ -11,7 +11,7 @@ cd apocalypse
 
 ## 1. 准备本地服务和一次性管理员密码
 
-在仓库根目录确认 `java -version` 是 25，Docker daemon 已运行。当前 shell 中为 JWT 生成私有签名密钥，并输入符合至少 8 位、同时含字母和数字要求的首次管理员密码：
+在仓库根目录确认 `java -version` 是 25，Docker daemon 已运行。当前 shell 中为 JWT 生成私有签名密钥，并输入符合至少 8 位、同时含字母和数字、最多 72 UTF-8 字节要求的首次管理员密码：
 
 ```bash
 export JWT_SECRET="$(openssl rand -hex 32)"

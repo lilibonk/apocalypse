@@ -5,6 +5,7 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.menu.service.MenuService;
 import io.apocalypse.system.role.dto.request.RoleSaveReq;
 import io.apocalypse.system.role.dto.response.RoleResp;
@@ -16,6 +17,7 @@ import java.util.List;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class RoleService {
+
+  private final DataScopeService dataScopeService;
 
   private final SysRoleMapper sysRoleMapper;
 
@@ -41,6 +45,7 @@ public class RoleService {
   /** 新增角色，返回主键。 */
   @Transactional
   public Long create(RoleSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:role:add");
     if (sysRoleMapper.existsByRoleKey(req.roleKey())) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "角色标识已存在");
     }
@@ -54,6 +59,7 @@ public class RoleService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, RoleSaveReq req) {
+    dataScopeService.requireGlobalWrite("system:role:edit");
     SysRoleEntity entity = requireById(id);
     if (!entity.getRoleKey().equals(req.roleKey())
         && sysRoleMapper.existsByRoleKey(req.roleKey())) {
@@ -68,6 +74,7 @@ public class RoleService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void delete(Long id) {
+    dataScopeService.requireGlobalWrite("system:role:remove");
     requireById(id);
     sysRoleMapper.deleteMenusByRoleId(id);
     sysRoleMapper.deleteUsersByRoleId(id);
@@ -79,6 +86,7 @@ public class RoleService {
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void assignMenus(Long roleId, List<Long> menuIds) {
+    dataScopeService.requireGlobalWrite("system:role:edit");
     requireById(roleId);
     List<Long> ids = menuIds == null ? List.of() : menuIds;
     menuService.requireValidMenuIds(ids);
@@ -93,15 +101,18 @@ public class RoleService {
   }
 
   /** 分页查询角色下的用户。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PageResult<RoleUserResp> pageUsers(Long roleId, int page, int size) {
     requireById(roleId);
-    return sysRoleMapper.pageUsers(roleId, page, size);
+    return sysRoleMapper.pageUsers(
+        roleId, page, size, dataScopeService.resolve("system:role:list"));
   }
 
   /** 整体替换角色下的用户。用户角色变化影响权限串，清空 userPerms 缓存。 */
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void assignUsers(Long roleId, List<Long> userIds) {
+    dataScopeService.requireGlobalWrite("system:role:edit");
     requireById(roleId);
     List<Long> ids = userIds == null ? List.of() : userIds;
     if (!ids.isEmpty() && sysRoleMapper.countExistingUsers(ids) != ids.size()) {
@@ -138,5 +149,10 @@ public class RoleService {
     entity.setSort(req.sort() == null ? 0 : req.sort());
     entity.setStatus(req.status() == null ? SysRoleEntity.STATUS_ENABLED : req.status());
     entity.setRemark(req.remark());
+    if (req.dataScope() != null) {
+      entity.setDataScope(req.dataScope());
+    } else if (entity.getDataScope() == null) {
+      entity.setDataScope("DEPT");
+    }
   }
 }

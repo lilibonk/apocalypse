@@ -3,6 +3,7 @@ package io.apocalypse.framework.security;
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.response.ErrorCode;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 
@@ -31,6 +32,9 @@ public final class PasswordPolicy {
   public static void validate(String rawPassword) {
     if (!StringUtils.hasText(rawPassword) || rawPassword.length() < 8) {
       throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "密码长度至少 8 位");
+    }
+    if (rawPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "密码 UTF-8 长度不能超过 72 字节");
     }
     boolean hasLetter = rawPassword.chars().anyMatch(Character::isLetter);
     boolean hasDigit = rawPassword.chars().anyMatch(Character::isDigit);

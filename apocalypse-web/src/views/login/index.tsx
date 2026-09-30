@@ -4,6 +4,8 @@
  * 保留 gaze 视线跟随；PixelWave 仅在动效实验室预览，登录不挂载。
  */
 
+import { submitForm } from '@/lib/form-submit'
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
@@ -78,12 +80,18 @@ export default function LoginPage() {
     setSubmitting(true)
     setOrbState('waiting')
     try {
-      await login(values.username, values.password)
+      const accepted = await login(values.username, values.password)
+      if (!accepted) {
+        setOrbState('idle')
+        return
+      }
+      const acceptedEpoch = useAuthStore.getState().sessionEpoch
       setOrbState('success')
       // 动效可用时短暂停留展示 success 态，否则立即跳转
       if (motionEnabled && !reducedMotion) {
         await new Promise((resolve) => window.setTimeout(resolve, 600))
       }
+      if (useAuthStore.getState().sessionEpoch !== acceptedEpoch) return
       navigate(from, { replace: true })
     } catch (error) {
       setOrbState('error')
@@ -138,7 +146,10 @@ export default function LoginPage() {
           </div>
 
           <Form {...form}>
-            <form onSubmit={onSubmit} className="space-y-5">
+            <form
+              onSubmit={(event) => submitForm(onSubmit(event), t('login.failed'))}
+              className="space-y-5"
+            >
               <FormField
                 control={form.control}
                 name="username"

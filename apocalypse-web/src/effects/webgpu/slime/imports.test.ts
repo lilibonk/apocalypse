@@ -1,7 +1,9 @@
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
+import tseslint from 'typescript-eslint'
 
-const eslint = new ESLint()
+// Synthetic import probes test only the engine boundary, independently of TS project files.
+const eslint = new ESLint({ overrideConfig: tseslint.configs.disableTypeChecked })
 const violations = async (code: string, filePath: string) => {
   const [result] = await eslint.lintText(code, { filePath })
   return result.messages.filter((message) => message.ruleId === 'no-restricted-imports')

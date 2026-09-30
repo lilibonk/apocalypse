@@ -13,37 +13,22 @@ import { useAuthStore } from '@/stores/auth'
 export function RequireAuth({ children }: { children: ReactNode }) {
   const tokens = useAuthStore((state) => state.tokens)
   const meLoaded = useAuthStore((state) => state.meLoaded)
+  const bootstrapped = useAuthStore((state) => state.bootstrapped)
   const ensureMe = useAuthStore((state) => state.ensureMe)
   const location = useLocation()
 
   useEffect(() => {
-    if (tokens && !meLoaded) {
+    if (bootstrapped && tokens && !meLoaded) {
       // The store owns sequence-bound failure handling; an old effect cannot clear a new user.
       void ensureMe().catch(() => {})
     }
-  }, [tokens, meLoaded, ensureMe])
+  }, [bootstrapped, tokens, meLoaded, ensureMe])
 
-  useEffect(() => {
-    if (!tokens || !meLoaded) return
-    const refreshIdentity = () => {
-      void ensureMe().catch(() => {})
-    }
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') refreshIdentity()
-    }
-    window.addEventListener('focus', refreshIdentity)
-    document.addEventListener('visibilitychange', handleVisibility)
-    return () => {
-      window.removeEventListener('focus', refreshIdentity)
-      document.removeEventListener('visibilitychange', handleVisibility)
-    }
-  }, [tokens, meLoaded, ensureMe])
-
-  if (!tokens) {
+  if (bootstrapped && !tokens) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
-  if (!meLoaded) {
+  if (!bootstrapped || !meLoaded) {
     return (
       <div className="flex min-h-svh items-center justify-center">
         <div className="w-64 space-y-3">

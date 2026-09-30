@@ -32,10 +32,10 @@ const baseline: DaySnapshot = {
 
 describe('calendar date details', () => {
   let fixture: EffectiveDay
-  beforeEach(() => {
+  beforeEach(async () => {
     const client = new QueryClient()
-    accessLifecycle.reset(0, client)
-    accessLifecycle.accept(
+    await accessLifecycle.reset(0, client)
+    await accessLifecycle.accept(
       0,
       [
         normalizeMenuNode({

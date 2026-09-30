@@ -11,19 +11,19 @@ import { useAuthStore } from './auth'
 const originalAdapter = http.defaults.adapter
 const initialTokens: TokenPair = {
   accessToken: 'test-only-old-access',
-  refreshToken: 'test-only-old-refresh',
+  refreshToken: null,
   tokenType: 'Bearer',
   expiresIn: 3600,
 }
 const rotatedTokens: TokenPair = {
   ...initialTokens,
   accessToken: 'test-only-new-access',
-  refreshToken: 'test-only-new-refresh',
+  refreshToken: null,
 }
 const switchedTokens: TokenPair = {
   ...initialTokens,
   accessToken: 'test-only-second-account-access',
-  refreshToken: 'test-only-second-account-refresh',
+  refreshToken: null,
 }
 const latestUser: CurrentUser = {
   user: { id: '1', username: 'test-user', nickname: 'Test user' },
@@ -46,14 +46,17 @@ let refreshCount: number
 let redirect: ReturnType<typeof vi.fn>
 let waiterCleanups: ReturnType<typeof vi.fn>[]
 
-beforeEach(() => {
+beforeEach(async () => {
   meRequests = []
   refreshCount = 0
   waiterCleanups = []
   redirect = vi.fn()
   vi.stubGlobal('window', { location: { pathname: '/system/role', assign: redirect } })
+  vi.stubGlobal('navigator', {
+    locks: { request: (_name: string, task: () => Promise<unknown>) => task() },
+  })
   useAuthStore.getState().clearSession()
-  accessLifecycle.reset(1, queryClient)
+  await accessLifecycle.reset(1, queryClient)
   useAuthStore.setState({
     tokens: initialTokens,
     user: latestUser.user,
@@ -61,6 +64,7 @@ beforeEach(() => {
     perms: ['withdrawn:permission'],
     menus: [],
     meLoaded: true,
+    bootstrapped: true,
     sessionEpoch: 1,
   })
   const subscribe = useAuthStore.subscribe
@@ -70,11 +74,12 @@ beforeEach(() => {
     return cleanup
   })
   const adapter: AxiosAdapter = async (config) => {
-    if (config.url === '/auth/refresh') {
+    if (config.url === '/auth/browser/csrf') return response(config, { token: 'test-only-csrf' })
+    if (config.url === '/auth/browser/refresh') {
       refreshCount++
       return response(config, rotatedTokens)
     }
-    if (config.url === '/auth/login') return response(config, switchedTokens)
+    if (config.url === '/auth/browser/login') return response(config, switchedTokens)
     if (config.headers.Authorization === `Bearer ${initialTokens.accessToken}`) {
       return response(config, null, 40100)
     }

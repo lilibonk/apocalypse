@@ -19,7 +19,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -34,6 +33,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -43,7 +43,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
 import lombok.RequiredArgsConstructor;
 
-/** 安全装配：无状态 JWT 资源服务器。 关闭 CSRF——本服务为纯无状态 JSON API（无 Cookie 会话），CSRF 攻击面不存在；若未来引入浏览器会话需重新开启。 */
+/** 安全装配：业务 API 使用无状态 Bearer；浏览器 Cookie 认证入口单独要求 CSRF 与精确来源。 */
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties(SecurityProperties.class)
@@ -61,6 +61,10 @@ public class SecurityConfig {
     "/auth/login",
     "/auth/refresh",
     "/auth/token",
+    "/auth/browser/csrf",
+    "/auth/browser/login",
+    "/auth/browser/refresh",
+    "/auth/browser/logout",
     "/v3/api-docs/**",
     "/swagger-ui/**",
     "/swagger-ui.html",
@@ -68,8 +72,13 @@ public class SecurityConfig {
   };
 
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    http.csrf(csrf -> csrf.disable())
+  public SecurityFilterChain securityFilterChain(
+      HttpSecurity http, BrowserCookiePolicy cookiePolicy) throws Exception {
+    http.csrf(
+            csrf ->
+                csrf.csrfTokenRepository(cookiePolicy.csrfRepository())
+                    .csrfTokenRequestHandler(new BrowserCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher(BrowserCookiePolicy::requiresCsrf))
         // 跨域来源走 CorsConfigurationSource bean（apocalypse.security.cors.allowed-origins 配置）
         .cors(Customizer.withDefaults())
         .sessionManagement(
@@ -94,7 +103,9 @@ public class SecurityConfig {
             oauth2 ->
                 oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
         // 黑名单校验需在 BearerTokenAuthenticationFilter 之后（SecurityContext 已填充 Jwt）
-        .addFilterAfter(jwtBlacklistFilter, BearerTokenAuthenticationFilter.class);
+        .addFilterAfter(jwtBlacklistFilter, BearerTokenAuthenticationFilter.class)
+        .addFilterBefore(
+            new BrowserRequestGuardFilter(cookiePolicy, restAccessDeniedHandler), CsrfFilter.class);
     return http.build();
   }
 
@@ -170,7 +181,7 @@ public class SecurityConfig {
 
   @Bean
   public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
+    return CompatiblePasswordEncoder.create();
   }
 
   /** HS256 要求密钥 ≥ 32 字节（256 bit），启动期即校验，避免运行期签名失败。 */

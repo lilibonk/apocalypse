@@ -1,0 +1,2009 @@
+{
+  "schemaVersion": 1,
+  "scope": "Production dependency graph plus Vite/Tailwind build contributions; may over-include code absent from the final bundle. License texts are in frontend-dependencies.txt; metadata alone is not a redistribution review.",
+  "dependencies": [
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/babel/babel.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76",
+          "bytes": 1106
+        }
+      ]
+    },
+    {
+      "name": "@floating-ui/core",
+      "version": "1.8.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/floating-ui/floating-ui.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+          "bytes": 1089
+        }
+      ]
+    },
+    {
+      "name": "@floating-ui/dom",
+      "version": "1.8.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/floating-ui/floating-ui.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+          "bytes": 1089
+        }
+      ]
+    },
+    {
+      "name": "@floating-ui/react-dom",
+      "version": "2.1.9",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/floating-ui/floating-ui.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+          "bytes": 1089
+        }
+      ]
+    },
+    {
+      "name": "@floating-ui/utils",
+      "version": "0.2.12",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/floating-ui/floating-ui.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+          "bytes": 1089
+        }
+      ]
+    },
+    {
+      "name": "@hookform/resolvers",
+      "version": "5.9.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/react-hook-form/resolvers.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e8eeb472f0a5889c2c51625b86a3f9b8630680adb9f49a125352e2e426392780",
+          "bytes": 1080
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/number",
+      "version": "1.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/primitive",
+      "version": "1.1.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-accessible-icon",
+      "version": "1.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-accordion",
+      "version": "1.2.20",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-alert-dialog",
+      "version": "1.1.23",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-arrow",
+      "version": "1.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-aspect-ratio",
+      "version": "1.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-avatar",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-checkbox",
+      "version": "1.3.11",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-collapsible",
+      "version": "1.1.20",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-collection",
+      "version": "1.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-compose-refs",
+      "version": "1.1.5",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-context",
+      "version": "1.2.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-context-menu",
+      "version": "2.3.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-dialog",
+      "version": "1.1.23",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-direction",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-dismissable-layer",
+      "version": "1.1.19",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-dropdown-menu",
+      "version": "2.1.24",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-focus-guards",
+      "version": "1.1.6",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-focus-scope",
+      "version": "1.1.16",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-form",
+      "version": "0.1.16",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-hover-card",
+      "version": "1.1.23",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-id",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-label",
+      "version": "2.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-menu",
+      "version": "2.1.24",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-menubar",
+      "version": "1.1.24",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-navigation-menu",
+      "version": "1.2.22",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-one-time-password-field",
+      "version": "0.1.16",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-password-toggle-field",
+      "version": "0.1.11",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-popover",
+      "version": "1.1.23",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-popper",
+      "version": "1.3.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-portal",
+      "version": "1.1.17",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-presence",
+      "version": "1.1.10",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-primitive",
+      "version": "2.1.10",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-progress",
+      "version": "1.1.16",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-radio-group",
+      "version": "1.4.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-roving-focus",
+      "version": "1.1.19",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-scroll-area",
+      "version": "1.2.18",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-select",
+      "version": "2.3.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-separator",
+      "version": "1.1.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-slider",
+      "version": "1.4.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "version": "1.3.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-switch",
+      "version": "1.3.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-tabs",
+      "version": "1.1.21",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-toast",
+      "version": "1.2.23",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-toggle",
+      "version": "1.1.18",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-toggle-group",
+      "version": "1.1.19",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-toolbar",
+      "version": "1.1.19",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-tooltip",
+      "version": "1.2.16",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-callback-ref",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-controllable-state",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-effect-event",
+      "version": "0.0.5",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-escape-keydown",
+      "version": "1.1.5",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-is-hydrated",
+      "version": "0.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-layout-effect",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-previous",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-rect",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-use-size",
+      "version": "1.1.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/react-visually-hidden",
+      "version": "1.2.11",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@radix-ui/rect",
+      "version": "1.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/standard-schema/standard-schema",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "653b779005a3a4d64a7288c940f7b9a0e8f0b1e0375f6aa6af9473caf131e564",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "@standard-schema/utils",
+      "version": "0.3.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/standard-schema/standard-schema",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9cf2166507311f427e083ef7671da566949391cb745789abcff8bd43ac26d1f1",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "@tanstack/query-core",
+      "version": "5.102.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/TanStack/query.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "5.102.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/TanStack/query.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a405ee70c632bb938acb7ac5f210e814409b3760ea9d2329d8ed8ffcfd11a0e7",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "@types/react",
+      "version": "19.2.18",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "bytes": 1141
+        }
+      ]
+    },
+    {
+      "name": "@types/react-dom",
+      "version": "19.2.5",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+          "bytes": 1141
+        }
+      ]
+    },
+    {
+      "name": "agent-base",
+      "version": "6.0.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/TooTallNate/node-agent-base.git",
+      "licenseFiles": [
+        {
+          "path": "README.md#license",
+          "sha256": "b3681ff73335c04770aa0367aa4ca72e77e5ca55007fc0bcb9d564d00cce20f4",
+          "bytes": 1108
+        }
+      ]
+    },
+    {
+      "name": "ajv",
+      "version": "8.20.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "ajv-validator/ajv",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3",
+          "bytes": 1090
+        }
+      ]
+    },
+    {
+      "name": "ajv-formats",
+      "version": "2.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ajv-validator/ajv-formats.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "9df3bb69929a3b650ed73b3bfa1756725aaff0ac296461605753547004eafeaf",
+          "bytes": 1074
+        }
+      ]
+    },
+    {
+      "name": "aria-hidden",
+      "version": "1.2.6",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/theKashey/aria-hidden.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "asynckit",
+      "version": "0.4.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/alexindigo/asynckit.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1953150d5d4b10c7542cee6f6e0c613b2682545233f069d75cfff1936386ce10",
+          "bytes": 1078
+        }
+      ]
+    },
+    {
+      "name": "axios",
+      "version": "1.19.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/axios/axios.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "82761059eaedacb3356803aea8a170d8298609f91b14fc32ee1bfb40d690183c",
+          "bytes": 1084
+        }
+      ]
+    },
+    {
+      "name": "call-bind-apply-helpers",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/call-bind-apply-helpers.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "declaredLicense": "Apache-2.0",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/joe-bell/cva.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0ccbf956cffc8dcf515809433cb5242ee67c94513d46e48c261d68d0880de406",
+          "bytes": 10753
+        }
+      ]
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "lukeed/clsx",
+      "licenseFiles": [
+        {
+          "path": "license",
+          "sha256": "9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97",
+          "bytes": 1104
+        }
+      ]
+    },
+    {
+      "name": "cmdk",
+      "version": "1.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/pacocoursey/cmdk.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "b5acfd21b3b61508365224c40ec1b03ec71091248baaf989d4be916551e7d532",
+          "bytes": 1069
+        }
+      ]
+    },
+    {
+      "name": "combined-stream",
+      "version": "1.0.8",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/felixge/node-combined-stream.git",
+      "licenseFiles": [
+        {
+          "path": "License",
+          "sha256": "47eb8ca82c798246774946d1be0f9aa08f025fa8325ced0947aeeb4c05fe5547",
+          "bytes": 1085
+        }
+      ]
+    },
+    {
+      "name": "cookie",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "jshttp/cookie",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c02110eedc16c7114f1a9bdc026c65626ce1d9c7e27fd51a8e0feee8a48a6858",
+          "bytes": 1175
+        }
+      ]
+    },
+    {
+      "name": "csstype",
+      "version": "3.2.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/frenic/csstype",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e",
+          "bytes": 1062
+        }
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "4.4.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/debug-js/debug.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3a61c6c96caf5c1d9b623fb9b04c822b783dfcb78aa7e49c76a3f643e6ed7f95",
+          "bytes": 1139
+        }
+      ]
+    },
+    {
+      "name": "delayed-stream",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/felixge/node-delayed-stream.git",
+      "licenseFiles": [
+        {
+          "path": "License",
+          "sha256": "47eb8ca82c798246774946d1be0f9aa08f025fa8325ced0947aeeb4c05fe5547",
+          "bytes": 1085
+        }
+      ]
+    },
+    {
+      "name": "detect-node-es",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/thekashey/detect-node",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "54b32293ea560d22cd9b62af9b2cda1a030d910a48c6601d227c5ff2338d95f8",
+          "bytes": 1068
+        }
+      ]
+    },
+    {
+      "name": "dunder-proto",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/es-shims/dunder-proto.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2b770a704c15de238c3f622b01b0044ddd60b49ee30608ea6991ebf19db7a7a1",
+          "bytes": 1073
+        }
+      ]
+    },
+    {
+      "name": "es-define-property",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/es-define-property.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "es-errors",
+      "version": "1.3.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/es-errors.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "es-object-atoms",
+      "version": "1.1.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/es-object-atoms.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "5e325595b4ea8cfec3802f545b1def5d7b73e4a5b8e9ba63e32a320f67732292",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "es-set-tostringtag",
+      "version": "2.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/es-shims/es-set-tostringtag.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1a3aeb1f1398bd697d57c3c585faadf59d825aca6e3162cd7eeb72ff76eb2466",
+          "bytes": 1073
+        }
+      ]
+    },
+    {
+      "name": "fast-deep-equal",
+      "version": "3.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/epoberezkin/fast-deep-equal.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+          "bytes": 1074
+        }
+      ]
+    },
+    {
+      "name": "fast-uri",
+      "version": "3.1.8",
+      "declaredLicense": "BSD-3-Clause",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/fastify/fast-uri.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786",
+          "bytes": 1813
+        }
+      ]
+    },
+    {
+      "name": "follow-redirects",
+      "version": "1.16.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+ssh://git@github.com/follow-redirects/follow-redirects.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "bfa8a54bb952ccda79f0f1889721d108f5b605babbb2b8a3705ffb52f4132eb7",
+          "bytes": 1136
+        }
+      ]
+    },
+    {
+      "name": "form-data",
+      "version": "4.0.6",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/form-data/form-data.git",
+      "licenseFiles": [
+        {
+          "path": "License",
+          "sha256": "e5b780d4f38d1d3328e3e53186c4e62d3fa149ea6f2bacd5de5ad0c30ac85343",
+          "bytes": 1118
+        }
+      ]
+    },
+    {
+      "name": "framer-motion",
+      "version": "13.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/motiondivision/motion/",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "5ff46083b88563822b0560dd6221ab89d2f74bc97a52d4c97a75020fd62c6f32",
+          "bytes": 1078
+        }
+      ]
+    },
+    {
+      "name": "function-bind",
+      "version": "1.1.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/Raynos/function-bind.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "773e131a7684726005a7e4688a80b4620033bc08499bc1404dd1a1eb3bca725e",
+          "bytes": 1052
+        }
+      ]
+    },
+    {
+      "name": "get-intrinsic",
+      "version": "1.3.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/get-intrinsic.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "39c5ec504cf6bd5cd782a7c695828e09189df79f5d94840e4f08feb97b9fd416",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "get-nonce",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git@github.com:theKashey/get-nonce.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "acf3b087b348d2f2e731b9d4131af185aad694c1204ce14a46909483fd42da05",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "get-proto",
+      "version": "1.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/get-proto.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "be46ce1e3b0479af9ce82d22b465a6d7d2ff084fca0aaf3d54172da2b5eb5781",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "gopd",
+      "version": "1.2.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/ljharb/gopd.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "d90bf0a089da4cf43d644ed240a0b3825dcdb705e64e38371d56995a4cc9e4c5",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "has-symbols",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/inspect-js/has-symbols.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "206c1adcf206dc0031b11232f5b054ec5f1662407ab1ca415247921cab2068ab",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "has-tostringtag",
+      "version": "1.0.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/inspect-js/has-tostringtag.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e2560e002e13281578c75c850061d9255c33d16d732939e8c2db64c2506642fa",
+          "bytes": 1067
+        }
+      ]
+    },
+    {
+      "name": "hasown",
+      "version": "2.0.4",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/inspect-js/hasOwn.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "bf9b0d665be2a689851eea667ca9f42066ea1d903b38349c51e6a44b2577680a",
+          "bytes": 1083
+        }
+      ]
+    },
+    {
+      "name": "html-parse-stringify",
+      "version": "4.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/i18next/html-parse-stringify.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3eb2802a4d0ea79f80977817451b056571dccd8373c9bf4e9be4b05f86afbf90",
+          "bytes": 1156
+        }
+      ]
+    },
+    {
+      "name": "https-proxy-agent",
+      "version": "5.0.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git://github.com/TooTallNate/node-https-proxy-agent.git",
+      "licenseFiles": [
+        {
+          "path": "README.md#license",
+          "sha256": "b3681ff73335c04770aa0367aa4ca72e77e5ca55007fc0bcb9d564d00cce20f4",
+          "bytes": 1108
+        }
+      ]
+    },
+    {
+      "name": "i18next",
+      "version": "26.4.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/i18next/i18next.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "1cd0a2b02a6cc40ef8ee16310d13eeffdd7b5de4a562fd3ee7c921d8eb54f60a",
+          "bytes": 1082
+        }
+      ]
+    },
+    {
+      "name": "json-schema-traverse",
+      "version": "1.0.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/epoberezkin/json-schema-traverse.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+          "bytes": 1074
+        }
+      ]
+    },
+    {
+      "name": "lucide-react",
+      "version": "1.34.0",
+      "declaredLicense": "ISC",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/lucide-icons/lucide.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+          "bytes": 3208
+        }
+      ]
+    },
+    {
+      "name": "math-intrinsics",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/es-shims/math-intrinsics.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "2b770a704c15de238c3f622b01b0044ddd60b49ee30608ea6991ebf19db7a7a1",
+          "bytes": 1073
+        }
+      ]
+    },
+    {
+      "name": "mime-db",
+      "version": "1.52.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "jshttp/mime-db",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "cc1dfd4dafa27271e8212cd3b274eeb3f262e40a6fdab36ddc3f9696f706f58b",
+          "bytes": 1172
+        }
+      ]
+    },
+    {
+      "name": "mime-types",
+      "version": "2.1.35",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "jshttp/mime-types",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "71f83c4c0621102a56d9853812777b85751bce7e9726f686f5b056c1f8a4b0e6",
+          "bytes": 1167
+        }
+      ]
+    },
+    {
+      "name": "motion",
+      "version": "13.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/motiondivision/motion",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "1bf0dc3f7727723e5a032ed12164a47cf92c05204cb1a3485f123c24e2833ed1",
+          "bytes": 1100
+        }
+      ]
+    },
+    {
+      "name": "motion-dom",
+      "version": "13.1.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/motiondivision/motion",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "1bf0dc3f7727723e5a032ed12164a47cf92c05204cb1a3485f123c24e2833ed1",
+          "bytes": 1100
+        }
+      ]
+    },
+    {
+      "name": "motion-utils",
+      "version": "13.0.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/motiondivision/motion",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "1bf0dc3f7727723e5a032ed12164a47cf92c05204cb1a3485f123c24e2833ed1",
+          "bytes": 1100
+        }
+      ]
+    },
+    {
+      "name": "ms",
+      "version": "2.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "vercel/ms",
+      "licenseFiles": [
+        {
+          "path": "license.md",
+          "sha256": "1662fae9b5314d11cf51284e2dcd1f006a354f7343f08712a730fcff9a359801",
+          "bytes": 1079
+        }
+      ]
+    },
+    {
+      "name": "proxy-from-env",
+      "version": "2.1.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/Rob--W/proxy-from-env.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "f55828df4b8752c48e765a806465b76a103e3cb363379c569b15a1df2ba2d79e",
+          "bytes": 1087
+        }
+      ]
+    },
+    {
+      "name": "radix-ui",
+      "version": "1.6.7",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/radix-ui/primitives.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+          "bytes": 1063
+        }
+      ]
+    },
+    {
+      "name": "react",
+      "version": "19.2.8",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/react/react.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "bytes": 1088
+        }
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.8",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/react/react.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "bytes": 1088
+        }
+      ]
+    },
+    {
+      "name": "react-hook-form",
+      "version": "7.86.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/react-hook-form/react-hook-form",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "e8eeb472f0a5889c2c51625b86a3f9b8630680adb9f49a125352e2e426392780",
+          "bytes": 1080
+        }
+      ]
+    },
+    {
+      "name": "react-i18next",
+      "version": "17.0.12",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/i18next/react-i18next.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "29b8ae456ef442e53a98df183ad088cf98c2ece73aa84c462330c43e665b8ab2",
+          "bytes": 1083
+        }
+      ]
+    },
+    {
+      "name": "react-remove-scroll",
+      "version": "2.7.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/theKashey/react-remove-scroll",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "react-remove-scroll-bar",
+      "version": "2.3.8",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/theKashey/react-remove-scroll-bar",
+      "licenseFiles": [
+        {
+          "path": "LICENSE (upstream supplement)",
+          "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84",
+          "bytes": 1093,
+          "url": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE"
+        }
+      ]
+    },
+    {
+      "name": "react-router",
+      "version": "7.18.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/remix-run/react-router",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49",
+          "bytes": 1161
+        }
+      ]
+    },
+    {
+      "name": "react-style-singleton",
+      "version": "2.2.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/theKashey/react-style-singleton",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "require-from-string",
+      "version": "2.0.2",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "floatdrop/require-from-string",
+      "licenseFiles": [
+        {
+          "path": "license",
+          "sha256": "6ee0feb1f6ef996ff5a68600f8cf98909cf412d39ef3cdceaefd87d636fa1b7f",
+          "bytes": 1128
+        }
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.27.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/facebook/react.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "bytes": 1088
+        }
+      ]
+    },
+    {
+      "name": "set-cookie-parser",
+      "version": "2.6.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "nfriedly/set-cookie-parser",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3888e22c6295249cd218efd6fdd8764eab273210c4b1a5294510ac16cacce8fb",
+          "bytes": 1147
+        }
+      ]
+    },
+    {
+      "name": "sonner",
+      "version": "2.0.8",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/emilkowalski/sonner.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "da9201378c36ffd81f51ad0b305f3f0981e90bc558789210ad65d1161eec3b7d",
+          "bytes": 1070
+        }
+      ]
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "3.6.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/dcastil/tailwind-merge.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "d4c70c7ce38cea8778f0aed3fc0bef0a9dbd27f13bd8b6773cbd6d37941971e5",
+          "bytes": 1070
+        }
+      ]
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.3",
+      "declaredLicense": "MIT",
+      "scope": "build contribution: generated stylesheet",
+      "upstream": "https://github.com/tailwindlabs/tailwindcss.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "three",
+      "version": "0.185.1",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/mrdoob/three.js",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+          "bytes": 1081
+        }
+      ]
+    },
+    {
+      "name": "tslib",
+      "version": "2.8.1",
+      "declaredLicense": "0BSD",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/Microsoft/tslib.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+          "bytes": 655
+        }
+      ]
+    },
+    {
+      "name": "typescript",
+      "version": "6.0.3",
+      "declaredLicense": "Apache-2.0",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/microsoft/TypeScript.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47",
+          "bytes": 9197
+        }
+      ]
+    },
+    {
+      "name": "use-callback-ref",
+      "version": "1.3.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/theKashey/use-callback-ref/",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "use-sidecar",
+      "version": "1.1.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/theKashey/use-sidecar",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "30f0cfddf483d1128e3610205020f2041a6c5e837aa999e0aa82e5576187d4a9",
+          "bytes": 1071
+        }
+      ]
+    },
+    {
+      "name": "use-sync-external-store",
+      "version": "1.6.0",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "https://github.com/facebook/react.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+          "bytes": 1088
+        }
+      ]
+    },
+    {
+      "name": "vite",
+      "version": "7.3.6",
+      "declaredLicense": "MIT",
+      "scope": "build contribution: module-preload runtime helper (full upstream license file retained)",
+      "upstream": "git+https://github.com/vitejs/vite.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "a77a1c089806b39ad339535bdf3677f636c91d96693e8ad7b11fe733f650ea64",
+          "bytes": 101176
+        }
+      ]
+    },
+    {
+      "name": "zod",
+      "version": "4.4.3",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/colinhacks/zod.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "bytes": 1072
+        }
+      ]
+    },
+    {
+      "name": "zustand",
+      "version": "5.0.15",
+      "declaredLicense": "MIT",
+      "scope": "production dependency graph (conservative superset of bundled code)",
+      "upstream": "git+https://github.com/pmndrs/zustand.git",
+      "licenseFiles": [
+        {
+          "path": "LICENSE",
+          "sha256": "c1e6e266563517467b1bf874817d23e426f3149252bd7d42758cd697514b8417",
+          "bytes": 1070
+        }
+      ]
+    }
+  ]
+}

@@ -67,6 +67,11 @@ export function configureClient(next: ClientHooks): void {
 export const http = axios.create({
   baseURL: '/api',
   timeout: 15_000,
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN',
+  withXSRFToken: (config) =>
+    typeof window !== 'undefined' &&
+    new URL(axios.getUri(config), window.location.href).origin === window.location.origin,
 })
 
 // 请求拦截：挂 Authorization（白名单除外）+ X-Trace-Id 透传
@@ -104,9 +109,10 @@ function refreshOnce(epoch: number): Promise<boolean> {
   if (refreshFlight?.epoch === epoch) return refreshFlight.promise
   const flight = { epoch, promise: hooks.tryRefresh() }
   refreshFlight = flight
-  void flight.promise.finally(() => {
+  const finish = () => {
     if (refreshFlight === flight) refreshFlight = undefined
-  })
+  }
+  void flight.promise.then(finish, finish)
   return flight.promise
 }
 
@@ -178,6 +184,21 @@ http.interceptors.response.use(
         const retried = await handleUnauthorized(error.config)
         if (retried !== null) return retried.data as never
         throw new ApiError(CODE_UNAUTHORIZED, '未认证或凭证无效')
+      }
+      const body: unknown = error.response.data
+      if (
+        body &&
+        typeof body === 'object' &&
+        'code' in body &&
+        typeof body.code === 'number' &&
+        'message' in body &&
+        typeof body.message === 'string'
+      ) {
+        throw new ApiError(
+          body.code,
+          body.message,
+          'traceId' in body && typeof body.traceId === 'string' ? body.traceId : null,
+        )
       }
       throw new ApiError(error.response.status, `服务异常（HTTP ${error.response.status}）`)
     }

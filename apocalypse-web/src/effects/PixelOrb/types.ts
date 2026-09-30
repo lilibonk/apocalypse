@@ -1,5 +1,5 @@
 /**
- * PixelOrb 当前角色契约（docs/brand-slime/solution-fit.md）。
+ * PixelOrb 当前角色契约。
  *
  * 状态词表固定为 idle / waiting / success / error / sleeping：
  * loading 语义并入 waiting；thinking 为 2 期 Agent 界面化身预留、当前不实现（宪法 §5）。

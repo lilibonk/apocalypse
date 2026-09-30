@@ -1,7 +1,7 @@
 /*
  * 设计 token 层 —— DEFINITION.md 的 CSS 投影（颜色/密度/半径）。
  *
- * 规则（见 AGENTS.md 与 src/design/DEFINITION.md）：
+ * 使用约定（见 src/design/DEFINITION.md）：
  * - 组件禁止写死颜色与间距像素值，一律引用本文件的 CSS 变量或 Tailwind 语义类
  *   （bg-background / text-muted-foreground / border-border / bg-primary ...）。
  * - 中性灰阶为骨架，品牌填充 --brand 驱动 --primary，可读强调 --brand-text 驱动 --ring，

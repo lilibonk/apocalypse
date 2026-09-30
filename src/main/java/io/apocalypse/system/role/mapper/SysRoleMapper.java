@@ -1,6 +1,7 @@
 package io.apocalypse.system.role.mapper;
 
 import io.apocalypse.common.response.PageResult;
+import io.apocalypse.system.authorization.dto.response.DataScopeResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 
@@ -74,15 +75,28 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
   /** 联表分页查询某角色下的用户；直接投影为角色域视图，避免依赖用户域实体/转换器。 */
   @Select(
       """
+      <script>
       SELECT u.id, u.username, u.nickname, u.status FROM sys_user u
       JOIN sys_user_role ur ON u.id = ur.user_id
       WHERE ur.role_id = #{roleId} AND u.deleted = 0
+      <if test="!scope.all">
+        <choose><when test="scope.departmentIds.size() > 0">
+          AND u.dept_id IN
+          <foreach collection="scope.departmentIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </when><otherwise>AND 1 = 0</otherwise></choose>
+      </if>
       ORDER BY u.create_time DESC, u.id DESC
+      </script>
       """)
-  Page<RoleUserResp> selectUserPage(Page<RoleUserResp> page, @Param("roleId") Long roleId);
+  Page<RoleUserResp> selectUserPage(
+      Page<RoleUserResp> page, @Param("roleId") Long roleId, @Param("scope") DataScopeResp scope);
 
   default PageResult<RoleUserResp> pageUsers(Long roleId, int page, int size) {
-    return PageResult.of(selectUserPage(new Page<>(page, size), roleId));
+    return pageUsers(roleId, page, size, new DataScopeResp(true, List.of()));
+  }
+
+  default PageResult<RoleUserResp> pageUsers(Long roleId, int page, int size, DataScopeResp scope) {
+    return PageResult.of(selectUserPage(new Page<>(page, size), roleId, scope));
   }
 
   /** 批量统计有效用户，用于整体替换前防止脏关联。 */

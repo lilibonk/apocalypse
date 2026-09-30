@@ -23,7 +23,7 @@ describe('authorization result generations', () => {
     const client = new QueryClient()
     const lifecycle = new AccessLifecycle()
     const menus = [menu('calendar'), menu('fixture')]
-    lifecycle.accept(0, menus, ['read', 'write', 'fixture-read'], client)
+    await lifecycle.accept(0, menus, ['read', 'write', 'fixture-read'], client)
     const read = lifecycle.capture('calendar', ['read'])
     const write = lifecycle.capture('calendar', ['write'])
     const other = lifecycle.capture('fixture', ['fixture-read'])
@@ -42,7 +42,7 @@ describe('authorization result generations', () => {
     expect(writing.signal.aborted).toBe(true)
     expect(reading.signal.aborted).toBe(false)
     expect(otherWork.signal.aborted).toBe(false)
-    lifecycle.accept(0, menus, ['read', 'write', 'fixture-read'], client)
+    await lifecycle.accept(0, menus, ['read', 'write', 'fixture-read'], client)
     const newWrite = lifecycle.capture('calendar', ['write'])
     client.getQueryCache().build(client, options(newWrite)).setData('new')
     await withdrawal
@@ -59,17 +59,17 @@ describe('authorization result generations', () => {
     client.clear()
   })
 
-  it('module removal and refresh invalidate old operations even if grants return unchanged', () => {
+  it('module removal and refresh invalidate old operations even if grants return unchanged', async () => {
     const client = new QueryClient()
     const lifecycle = new AccessLifecycle()
-    lifecycle.accept(0, [menu('calendar')], ['read'], client)
+    await lifecycle.accept(0, [menu('calendar')], ['read'], client)
     const original = lifecycle.begin(lifecycle.capture('calendar', ['read']))
-    lifecycle.pause(client)
+    await lifecycle.pause(client)
     expect(original.signal.aborted).toBe(true)
-    lifecycle.accept(0, [menu('calendar')], ['read'], client)
+    await lifecycle.accept(0, [menu('calendar')], ['read'], client)
     expect(original.isCurrent()).toBe(false)
     const next = lifecycle.begin(lifecycle.capture('calendar', ['read']))
-    lifecycle.accept(0, [], ['read'], client)
+    await lifecycle.accept(0, [], ['read'], client)
     expect(next.signal.aborted).toBe(true)
     expect(() => lifecycle.begin(lifecycle.capture('unknown', []))).toThrow()
     client.clear()
@@ -78,7 +78,7 @@ describe('authorization result generations', () => {
   it('late ignored-signal result cannot execute external side effects in another identity', async () => {
     const client = new QueryClient()
     const lifecycle = new AccessLifecycle()
-    lifecycle.accept(0, [menu('fixture')], ['download'], client)
+    await lifecycle.accept(0, [menu('fixture')], ['download'], client)
     const operation = lifecycle.begin(lifecycle.capture('fixture', ['download']))
     let resolve!: (value: string) => void
     const ignoredSignal = new Promise<string>((done) => {
@@ -88,8 +88,8 @@ describe('authorization result generations', () => {
     const pending = ignoredSignal.then((data) => {
       if (operation.isCurrent()) saved = data
     })
-    lifecycle.reset(1, client)
-    lifecycle.accept(1, [menu('fixture')], ['download'], client)
+    await lifecycle.reset(1, client)
+    await lifecycle.accept(1, [menu('fixture')], ['download'], client)
     resolve('old secret')
     await pending
     expect(saved).toBe('')

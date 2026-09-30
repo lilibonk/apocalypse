@@ -25,6 +25,15 @@ export default definePageSchema({
   columns: [
     { key: 'roleName', title: '角色名称' },
     { key: 'roleKey', title: '角色标识' },
+    {
+      key: 'dataScope',
+      title: '数据范围',
+      options: [
+        { label: '全部部门', value: 'ALL' },
+        { label: '本部门', value: 'DEPT' },
+        { label: '本部门及下级部门', value: 'DEPT_AND_CHILDREN' },
+      ],
+    },
     { key: 'sort', title: '排序' },
     { key: 'status', title: '状态', type: 'dict', dictType: 'sys_user_status' },
     { key: 'remark', title: '备注' },
@@ -35,6 +44,18 @@ export default definePageSchema({
     fields: [
       { name: 'roleName', label: '角色名称', type: 'input', required: true, maxLength: 64 },
       { name: 'roleKey', label: '角色标识', type: 'input', required: true, maxLength: 64 },
+      {
+        name: 'dataScope',
+        label: '数据范围',
+        type: 'select',
+        defaultValue: 'DEPT',
+        options: [
+          { label: '全部部门', value: 'ALL' },
+          { label: '本部门', value: 'DEPT' },
+          { label: '本部门及下级部门', value: 'DEPT_AND_CHILDREN' },
+        ],
+        help: '数据范围只作用于此角色实际授予的操作。',
+      },
       { name: 'sort', label: '排序', type: 'number', min: 0, max: 9999 },
       {
         name: 'status',

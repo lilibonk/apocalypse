@@ -11,8 +11,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
- * 部门 Mapper。树查询用 PostgreSQL WITH RECURSIVE（替代 ancestors 冗余列，约定见 AGENTS.md §5）； MP 类型封装在 default
- * 方法内（约定见 {@link SysUserMapper}）。
+ * 部门 Mapper。树查询用 PostgreSQL WITH RECURSIVE，替代 ancestors 冗余列；MP 类型封装在 default 方法内（约定见 {@link
+ * SysUserMapper}）。
  */
 public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
 
@@ -33,6 +33,19 @@ public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
       SELECT * FROM dept_tree ORDER BY sort
       """)
   List<SysDeptEntity> selectTree();
+
+  /** 只有从有效根经全有效祖先到达的部门可以作为用户部门目标。 */
+  @Select(
+      """
+      WITH RECURSIVE dept_tree AS (
+        SELECT * FROM sys_dept WHERE parent_id = 0 AND deleted = 0 AND status = 1
+        UNION
+        SELECT d.* FROM sys_dept d JOIN dept_tree t ON d.parent_id = t.id
+        WHERE d.deleted = 0 AND d.status = 1
+      )
+      SELECT * FROM dept_tree ORDER BY sort, id
+      """)
+  List<SysDeptEntity> selectActiveTree();
 
   /** 以 rootId 为根的子树（含 rootId 自身）；UNION 对完整行去重，使历史循环数据也能有限返回。 */
   @Select(

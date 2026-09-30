@@ -1,13 +1,15 @@
 # Apocalypse
 
-Apocalypse 是开发中的 Java 25 / Spring Boot 4.1 模块化单体管理后台脚手架。后端保持**单 Maven 模块**，以 Spring Modulith、ArchUnit 和集成测试守护业务边界；同仓库提供 React 管理台。当前代码可作为开发基础，已通过一次隔离副本的最小模块接入演练；**尚未发布稳定版本，也未完成跨版本升级验收**。
+Apocalypse 是 Java 25 / Spring Boot 4.1 模块化单体管理后台脚手架。后端保持**单 Maven 模块**，以 Spring Modulith、ArchUnit 和集成测试守护业务边界；同仓库提供 React 管理台。当前版本为 **0.1.0-rc.1 发行候选**，已完成只读及带用户归属写入的隔离模块接入演练；正式发行状态与支持范围见[发行契约](docs/release.md)。
 
 ## 已有能力
 
-- 系统管理：用户、角色、菜单/按钮权限、部门、字典、参数、登录/操作审计和在线会话。
-- 基础设施：Spring Security/JWT、对象授权约定、MyBatis-Plus、Flyway、PostgreSQL、Redis/Caffeine 两级缓存、OpenAPI、限流和 TraceId。
-- 质量检查：`./mvnw verify` 运行格式、依赖、架构、单元及 Testcontainers 集成检查；前端用 `pnpm check` 运行格式、lint、测试与构建。
+- 系统管理：用户、角色及三档部门行级数据范围、菜单/按钮权限、部门、字典、参数、登录/操作审计和在线会话。
+- 基础设施：Spring Security/JWT、浏览器内存 access/HttpOnly refresh 与 CSRF、对象授权约定、MyBatis-Plus、Flyway、PostgreSQL、Redis/Caffeine 两级缓存、OpenAPI、限流和 TraceId。
+- 质量检查：`./mvnw verify` 运行格式、依赖、架构、单元及 Testcontainers 集成检查；前端用 `pnpm check` 运行格式、类型规则、单元测试与构建，`pnpm test:browser` 验证真实 Chromium 交互与权限竞态。
 - 可选能力：Calendar 是默认关闭的试验模块，并非业务系统的通用领域模板。关闭运行入口时，它的代码及 V8–V10 数据库迁移仍在同一制品中；早期 Order 运行 API 已退役，V2 迁移与事件兼容桥仍保留。
+
+本框架不提供代码生成器。在线任务调度管理平台、公告、多租户及通用文件服务不属于当前发行范围；业务开发使用现有模块入口、DynaLayer 和明确的权限/查询合同。首版支持范围与后续兼容政策以[发行契约](docs/release.md)为准。
 
 ## 本地启动
 
@@ -18,9 +20,8 @@ Apocalypse 是开发中的 Java 25 / Spring Boot 4.1 模块化单体管理后台
 - [使用文档索引](docs/README.md)：启动、模块接入、运行、发行边界与 Calendar 可选能力。
 - [模块开发](docs/module-development.md)：后端模块入口、权限、迁移及前端页面/查询合同。
 - [前端 README](apocalypse-web/README.md)：前端命令、目录与联调方式。
-- [架构约束](AGENTS.md)：贡献者必须遵守的项目红线；前端另见[前端约束](apocalypse-web/AGENTS.md)。
 
-维护者的产品计划、历史设计和验收证据不属于使用脚手架的前置条件。仓库内 `docs/plans/` 等历史记录不替代上述现行使用文档。部署前请阅读[运行与升级边界](docs/operations.md)，并按自己的环境验证安全、备份及观测配置。
+模块接入以现行使用文档、代码中的扩展入口及自动化检查为依据。部署前请阅读[运行与升级边界](docs/operations.md)，并按自己的环境验证安全、备份及观测配置。
 
 ## 许可
 
