@@ -25,3 +25,5 @@ Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/�
 登录页的 WebGPU 史莱姆是当前品牌实现；不支持 WebGPU 或用户关闭动效时使用静态展示。Apocalypse 项目自有部分按 [Apache License 2.0](../LICENSE) 授权；史莱姆、UI 组件和其他直接移植来源的原始许可见[第三方声明](../THIRD_PARTY_NOTICES.md)。历史设计验收记录不是新业务页面的接入指南；现行视觉与交互约束见[设计定义](src/design/DEFINITION.md)。
 
 当前界面采用苹果应用式层级与 mint 品牌：中性内容底色、轻量导航材质、明暗主题、固定正文的两档密度与整层浮层动效。标准 CRUD 继续使用 DynaLayer，查询失败与成功空态分别表达；视觉和状态规则见[设计定义](src/design/DEFINITION.md)。
+
+工作台的品牌首图与根 README 同源，提供桌面/手机、明暗四份素材。静态 Apo 图形标用于登录页、侧栏、移动导航与 favicon；应用图形标和首图跟随应用主题，登录交互角色仍沿用现有 WebGPU 与静态降级。素材位于 `public/brand/`，图形消费者为 `BrandSignature`，首图消费者为 `BrandHero`。

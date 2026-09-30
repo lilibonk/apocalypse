@@ -6,33 +6,18 @@
   role="img"
   aria-label="Apo / Milk Cloud brand mark"
 >
-  <title>Apocalypse · Apo / Milk Cloud</title>
-  <style>
-    @media (prefers-color-scheme: dark) {
-      .apo-body {
-        fill: #78e0c5;
-      }
-      .apo-eyes {
-        fill: #101b18;
-      }
-      .apo-smile {
-        stroke: #101b18;
-      }
-    }
-  </style>
+  <title>Apo / Milk Cloud</title>
   <path
-    class="apo-body"
     fill="#087b63"
     d="M6 27C5 20 9 16 17 17C27 19 35 16 45 10C51 7 56 10 56 17C56 25 58 31 61 39C64 50 57 55 47 54C34 53 23 59 12 56C4 54 3 49 5 41C7 35 7 31 6 27Z"
   />
-  <g class="apo-eyes" fill="#f5f9f6">
+  <g fill="#f5f9f6">
     <ellipse cx="25" cy="34" rx="2.6" ry="3.3" />
     <ellipse cx="45" cy="29" rx="2.6" ry="3.3" />
   </g>
   <path
     d="M33 41Q39 43 44 37"
     fill="none"
-    class="apo-smile"
     stroke="#f5f9f6"
     stroke-width="2.5"
     stroke-linecap="round"

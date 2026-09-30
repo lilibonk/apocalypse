@@ -51,6 +51,8 @@ Apple Liquid Glass 在本项目是 Web 视觉借鉴。仅导航、工具栏等�
 - prefers-reduced-motion 与 html[data-motion='off'] 都生效；禁用后内容立即可读、可操作。任何逻辑不得依赖动画结束才允许操作。
 - 数据表格和树节点不常驻装饰动画。PixelWave 仅保留开发实验室默认关闭预览，登录不挂载。
 - 角色使用当前 Milk Cloud 运行实现，静态签名与角色职责分离。PixelOrb 兼容入口和 idle/waiting/success/error/sleeping 状态、384/256/128/64/32 容器、WebGPU 单后端、静态降级、隐藏暂停与资源释放保留。角色造型的人工接受以独立角色交付记录为准。
+- 静态品牌图形标采用 Apo / Milk Cloud 的不对称轮廓、豆眼与微笑，与 README 首图同源；侧栏、移动导航、登录页首与 favicon 共用此图形。应用内明暗版本跟随 `.dark`，favicon 适配浏览器的系统主题。字标采用 Apocalypse 的自然大小写与系统字体。
+- 工作台欢迎区使用 README 同源品牌首图，提供桌面/手机和明暗版本；常用任务、活动与会话保留现有权限和真实数据行为。首图作为静态品牌展示，不挂载 WebGPU；登录页继续保留交互角色与密码闭眼。
 
 ## 7. 验证与维护
 

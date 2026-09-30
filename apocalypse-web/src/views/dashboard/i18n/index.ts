@@ -8,6 +8,7 @@ const dashboardI18n = {
       welcome: '{{name}}，欢迎回来',
       welcomeAnonymous: '欢迎回来',
       subtitle: '开始一项管理任务，或查看最近的访问与操作。',
+      brandHeroAlt: 'Apocalypse 品牌首图：Apo / Milk Cloud。为复杂系统，保留秩序。',
       commonTasks: '常用任务',
       commonTasksHint: '按当前可访问的页面展示',
       noTasks: '当前账户暂无可访问的任务页面。',
@@ -46,6 +47,8 @@ const dashboardI18n = {
       welcome: 'Welcome back, {{name}}',
       welcomeAnonymous: 'Welcome back',
       subtitle: 'Start a management task or review recent access and operations.',
+      brandHeroAlt:
+        'Apocalypse brand artwork with Apo / Milk Cloud. Bringing order to complex systems.',
       commonTasks: 'Common tasks',
       commonTasksHint: 'Pages available to your account',
       noTasks: 'No task pages are available to this account.',

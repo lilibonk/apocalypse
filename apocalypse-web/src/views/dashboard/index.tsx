@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
+import { BrandHero } from '@/components/BrandHero'
 import { resolveMenuIcon } from '@/components/layout/menu-icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -136,6 +137,8 @@ export default function DashboardPage() {
         </h1>
         <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
       </header>
+
+      <BrandHero alt={t('brandHeroAlt')} />
 
       <section aria-labelledby="dashboard-tasks-title" className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
