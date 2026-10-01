@@ -2,7 +2,7 @@
 
 本参考把同一发行版本的 JAR 和前端静态目录部署到单机 Linux Docker：nginx 提供 HTTPS 和 `/api/` 代理，Temurin 25 运行后端，PostgreSQL 18.6 保存数据，Redis 8.10.1 保存缓存与会话辅助状态。根目录的 `docker-compose.yml` 仍仅用于本地开发。
 
-参考配置在 [deploy/compose.yml](../deploy/compose.yml)，运行时配置和密钥放在仓库之外。当前平台为 Linux arm64（本机 Linux VM），本批冻结的诊断 JAR 已完成安装、重启、新卷恢复、失败制品回退，以及生产静态资源限制的代理与后端直连验证；正式候选仍需在依赖批准和正式构建后以同一制品验收。官方镜像也提供 amd64，但未把本轮 arm64 结果当作 amd64、HA、压力测试或公网生产环境验收。没有前一正式版本，因此不承诺从任意开发库原地升级。
+参考配置在 [deploy/compose.yml](../deploy/compose.yml)，运行时配置和密钥放在仓库之外。首版支持范围限定为已测的 Linux arm64 单机环境（本机 Linux VM）；具体发布包和同包验收范围见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.1)。官方镜像也提供 amd64，但未把本轮 arm64 结果当作 amd64、HA、压力测试或公网生产环境验收。没有前一正式版本，因此不承诺从任意开发库原地升级。
 
 ## 准备与首次启动
 
@@ -62,7 +62,7 @@ dc up -d --force-recreate --wait --wait-timeout 180 backend
 
 关闭 springdoc 的 UI/API 配置并不删除 JAR 中的 WebJar；此前诊断实测中，认证用户仍可读取 Swagger JavaScript。本次 `application-prod.yml` 已设置 `spring.web.resources.add-mappings=false`，让生产后端自身禁用默认静态资源映射；前端静态资源继续由 nginx 独立提供。nginx 同时按准确路径边界拒绝 Swagger UI、WebJar 和 OpenAPI 文档入口，保留相邻的业务 API 前缀。未知 API 仍按统一契约返回 `R.code=40400`。
 
-包含上述改动的新冻结诊断 JAR 已通过代理与后端直连复验：代理返回 HTTP 404，后端认证后的真实 Swagger WebJar 请求返回 `R.code=40400`；正常 API 和恢复流程仍可用。这是诊断制品的结果，正式发行仍需用最终批准和构建的候选复验。静态资源不可达也不代表 JAR 中的依赖已消失或已知漏洞已经修复，依赖风险仍按发行审查处理。
+发行验收同时检查代理与后端直连：代理返回 HTTP 404，后端认证后的真实 Swagger WebJar 请求返回 `R.code=40400`，并复核正常 API 和恢复流程。静态资源不可达也不代表 JAR 中的依赖已消失或已知漏洞已经修复，依赖风险仍按[发行契约](release.md)处理。
 
 `deployment.env` 只保存非秘密路径与 UID/端口。Compose secrets 在这里是受限的宿主机文件挂载，不是加密秘密管理服务。不要修改 `APP_UID` 后忘记同步文件所有者；否则应用无法读取 `0600` 密钥。移动部署时要同时保全权限、证书和受控凭据记录。
 

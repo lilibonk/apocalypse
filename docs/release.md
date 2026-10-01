@@ -1,6 +1,6 @@
 # 发行与兼容契约
 
-当前前后端统一为 **`0.1.0-rc.1` 发行候选**，尚未发布稳定 tag。候选版本号不表示所有发行验收已经通过；正式分发以固定 commit、验收记录和发行负责人批准为准。项目自有部分采用 [Apache License 2.0](../LICENSE)，第三方代码与依赖依[各自声明](../THIRD_PARTY_NOTICES.md)授权。
+当前前后端统一为 **`0.1.0-rc.1` 首版预发布**，尚未发布稳定版本。[GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.1) 提供固定 tag 对应的发布包和 SHA-256 校验值；版本号不表示跨平台、容量或完整供应链保证。项目自有部分采用 [Apache License 2.0](../LICENSE)，第三方代码与依赖依[各自声明](../THIRD_PARTY_NOTICES.md)授权。
 
 ## 首次发行的制品边界
 
