@@ -3,7 +3,7 @@
  * DynaTable rowKey=jti，分页禁用（page 固定 1、size 取列表长度）；空态文案「暂无在线用户」。
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, LogOut } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -33,6 +33,8 @@ import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import { summarizeUserAgent } from '@/lib/user-agent'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
+import { useAuthStore } from '@/stores/auth'
 
 import { kickOnlineUser, listOnlineUsers, type OnlineUserRow } from './online.api'
 
@@ -46,6 +48,11 @@ const columns: DynaColumn[] = [
 ]
 
 export default function OnlineUserPage() {
+  const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
+  return <OnlineUserWorkspace key={authorizationEpoch} />
+}
+
+function OnlineUserWorkspace() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [kicking, setKicking] = useState<OnlineUserRow | null>(null)
@@ -64,8 +71,14 @@ export default function OnlineUserPage() {
     },
   })
 
-  const kickMutation = useMutation({
-    mutationFn: (jti: string) => kickOnlineUser(jti),
+  const kickMutation = useModuleMutation(undefined, {
+    localKey: kicking?.jti ?? '',
+    mutationFn: (run, jti: string) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:online:kick'],
+        execute: (transport) => kickOnlineUser(jti, transport),
+      }),
     onSuccess: () => {
       toast.success(
         t('common.已将该用户全部设备强制下线', { defaultValue: '已将该用户全部设备强制下线' }),

@@ -5,6 +5,9 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.framework.capability.CapabilityRegistry;
 import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.authorization.service.AuthorizationAuditService;
+import io.apocalypse.system.authorization.service.AuthorizationReadService;
+import io.apocalypse.system.authorization.service.AuthorizationStateService;
 import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.menu.dto.request.MenuSaveReq;
 import io.apocalypse.system.menu.dto.response.MenuTreeNode;
@@ -19,7 +22,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,12 @@ public class MenuService {
 
   private final CapabilityRegistry capabilityRegistry;
 
+  private final AuthorizationReadService authorizationReadService;
+
+  private final AuthorizationAuditService authorizationAudit;
+
+  private final AuthorizationStateService authorizationState;
+
   /** 全量菜单树（管理端）。 */
   public List<MenuTreeNode> tree() {
     return buildTree(sysMenuMapper.selectAll());
@@ -49,22 +57,28 @@ public class MenuService {
   }
 
   /** 用户接口权限串；能力状态是缓存身份的一部分，跨配置实例不会复用错误快照。 */
-  @Cacheable(
-      cacheNames = "userPerms",
-      key = "#userId + ':' + @capabilityRegistry.cacheDiscriminator()",
-      sync = true)
   public List<String> permsByUserId(Long userId) {
-    return enabledPermsByUserId(userId);
+    return authorizationReadService.snapshotForUser(userId).permissions();
   }
 
   /** 认证签发专用：始终从数据库读取，禁止把可能滞后的缓存权限写入新 JWT。 */
   public List<String> freshPermsByUserId(Long userId) {
-    return enabledPermsByUserId(userId);
+    return authorizationReadService.snapshotForUser(userId).permissions();
   }
 
   /** 角色授权前批量校验菜单主键。 */
   public void requireValidMenuIds(List<Long> menuIds) {
-    if (!menuIds.isEmpty() && sysMenuMapper.selectBatchIds(menuIds).size() != menuIds.size()) {
+    requireValidNavigationIds(menuIds);
+  }
+
+  /** 导航只能引用 C/M，停用关系可保留但不会成为有效导航。 */
+  public void requireValidNavigationIds(List<Long> menuIds) {
+    if (menuIds.isEmpty()) {
+      return;
+    }
+    List<SysMenuEntity> menus = sysMenuMapper.selectBatchIds(menuIds);
+    if (menus.size() != menuIds.size()
+        || menus.stream().anyMatch(menu -> !List.of("C", "M").contains(menu.getMenuType()))) {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的菜单");
     }
   }
@@ -74,12 +88,15 @@ public class MenuService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public Long create(MenuSaveReq req) {
     dataScopeService.requireGlobalWrite("system:menu:add");
+    requireNavigationRequest(req);
     validateParent(null, req.parentId());
     SysMenuEntity entity = new SysMenuEntity();
     applyReq(entity, req);
     entity.setId(null);
     sysMenuMapper.insert(entity);
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "NAVIGATION", entity.getId(), 0, entity.getVersion(), null, toNode(entity, Map.of()));
     return entity.getId();
   }
 
@@ -88,11 +105,18 @@ public class MenuService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, MenuSaveReq req) {
     dataScopeService.requireGlobalWrite("system:menu:edit");
+    requireNavigationRequest(req);
     SysMenuEntity entity = requireById(id);
+    requireNavigationEntity(entity);
+    MenuTreeNode before = toNode(entity, Map.of());
+    int beforeVersion = entity.getVersion();
     validateParent(id, req.parentId());
     applyReq(entity, req);
     ConcurrencyGuard.requireSingleRow(sysMenuMapper.updateById(entity));
+    authorizationState.navigationChanged(id);
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "NAVIGATION", id, beforeVersion, entity.getVersion(), before, toNode(entity, Map.of()));
   }
 
   /** 删除菜单（逻辑删）。存在子菜单时不允许删除。 */
@@ -100,12 +124,22 @@ public class MenuService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void delete(Long id) {
     dataScopeService.requireGlobalWrite("system:menu:remove");
-    requireById(id);
+    SysMenuEntity entity = requireById(id);
+    requireNavigationEntity(entity);
+    MenuTreeNode before = toNode(entity, Map.of());
     if (!sysMenuMapper.selectByParentId(id).isEmpty()) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "存在子菜单，不允许删除");
     }
     ConcurrencyGuard.requireSingleRow(sysMenuMapper.deleteById(id));
+    authorizationState.navigationChanged(id);
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "NAVIGATION",
+        id,
+        entity.getVersion(),
+        entity.getVersion() + 1L,
+        before,
+        Map.of("navigation", before, "deleted", true));
   }
 
   private SysMenuEntity requireById(Long id) {
@@ -146,7 +180,6 @@ public class MenuService {
     entity.setMenuType(req.menuType());
     entity.setPath(req.path());
     entity.setComponent(req.component());
-    entity.setPerms(req.perms());
     entity.setIcon(req.icon());
     entity.setSort(req.sort() == null ? 0 : req.sort());
     entity.setVisible(req.visible() == null ? 1 : req.visible());
@@ -190,12 +223,17 @@ public class MenuService {
         entity.getStatus());
   }
 
-  private List<String> enabledPermsByUserId(Long userId) {
-    return sysMenuMapper.selectPermissionMenusByUserId(userId).stream()
-        .filter(menu -> capabilityRegistry.isEnabled(menu.getModuleKey()))
-        .map(SysMenuEntity::getPerms)
-        .distinct()
-        .toList();
+  private static void requireNavigationRequest(MenuSaveReq request) {
+    if (!List.of("C", "M").contains(request.menuType())
+        || (request.perms() != null && !request.perms().isEmpty())) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "菜单仅管理 C/M 导航，业务权限请使用独立权限目录");
+    }
+  }
+
+  private static void requireNavigationEntity(SysMenuEntity entity) {
+    if (!List.of("C", "M").contains(entity.getMenuType())) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "历史按钮权限为只读档案");
+    }
   }
 
   /** 禁用节点及以该节点为祖先的已返回子树全部移除，绝不把关闭模块的子节点提升为根。 */

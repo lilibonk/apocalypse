@@ -105,6 +105,8 @@ export interface DynaEditAction {
   label?: string
   /** perms 串（域:对象:动作），无权限不渲染。 */
   perm?: string
+  /** This particular execution entry requires the effective ALL scope. */
+  requiresAllScope?: boolean
 }
 
 /** 行操作：查看详情（打开 DynaDetail，不发起额外请求）。 */
@@ -112,6 +114,8 @@ export interface DynaViewAction {
   kind: 'view'
   label?: string
   perm?: string
+  /** This particular execution entry requires the effective ALL scope. */
+  requiresAllScope?: boolean
 }
 
 /** 行操作：删除（AlertDialog 确认 → DELETE {endpoint}/{id}）。 */
@@ -119,6 +123,8 @@ export interface DynaDeleteAction {
   kind: 'delete'
   label?: string
   perm?: string
+  /** This particular execution entry requires the effective ALL scope. */
+  requiresAllScope?: boolean
 }
 
 /**
@@ -143,6 +149,8 @@ export interface DynaStatusToggleAction {
    */
   submitRow?: boolean
   perm?: string
+  /** This particular execution entry requires the effective ALL scope. */
+  requiresAllScope?: boolean
 }
 
 /**
@@ -157,6 +165,8 @@ export interface DynaCustomAction {
   /** 按钮文案原文；渲染层走 t() 兜底原文。 */
   label: string
   perm?: string
+  /** This particular execution entry requires the effective ALL scope. */
+  requiresAllScope?: boolean
 }
 
 export type DynaRowAction =
@@ -181,6 +191,7 @@ export interface DynaPageSchema {
   listPerm?: string
   /** 顶部「新增」按钮权限串；缺省不渲染新增按钮。 */
   createPerm?: string
+  createRequiresAllScope?: boolean
   /** 新增按钮文案（默认 `新增${entityName ?? ''}`）。 */
   createLabel?: string
   search?: DynaSearchField[]
@@ -309,12 +320,23 @@ const columnSchema = z
   })
 
 const rowActionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('view'), label: z.string().optional(), perm: permsString.optional() }),
-  z.object({ kind: z.literal('edit'), label: z.string().optional(), perm: permsString.optional() }),
+  z.object({
+    kind: z.literal('view'),
+    label: z.string().optional(),
+    perm: permsString.optional(),
+    requiresAllScope: z.boolean().optional(),
+  }),
+  z.object({
+    kind: z.literal('edit'),
+    label: z.string().optional(),
+    perm: permsString.optional(),
+    requiresAllScope: z.boolean().optional(),
+  }),
   z.object({
     kind: z.literal('delete'),
     label: z.string().optional(),
     perm: permsString.optional(),
+    requiresAllScope: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('status-toggle'),
@@ -325,12 +347,14 @@ const rowActionSchema = z.discriminatedUnion('kind', [
     offLabel: z.string().optional(),
     submitRow: z.boolean().optional(),
     perm: permsString.optional(),
+    requiresAllScope: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('custom'),
     key: z.string().min(1),
     label: z.string().min(1),
     perm: permsString.optional(),
+    requiresAllScope: z.boolean().optional(),
   }),
 ])
 
@@ -345,6 +369,7 @@ export const pageSchemaValidator = z
     pageSize: z.number().int().positive().optional(),
     listPerm: permsString.optional(),
     createPerm: permsString.optional(),
+    createRequiresAllScope: z.boolean().optional(),
     createLabel: z.string().optional(),
     search: z.array(searchFieldSchema).optional(),
     columns: z.array(columnSchema).min(1, 'columns 至少一列'),

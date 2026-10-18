@@ -1,90 +1,107 @@
 /**
- * Task-oriented dashboard. Escapes DynaLayer because it combines independent read-only sources,
- * while every entry and activity record remains bounded by the current account's permissions.
+ * Task-oriented dashboard. Escapes DynaLayer because independent read-only sources feed
+ * bounded sample visualizations; every source and detail remains guarded by current access.
  */
-
-import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, CircleAlert, LogIn, MonitorDot, ScrollText } from 'lucide-react'
-import { useMemo } from 'react'
+import type { UseQueryResult } from '@tanstack/react-query'
+import { ArrowUpRight, LogIn, RefreshCw, ScrollText } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { BrandHero } from '@/components/BrandHero'
+import { InsightCard } from '@/components/insights/InsightCard'
 import { resolveMenuIcon } from '@/components/layout/menu-icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
-import { ApiError } from '@/lib/api/client'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
 import { cn } from '@/lib/utils'
 import { resolvePageComponent } from '@/routes/component-map'
 import { flattenMenuRoutes } from '@/routes/menu-routes'
 import { useAuthStore } from '@/stores/auth'
-import { pageLoginLogs } from '@/views/system/log/login/login-log.api'
-import { pageOperLogs } from '@/views/system/log/oper/oper-log.api'
-import { listOnlineUsers } from '@/views/system/online/online.api'
 
+import { DashboardInsights, SectionSkeleton, type DashboardSourceState } from './dashboard-insights'
+import {
+  operationTypeKey,
+  summarizeLoginSample,
+  summarizeOperationSample,
+  type DashboardSampleSize,
+} from './dashboard-insights.model'
 import {
   commonTaskRoutes,
   readableQueryData,
   recentActivity,
   routeComponent,
+  type RecentActivity,
 } from './dashboard-model'
+import { useDashboardSources } from './dashboard.queries'
+import { MobileDashboard } from './MobileDashboard'
 
-function SectionSkeleton() {
-  const { t } = useTranslation('dashboard')
-  return (
-    <div role="status" className="space-y-4 py-5">
-      <span className="sr-only">{t('loading')}</span>
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-4 w-1/2" />
-      <Skeleton className="h-4 w-3/5" />
-    </div>
-  )
+function visibleSource<T>(
+  query: UseQueryResult<T, Error> & { allowed: boolean },
+): DashboardSourceState<T> {
+  return {
+    allowed: query.allowed,
+    data: readableQueryData(query.allowed, query),
+    error: query.error,
+    isError: query.isError,
+    isPending: query.isPending,
+    isFetching: query.isFetching,
+    retry: () => {
+      void query.refetch()
+    },
+  }
 }
 
-function SourceFailure({
-  source,
-  error,
-  hasData,
-  retrying,
-  onRetry,
-}: {
-  source: string
-  error: unknown
-  hasData: boolean
-  retrying: boolean
-  onRetry: () => void
-}) {
-  const { t } = useTranslation('dashboard')
-  return (
-    <div role="alert" className="flex items-start gap-3 rounded-lg bg-muted p-4 text-sm">
-      <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="font-medium">{t('loadFailed', { source })}</p>
-        <p className="break-words text-muted-foreground">
-          {error instanceof ApiError ? error.message : t('unavailable')}
-        </p>
-        {hasData && <p className="text-xs text-muted-foreground">{t('refreshFailed')}</p>}
-        {!hasData && isResourceDenied(error) && (
-          <p className="text-xs text-muted-foreground">{t('resourceDenied')}</p>
-        )}
-      </div>
-      <Button variant="outline" size="sm" disabled={retrying} onClick={onRetry}>
-        {t('retry')}
-      </Button>
-    </div>
-  )
+interface ActivitySelection {
+  kind: 'login' | 'operation'
+  id: string
+}
+
+interface ActivityDetailState {
+  context: string
+  selection: ActivitySelection | null
+  open: boolean
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation('dashboard')
+  const desktop = useDesktopViewport()
+  return desktop ? <DesktopDashboard /> : <MobileDashboard />
+}
+
+function DesktopDashboard() {
+  const { t, i18n } = useTranslation('dashboard')
+  const language = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'zh'
+  const motionEnabled = useMotionPreference()
   const menuTitle = useMenuTitle()
   const user = useAuthStore((state) => state.user)
-  const perms = useAuthStore((state) => state.perms)
   const menus = useAuthStore((state) => state.menus)
   const meLoaded = useAuthStore((state) => state.meLoaded)
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
+  const [sampleSize, setSampleSize] = useState<DashboardSampleSize>(100)
+  const queries = useDashboardSources()
+  const login = visibleSource(queries.login)
+  const operation = visibleSource(queries.operation)
+  const online = visibleSource(queries.online)
+  const loginSample = useMemo(
+    () => (login.data ? summarizeLoginSample(login.data.list, sampleSize) : null),
+    [login.data, sampleSize],
+  )
+  const operationSample = useMemo(
+    () => (operation.data ? summarizeOperationSample(operation.data.list, sampleSize) : null),
+    [operation.data, sampleSize],
+  )
   const routes = useMemo(
     () =>
       flattenMenuRoutes(menus).filter((route) =>
@@ -93,52 +110,208 @@ export default function DashboardPage() {
     [menus],
   )
   const tasks = commonTaskRoutes(routes)
-  const canReadLogin = meLoaded && perms.includes('system:log:login')
-  const canReadOperation = meLoaded && perms.includes('system:log:oper')
-  const canReadOnline = meLoaded && perms.includes('system:online:list')
-
-  const loginQuery = useQuery({
-    queryKey: ['dashboard', 'login-logs'],
-    queryFn: () => pageLoginLogs(1, 4),
-    enabled: canReadLogin,
-  })
-  const operQuery = useQuery({
-    queryKey: ['dashboard', 'oper-logs'],
-    queryFn: () => pageOperLogs(1, 4),
-    enabled: canReadOperation,
-  })
-  const onlineQuery = useQuery({
-    queryKey: ['dashboard', 'online-users'],
-    queryFn: listOnlineUsers,
-    enabled: canReadOnline,
-  })
-
-  const logins = readableQueryData(canReadLogin, loginQuery)
-  const operations = readableQueryData(canReadOperation, operQuery)
-  const online = readableQueryData(canReadOnline, onlineQuery)
-  const activity = recentActivity(logins?.list, operations?.list)
-  const loadingActivity =
-    (canReadLogin && loginQuery.isPending) || (canReadOperation && operQuery.isPending)
-  const activityFailed =
-    (canReadLogin && loginQuery.isError) || (canReadOperation && operQuery.isError)
-  const hasAuditAccess = canReadLogin || canReadOperation
-  const auditRoute = routes.find((route) =>
-    ['system/log/oper', 'system/log/login'].includes(routeComponent(route)),
-  )
+  const loginRoute = routes.find((route) => routeComponent(route) === 'system/log/login')
+  const operationRoute = routes.find((route) => routeComponent(route) === 'system/log/oper')
   const onlineRoute = routes.find((route) => routeComponent(route) === 'system/online')
+  const auditRoute =
+    operation.allowed && operationRoute ? operationRoute : login.allowed ? loginRoute : undefined
+  const activity = recentActivity(loginSample?.rows, operationSample?.rows)
+  const loadingActivity =
+    (login.allowed && login.isPending) || (operation.allowed && operation.isPending)
+  const activityFailed =
+    (login.allowed && login.isError) || (operation.allowed && operation.isError)
+  const hasAuditAccess = login.allowed || operation.allowed
   const name = user?.nickname || user?.username
+
+  const detailContext = JSON.stringify([
+    sessionEpoch,
+    user?.id,
+    meLoaded,
+    login.allowed,
+    operation.allowed,
+    isResourceDenied(login.error),
+    isResourceDenied(operation.error),
+  ])
+  const [detail, setDetail] = useState<ActivityDetailState>(() => ({
+    context: detailContext,
+    selection: null,
+    open: false,
+  }))
+  // Keep only identity in local state. A changed authorization context cannot preserve a
+  // sensitive row for an exit animation or reopen it when permission later returns.
+  if (detail.context !== detailContext)
+    setDetail({ context: detailContext, selection: null, open: false })
+  const selected = detail.context === detailContext ? detail.selection : null
+  let selectedActivity: RecentActivity | null = null
+  if (selected?.kind === 'login') {
+    const row = login.data?.list.find((entry) => entry.id === selected.id)
+    if (row) selectedActivity = { kind: 'login', id: `login-${row.id}`, time: row.loginTime, row }
+  } else if (selected?.kind === 'operation') {
+    const row = operation.data?.list.find((entry) => entry.id === selected.id)
+    if (row)
+      selectedActivity = { kind: 'operation', id: `operation-${row.id}`, time: row.operTime, row }
+  }
+  if (detail.context === detailContext && detail.open && detail.selection && !selectedActivity) {
+    setDetail({ context: detailContext, selection: null, open: false })
+  }
+
+  const resultLabel = (item: RecentActivity) => {
+    const value = item.kind === 'login' ? item.row.success : item.row.status
+    return t(value === 1 ? 'succeeded' : value === 0 ? 'failed' : 'unknownStatus')
+  }
+  const activityTitle = (item: RecentActivity) =>
+    item.kind === 'login'
+      ? t(
+          item.row.success === 1
+            ? 'loginSuccess'
+            : item.row.success === 0
+              ? 'loginFailure'
+              : 'unknownStatus',
+        )
+      : item.row.title || t('operation')
 
   return (
     <div className="min-w-0 space-y-6 p-4 sm:p-6">
-      <header className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">{t('title')}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {name ? t('welcome', { name }) : t('welcomeAnonymous')}
-        </h1>
-        <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-2">
+          <p className="insight-eyebrow">{t('title')}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {name ? t('welcome', { name }) : t('welcomeAnonymous')}
+          </h1>
+          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
+        </div>
+        {(login.allowed || operation.allowed || online.allowed) && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={login.isFetching || operation.isFetching || online.isFetching}
+            onClick={() => {
+              if (login.allowed) login.retry()
+              if (operation.allowed) operation.retry()
+              if (online.allowed) online.retry()
+            }}
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            {t('refresh')}
+          </Button>
+        )}
       </header>
 
-      <BrandHero alt={t('brandHeroAlt')} />
+      <DashboardInsights
+        login={login}
+        operation={operation}
+        online={online}
+        loginSample={loginSample}
+        operationSample={operationSample}
+        sampleSize={sampleSize}
+        onSampleSize={setSampleSize}
+        motionEnabled={motionEnabled}
+        language={language}
+        loginHref={login.allowed ? loginRoute?.path : undefined}
+        operationHref={operation.allowed ? operationRoute?.path : undefined}
+        onlineHref={online.allowed ? onlineRoute?.path : undefined}
+      >
+        <InsightCard
+          className="flex h-full min-w-0 flex-col p-5 sm:p-6"
+          motionEnabled={motionEnabled}
+          order={5}
+          aria-labelledby="dashboard-activity-title"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="dashboard-activity-title" className="font-semibold">
+                {t('activity')}
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {t('activityHint')}
+              </p>
+            </div>
+            {auditRoute && hasAuditAccess && (
+              <Button variant="ghost" size="xs" asChild>
+                <Link to={auditRoute.path}>
+                  {t('viewAll')}
+                  <ArrowUpRight aria-hidden="true" />
+                </Link>
+              </Button>
+            )}
+          </div>
+          {!hasAuditAccess && (
+            <p role="status" className="py-8 text-sm text-muted-foreground">
+              {t('noAuditAccess')}
+            </p>
+          )}
+          {loadingActivity && <SectionSkeleton />}
+          {hasAuditAccess && !loadingActivity && !activityFailed && activity.length === 0 && (
+            <div role="status" className="space-y-1 py-8 text-center">
+              <p className="text-sm font-medium">{t('noActivity')}</p>
+              <p className="text-xs text-muted-foreground">{t('noActivityHint')}</p>
+            </div>
+          )}
+          {activityFailed && activity.length === 0 && (
+            <p role="status" className="py-8 text-sm text-muted-foreground">
+              {t('unavailable')}
+            </p>
+          )}
+          <ul className="mt-3 flex-1 divide-y divide-border-subtle">
+            {activity.map((item) => {
+              const success = item.kind === 'login' ? item.row.success === 1 : item.row.status === 1
+              const Icon = item.kind === 'login' ? LogIn : ScrollText
+              const title = activityTitle(item)
+              const actor =
+                item.kind === 'login' ? item.row.username : item.row.operName || t('unknownUser')
+              const ip = item.kind === 'login' ? item.row.ip : item.row.operIp
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-start gap-3 rounded-control py-3 text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t('inspectActivity', { title })}
+                    onClick={() =>
+                      setDetail({
+                        context: detailContext,
+                        selection: { kind: item.kind, id: item.row.id },
+                        open: true,
+                      })
+                    }
+                  >
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-control bg-muted text-brand-text">
+                      <Icon className="size-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 break-words text-xs font-medium">{title}</span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            success ? 'text-success-foreground' : 'text-destructive',
+                          )}
+                        >
+                          {resultLabel(item)}
+                        </Badge>
+                      </span>
+                      <span className="block break-words text-xs text-muted-foreground">
+                        {actor} · {ip || t('unknownIp')}
+                      </span>
+                      <time
+                        dateTime={item.time.replace(' ', 'T')}
+                        className="block text-xs text-muted-foreground tabular-nums"
+                      >
+                        {item.time.replace('T', ' ').slice(0, 16)}
+                      </time>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          {hasAuditAccess && (
+            <p className="mt-3 border-t border-border-subtle pt-3 text-xs leading-relaxed text-muted-foreground">
+              {t('activityScope')}
+            </p>
+          )}
+        </InsightCard>
+      </DashboardInsights>
 
       <section aria-labelledby="dashboard-tasks-title" className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -179,160 +352,78 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <div className="grid items-start gap-6 xl:grid-cols-3">
-        <section
-          aria-labelledby="dashboard-activity-title"
-          className="min-w-0 rounded-panel border border-border bg-card xl:col-span-2"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:px-5">
-            <div className="space-y-1">
-              <h2 id="dashboard-activity-title" className="text-base font-semibold">
-                {t('activity')}
-              </h2>
-              <p className="text-xs text-muted-foreground">{t('activityHint')}</p>
-            </div>
-            {auditRoute && hasAuditAccess && (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to={auditRoute.path}>
-                  {t('viewAll')}
-                  <ArrowUpRight className="size-4" aria-hidden="true" />
-                </Link>
-              </Button>
-            )}
-          </div>
-          <div className="px-4 sm:px-5">
-            {!hasAuditAccess && (
-              <p role="status" className="py-8 text-sm text-muted-foreground">
-                {t('noAuditAccess')}
-              </p>
-            )}
-            {(canReadLogin && loginQuery.isError) || (canReadOperation && operQuery.isError) ? (
-              <div className="space-y-3 py-4">
-                {canReadLogin && loginQuery.isError && (
-                  <SourceFailure
-                    source={t('loginSource')}
-                    error={loginQuery.error}
-                    hasData={logins !== undefined}
-                    retrying={loginQuery.isFetching}
-                    onRetry={() => void loginQuery.refetch()}
-                  />
-                )}
-                {canReadOperation && operQuery.isError && (
-                  <SourceFailure
-                    source={t('operationSource')}
-                    error={operQuery.error}
-                    hasData={operations !== undefined}
-                    retrying={operQuery.isFetching}
-                    onRetry={() => void operQuery.refetch()}
-                  />
-                )}
-              </div>
-            ) : null}
-            {loadingActivity && <SectionSkeleton />}
-            {hasAuditAccess && !loadingActivity && !activityFailed && activity.length === 0 && (
-              <div role="status" className="space-y-1 py-8 text-center">
-                <p className="text-sm font-medium">{t('noActivity')}</p>
-                <p className="text-xs text-muted-foreground">{t('noActivityHint')}</p>
-              </div>
-            )}
-            <ul className="divide-y divide-border">
-              {activity.map((item) => {
-                const success =
-                  item.kind === 'login' ? item.row.success === 1 : item.row.status === 1
-                const Icon = item.kind === 'login' ? LogIn : ScrollText
-                const title =
-                  item.kind === 'login'
-                    ? t(success ? 'loginSuccess' : 'loginFailure')
-                    : item.row.title || t('operation')
-                const actor =
-                  item.kind === 'login' ? item.row.username : item.row.operName || t('unknownUser')
-                const ip = item.kind === 'login' ? item.row.ip : item.row.operIp
-                return (
-                  <li key={item.id} className="flex items-start gap-3 py-4">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="min-w-0 break-words text-sm font-medium">{title}</p>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            success ? 'text-success-foreground' : 'text-destructive',
-                          )}
-                        >
-                          {t(success ? 'succeeded' : 'failed')}
-                        </Badge>
-                      </div>
-                      <p className="break-words text-xs text-muted-foreground">
-                        {actor} · {ip || t('unknownIp')}
-                      </p>
-                      <time
-                        dateTime={item.time}
-                        className="block text-xs tabular-nums text-muted-foreground"
-                      >
-                        {item.time.replace('T', ' ').slice(0, 16)}
-                      </time>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-            {hasAuditAccess && (
-              <p className="border-t border-border py-3 text-xs leading-5 text-muted-foreground">
-                {t('activityScope')}
-              </p>
-            )}
-          </div>
-        </section>
+      <BrandHero alt={t('brandHeroAlt')} />
 
-        <aside
-          aria-labelledby="dashboard-sessions-title"
-          className="space-y-4 rounded-panel border border-border bg-card p-4 sm:p-5"
+      {selectedActivity && (
+        <Dialog
+          open={detail.open}
+          onOpenChange={(open) => setDetail((current) => ({ ...current, open }))}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h2 id="dashboard-sessions-title" className="text-base font-semibold">
-                {t('online')}
-              </h2>
-              <p className="text-xs text-muted-foreground">{t('onlineHint')}</p>
-            </div>
-            <MonitorDot className="size-5 text-muted-foreground" aria-hidden="true" />
-          </div>
-          {!canReadOnline && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t('noOnlineAccess')}
-            </p>
-          )}
-          {canReadOnline && onlineQuery.isPending && <SectionSkeleton />}
-          {canReadOnline && onlineQuery.isError && (
-            <SourceFailure
-              source={t('online')}
-              error={onlineQuery.error}
-              hasData={online !== undefined}
-              retrying={onlineQuery.isFetching}
-              onRetry={() => void onlineQuery.refetch()}
-            />
-          )}
-          {online !== undefined && (
-            <p
-              data-slot="session-count"
-              className="text-2xl font-semibold tracking-tight tabular-nums"
-            >
-              {online.length ? t('sessions', { count: online.length }) : t('noSessions')}
-            </p>
-          )}
-          {onlineRoute && canReadOnline && (
-            <Button variant="outline" asChild>
-              <Link to={onlineRoute.path}>
-                {t('manageSessions')}
-                <ArrowUpRight className="size-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          )}
-        </aside>
-      </div>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('details')}</DialogTitle>
+              <DialogDescription>{t('detailsHint')}</DialogDescription>
+            </DialogHeader>
+            <p className="break-words text-base font-medium">{activityTitle(selectedActivity)}</p>
+            <dl className="grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-muted-foreground">{t('actor')}</dt>
+                <dd className="mt-1 break-words">
+                  {selectedActivity.kind === 'login'
+                    ? selectedActivity.row.username
+                    : selectedActivity.row.operName || t('unknownUser')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{t('result')}</dt>
+                <dd className="mt-1">{resultLabel(selectedActivity)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{t('recordedTime')}</dt>
+                <dd className="mt-1 tabular-nums">{selectedActivity.time.replace('T', ' ')}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">{t('address')}</dt>
+                <dd className="mt-1 break-all">
+                  {(selectedActivity.kind === 'login'
+                    ? selectedActivity.row.ip
+                    : selectedActivity.row.operIp) || t('unknownIp')}
+                </dd>
+              </div>
+              {selectedActivity.kind === 'operation' && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">{t('businessType')}</dt>
+                  <dd className="mt-1 break-words">
+                    {operationTypeKey(selectedActivity.row.businessType)
+                      ? t(operationTypeKey(selectedActivity.row.businessType)!)
+                      : selectedActivity.row.businessType || t('typeUnknown')}
+                  </dd>
+                  <dd className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                    {selectedActivity.row.businessType}
+                  </dd>
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">{t('message')}</dt>
+                <dd className="mt-1 break-words">
+                  {(selectedActivity.kind === 'login'
+                    ? selectedActivity.row.message
+                    : selectedActivity.row.errorMsg) || t('missingValue')}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">{t('recordId')}</dt>
+                <dd className="mt-1 break-all font-mono text-xs">{selectedActivity.row.id}</dd>
+              </div>
+            </dl>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">{t('close')}</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

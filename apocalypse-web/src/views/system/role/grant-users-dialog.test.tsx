@@ -1,113 +1,57 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { ApiError } from '@/lib/api/client'
-
 import { GrantUsersDialog } from './index'
-
-const { query, mutation, assigned, queryKeys } = vi.hoisted(() => ({
-  query: vi.fn(),
-  mutation: vi.fn(),
-  assigned: {
-    data: undefined as string[] | undefined,
-    isSuccess: false,
-    isFetching: true,
-    isError: false,
+import type { RolePermissionOpening } from './role-permission.model'
+const { editor } = vi.hoisted(() => ({ editor: vi.fn() }))
+vi.mock('./RoleMemberEditor', () => ({
+  RoleMemberEditor: (props: unknown) => {
+    editor(props)
+    return <div data-testid="shared-member-editor" />
   },
-  queryKeys: [] as (readonly unknown[])[],
 }))
-vi.mock('@tanstack/react-query', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
-  useQuery: query,
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-  useMutation: mutation,
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: (selector: (state: { sessionEpoch: number }) => number) =>
+    selector({ sessionEpoch: 8 }),
 }))
 vi.mock('@/components/dyna', () => ({
   DynaPage: () => null,
   definePageSchema: (schema: unknown) => schema,
 }))
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) =>
-      String(options?.defaultValue ?? key.split('.').slice(1).join('.')).replace(
-        /\{\{(\w+)\}\}/g,
-        (_, name: string) => String(options?.[name] ?? ''),
-      ),
-  }),
-}))
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('@/components/ui/dialog', () => {
   const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return Object.fromEntries(
-    [
-      'Dialog',
-      'DialogContent',
-      'DialogHeader',
-      'DialogTitle',
-      'DialogDescription',
-      'DialogFooter',
-    ].map((name) => [name, Container]),
+    ['Dialog', 'DialogContent', 'DialogHeader', 'DialogTitle', 'DialogDescription'].map((name) => [
+      name,
+      Container,
+    ]),
   )
 })
-
-const render = () =>
-  renderToStaticMarkup(
-    <GrantUsersDialog role={{ id: 'role-1', roleName: 'Role' }} onClose={vi.fn()} />,
-  )
-const saveButton = (html: string) => html.match(/<button\b[^>]*>保存<\/button>/)?.[0]
-
-beforeEach(() => {
-  Object.assign(assigned, { data: undefined, isSuccess: false, isFetching: true, isError: false })
-  queryKeys.length = 0
-  mutation.mockReset()
-  mutation.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  query.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey.includes('grant')) {
-      queryKeys.push(queryKey)
-      return { ...assigned, error: new ApiError(-1, '第二页加载失败'), refetch: vi.fn() }
-    }
-    return {
-      data: { list: [{ id: '1', username: 'visible', nickname: null }], total: 405 },
-      isLoading: false,
-      isFetching: false,
-    }
+beforeEach(() => editor.mockClear())
+describe('list member assignment entry', () => {
+  it('uses the same complete-baseline editor in list presentation', () => {
+    expect(
+      renderToStaticMarkup(
+        <GrantUsersDialog
+          role={{ id: '9223372036854775801', roleName: '审计员' }}
+          onClose={vi.fn()}
+        />,
+      ),
+    ).toContain('shared-member-editor')
+    expect(editor.mock.calls[0]![0]).toMatchObject({
+      presentation: 'list',
+      opening: { principalEpoch: 8, role: { id: '9223372036854775801', roleName: '审计员' } },
+    })
   })
-})
-
-describe('role assignment replacement guard', () => {
-  it('disables editing and saving until the complete assignment load succeeds', () => {
-    const html = render()
-    expect(saveButton(html)).toContain('disabled=""')
-    expect(html.match(/<input\b[^>]*>/)?.[0]).toContain('disabled=""')
-    const options = mutation.mock.calls.at(-1)?.[0] as { mutationFn: (ids: string[]) => unknown }
-    expect(() => options.mutationFn([])).toThrow('完整加载')
-  })
-
-  it('shows an assigned-page failure and keeps saving disabled', () => {
-    Object.assign(assigned, { isFetching: false, isError: true })
-    const html = render()
-    expect(html).toContain('第二页加载失败')
-    expect(html).toContain('重试加载已分配用户')
-    expect(saveButton(html)).toContain('disabled=""')
-  })
-
-  it('does not initialize from successful cached data while its fresh fetch is running', () => {
-    Object.assign(assigned, { data: ['1'], isSuccess: true, isFetching: true })
-    expect(saveButton(render())).toContain('disabled=""')
-  })
-
-  it('keeps assignments outside the visible page and enables save only after initialization', () => {
-    Object.assign(assigned, { data: ['1', '405'], isSuccess: true, isFetching: false })
-    const html = render()
-    expect(html).toContain('已选 2 人（含其他页）')
-    expect(html).toContain('checked=""')
-    expect(saveButton(html)).not.toContain('disabled=""')
-  })
-
-  it('uses a new baseline query for every reopened dialog', () => {
+  it('gives every reopened dialog a fresh private baseline identity', () => {
+    const render = () =>
+      renderToStaticMarkup(
+        <GrantUsersDialog role={{ id: '1', roleName: '审计员' }} onClose={vi.fn()} />,
+      )
     render()
-    const first = queryKeys.at(-1)
     render()
-    expect(queryKeys.at(-1)).not.toEqual(first)
+    const calls = editor.mock.calls as [{ opening: RolePermissionOpening }][]
+    expect(calls[0]![0].opening.openId).not.toEqual(calls[1]![0].opening.openId)
   })
 })

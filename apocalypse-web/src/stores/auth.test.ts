@@ -138,6 +138,10 @@ describe('auth logout state machine', () => {
     const newTokens = { ...tokens, accessToken: 'new-account-access' }
     loginRequest.mockResolvedValue(newTokens)
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'current', nickname: 'Current account' },
       roles: ['ROLE_CURRENT'],
       perms: ['system:user:list'],
@@ -170,6 +174,10 @@ describe('auth logout state machine', () => {
       () => new Promise<typeof tokens>((resolve) => (finishLogin = resolve)),
     )
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'current', nickname: 'Current account' },
       roles: [],
       perms: [],
@@ -193,6 +201,10 @@ describe('auth logout state machine', () => {
     queryClient.setQueryData(['calendar', 'contexts'], [{ id: 'first-account' }])
     loginRequest.mockResolvedValue(switchedTokens)
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'second', nickname: '第二账户' },
       roles: [],
       perms: [],
@@ -212,6 +224,10 @@ describe('auth logout state machine', () => {
       .mockImplementationOnce(() => new Promise((_, reject) => (rejectOlder = reject)))
       .mockResolvedValueOnce({ ...tokens, accessToken: 'current-account-access' })
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'current-account' },
       roles: [],
       perms: [],
@@ -230,6 +246,10 @@ describe('auth logout state machine', () => {
 
   it('账户切换后忽略旧账户晚返回的 ensureMe', async () => {
     let resolveFirstUser!: (value: {
+      authorizationSnapshotId: string
+      evaluatedAt: string
+      nextTransitionAt: null
+      allScopePerms: string[]
       user: { id: string; username: string; nickname: string }
       roles: string[]
       perms: string[]
@@ -240,6 +260,10 @@ describe('auth logout state machine', () => {
     })
     const switchedTokens = { ...tokens, accessToken: 'second-account' }
     fetchCurrentUserRequest.mockReturnValueOnce(firstUser).mockResolvedValueOnce({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'second', nickname: '第二账户' },
       roles: ['ROLE_SECOND'],
       perms: ['calendar:day:list'],
@@ -250,6 +274,10 @@ describe('auth logout state machine', () => {
     const staleEnsureMe = useAuthStore.getState().ensureMe()
     await useAuthStore.getState().login('second', 'password')
     resolveFirstUser({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '1', username: 'first', nickname: '第一账户' },
       roles: ['ROLE_FIRST'],
       perms: ['system:user:list'],
@@ -286,6 +314,10 @@ describe('auth logout state machine', () => {
     })
     refreshRequest.mockResolvedValue(refreshed)
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '1', username: 'admin', nickname: '管理员' },
       roles: [],
       perms: [],
@@ -308,6 +340,10 @@ describe('auth logout state machine', () => {
 
   it('ensureMe 保留后端 moduleKey 作为 capability 唯一事实源', async () => {
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '1', username: 'admin', nickname: '管理员' },
       roles: ['ROLE_ADMIN'],
       perms: ['calendar:day:list'],
@@ -341,9 +377,19 @@ describe('auth logout state machine', () => {
       resolve = yes
       reject = no
     })
-    const me = { user: { id: '1', username: 'admin' }, roles: [], perms: [], menus: [] }
+    const me = {
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
+      user: { id: '1', username: 'admin' },
+      roles: [],
+      perms: [],
+      menus: [],
+    }
     fetchCurrentUserRequest.mockReturnValueOnce(stale).mockResolvedValueOnce(me)
     const first = useAuthStore.getState().ensureMe()
+    useAuthStore.setState((state) => ({ authorizationEpoch: state.authorizationEpoch + 1 }))
     await useAuthStore.getState().ensureMe()
     if (outcome === 'success') resolve({ ...me, perms: ['withdrawn'] })
     else reject(new Error('old failure'))
@@ -369,6 +415,10 @@ describe('auth logout state machine', () => {
       }),
     )
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2' },
       roles: [],
       perms: [],
@@ -392,6 +442,10 @@ describe('auth logout state machine', () => {
       }),
     )
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '1' },
       roles: [],
       perms: [],
@@ -412,6 +466,10 @@ describe('auth logout state machine', () => {
     queryClient.setQueryData(['system', 'users'], [{ id: 'old-only' }])
     refreshRequest.mockResolvedValue({ ...tokens, accessToken: 'new-memory-access' })
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'new', nickname: 'New' },
       roles: [],
       perms: [],
@@ -430,6 +488,10 @@ describe('auth logout state machine', () => {
     useAuthStore.setState({ tokens: null, user: null, bootstrapped: false })
     refreshRequest.mockResolvedValue({ ...tokens, accessToken: 'bootstrap-memory-access' })
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '1', username: 'fixture' },
       roles: [],
       perms: [],
@@ -463,6 +525,10 @@ describe('auth logout state machine', () => {
       .mockImplementationOnce(() => new Promise<typeof tokens>((resolve) => (finishOld = resolve)))
       .mockResolvedValueOnce({ ...tokens, accessToken: 'current-cookie-access' })
     fetchCurrentUserRequest.mockResolvedValue({
+      authorizationSnapshotId: 'test-snapshot',
+      evaluatedAt: '2026-10-18T00:00:00Z',
+      nextTransitionAt: null,
+      allScopePerms: [],
       user: { id: '2', username: 'current-cookie-user' },
       roles: [],
       perms: [],

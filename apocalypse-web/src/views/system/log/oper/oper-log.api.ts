@@ -33,8 +33,10 @@ export function pageOperLogs(
   page: number,
   size: number,
   keyword?: string,
+  signal?: AbortSignal,
 ): Promise<PageResult<OperLogRow>> {
   return request<PageResult<OperLogRow>>('/system/logs/oper', {
     query: { page, size, keyword: keyword || undefined },
+    signal,
   })
 }

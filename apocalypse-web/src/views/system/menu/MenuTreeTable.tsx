@@ -81,7 +81,7 @@ export function MenuTreeTable({
             <TableHead className="min-w-64">
               {t('common.路由定义', { defaultValue: '路由定义' })}
             </TableHead>
-            <TableHead>{t('common.权限标识', { defaultValue: '权限标识' })}</TableHead>
+            <TableHead>{t('system:authorization.legacyTrace')}</TableHead>
             <TableHead className="w-36">
               {t('common.显示与状态', { defaultValue: '显示与状态' })}
             </TableHead>
@@ -160,7 +160,9 @@ export function MenuTreeTable({
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{node.menuName}</span>
                         <Badge variant={typeMeta.variant} className="shrink-0">
-                          {t(`dyna.${typeMeta.label}`, { defaultValue: typeMeta.label })}
+                          {node.menuType === 'F'
+                            ? t('system:authorization.legacyButton')
+                            : t(`dyna.${typeMeta.label}`, { defaultValue: typeMeta.label })}
                         </Badge>
                       </div>
                       <span className="mt-0.5 block truncate text-xs text-muted-foreground">
@@ -191,7 +193,7 @@ export function MenuTreeTable({
                 <TableCell className="font-mono">{node.sort}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   {node.menuType !== 'F' && (
-                    <Perm perm="system:menu:add">
+                    <Perm perm="system:menu:add" requiresAllScope>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -209,13 +211,14 @@ export function MenuTreeTable({
                       </Tooltip>
                     </Perm>
                   )}
-                  <Perm perm="system:menu:edit">
+                  <Perm perm="system:menu:edit" requiresAllScope>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           aria-label={t('common.编辑', { defaultValue: '编辑' })}
+                          disabled={node.menuType === 'F'}
                           onClick={() => onEdit(node)}
                         >
                           <Pencil className="size-3.5" />
@@ -224,13 +227,14 @@ export function MenuTreeTable({
                       <TooltipContent>{t('common.编辑', { defaultValue: '编辑' })}</TooltipContent>
                     </Tooltip>
                   </Perm>
-                  <Perm perm="system:menu:remove">
+                  <Perm perm="system:menu:remove" requiresAllScope>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           aria-label={t('common.删除', { defaultValue: '删除' })}
+                          disabled={node.menuType === 'F'}
                           onClick={() => onDelete(node)}
                         >
                           <Trash2 className="size-3.5 text-destructive" />

@@ -1,6 +1,6 @@
 /**
  * axios 封装：baseURL `/api`（dev 经 vite proxy 剥前缀转发到 :8080）、
- * 响应拦截器统一解包 R、401/40100 → refresh → 重放原请求一次、错误统一抛 ApiError。
+ * 响应拦截器统一解包 R；401/40100 刷新身份并取消旧授权代次的业务操作，错误统一抛 ApiError。
  *
  * 与 auth store 的耦合用注册式回调解开（client 不 import store，避免循环依赖）：
  * 应用启动时由 stores/auth.ts 调 configureClient 注入 token 获取、刷新、登出回调。
@@ -48,6 +48,10 @@ interface ClientHooks {
   /** 取当前 accessToken。 */
   getAccessToken: () => string | null
   getPrincipalEpoch?: () => number
+  getAuthorizationEpoch?: () => number
+  assertAuthorizationCurrent?: (epoch: number) => void
+  assertPermissionAccess?: (permissions: readonly string[], allScopes: readonly string[]) => void
+  subscribeAuthorization?: (listener: () => void) => () => void
   /** 尝试刷新令牌（POST /auth/refresh，旋转机制）；返回是否成功。 */
   tryRefresh: () => Promise<boolean>
   /** 刷新失败或 401/40100 不可恢复时的登出+跳转处理。 */
@@ -91,16 +95,30 @@ function assertRequestCurrent(config: InternalAxiosRequestConfig | undefined) {
   config.requestContext?.assertCurrent()
 }
 
-export function captureRequestContext(): RequestContext {
+export function captureRequestContext(authorization = true): RequestContext {
   const principalEpoch = hooks.getPrincipalEpoch?.() ?? 0
+  const authorizationEpoch = hooks.getAuthorizationEpoch?.() ?? 0
   return {
     principalEpoch,
-    scoped: false,
+    authorizationEpoch,
+    scoped: authorization && hooks.assertAuthorizationCurrent !== undefined,
     assertCurrent: () => {
       if (principalEpoch !== (hooks.getPrincipalEpoch?.() ?? 0))
         throw new CanceledError('Identity changed')
+      if (authorization) hooks.assertAuthorizationCurrent?.(authorizationEpoch)
     },
   }
+}
+
+export function assertPermissionAccess(
+  permissions: readonly string[],
+  allScopes: readonly string[] = [],
+): void {
+  hooks.assertPermissionAccess?.(permissions, allScopes)
+}
+
+export function subscribeAuthorization(listener: () => void): () => void {
+  return hooks.subscribeAuthorization?.(listener) ?? (() => {})
 }
 
 let refreshFlight: { epoch: number; promise: Promise<boolean> } | undefined
@@ -116,7 +134,7 @@ function refreshOnce(epoch: number): Promise<boolean> {
   return flight.promise
 }
 
-/** 401/40100 统一处理链：tryRefresh 成功则重放原请求一次，否则登出。返回 null 表示已处理完（继续抛业务错）。 */
+/** 401/40100 刷新后取消业务操作；未绑定授权的认证请求才可重放。null 表示继续抛业务错。 */
 async function handleUnauthorized(
   config: InternalAxiosRequestConfig | undefined,
 ): Promise<{ data: unknown } | null> {
@@ -218,12 +236,14 @@ export interface RequestOptions {
   context?: RequestContext
   /** Authentication bootstrap must not recursively refresh itself. */
   noRefresh?: boolean
+  /** Only authentication bootstrap reads may run without an accepted authorization snapshot. */
+  authorization?: boolean
 }
 
 /**
  * 发起请求并解包 R（响应拦截器已把 R.data 拍平为返回值）。
  * - code === 0：返回 data。
- * - 40100/HTTP 401：拦截器内先 tryRefresh，成功则原样重放一次；仍失败走 onUnauthorized 并抛错。
+ * - 40100/HTTP 401：先 tryRefresh；旧授权业务操作取消，用户可从新快照重试。
  * - 其他非 0：抛 ApiError（message 即后端中文文案）。
  */
 export function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -236,7 +256,9 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
     params: options.query,
     anonymous: options.anonymous,
     signal: options.signal,
-    requestContext: options.context ?? captureRequestContext(),
+    requestContext:
+      options.context ??
+      captureRequestContext(!options.anonymous && options.authorization !== false),
     noRefresh: options.noRefresh,
   }) as unknown as Promise<T>
 }

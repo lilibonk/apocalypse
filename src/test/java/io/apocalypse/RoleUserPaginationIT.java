@@ -37,6 +37,8 @@ class RoleUserPaginationIT extends AbstractIntegrationTest {
         "Pagination fixture",
         USER_PREFIX);
     jdbcTemplate.update(
+        "INSERT INTO sys_role_authorization_state(role_id,revision) VALUES(?,0)", ROLE_ID);
+    jdbcTemplate.update(
         """
         INSERT INTO sys_user (id, username, password, status, create_time)
         SELECT ? + entry, ? || entry::text, '{test-fixture-disabled}', 0,

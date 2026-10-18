@@ -38,35 +38,42 @@ export function subscribeBrowserSessionChange(listener: () => void): () => void 
   return () => current.removeEventListener('message', receive)
 }
 
-/** Re-read the shared cookie after restoration, coalescing focus/visibility/BFCache bursts. */
-export function subscribeBrowserSessionRestore(listener: () => void): () => void {
+/** BFCache may miss account broadcasts; preserve that signal when coalescing focus bursts. */
+export function subscribeBrowserSessionRestore(
+  listener: (restoredFromCache: boolean) => void,
+): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {}
   let scheduled: ReturnType<typeof setTimeout> | undefined
   let lastStarted = 0
-  const schedule = () => {
+  let requiresCookieRebind = false
+  const schedule = (restoredFromCache = false) => {
+    requiresCookieRebind ||= restoredFromCache
     if (scheduled !== undefined) return
     // There is no polling: one trailing event is retained, with at most one start per second.
     scheduled = setTimeout(
       () => {
         scheduled = undefined
         lastStarted = Date.now()
-        listener()
+        const restore = requiresCookieRebind
+        requiresCookieRebind = false
+        listener(restore)
       },
       Math.max(100, 1000 - (Date.now() - lastStarted)),
     )
   }
+  const focus = () => schedule()
   const visibility = () => {
     if (document.visibilityState === 'visible') schedule()
   }
   const pageshow = (event: PageTransitionEvent) => {
-    if (event.persisted) schedule()
+    if (event.persisted) schedule(true)
   }
-  window.addEventListener('focus', schedule)
+  window.addEventListener('focus', focus)
   document.addEventListener('visibilitychange', visibility)
   window.addEventListener('pageshow', pageshow)
   return () => {
     if (scheduled !== undefined) clearTimeout(scheduled)
-    window.removeEventListener('focus', schedule)
+    window.removeEventListener('focus', focus)
     document.removeEventListener('visibilitychange', visibility)
     window.removeEventListener('pageshow', pageshow)
   }

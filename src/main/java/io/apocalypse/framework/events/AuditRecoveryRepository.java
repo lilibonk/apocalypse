@@ -1,5 +1,6 @@
 package io.apocalypse.framework.events;
 
+import io.apocalypse.common.event.AuthorizationChangedEvent;
 import io.apocalypse.common.event.LoginFailedEvent;
 import io.apocalypse.common.event.LoginSucceededEvent;
 import io.apocalypse.common.event.OperLoggedEvent;
@@ -39,7 +40,8 @@ public class AuditRecoveryRepository implements EventPublicationRepository {
       Map.of(
           LoginSucceededEvent.class.getName(), LoginSucceededEvent.class,
           LoginFailedEvent.class.getName(), LoginFailedEvent.class,
-          OperLoggedEvent.class.getName(), OperLoggedEvent.class);
+          OperLoggedEvent.class.getName(), OperLoggedEvent.class,
+          AuthorizationChangedEvent.class.getName(), AuthorizationChangedEvent.class);
 
   private static final String AUDIT = "event_type IN (:auditTypes) AND completion_date IS NULL";
 

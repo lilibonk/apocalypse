@@ -1,0 +1,276 @@
+.permission-study {
+  min-width: 0;
+}
+
+.permission-study button {
+  cursor: pointer;
+}
+
+.permission-study button:focus-visible {
+  outline: calc(var(--spacing) / 2) solid var(--ring);
+  outline-offset: var(--spacing);
+}
+
+.permission-example-tag {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 14%, var(--card));
+}
+
+.permission-role-choice {
+  border-color: var(--border-subtle);
+  background: var(--card);
+}
+
+.permission-role-choice:hover {
+  background: var(--study-surface-raised);
+}
+
+.permission-role-choice[data-active='true'] {
+  border-color: color-mix(in oklch, var(--study-role) 55%, var(--border));
+  background: color-mix(in oklch, var(--study-role) 8%, var(--card));
+}
+
+.permission-role-icon {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.permission-role-choice[data-active='true'] .permission-role-icon {
+  color: var(--study-role-foreground);
+  background: color-mix(in oklch, var(--study-role) 18%, var(--card));
+}
+
+.permission-role-marker {
+  color: var(--study-role-foreground);
+}
+
+.permission-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1280px) {
+  .permission-workspace {
+    grid-template-columns: minmax(0, 1fr) calc(var(--spacing) * 80);
+  }
+}
+
+.permission-view-control {
+  background: var(--muted);
+}
+
+.permission-view-button {
+  color: var(--muted-foreground);
+}
+
+.permission-view-button[aria-pressed='true'] {
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+
+.permission-reset:hover,
+.permission-clear:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.permission-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.permission-live-dot,
+.permission-legend-selected,
+.permission-detail-dot {
+  background: var(--brand-text);
+}
+
+.permission-legend-other {
+  background: var(--study-edge);
+}
+
+.permission-graph {
+  aspect-ratio: 840 / 560;
+  background-image: radial-gradient(
+    var(--study-grid) calc(var(--spacing) / 5),
+    transparent calc(var(--spacing) / 5)
+  );
+  background-size: calc(var(--spacing) * 5) calc(var(--spacing) * 5);
+}
+
+.permission-edge {
+  stroke: var(--study-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.permission-edge[data-active='true'] {
+  stroke: var(--brand-text);
+  stroke-width: 1.4;
+}
+
+.permission-action-edge {
+  stroke-dasharray: 3 5;
+}
+
+.permission-action-edge[data-active='true'] {
+  stroke-dasharray: none;
+}
+
+.permission-dial-ticks {
+  stroke: var(--study-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.permission-node {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+  z-index: 1;
+}
+
+.permission-node-circle {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+
+.permission-node-role .permission-node-circle {
+  color: var(--study-role-foreground);
+  background: color-mix(in oklch, var(--study-role) 15%, var(--card));
+  border-color: color-mix(in oklch, var(--study-role) 35%, var(--border));
+  box-shadow: 0 0 calc(var(--spacing) * 14) color-mix(in oklch, var(--study-role) 14%, transparent);
+}
+
+.permission-node-group[data-active='true'] .permission-node-circle,
+.permission-node-action[data-active='true'] .permission-node-circle {
+  color: var(--brand-text);
+  border-color: color-mix(in oklch, var(--brand-text) 50%, var(--border));
+  background: color-mix(in oklch, var(--primary) 16%, var(--card));
+  box-shadow: 0 0 calc(var(--spacing) * 12) var(--study-glow);
+}
+
+.permission-node:hover .permission-node-circle {
+  border-color: var(--brand-text);
+}
+
+.permission-node[data-dimmed='true'] {
+  opacity: 0.45;
+}
+
+.permission-node-check {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: calc(var(--spacing) * 4);
+  height: calc(var(--spacing) * 4);
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.permission-node-label {
+  position: absolute;
+  top: calc(100% + var(--spacing) * 5);
+  left: 50%;
+  width: calc(var(--spacing) * 40);
+  max-width: 24vw;
+  translate: -50% 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.permission-node-action .permission-node-label {
+  top: calc(100% + var(--spacing) * 2);
+}
+
+.permission-empty {
+  min-height: calc(var(--spacing) * 100);
+}
+
+.permission-list-group,
+.permission-list-icon {
+  background: var(--study-surface-raised);
+}
+
+.permission-list-icon {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 10%, var(--card));
+}
+
+.permission-list-action:hover,
+.permission-detail-button:hover {
+  background: var(--muted);
+}
+
+.permission-list-action[aria-pressed='true'],
+.permission-detail-button[aria-pressed='true'] {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 12%, var(--card));
+}
+
+.permission-summary-header {
+  background:
+    radial-gradient(ellipse at 90% 15%, var(--study-glow), transparent 70%),
+    var(--study-surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.permission-summary-mark,
+.permission-selection-icon,
+.permission-grant-label {
+  color: var(--brand-text);
+}
+
+.permission-summary-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.permission-coverage span {
+  background: var(--border);
+}
+
+.permission-coverage span[data-granted='true'] {
+  background: var(--brand-text);
+}
+
+.permission-path-index {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.permission-source-path li:last-child .permission-path-index {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 15%, var(--card));
+}
+
+.permission-selection {
+  border-color: var(--border-subtle);
+  background: var(--study-surface-raised);
+}
+
+.permission-selection-icon {
+  background: color-mix(in oklch, var(--primary) 12%, var(--card));
+}
+
+.permission-detail-list {
+  max-height: calc(var(--spacing) * 80);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}

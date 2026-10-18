@@ -26,6 +26,10 @@ const switchedTokens: TokenPair = {
   refreshToken: null,
 }
 const latestUser: CurrentUser = {
+  authorizationSnapshotId: 'test-snapshot',
+  evaluatedAt: '2026-10-18T00:00:00Z',
+  nextTransitionAt: null,
+  allScopePerms: [],
   user: { id: '1', username: 'test-user', nickname: 'Test user' },
   roles: [],
   perms: [],
@@ -106,6 +110,7 @@ afterEach(() => {
 async function beginSupersededRefresh() {
   const refresh = useAuthStore.getState().tryRefresh()
   await vi.waitFor(() => expect(meRequests).toHaveLength(1))
+  useAuthStore.setState((state) => ({ authorizationEpoch: state.authorizationEpoch + 1 }))
   const newerMe = useAuthStore.getState().ensureMe()
   await vi.waitFor(() => expect(meRequests).toHaveLength(2))
   return { refresh, newerMe }
@@ -131,6 +136,7 @@ describe('store and client refresh bootstrap', () => {
 
     // RequireAuth runs this effect when rotation replaces tokens while meLoaded is false.
     // The second request deliberately outlives the refresh-owned bootstrap request.
+    useAuthStore.setState((state) => ({ authorizationEpoch: state.authorizationEpoch + 1 }))
     const guardBootstrap = useAuthStore.getState().ensureMe()
     await vi.waitFor(() => expect(meRequests).toHaveLength(2))
     meRequests[0].finish({ ...latestUser, perms: ['withdrawn:permission'] })
@@ -144,7 +150,7 @@ describe('store and client refresh bootstrap', () => {
 
     expect(tokensWhileLatestPending).toEqual(rotatedTokens)
     expect(redirectsWhileLatestPending).toBe(0)
-    expect(result).toEqual({ ok: true, value: { saved: true } })
+    expect(result).toMatchObject({ ok: false, error: { code: 'ERR_CANCELED' } })
     expect(refreshCount).toBe(1)
     expect(useAuthStore.getState()).toMatchObject({
       tokens: rotatedTokens,
@@ -178,7 +184,8 @@ describe('store and client refresh bootstrap', () => {
 
       await expect(refresh).resolves.toBe(false)
       await expect(newerResult).resolves.toMatchObject({ code })
-      expect(useAuthStore.getState().tokens).toBeNull()
+      expect(useAuthStore.getState().tokens).toEqual(code === 40100 ? null : rotatedTokens)
+      expect(useAuthStore.getState().meLoaded).toBe(false)
       expectWaiterReleased()
       expect(refreshCount).toBe(1)
     },

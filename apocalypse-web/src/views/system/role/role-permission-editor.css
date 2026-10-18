@@ -1,0 +1,137 @@
+.role-menu-editor {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.role-menu-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--spacing) * 5);
+}
+
+@container (min-width: 56rem) {
+  .role-menu-editor-layout {
+    grid-template-columns: minmax(0, 1fr) calc(var(--spacing) * 72);
+  }
+}
+
+.role-menu-editor-canvas {
+  position: relative;
+  aspect-ratio: 780 / 510;
+  background-image: radial-gradient(
+    var(--insight-grid) calc(var(--spacing) / 5),
+    transparent calc(var(--spacing) / 5)
+  );
+  background-size: calc(var(--spacing) * 5) calc(var(--spacing) * 5);
+}
+
+.role-menu-editor-edge {
+  fill: none;
+  stroke: var(--insight-edge);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.role-menu-editor-edge[data-state='unlinked'] {
+  stroke-dasharray: 2 6;
+  opacity: 0.55;
+}
+
+.role-menu-editor-edge[data-state='added'] {
+  stroke: var(--brand-text);
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+}
+
+.role-menu-editor-edge[data-state='removed'] {
+  stroke: var(--destructive);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 5;
+}
+
+.role-menu-editor-node {
+  position: absolute;
+  translate: -50% -50%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+
+.role-menu-editor-node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: calc(var(--spacing) * 1);
+}
+
+.role-menu-editor-node[data-active='true'] {
+  border-color: var(--brand-text);
+  box-shadow: 0 0 calc(var(--spacing) * 10) var(--insight-glow);
+}
+
+.role-menu-editor-node[data-state='added'] {
+  color: var(--brand-text);
+  border-color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 14%, var(--card));
+}
+
+.role-menu-editor-node[data-state='removed'] {
+  color: var(--destructive);
+  border-color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 7%, var(--card));
+}
+
+.role-menu-editor-node[data-role='true'] {
+  color: var(--insight-role-foreground);
+  border-color: color-mix(in oklch, var(--insight-role-foreground) 35%, var(--border));
+  background: color-mix(in oklch, var(--insight-role) 18%, var(--card));
+}
+
+.role-menu-editor-node-label {
+  position: absolute;
+  translate: 0 -50%;
+}
+
+.role-menu-editor-state[data-state='added'] {
+  color: var(--brand-text);
+}
+
+.role-menu-editor-state[data-state='removed'] {
+  color: var(--destructive);
+}
+
+.role-menu-editor-change {
+  border-color: var(--border-subtle);
+  background: var(--insight-surface-raised);
+}
+
+.role-menu-editor-change[data-state='added'] {
+  border-color: color-mix(in oklch, var(--brand-text) 30%, var(--border));
+}
+
+.role-menu-editor-change[data-state='removed'] {
+  border-color: color-mix(in oklch, var(--destructive) 30%, var(--border));
+}
+
+.role-menu-editor-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+  box-shadow: var(--shadow-floating);
+}
+
+.role-menu-editor-edge[data-state='updated'] {
+  stroke: var(--warning);
+  stroke-width: 2;
+}
+
+.role-menu-editor-node[data-state='updated'] {
+  color: var(--warning-foreground);
+  border-color: var(--warning);
+  background: color-mix(in oklch, var(--warning) 12%, var(--card));
+}

@@ -1,7 +1,8 @@
 package io.apocalypse.system.authorization.mapper;
 
-import io.apocalypse.system.authorization.dto.response.RoleScopeGrantResp;
+import io.apocalypse.system.authorization.dto.response.ProtectedGrantResp;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Param;
@@ -14,43 +15,23 @@ public interface DataScopeMapper {
 
   @Select(
       """
-      SELECT DISTINCT r.data_scope, m.module_key FROM sys_role r
-      JOIN sys_user_role ur ON ur.role_id = r.id
-      JOIN sys_user u ON u.id = ur.user_id
-      JOIN sys_role_menu rm ON rm.role_id = r.id
-      JOIN sys_menu m ON m.id = rm.menu_id
-      WHERE u.id = #{userId} AND u.username = #{username} AND u.deleted = 0 AND u.status = 1
-        AND r.deleted = 0 AND r.status = 1
-        AND m.deleted = 0 AND m.status = 1 AND m.perms = #{permission}
-      """)
-  List<RoleScopeGrantResp> selectGrants(
-      @Param("userId") Long userId,
-      @Param("username") String username,
-      @Param("permission") String permission);
-
-  @Select(
-      """
-      WITH RECURSIVE active_depts AS (
-        SELECT id, parent_id FROM sys_dept WHERE parent_id = 0 AND deleted = 0 AND status = 1
-        UNION
-        SELECT d.id, d.parent_id FROM sys_dept d JOIN active_depts a ON d.parent_id = a.id
-        WHERE d.deleted = 0 AND d.status = 1
-      ), allowed AS (
-        SELECT a.id, a.parent_id FROM active_depts a JOIN sys_user u ON u.dept_id = a.id
-        WHERE u.id = #{userId} AND u.deleted = 0 AND u.status = 1
-        UNION
-        SELECT a.id, a.parent_id FROM active_depts a JOIN allowed p ON a.parent_id = p.id
-        WHERE #{children}
-      )
-      SELECT id FROM allowed ORDER BY id
-      """)
-  List<Long> selectAllowedDepartments(
-      @Param("userId") Long userId, @Param("children") boolean children);
-
-  @Select(
-      """
       SELECT EXISTS (SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.id = ur.role_id
         WHERE ur.user_id = #{userId} AND r.deleted = 0 AND r.status = 1 AND r.data_scope = 'ALL')
       """)
   boolean hasEffectiveAllRole(@Param("userId") Long userId);
+
+  @Select(
+      """
+      SELECT DISTINCT p.code, p.module_key
+      FROM sys_user_role ur
+      JOIN sys_role r ON r.id = ur.role_id AND r.deleted = 0
+      JOIN sys_role_permission g ON g.role_id = r.id
+      JOIN sys_permission p ON p.id = g.permission_id AND p.deleted = 0
+      WHERE ur.user_id = #{userId} AND p.lifecycle IN ('ACTIVE', 'DEPRECATED')
+        AND (g.valid_until IS NULL OR g.valid_until > #{evaluatedAt})
+        AND CASE WHEN g.scope_override = 'INHERIT_ROLE'
+          THEN r.data_scope ELSE g.scope_override END = 'ALL'
+      """)
+  List<ProtectedGrantResp> potentialAllGrants(
+      @Param("userId") Long userId, @Param("evaluatedAt") Instant evaluatedAt);
 }

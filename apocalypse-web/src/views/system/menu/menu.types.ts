@@ -54,10 +54,9 @@ export interface MenuNode {
 export interface MenuSaveReq {
   parentId: SnowflakeId
   menuName: string
-  menuType: MenuType
+  menuType: 'C' | 'M'
   path?: string
   component?: string
-  perms?: string
   icon?: string
   sort?: number
   visible?: number

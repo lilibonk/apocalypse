@@ -42,22 +42,23 @@ class SystemBaseIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void roleMenusReturnsCurrentAssignmentsForSafeEditing() {
+  void independentPermissionAndNavigationBaselinesReplaceLegacyMenuProtocol() {
     String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
-    JsonNode menuIds = getForData("/system/roles/1/menus", token);
-
-    assertThat(menuIds.isArray()).isTrue();
+    assertThat(
+            exchangeRaw("/system/roles/1/menus", HttpMethod.GET, null, token).path("code").asInt())
+        .isEqualTo(40000);
+    JsonNode grants = getForData("/system/roles/1/permissions", token).path("grants");
     int assignments =
         jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM sys_role_menu WHERE role_id = 1", Integer.class);
-    assertThat(menuIds).hasSize(assignments);
+            "SELECT count(*) FROM sys_role_permission WHERE role_id = 1", Integer.class);
+    assertThat(grants).hasSize(assignments);
+    assertThat(grants.toString()).contains("order:create").contains("calendar:data-import:publish");
+    JsonNode menuIds = getForData("/system/roles/1/navigation", token).path("navigationIds");
     assertThat(menuIds.toString())
         .contains("\"100\"")
-        .contains("\"144\"")
-        .contains("\"165\"")
         .contains("\"200\"")
-        .contains("\"226\"");
+        .doesNotContain("\"144\"", "\"165\"", "\"226\"");
   }
 
   @Test

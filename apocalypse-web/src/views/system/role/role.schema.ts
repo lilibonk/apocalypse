@@ -19,6 +19,7 @@ export default definePageSchema({
   description: '系统角色的增删改查与授权',
   entityName: '角色',
   createPerm: 'system:role:add',
+  createRequiresAllScope: true,
   search: [
     { name: 'keyword', label: '角色名称 / 标识', type: 'input', placeholder: '角色名称 / 标识' },
   ],
@@ -69,19 +70,30 @@ export default definePageSchema({
     ],
   },
   rowActions: [
-    { kind: 'edit', perm: 'system:role:edit' },
+    { kind: 'edit', perm: 'system:role:edit', requiresAllScope: true },
     {
-      kind: 'status-toggle',
-      field: 'status',
-      onValue: 1,
-      offValue: 0,
-      // RoleSaveReq 全量替换语义（roleName/roleKey @NotBlank）：局部 {status} 会被 400 拒绝，须提交整行
-      submitRow: true,
+      kind: 'custom',
+      key: 'toggle-role',
+      label: '启用 / 停用',
       perm: 'system:role:edit',
+      requiresAllScope: true,
     },
-    { kind: 'delete', perm: 'system:role:remove' },
-    { kind: 'custom', key: 'grant-menus', label: '菜单授权', perm: 'system:role:edit' },
-    { kind: 'custom', key: 'grant-users', label: '分配用户', perm: 'system:role:edit' },
+    { kind: 'delete', perm: 'system:role:remove', requiresAllScope: true },
+    { kind: 'custom', key: 'grant-permissions', label: '业务权限', perm: 'system:role:list' },
+    {
+      kind: 'custom',
+      key: 'grant-navigation',
+      label: '分配导航',
+      perm: 'system:role:edit',
+      requiresAllScope: true,
+    },
+    {
+      kind: 'custom',
+      key: 'grant-users',
+      label: '分配用户',
+      perm: 'system:role:edit',
+      requiresAllScope: true,
+    },
   ],
   deleteNameKey: 'roleName',
 })

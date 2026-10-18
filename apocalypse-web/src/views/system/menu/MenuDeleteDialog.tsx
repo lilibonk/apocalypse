@@ -3,7 +3,8 @@
  * 后端在存在子菜单时拒绝删除；有子节点时这里同步加强警告文案（仍允许尝试，错误透后端中文文案）。
  */
 
-import { useMutation } from '@tanstack/react-query'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
+import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -34,8 +35,24 @@ export function MenuDeleteDialog({
 }) {
   const { t } = useTranslation()
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteMenu(id),
+  const denial = useResourceDenial({
+    errors: [],
+    clear: { queryKey: ['system', 'menus'] },
+    reset: () => {
+      onClose()
+      onDeleted()
+    },
+  })
+  const deleteMutation = useModuleMutation(undefined, {
+    localKey: node?.id ?? 'closed',
+    onDenied: denial,
+    mutationFn: (run, id: string) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:menu:remove'],
+        requiredAllScopePerms: ['system:menu:remove'],
+        execute: (transport) => deleteMenu(id, transport),
+      }),
     onSuccess: () => {
       toast.success(t('common.菜单已删除', { defaultValue: '菜单已删除' }))
       onClose()
@@ -85,7 +102,7 @@ export function MenuDeleteDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            disabled={deleteMutation.isPending}
+            disabled={deleteMutation.isPending || node?.menuType === 'F'}
             onClick={(event) => {
               event.preventDefault()
               if (node) deleteMutation.mutate(node.id)

@@ -10,6 +10,7 @@ import java.util.Optional;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.springframework.util.StringUtils;
 
@@ -108,6 +109,9 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
   /** 清空用户的全部角色关联。 */
   @Delete("DELETE FROM sys_user_role WHERE user_id = #{userId}")
   int deleteRolesByUserId(@Param("userId") Long userId);
+
+  @Select("SELECT role_id FROM sys_user_role WHERE user_id = #{userId} ORDER BY role_id")
+  List<Long> selectRoleIdsByUserId(@Param("userId") Long userId);
 
   /** 仅当账号仍处于 bootstrap 哨兵状态时原子启用；并发启动只有一个调用方返回 1。 */
   @Update(

@@ -1,6 +1,6 @@
 package io.apocalypse.framework.events;
 
-import io.apocalypse.AbstractIntegrationTest;
+import io.apocalypse.common.event.AuthorizationChangedEvent;
 import io.apocalypse.common.event.LoginFailedEvent;
 import io.apocalypse.common.event.LoginSucceededEvent;
 import io.apocalypse.common.event.OperLoggedEvent;
@@ -24,13 +24,16 @@ import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.core.EventPublicationRepository;
 import org.springframework.modulith.events.core.EventPublicationRepository.FailedCriteria;
@@ -39,6 +42,9 @@ import org.springframework.modulith.events.core.TargetEventPublication;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.event.TransactionalApplicationListenerMethodAdapter;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,7 +53,7 @@ import static org.awaitility.Awaitility.await;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
-/** 真实 Modulith 登记/失败/重投/完成链路；仅使用 Testcontainers 合成数据。 */
+/** 真实恢复链路使用独立数据库，不能让其他缓存上下文的 publication 或调度器参与批量计数。 */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -59,8 +65,21 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
       "apocalypse.events.recovery.max-backoff=2m",
       "apocalypse.events.recovery.stale-after=10m"
     })
-class AuditRecoveryIT extends AbstractIntegrationTest {
+class AuditRecoveryIT {
 
+  @ServiceConnection
+  static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.6-alpine");
+
+  @ServiceConnection(name = "redis")
+  static final GenericContainer<?> REDIS =
+      new GenericContainer<>(DockerImageName.parse("redis:8.10.1-alpine")).withExposedPorts(6379);
+
+  static {
+    POSTGRES.start();
+    REDIS.start();
+  }
+
+  @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private AuditEventRecovery recovery;
   @Autowired private AuditRecoveryRepository repository;
   @Autowired private AuditRecoveryProperties properties;
@@ -78,16 +97,34 @@ class AuditRecoveryIT extends AbstractIntegrationTest {
   private final List<UUID> publicationIds = new ArrayList<>();
   private final List<UUID> eventIds = new ArrayList<>();
 
+  @BeforeEach
+  void awaitIsolatedPublicationQueueBeforeStagingFixtures() {
+    // An abandoned publication from another context cannot complete after that context is closed.
+    // Isolation, rather than polling or deleting another test's records, keeps exact run counts
+    // valid.
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .untilAsserted(
+            () ->
+                assertThat(repository.snapshot(Instant.now()).pending())
+                    .as(
+                        "this class's isolated publication queue must be clean before fixture setup")
+                    .isZero());
+  }
+
   @AfterEach
   void cleanFixtures() {
     jdbcTemplate.execute(
         "ALTER TABLE sys_login_log DROP CONSTRAINT IF EXISTS audit_recovery_fault");
+    jdbcTemplate.execute(
+        "ALTER TABLE sys_authorization_audit DROP CONSTRAINT IF EXISTS authorization_recovery_fault");
     for (UUID id : publicationIds) {
       jdbcTemplate.update("DELETE FROM event_publication WHERE id = ?", id);
     }
     for (UUID id : eventIds) {
       jdbcTemplate.update("DELETE FROM sys_login_log WHERE event_id = ?", id);
       jdbcTemplate.update("DELETE FROM sys_oper_log WHERE event_id = ?", id);
+      jdbcTemplate.update("DELETE FROM sys_authorization_audit WHERE event_id = ?", id);
     }
   }
 
@@ -121,6 +158,51 @@ class AuditRecoveryIT extends AbstractIntegrationTest {
     assertThat(attempts(publication)).isEqualTo(2);
     assertThat(recovery.recoverOnce()).isZero();
     assertThat(rowCount(event.eventId())).isEqualTo(1);
+  }
+
+  @Test
+  void authorizationConfigurationFailureUsesTheSameReliableRecovery() {
+    UUID eventId = UUID.randomUUID();
+    eventIds.add(eventId);
+    var event =
+        new AuthorizationChangedEvent(
+            eventId,
+            LocalDateTime.now(),
+            1L,
+            "ROLE_PERMISSION",
+            1L,
+            1L,
+            2L,
+            "[]",
+            "[{\"permissionId\":101}]",
+            "b".repeat(64),
+            "authorization_recovery_fault");
+    jdbcTemplate.execute(
+        "ALTER TABLE sys_authorization_audit ADD CONSTRAINT authorization_recovery_fault "
+            + "CHECK (request_id <> 'authorization_recovery_fault')");
+    new TransactionTemplate(transactions)
+        .executeWithoutResult(status -> publisher.publishEvent(event));
+    UUID publication = findPublication(eventId);
+    awaitStatus(publication, "FAILED");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sys_authorization_audit WHERE event_id=?",
+                Integer.class,
+                eventId))
+        .isZero();
+    jdbcTemplate.execute(
+        "ALTER TABLE sys_authorization_audit DROP CONSTRAINT authorization_recovery_fault");
+    due(publication);
+    assertThat(recovery.recoverOnce()).isEqualTo(1);
+    awaitStatus(publication, "COMPLETED");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sys_authorization_audit WHERE event_id=?",
+                Integer.class,
+                eventId))
+        .isEqualTo(1);
+    assertThat(attempts(publication)).isEqualTo(2);
+    assertThat(recovery.recoverOnce()).isZero();
   }
 
   @Test
@@ -216,6 +298,11 @@ class AuditRecoveryIT extends AbstractIntegrationTest {
     for (int i = 0; i < 5; i++) {
       waiting.add(stage(event("audit_batch_" + i), "FAILED", 1));
     }
+    assertThat(properties.batchSize()).isEqualTo(2);
+    assertThat(properties.maxInFlight()).isEqualTo(4);
+    AuditRecoveryRepository.Snapshot initial = repository.snapshot(Instant.now());
+    assertThat(initial.pending()).isEqualTo(8);
+    assertThat(initial.inFlight()).isEqualTo(3);
     assertThat(recovery.recoverOnce()).isEqualTo(1);
     await()
         .atMost(Duration.ofSeconds(10))

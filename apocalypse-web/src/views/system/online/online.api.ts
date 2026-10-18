@@ -4,7 +4,7 @@
  * jti 是 string 主键，原样拼路径。
  */
 
-import { request } from '@/lib/api/client'
+import { request, type RequestOptions } from '@/lib/api/client'
 
 /** 在线用户会话（对应后端 OnlineUserResp）。 */
 export type OnlineUserRow = {
@@ -16,11 +16,14 @@ export type OnlineUserRow = {
 }
 
 /** 在线用户列表（List 非分页）。 */
-export function listOnlineUsers(): Promise<OnlineUserRow[]> {
-  return request<OnlineUserRow[]>('/system/online-users')
+export function listOnlineUsers(options?: { signal?: AbortSignal }): Promise<OnlineUserRow[]> {
+  return request<OnlineUserRow[]>('/system/online-users', { signal: options?.signal })
 }
 
 /** 强退指定会话（删在线条目 + jti 入黑名单）。 */
-export function kickOnlineUser(jti: string): Promise<void> {
-  return request<void>(`/system/online-users/${jti}`, { method: 'DELETE' })
+export function kickOnlineUser(
+  jti: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<void> {
+  return request<void>(`/system/online-users/${jti}`, { method: 'DELETE', ...transport })
 }

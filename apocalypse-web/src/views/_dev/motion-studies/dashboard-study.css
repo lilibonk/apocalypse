@@ -1,0 +1,101 @@
+.study-card.dashboard-study-hero {
+  background: radial-gradient(ellipse at 0% 0%, var(--study-glow), transparent 66%), var(--card);
+}
+
+.dashboard-study-range {
+  border-radius: var(--study-card-radius);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.dashboard-study-range button[aria-pressed='true'] {
+  background: var(--study-surface-raised);
+  color: var(--foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.dashboard-study-action {
+  background: var(--study-blue);
+  color: var(--study-blue-foreground);
+}
+
+.dashboard-study-action:hover {
+  background: color-mix(in srgb, var(--study-blue) 88%, var(--foreground));
+}
+
+.dashboard-study-chart {
+  width: 100%;
+  overflow: visible;
+  color: var(--foreground);
+}
+
+.dashboard-study-chart-grid {
+  stroke: var(--study-grid);
+  stroke-dasharray: 2 6;
+}
+
+.dashboard-study-plot-line {
+  stroke: var(--foreground);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-study-plot-dot {
+  stroke: var(--foreground);
+  stroke-width: 2;
+  fill: var(--card);
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-study-gauge-tick {
+  stroke: var(--border-subtle);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.dashboard-study-gauge-tick[data-active='true'] {
+  stroke: var(--brand);
+}
+
+.dashboard-study-distribution [data-category='0'] {
+  background: var(--brand);
+}
+
+.dashboard-study-distribution [data-category='1'] {
+  background: var(--study-blue);
+}
+
+.dashboard-study-distribution [data-category='2'] {
+  background: var(--study-role-foreground);
+}
+
+.dashboard-study-distribution [data-category='3'] {
+  background: var(--muted-foreground);
+}
+
+.dashboard-study-activity-icon {
+  color: var(--brand-text);
+  background: color-mix(in srgb, var(--brand) 13%, var(--card));
+}
+
+.dashboard-study-activity-icon[data-kind='export'] {
+  color: var(--info-foreground);
+  background: var(--info);
+}
+
+.dashboard-study-activity-icon[data-kind='role'] {
+  color: var(--study-role-foreground);
+  background: color-mix(in srgb, var(--study-role) 13%, var(--card));
+}
+
+@media (min-width: 64rem) {
+  .dashboard-study-top {
+    grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr);
+  }
+
+  .dashboard-study-bottom {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.05fr) minmax(0, 1.2fr);
+  }
+}

@@ -12,12 +12,14 @@ export function Perm({
   perm,
   children,
   fallback = null,
+  requiresAllScope = false,
 }: {
   perm: string
   children: ReactNode
   fallback?: ReactNode
+  requiresAllScope?: boolean
 }) {
-  const allowed = usePerm(perm)
+  const allowed = usePerm(perm, requiresAllScope)
   return allowed ? children : fallback
 }
 

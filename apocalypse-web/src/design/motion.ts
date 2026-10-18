@@ -33,3 +33,18 @@ export const motionTransition = {
   panelEnter: { duration: motionDuration.panel, ease: motionEase.enter },
   panelExit: { duration: motionDuration.panelExit, ease: motionEase.exit },
 } as const
+
+/** Dashboard / authorization insights: finite, interruptible movement; no looping decoration. */
+export const insightMotion = {
+  surface: { type: 'spring', stiffness: 280, damping: 26, mass: 0.8 },
+  layout: { type: 'spring', stiffness: 240, damping: 28, mass: 0.9 },
+  chart: { duration: 0.48, ease: motionEase.enter },
+  number: { duration: 0.6, ease: motionEase.enter },
+  instant: { duration: 0 },
+  stagger: 0.045,
+  enterOffset: 14,
+  hoverLift: 3,
+} as const
+
+/** The offline study retains the same approved motion vocabulary as its live counterparts. */
+export const studyMotion = insightMotion

@@ -5,19 +5,25 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.security.TokenVersionStore;
+import io.apocalypse.system.authorization.service.AuthorizationAuditService;
+import io.apocalypse.system.authorization.service.AuthorizationStateService;
 import io.apocalypse.system.authorization.service.DataScopeService;
-import io.apocalypse.system.menu.service.MenuService;
 import io.apocalypse.system.role.dto.request.RoleSaveReq;
 import io.apocalypse.system.role.dto.response.RoleResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 import io.apocalypse.system.role.mapper.SysRoleMapper;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
@@ -31,15 +37,21 @@ public class RoleService {
 
   private final SysRoleMapper sysRoleMapper;
 
-  private final MenuService menuService;
+  private final AuthorizationStateService authorizationState;
+
+  private final AuthorizationAuditService authorizationAudit;
 
   private final RoleConvert roleConvert;
 
   private final TokenVersionStore tokenVersionStore;
 
   /** 分页查询角色。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PageResult<RoleResp> page(int page, int size, String keyword) {
-    return sysRoleMapper.pageByKeyword(page, size, keyword).map(roleConvert::toResp);
+    var roles = sysRoleMapper.pageByKeyword(page, size, keyword);
+    var revisions =
+        authorizationState.roleRevisions(roles.list().stream().map(SysRoleEntity::getId).toList());
+    return roles.map(entity -> roleConvert.toResp(entity, revisions.get(entity.getId())));
   }
 
   /** 新增角色，返回主键。 */
@@ -52,6 +64,8 @@ public class RoleService {
     SysRoleEntity entity = new SysRoleEntity();
     applyReq(entity, req);
     sysRoleMapper.insert(entity);
+    authorizationState.initializeRole(entity.getId());
+    authorizationAudit.record("ROLE", entity.getId(), 0, 0, null, roleConvert.toResp(entity, 0L));
     return entity.getId();
   }
 
@@ -60,14 +74,25 @@ public class RoleService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void update(Long id, RoleSaveReq req) {
     dataScopeService.requireGlobalWrite("system:role:edit");
+    long beforeRevision =
+        authorizationState.requireRoleRevision(id, req.expectedAuthorizationRevision());
     SysRoleEntity entity = requireById(id);
+    RoleResp before = roleConvert.toResp(entity, beforeRevision);
     if (!entity.getRoleKey().equals(req.roleKey())
         && sysRoleMapper.existsByRoleKey(req.roleKey())) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "角色标识已存在");
     }
     applyReq(entity, req);
     ConcurrencyGuard.requireSingleRow(sysRoleMapper.updateById(entity));
+    long afterRevision = authorizationState.advanceRole(id, beforeRevision);
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "ROLE",
+        id,
+        beforeRevision,
+        afterRevision,
+        before,
+        roleConvert.toResp(entity, afterRevision));
   }
 
   /** 删除角色（逻辑删，同时清空角色-菜单关联）。 */
@@ -75,29 +100,33 @@ public class RoleService {
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void delete(Long id) {
     dataScopeService.requireGlobalWrite("system:role:remove");
-    requireById(id);
-    sysRoleMapper.deleteMenusByRoleId(id);
+    SysRoleEntity entity = requireById(id);
+    long beforeRevision = authorizationState.roleRevision(id);
+    RoleResp before = roleConvert.toResp(entity, beforeRevision);
+    List<Long> beforeMembers = sysRoleMapper.selectUserIdsByRoleId(id);
     sysRoleMapper.deleteUsersByRoleId(id);
+    long afterRevision = authorizationState.advanceRole(id, beforeRevision);
     ConcurrencyGuard.requireSingleRow(sysRoleMapper.deleteById(id));
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "ROLE",
+        id,
+        beforeRevision,
+        afterRevision,
+        Map.of("role", before, "deleted", false, "members", beforeMembers),
+        Map.of("role", before, "deleted", true, "members", List.of()));
   }
 
   /** 重置角色菜单（授权）。 */
   @Transactional
   @CacheEvict(cacheNames = "userPerms", allEntries = true)
   public void assignMenus(Long roleId, List<Long> menuIds) {
-    dataScopeService.requireGlobalWrite("system:role:edit");
-    requireById(roleId);
-    List<Long> ids = menuIds == null ? List.of() : menuIds;
-    menuService.requireValidMenuIds(ids);
-    sysRoleMapper.replaceMenus(roleId, ids);
-    tokenVersionStore.invalidateGlobalAuthorization();
+    throw legacyProtocolError();
   }
 
   /** 查询角色当前菜单授权，用于授权修改前的安全回显。 */
   public List<Long> menuIds(Long roleId) {
-    requireById(roleId);
-    return sysRoleMapper.selectMenuIdsByRoleId(roleId);
+    throw legacyProtocolError();
   }
 
   /** 分页查询角色下的用户。 */
@@ -106,6 +135,14 @@ public class RoleService {
     requireById(roleId);
     return sysRoleMapper.pageUsers(
         roleId, page, size, dataScopeService.resolve("system:role:list"));
+  }
+
+  /** 完整成员关联基线。使用与整体替换相同的授权锁和 ALL 操作范围，不受 role:list 的部门过滤影响。 仅返回已保存的关联 ID；禁用或资料不可读的成员不会被静默剔除。 */
+  @Transactional(readOnly = true)
+  public List<Long> userIds(Long roleId) {
+    dataScopeService.requireGlobalWrite("system:role:edit");
+    requireById(roleId);
+    return sysRoleMapper.selectUserIdsByRoleId(roleId);
   }
 
   /** 整体替换角色下的用户。用户角色变化影响权限串，清空 userPerms 缓存。 */
@@ -118,9 +155,51 @@ public class RoleService {
     if (!ids.isEmpty() && sysRoleMapper.countExistingUsers(ids) != ids.size()) {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "存在无效的用户");
     }
+    List<Long> before = sysRoleMapper.selectUserIdsByRoleId(roleId);
+    long beforeRevision = authorizationState.roleRevision(roleId);
     sysRoleMapper.deleteUsersByRoleId(roleId);
     ids.forEach(userId -> sysRoleMapper.insertUserRole(userId, roleId));
+    long afterRevision = authorizationState.advanceRole(roleId, beforeRevision);
     tokenVersionStore.invalidateGlobalAuthorization();
+    authorizationAudit.record(
+        "ROLE_MEMBERS",
+        roleId,
+        beforeRevision,
+        afterRevision,
+        before,
+        sysRoleMapper.selectUserIdsByRoleId(roleId));
+  }
+
+  /** 用户子域完成角色替换/用户删除后调用；重建完整成员前后态并更新受影响角色的并发版本。 */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void recordUserRoleChange(Long userId, List<Long> before, List<Long> after) {
+    var previous = new HashSet<>(before);
+    var current = new HashSet<>(after);
+    var changed = new TreeSet<>(previous);
+    changed.addAll(current);
+    changed.removeIf(roleId -> previous.contains(roleId) == current.contains(roleId));
+    Map<Long, Long> revisions = authorizationState.roleRevisions(new ArrayList<>(changed));
+    for (Long roleId : changed) {
+      Long beforeRevision = revisions.get(roleId);
+      if (beforeRevision == null) {
+        throw new BizException(ErrorCode.CONFLICT);
+      }
+      List<Long> afterMembers = sysRoleMapper.selectUserIdsByRoleId(roleId);
+      var beforeMembers = new TreeSet<>(afterMembers);
+      if (current.contains(roleId)) {
+        beforeMembers.remove(userId);
+      } else {
+        beforeMembers.add(userId);
+      }
+      long afterRevision = authorizationState.advanceRole(roleId, beforeRevision);
+      authorizationAudit.record(
+          "ROLE_MEMBERS",
+          roleId,
+          beforeRevision,
+          afterRevision,
+          List.copyOf(beforeMembers),
+          afterMembers);
+    }
   }
 
   /** 认证/当前用户视图所需的有效角色标识。 */
@@ -141,6 +220,10 @@ public class RoleService {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "角色不存在");
     }
     return entity;
+  }
+
+  private static BizException legacyProtocolError() {
+    return new BizException(ErrorCode.PARAM_INVALID.getCode(), "客户端需升级，请重新加载");
   }
 
   private static void applyReq(SysRoleEntity entity, RoleSaveReq req) {

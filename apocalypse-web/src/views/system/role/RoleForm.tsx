@@ -20,6 +20,16 @@ export function localizeRoleSchema(schema: DynaPageSchema, text: (key: string) =
   }))
   return {
     ...schema,
+    rowActions: schema.rowActions?.map((action) =>
+      action.kind === 'custom'
+        ? {
+            ...action,
+            label: text(
+              `authorization.${action.key === 'grant-permissions' ? 'permissions' : action.key === 'grant-navigation' ? 'navigation' : action.key === 'grant-users' ? 'members' : 'toggleRole'}`,
+            ),
+          }
+        : action,
+    ),
     columns: schema.columns.map((column) =>
       column.key === 'dataScope' ? { ...column, title: text('dataScope.label'), options } : column,
     ),
@@ -41,8 +51,26 @@ export function RoleForm(props: DynaFormProps) {
     <DynaForm
       {...props}
       config={config}
+      submitDisabled={
+        props.submitDisabled ||
+        (props.mode === 'edit' && typeof props.initialRow?.authorizationRevision !== 'string')
+      }
+      onSubmit={(body) =>
+        props.onSubmit(
+          props.mode === 'edit'
+            ? {
+                ...body,
+                expectedAuthorizationRevision: props.initialRow?.authorizationRevision,
+              }
+            : body,
+        )
+      }
       feedback={
-        props.mode === 'edit' && !props.initialRow?.dataScope ? (
+        props.mode === 'edit' && typeof props.initialRow?.authorizationRevision !== 'string' ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t('authorization.roleRevisionMissing')}
+          </p>
+        ) : props.mode === 'edit' && !props.initialRow?.dataScope ? (
           <p className="text-sm text-muted-foreground">{t('dataScope.unchanged')}</p>
         ) : undefined
       }

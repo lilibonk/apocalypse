@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { chromium, expect, test, type Locator, type Page } from '@playwright/test'
+import { chromium, expect, test, type Locator, type Page, type Response } from '@playwright/test'
 
 interface DeploymentCheckpoint {
   origin: string
@@ -117,7 +117,7 @@ async function navigate(page: Page, path: string): Promise<void> {
       })
       .click()
   await link.click()
-  await expect(page).toHaveURL(new RegExp(`${path}$`))
+  await expect(page).toHaveURL(new RegExp(`${path}(?:\\?.*)?$`))
 }
 
 async function search(page: Page, label: string, keyword: string): Promise<Locator> {
@@ -138,14 +138,214 @@ async function removeRow(page: Page, row: Locator): Promise<void> {
   await expect(row).toBeHidden()
 }
 
-async function grantUserMenu(page: Page, roleRow: Locator, selected: boolean): Promise<void> {
-  await roleRow.getByRole('button', { name: '菜单授权', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '菜单授权', exact: true })
-  await dialog.getByRole('textbox', { name: '搜索菜单与操作', exact: true }).fill('用户管理')
-  await dialog.getByRole('checkbox', { name: '用户管理', exact: true }).setChecked(selected)
-  await dialog.getByRole('button', { name: '查看变更并继续', exact: true }).click()
-  await dialog.getByRole('button', { name: '确认并保存', exact: true }).click()
+async function responseData(response: Response): Promise<unknown> {
+  const body: unknown = await response.json()
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    !('code' in body) ||
+    body.code !== 0 ||
+    !('data' in body)
+  )
+    throw new Error(`Expected a successful envelope from ${new URL(response.url()).pathname}`)
+  return body.data
+}
+
+function stringIds(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.some((id) => typeof id !== 'string') ||
+    new Set(value).size !== value.length
+  )
+    throw new Error('Expected a complete collection of unique string IDs')
+  return value as string[]
+}
+
+async function roleList(page: Page): Promise<void> {
+  await navigate(page, '/system/role')
+  await page.getByRole('button', { name: '角色列表', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: '角色名称 / 标识', exact: true })).toBeVisible()
+}
+
+async function revalidateAuthorization(page: Page): Promise<void> {
+  const current = page.waitForResponse(
+    (response) => endpoint(response, '/system/users/me') && response.status() === 200,
+  )
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await responseData(await current)
+  await expect(page.getByRole('button', { name: /^账户菜单：/ })).toBeVisible()
+}
+
+/** Only normal editor controls can close this dialog; snapshot replacement may close it first. */
+async function closeBusinessDialog(dialog: Locator): Promise<void> {
+  const back = dialog.getByRole('button', { name: '返回角色', exact: true })
+  await expect.poll(async () => !(await dialog.isVisible()) || (await back.isVisible())).toBe(true)
+  if (await dialog.isVisible()) {
+    try {
+      await back.click({ timeout: 2000 })
+    } catch {
+      // A successful /me change can unmount the old editor between visibility and click.
+      await expect(dialog).toBeHidden()
+    }
+  }
   await expect(dialog).toBeHidden()
+}
+
+/** Business authority is granted separately from navigation, through the full baseline editor. */
+async function setUserListGrant(page: Page, roleRow: Locator, selected: boolean): Promise<string> {
+  const initial = page.waitForResponse(
+    (response) =>
+      /^\/api\/system\/roles\/[^/]+\/permissions$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === 'GET' &&
+      response.status() === 200,
+  )
+  await roleRow.getByRole('button', { name: '业务权限', exact: true }).click()
+  const baseline = await responseData(await initial)
+  if (
+    !baseline ||
+    typeof baseline !== 'object' ||
+    !('roleId' in baseline) ||
+    typeof baseline.roleId !== 'string'
+  )
+    throw new Error('Role permission baseline identity missing')
+  const roleId = baseline.roleId
+  const dialog = page.getByRole('dialog', { name: '业务权限', exact: true })
+  await dialog.getByRole('button', { name: '编辑业务授权', exact: true }).click()
+  if (selected) await dialog.getByRole('button', { name: '候选权限', exact: true }).click()
+  await dialog
+    .getByRole('textbox', { name: '搜索权限名称或标识', exact: true })
+    .fill('system:user:list')
+  await dialog.getByRole('button', { name: '查询', exact: true }).click()
+  const entry = dialog
+    .getByRole('listitem')
+    .filter({ has: page.getByText('system:user:list', { exact: true }) })
+  await expect(entry).toHaveCount(1)
+  await entry.getByRole('button', { name: selected ? /^添加授权：/ : /^移除授权：/ }).click()
+  await dialog.getByRole('button', { name: '审阅变更', exact: true }).click()
+  const saved = page.waitForResponse(
+    (response) =>
+      endpoint(response, `/system/roles/${roleId}/permissions`) &&
+      response.request().method() === 'PUT',
+  )
+  await dialog.getByRole('button', { name: '保存授权', exact: true }).click()
+  const response = await saved
+  await responseData(response)
+  const submitted: unknown = response.request().postDataJSON()
+  if (
+    !submitted ||
+    typeof submitted !== 'object' ||
+    !('upsert' in submitted) ||
+    !('remove' in submitted)
+  )
+    throw new Error('Permission delta missing')
+  expect(Array.isArray(submitted.upsert) ? submitted.upsert.length : -1).toBe(selected ? 1 : 0)
+  expect(stringIds(submitted.remove)).toHaveLength(selected ? 0 : 1)
+  await revalidateAuthorization(page)
+  await closeBusinessDialog(dialog)
+  return roleId
+}
+
+async function readRoleNavigation(page: Page, roleRow: Locator, roleId: string): Promise<string[]> {
+  const initial = page.waitForResponse(
+    (response) =>
+      endpoint(response, `/system/roles/${roleId}/navigation`) &&
+      response.request().method() === 'GET' &&
+      response.status() === 200,
+  )
+  await roleRow.getByRole('button', { name: '导航分配', exact: true }).click()
+  const value = await responseData(await initial)
+  if (!value || typeof value !== 'object' || !('navigationIds' in value))
+    throw new Error('Navigation baseline missing')
+  const ids = stringIds(value.navigationIds)
+  const dialog = page.getByRole('dialog', { name: '导航分配', exact: true })
+  await dialog.getByRole('button', { name: '返回图谱', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  return ids
+}
+
+async function grantUserNavigation(page: Page, roleRow: Locator, roleId: string): Promise<void> {
+  await roleRow.getByRole('button', { name: '导航分配', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '导航分配', exact: true })
+  await dialog
+    .getByRole('searchbox', { name: '搜索导航名称、路径或 ID…', exact: true })
+    .fill('用户管理')
+  const entry = dialog
+    .getByRole('listitem')
+    .filter({ has: page.getByText('用户管理', { exact: true }) })
+  await expect(entry).toHaveCount(1)
+  await entry.getByRole('button', { name: '添加授权', exact: true }).click()
+  await dialog.getByRole('button', { name: '审阅关联变更', exact: true }).click()
+  const saved = page.waitForResponse(
+    (response) =>
+      endpoint(response, `/system/roles/${roleId}/navigation`) &&
+      response.request().method() === 'PUT',
+  )
+  await dialog.getByRole('button', { name: '确认并保存关联', exact: true }).click()
+  await responseData(await saved)
+  await expect(dialog).toBeHidden()
+  await revalidateAuthorization(page)
+}
+
+async function assignRoleMember(
+  page: Page,
+  roleRow: Locator,
+  roleId: string,
+  username: string,
+): Promise<void> {
+  const initial = page.waitForResponse(
+    (response) =>
+      endpoint(response, `/system/roles/${roleId}/user-ids`) &&
+      response.request().method() === 'GET' &&
+      response.status() === 200,
+  )
+  await roleRow.getByRole('button', { name: '角色成员', exact: true }).click()
+  const baseline = stringIds(await responseData(await initial))
+  const dialog = page.getByRole('dialog', { name: '角色成员', exact: true })
+  await dialog.getByRole('button', { name: '添加成员', exact: true }).click()
+  await dialog.getByRole('textbox', { name: '搜索用户名或显示名称', exact: true }).fill(username)
+  const candidateResponse = page.waitForResponse(
+    (response) =>
+      endpoint(response, '/system/users/page') &&
+      new URL(response.url()).searchParams.get('keyword') === username &&
+      response.status() === 200,
+  )
+  await dialog.getByRole('button', { name: '查找成员', exact: true }).click()
+  const candidates = await responseData(await candidateResponse)
+  if (
+    !candidates ||
+    typeof candidates !== 'object' ||
+    !('list' in candidates) ||
+    !Array.isArray(candidates.list)
+  )
+    throw new Error('Member candidate page missing')
+  const candidate: unknown = candidates.list.find(
+    (entry: unknown) =>
+      entry && typeof entry === 'object' && 'username' in entry && entry.username === username,
+  )
+  if (
+    !candidate ||
+    typeof candidate !== 'object' ||
+    !('id' in candidate) ||
+    typeof candidate.id !== 'string'
+  )
+    throw new Error('Member candidate identity missing')
+  const entry = dialog
+    .getByRole('listitem')
+    .filter({ has: page.getByText(username, { exact: true }) })
+  await entry.getByRole('button', { name: '添加授权', exact: true }).click()
+  await dialog.getByRole('button', { name: '审核变更', exact: true }).click()
+  const saved = page.waitForResponse(
+    (response) =>
+      endpoint(response, `/system/roles/${roleId}/users`) && response.request().method() === 'PUT',
+  )
+  await dialog.getByRole('button', { name: '保存成员关系', exact: true }).click()
+  const response = await saved
+  await responseData(response)
+  expect(stringIds(response.request().postDataJSON()).sort()).toEqual(
+    [...new Set([...baseline, candidate.id])].sort(),
+  )
+  await expect(dialog).toBeHidden()
+  await revalidateAuthorization(page)
 }
 
 test('temporary certificate pin accepts its origin and a wrong pin is rejected', async ({
@@ -273,10 +473,19 @@ test('Secure cookie, CSRF rejection, reload and serialized two-tab refresh/logou
     if (!pending.delete(request)) return
     active--
   })
+  const focusReads = [page, second].map((tab) =>
+    tab.waitForResponse(
+      (response) => endpoint(response, '/system/users/me') && response.status() === 200,
+    ),
+  )
   await Promise.all([
     page.evaluate(() => window.dispatchEvent(new Event('focus'))),
     second.evaluate(() => window.dispatchEvent(new Event('focus'))),
   ])
+  for (const response of await Promise.all(focusReads)) await responseData(response)
+  expect(finished).toBe(0)
+  // Both documents now bootstrap from the shared cookie, exercising two real rotations.
+  await Promise.all([page.reload(), second.reload()])
   await expect.poll(() => finished).toBeGreaterThanOrEqual(2)
   expect(peak).toBe(1)
   await expect(page.getByRole('button', { name: /^账户菜单：/ })).toBeVisible()
@@ -343,7 +552,7 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
   await saveDialog(page, '新增部门')
   await expect(page.getByRole('cell', { name: department, exact: true })).toBeVisible()
 
-  await navigate(page, '/system/role')
+  await roleList(page)
   await page.getByRole('button', { name: '新增角色', exact: true }).click()
   let dialog = page.getByRole('dialog', { name: '新增角色', exact: true })
   await dialog.getByRole('textbox', { name: '角色名称' }).fill(roleName)
@@ -389,22 +598,15 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
   await saveDialog(page, '编辑用户')
   await expect(userRow.getByRole('cell', { name: department, exact: true })).toBeVisible()
 
-  await navigate(page, '/system/role')
+  await roleList(page)
   roleRow = await search(page, '角色名称 / 标识', roleName)
-  await grantUserMenu(page, roleRow, true)
-  await roleRow.getByRole('button', { name: '分配用户', exact: true }).click()
-  dialog = page.getByRole('dialog', { name: '分配用户', exact: true })
-  await expect(dialog.getByRole('checkbox').first()).toBeVisible()
-  await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeEnabled()
-  const candidate = dialog.getByRole('checkbox', { name: new RegExp(`^${username}\\b`) })
-  for (let attempt = 0; attempt < 10 && !(await candidate.isVisible()); attempt++) {
-    const next = dialog.getByRole('button', { name: '下一页', exact: true })
-    await expect(next).toBeEnabled()
-    await next.click()
-  }
-  await candidate.check()
-  await dialog.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(dialog).toBeHidden()
+  const roleId = await setUserListGrant(page, roleRow, true)
+  roleRow = await search(page, '角色名称 / 标识', roleName)
+  await grantUserNavigation(page, roleRow, roleId)
+  roleRow = await search(page, '角色名称 / 标识', roleName)
+  const savedNavigation = await readRoleNavigation(page, roleRow, roleId)
+  expect(savedNavigation.length).toBeGreaterThan(0)
+  await assignRoleMember(page, roleRow, roleId, username)
 
   await navigate(page, '/system/user')
   await search(page, '用户名 / 昵称', credentials.username)
@@ -430,9 +632,13 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
   try {
     const admin = await administrator.newPage()
     await login(admin)
-    await navigate(admin, '/system/role')
+    await roleList(admin)
     roleRow = await search(admin, '角色名称 / 标识', roleName)
-    await grantUserMenu(admin, roleRow, false)
+    await setUserListGrant(admin, roleRow, false)
+    roleRow = await search(admin, '角色名称 / 标识', roleName)
+    expect((await readRoleNavigation(admin, roleRow, roleId)).sort()).toEqual(
+      [...savedNavigation].sort(),
+    )
     const observePermission = (response: { url(): string; status(): number }) => {
       const path = new URL(response.url()).pathname
       if (
@@ -446,13 +652,30 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
     const renewedPermissions = page.waitForResponse(
       (response) => endpoint(response, '/system/users/me') && response.status() === 200,
     )
+    const forbiddenUsers = page.waitForResponse(async (response) => {
+      if (!endpoint(response, '/system/users/page')) return false
+      if (response.status() === 403) return true
+      if (response.status() !== 200) return false
+      const body: unknown = await response.json()
+      return Boolean(body && typeof body === 'object' && 'code' in body && body.code === 40300)
+    })
     await page.evaluate(() =>
       window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })),
     )
-    await renewedPermissions
+    const currentUser = await responseData(await renewedPermissions)
+    if (
+      !currentUser ||
+      typeof currentUser !== 'object' ||
+      !('perms' in currentUser) ||
+      !Array.isArray(currentUser.perms)
+    )
+      throw new Error('Accepted permission snapshot missing')
+    expect(currentUser.perms).not.toContain('system:user:list')
+    await forbiddenUsers
     page.off('response', observePermission)
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('link', { name: '用户管理', exact: true })).toHaveCount(0)
+    await expect(page).toHaveURL(/\/system\/user$/)
+    await expect(page.getByRole('link', { name: '用户管理', exact: true })).toBeVisible()
+    await expect(page.getByRole('alert')).toBeVisible()
     await expect(page.getByRole('cell', { name: username, exact: true })).toHaveCount(0)
 
     await login(second, { username, password })
@@ -484,7 +707,7 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
 
     await navigate(admin, '/system/user')
     await removeRow(admin, await search(admin, '用户名 / 昵称', username))
-    await navigate(admin, '/system/role')
+    await roleList(admin)
     roleRow = await search(admin, '角色名称 / 标识', roleName)
     await removeRow(admin, roleRow)
     await navigate(admin, '/system/dept')
@@ -498,61 +721,97 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
     await administrator.close()
   }
   completed.push({
-    name: 'Actual role/department CRUD; missed-broadcast restore; account cache reset; permission withdrawal; persistent forced logout',
+    name: 'Actual role/department CRUD and independent business/navigation/member grants; missed-broadcast restore; account cache reset; API-only withdrawal preserves navigation and returns 403; persistent forced logout',
     result: 'passed',
   })
 })
 
-test('an actually expired access token refreshes from cookie and retries a protected browser query', async ({
+test('an actually expired access token refreshes from cookie and a new query generation recovers', async ({
   page,
 }) => {
   test.setTimeout(200_000)
   expect(checkpoint.accessTtlSeconds).toBe(60)
   expect(checkpoint.effectiveExpiresIn).toBe(60)
-  await login(page)
+  const access = await login(page)
   await navigate(page, '/system/user')
-  await expect(page.getByRole('button', { name: '刷新数据', exact: true })).toBeVisible()
-  const rotation = page.waitForResponse((response) => endpoint(response, '/auth/browser/refresh'))
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-  const response: unknown = await (await rotation).json()
-  if (!response || typeof response !== 'object' || !('data' in response))
-    throw new Error('Rotation envelope missing')
-  const data = response.data
-  if (
-    !data ||
-    typeof data !== 'object' ||
-    !('accessToken' in data) ||
-    typeof data.accessToken !== 'string'
-  )
-    throw new Error('Rotated memory access missing')
+  await search(page, '用户名 / 昵称', credentials.username)
   const claims: unknown = JSON.parse(
-    Buffer.from(data.accessToken.split('.')[1], 'base64url').toString('utf8'),
+    Buffer.from(access.split('.')[1], 'base64url').toString('utf8'),
   )
   if (!claims || typeof claims !== 'object' || !('exp' in claims) || typeof claims.exp !== 'number')
     throw new Error('Access expiry missing')
+  if (!('iat' in claims) || typeof claims.iat !== 'number')
+    throw new Error('Access issuance time missing')
+  expect(claims.exp - claims.iat).toBe(60)
   const expiration = claims.exp
-  await expect(page.getByRole('button', { name: '刷新数据', exact: true })).toBeVisible()
   // Spring's default timestamp validator permits clock skew; wait past expiry plus that margin.
   const wait = expiration * 1000 + 65_000 - Date.now()
   if (wait < 0 || wait > 135_000) throw new Error('Unexpected test access expiry window')
   await new Promise((resolve) => setTimeout(resolve, wait))
+  let oldQueryRequests = 0
+  const transitions: string[] = []
+  const observeRequest = (request: { url(): string }) => {
+    if (
+      endpoint(request, '/system/users/page') &&
+      new URL(request.url()).searchParams.get('keyword') === credentials.username
+    )
+      oldQueryRequests++
+  }
+  const observeResponse = (response: Response) => {
+    if (endpoint(response, '/system/users/page') && response.status() === 401)
+      transitions.push('old-query-401')
+    if (endpoint(response, '/auth/browser/refresh') && response.status() === 200)
+      transitions.push('refresh')
+    if (endpoint(response, '/system/users/me') && response.status() === 200) transitions.push('me')
+    if (
+      endpoint(response, '/system/users/page') &&
+      response.status() === 200 &&
+      !new URL(response.url()).searchParams.get('keyword')
+    )
+      transitions.push('new-query')
+  }
+  page.on('request', observeRequest)
+  page.on('response', observeResponse)
   const unauthorized = page.waitForResponse(
     (value) => endpoint(value, '/system/users/page') && value.status() === 401,
   )
   const refreshed = page.waitForResponse(
     (value) => endpoint(value, '/auth/browser/refresh') && value.status() === 200,
   )
-  const replayed = page.waitForResponse(
-    (value) => endpoint(value, '/system/users/page') && value.status() === 200,
+  const accepted = page.waitForResponse(
+    (value) => endpoint(value, '/system/users/me') && value.status() === 200,
+  )
+  const newQuery = page.waitForResponse(
+    (value) =>
+      endpoint(value, '/system/users/page') &&
+      value.status() === 200 &&
+      !new URL(value.url()).searchParams.get('keyword'),
   )
   await page.getByRole('button', { name: '刷新数据', exact: true }).click()
-  await unauthorized
-  await refreshed
-  await replayed
+  const expiredResponse = await unauthorized
+  expect(new URL(expiredResponse.url()).searchParams.get('keyword')).toBe(credentials.username)
+  const renewed = await responseData(await refreshed)
+  if (
+    !renewed ||
+    typeof renewed !== 'object' ||
+    !('accessToken' in renewed) ||
+    typeof renewed.accessToken !== 'string' ||
+    'refreshToken' in renewed
+  )
+    throw new Error('Cookie rotation must return a new memory access token only')
+  expect(renewed.accessToken === access).toBe(false)
+  await responseData(await accepted)
+  await responseData(await newQuery)
   await expect(page).toHaveURL(/\/system\/user$/)
+  await expect(page.getByRole('textbox', { name: '用户名 / 昵称', exact: true })).toHaveValue('')
   await expect(page.getByRole('cell', { name: credentials.username, exact: true })).toBeVisible()
+  // The old filtered request is cancelled after refresh, never replayed under a new generation.
+  expect(oldQueryRequests).toBe(1)
+  expect(transitions).toEqual(['old-query-401', 'refresh', 'me', 'new-query'])
+  page.off('request', observeRequest)
+  page.off('response', observeResponse)
   completed.push({
-    name: 'Real 60-second access expiry plus clock skew; backend 401; cookie rotation; protected query replay',
+    name: 'Real 60-second access expiry plus clock skew; backend 401; cookie rotation and accepted me; new query generation recovers without replaying the old operation',
     result: 'passed',
   })
 })

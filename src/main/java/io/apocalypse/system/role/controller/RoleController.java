@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 角色管理端点。 写操作按初始基线种子 perms 鉴权（{@code system:role:add/edit/remove}，授权动作归 edit），读操作 {@code
- * system:role:list}。
+ * system:role:list}；完整成员关联基线按 edit 的全局范围保护。
  */
 @Validated
 @RestController
@@ -101,6 +101,13 @@ public class RoleController {
           @Max(value = 200, message = "每页条数不能超过 200")
           int size) {
     return roleService.pageUsers(id, page, size);
+  }
+
+  /** 完整成员关联主键，供全量替换前回显；权限与成员替换相同，不返回用户资料。 */
+  @GetMapping("/{id}/user-ids")
+  @PreAuthorize("hasAuthority('system:role:edit')")
+  public List<Long> userIds(@PathVariable Long id) {
+    return roleService.userIds(id);
   }
 
   /** 整体替换角色下的用户。 */

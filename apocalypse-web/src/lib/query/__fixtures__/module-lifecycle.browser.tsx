@@ -206,7 +206,10 @@ async function authorize(nextPerms = perms, moduleMenus = menus) {
       menus: moduleMenus,
       meLoaded: true,
     })
-    await accessLifecycle.accept(principal, moduleMenus, nextPerms, client)
+    await accessLifecycle.accept(principal, moduleMenus, nextPerms, client, {
+      epoch: useAuthStore.getState().authorizationEpoch,
+      deadline: Number.POSITIVE_INFINITY,
+    })
   })
 }
 async function click(selector: string) {

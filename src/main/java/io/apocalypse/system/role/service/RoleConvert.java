@@ -10,5 +10,5 @@ import org.mapstruct.MappingConstants;
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface RoleConvert {
 
-  RoleResp toResp(SysRoleEntity entity);
+  RoleResp toResp(SysRoleEntity entity, Long authorizationRevision);
 }

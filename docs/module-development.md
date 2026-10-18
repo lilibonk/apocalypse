@@ -7,9 +7,11 @@ Apocalypse 是单 Maven 模块的模块化单体。业务代码放在 `io.apocal
 1. 确定独立业务域及权限前缀。模块根包只放 `package-info.java`；对外 facade 和共享视图放在 `api/`，由 `@NamedInterface("api")` 标记。跨模块调用仅走对方 `api` 或 `common.event`。复杂域可采用 `application/domain/infrastructure/interfaces`，简单域可按子域组织 controller/service/mapper/entity/dto。
 2. 在本模块 `infrastructure/config/` 提供一个 `@ModuleConfiguration` 入口，只扫描本域并显式导入运行配置。扫描需排除配置类并保留 `TypeExcludeFilter`，MapperScan 也只能限定本域。常驻的 system 与可选模块采用不同装配方式；需要开关时，先复用 `framework.capability` 的声明、guard 与 `@ConditionalOnCapability`，不要另造前端或 Redis 开关。实际双模块启停参考测试专用的 `src/test/java/io/apocalypse/fixture/` 和 `OptionalModuleLifecycleIT`。
 3. 用 `record` 定义 `dto.request` / `dto.response`。Controller 位于 `controller` 或 `interfaces`，返回裸业务值，由统一响应层包装为 `R<T>`；业务错误抛 `BizException`。持久化对象和 MyBatis-Plus 查询类型留在 mapper/infrastructure，不暴露到模块 API。
-4. 数据库 DDL 只新增按顺序命名的 Flyway `V<n>__*.sql`，并为菜单/按钮权限准备相应数据。可选模块的菜单 `module_key` 必须与能力 key 一致。后端接口用 `@PreAuthorize("hasAuthority('域:对象:动作')")`；含用户归属的数据从登录身份推导 owner，在读取与写入两侧做对象授权。已有迁移不可重写。
+4. 在模块入口声明纯元数据 `PermissionActionDefinition` Bean，列出每个业务动作的 code、moduleKey 与是否支持部门数据范围；可选模块关闭时也必须保留这些声明，不读取运行资源。动作使用 `PermissionActionRegistry.Action.business(code, moduleKey, systemScope)`，code 按 `域:对象:动作` 命名，不占用 `ROLE_` / `SCOPE_`。同一 code 只能声明一次；只有确实接入统一部门范围约束的动作才声明 `systemScope=true`。参考 `SystemPermissionActions` 与 `CalendarPermissionActions`。
+5. 数据库 DDL 只新增按顺序命名的 Flyway `V<n>__*.sql`。分别新增 `sys_permission` 动作定义、`sys_menu` C/M 导航、需要的 `sys_role_permission` 业务授权和 `sys_role_navigation` 导航分配；新增定义本身不授予任何角色。定义的 code、module_key 与代码声明一致，导航的 `module_key` 与能力 key 一致。启动校验要求每个代码动作都有对应定义，并拒绝未知的可执行定义或模块归属冲突。历史 F/perms 和 `sys_role_menu` 仅保留迁移证据，不再写入或用于授权；已有迁移不可重写。
+6. 后端接口用已登记的字面量 `@PreAuthorize("hasAuthority('域:对象:动作')")`。统一 `LiveAuthorizationManagerFactory` 按同一方法调用快照判定当前授权、模块状态、范围和有效期，不以 JWT 里的旧业务权限作依据。含用户归属的数据从登录身份推导 owner，在读取与写入两侧做对象授权。
 
-最小可选模块可以按以下文件清单接入。`<key>` 是同一个能力 key；迁移版本号与菜单 ID 必须在当前仓库中选择未占用值，不能直接复制别的模块的种子 ID。测试夹具 `src/test/java/io/apocalypse/fixture/` 展示装配写法，但它只在测试 classpath、测试 profile 下生效，不能原样当成生产模块。
+最小可选模块可以按以下文件清单接入。`<key>` 是同一个能力 key；迁移版本号、权限 ID 与菜单 ID 必须在当前仓库中选择未占用值，不能直接复制别的模块的种子 ID。测试夹具 `src/test/java/io/apocalypse/fixture/` 展示装配写法，但它只在测试 classpath、测试 profile 下生效，不能原样当成生产模块。其隔离测试先执行 Flyway 并准备对应动作定义，再启动模块上下文；新增模块也必须同时满足声明和数据库校验。
 
 ```text
 src/main/java/io/apocalypse/<key>/package-info.java
@@ -17,14 +19,23 @@ src/main/java/io/apocalypse/<key>/api/package-info.java
 src/main/java/io/apocalypse/<key>/api/*Facade.java
 src/main/java/io/apocalypse/<key>/infrastructure/config/*ModuleConfiguration.java
 src/main/java/io/apocalypse/<key>/infrastructure/config/*RuntimeConfiguration.java
+src/main/java/io/apocalypse/<key>/infrastructure/config/*PermissionActions.java
 src/main/java/io/apocalypse/<key>/interfaces/*Controller.java
 src/main/resources/db/migration/V<n>__<key>_*.sql
 ```
 
+## 授权与导航契约
+
+角色授权从 `GET /system/roles/{id}/permissions` 读取完整配置及角色 `revision`、目录 `catalogRevision`，通过同路径 PUT 提交 `expectedRevision`、`expectedCatalogRevision`、`upsert` 和 `remove` 增量。每条授权包含 `permissionId`、`enabled`、`scopeOverride`、`validFrom` 和 `validUntil`；未提交的已有授权保留。目录修改另用定义的 `expectedVersion`。遇到版本冲突先回读并让使用者处理差异，不覆盖并发修改，也不按过滤后的可见列表整体替换。
+
+导航从 `GET /system/roles/{id}/navigation` 读取，通过同路径 PUT 提交 `expectedRevision`、`addIds`、`removeIds`。导航与业务授权共用角色修订号但分别修改；分配页面不会授予接口能力。旧 `/system/roles/{id}/menus` 协议已拒绝读写。权限目录只能维护已声明动作的名称、说明、状态和生命周期，不能创建接口或修改动作身份；`LEGACY` 保留历史信息且不执行，`DEPRECATED` 允许已有授权继续执行，但不接受新增或修改授权，已有关系可显式移除。
+
+逐权限范围默认 `INHERIT_ROLE`，只有声明支持部门范围的动作接受 `ALL`、`DEPT` 或 `DEPT_AND_CHILDREN` override。同一动作的有效授权合并范围，其他动作的 ALL 不扩大本次权限。读取使用入口保存的动作范围；接入系统部门范围的敏感写在事务内调用 `DataScopeService.lockForWrite()`，取得统一授权锁后重验身份、版本、授权与当前时刻，并与入口范围相交。有效期使用 `Instant` / `timestamptz` / RFC 3339 UTC，以服务端统一 `Clock` 判断 `[validFrom, validUntil)`；不得缓存最终允许结果或用浏览器时钟代替判定。
+
 ## 前端接入顺序
 
 1. 页面放在 `src/views/<业务域>/`，标准 CRUD 优先用 DynaLayer schema；`src/views/system/user/index.tsx` 是现有页面范例。后端契约可由本模块的 `*.api.ts` 通过 `src/lib/api/client` 适配，不在组件中直接 `fetch`；请求选项必须显式展开 `{ ...transport }`，把捕获的 `signal` 与身份上下文传到底层。
-2. 模块自己的 `i18n/` 提供唯一 namespace 的中英文 locale pack；构建期 loader 自动发现，不修改全局静态业务名单。菜单的 `component` 与页面路径保持一致，权限由后端最新 `/system/users/me` 决定。
+2. 模块自己的 `i18n/` 提供唯一 namespace 的中英文 locale pack；构建期 loader 自动发现，不修改全局静态业务名单。菜单的 `component` 与页面路径保持一致，权限由后端最新 `/system/users/me` 决定；该响应还返回 `authorizationSnapshotId`、`evaluatedAt`、`nextTransitionAt` 与 `allScopePerms`。复用共享授权生命周期，在快照或范围改变、有效期边界到达时同步页面与查询状态，不从 JWT 旧权限或导航可见性推导接口能力。
 3. 可选模块只在自己的 `*.queries.ts` 声明 `ModuleScope`；页面 `index.tsx` 导出这个既有 scope 作为 `queryScope`，并用 `ModuleAccess` 包住页面。查询用 `useQuery(模块查询定义(...))`，页面与 DynaLayer 复用相同的查询/操作定义。撤权、换号、刷新后的旧请求不可回填结果；相关封装与回归测试位于 `src/lib/query/`。
 
 可选页面至少对应 `src/views/<key>/index.tsx`、`<key>.api.ts`、`<key>.queries.ts` 与 `i18n/index.ts`。菜单 `component='<key>/index'` 通过约定映射到该页面；页面导出的 `queryScope.moduleKey` 必须等于菜单的 `module_key`，中英文 locale pack 的叶子键须一致。
@@ -33,12 +44,12 @@ src/main/resources/db/migration/V<n>__<key>_*.sql
 
 只读示例验证的是装配路径，不能直接证明业务写入与对象授权。新增包含用户归属的数据时，先在服务端从 `SecurityUtils.currentUserId()` 取得身份；创建时由服务端写入 `owner_id`，请求体中的 `userId` / `ownerId` 不作所有权依据。详情、列表、修改和删除查询必须带 owner 约束，记录存在但不属于当前用户时不能返回内容。业务记录 ID 沿用雪花 `Long`，MyBatis-Plus 类型留在 mapper/infrastructure，写操作的事务放在 service/application 层。
 
-菜单页与按钮权限分别声明 `域:对象:动作`，给需要的角色建立关系；可选模块每个菜单的 `module_key` 必须与后端能力 key 和前端 `ModuleScope` 一致。Flyway 版本、菜单 ID 与权限串先在目标仓库查重，不从示例补丁原样复制。验证时用两个都具有接口权限的账号做读写：同权限不等于同 owner；再检查无权限账号、模块关闭/重启和迁移仍在的状态。
+页面导航与业务动作分别建立角色关系；按钮使用独立动作 code 判断当前权限。可选模块每个菜单及权限定义的 `module_key` 必须与后端能力 key 和前端 `ModuleScope` 一致。Flyway 版本、菜单 ID、权限 ID 与动作 code 先在目标仓库查重，不从示例补丁原样复制。验证时用两个都具有接口权限的账号做读写：同权限不等于同 owner；再检查无权限账号、模块关闭/重启和迁移仍在的状态。
 
 前端写操作在模块 `*.queries.ts` 通过同一个 scope 的 `operation` 定义，组件用 `useModuleMutation` 调用，并提供 `localKey` 与 `onDenied`。对象级 403/404 可能不改变 `/me`，应使用 `useResourceDenial` 清掉被拒对象的缓存和编辑态；成功后只通过模块查询定义的 `filter` 失效相关查询。详情 ID、分页和筛选条件必须进入 query 参数身份；不要在异步回调结束后重新捕获当前授权来写旧结果。
 
 ## 完成检查
 
-从新库启动时确认迁移、菜单、角色与接口权限一致；分别核查有权、无权和对象不属于当前用户的路径。可选模块还需验证开、关、重启和旧权限缓存；关停不能跳过共享 Flyway 与安全校验。运行 `./mvnw --batch-mode verify` 和前端 `pnpm check`；测试必须使用 Testcontainers，不连接已有业务环境。
+从新库启动时确认迁移、动作声明、角色业务授权与导航分配一致；分别核查有权、无权和对象不属于当前用户的路径。支持范围或有效期时，还需验证同一旧 JWT 在授权开始/到期后的行为、相同权限串下的范围收缩，以及等待写锁期间的撤权或到期。可选模块还需验证开、关、重启和旧权限缓存；关停不能跳过共享 Flyway 与安全校验。`AuthorizationRulesTest` 与 `PermissionActionRegistryTest` 检查动作声明、统一判定入口及旧授权来源禁用，集成测试验证实际范围与时间边界。运行 `./mvnw --batch-mode verify` 和前端 `pnpm check`；测试必须使用 Testcontainers，不连接已有业务环境。
 
 使用 `OptionalModuleLifecycleIT` 及其测试夹具核对最小装配路径，并按新业务的读写与 ownership 约束添加自己的集成测试。所有演练在一次性环境完成；不要将实验模块、菜单或占用的迁移编号原样复制到生产。

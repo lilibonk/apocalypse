@@ -131,7 +131,7 @@ class AuditEventIT extends AbstractIntegrationTest {
               .defaultSchema(schema)
               .locations("classpath:db/migration")
               .load();
-      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(3);
       UUID eventId = UUID.randomUUID();
       jdbcTemplate.update(
           "INSERT INTO "

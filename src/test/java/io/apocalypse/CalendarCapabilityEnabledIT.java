@@ -47,7 +47,7 @@ class CalendarCapabilityEnabledIT extends AbstractIntegrationTest {
         .contains("calendar:data-import:publish");
     assertThat(
             jdbcTemplate.queryForObject(
-                "SELECT count(DISTINCT perms) FROM sys_menu WHERE module_key = 'calendar' AND perms IS NOT NULL",
+                "SELECT count(DISTINCT code) FROM sys_permission WHERE module_key = 'calendar'",
                 Long.class))
         .isEqualTo(26L);
   }
@@ -1318,9 +1318,14 @@ class CalendarCapabilityEnabledIT extends AbstractIntegrationTest {
         roleKey);
     jdbcTemplate.update(
         """
-        INSERT INTO sys_role_menu (role_id, menu_id)
-        SELECT ?, id FROM sys_menu WHERE module_key = 'calendar'
+        INSERT INTO sys_role_permission (role_id, permission_id)
+        SELECT ?, id FROM sys_permission WHERE module_key = 'calendar'
         """,
+        roleId);
+    jdbcTemplate.update(
+        "INSERT INTO sys_role_authorization_state(role_id, revision) VALUES (?, 0)", roleId);
+    jdbcTemplate.update(
+        "INSERT INTO sys_role_navigation(role_id, menu_id) SELECT ?, id FROM sys_menu WHERE module_key = 'calendar' AND menu_type IN ('C', 'M')",
         roleId);
   }
 

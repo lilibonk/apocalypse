@@ -15,40 +15,32 @@ public interface SysMenuMapper extends BaseMapper<SysMenuEntity> {
 
   /** 全量菜单（按显示顺序）。 */
   default List<SysMenuEntity> selectAll() {
-    return selectList(new LambdaQueryWrapper<SysMenuEntity>().orderByAsc(SysMenuEntity::getSort));
+    return selectList(
+        new LambdaQueryWrapper<SysMenuEntity>()
+            .in(SysMenuEntity::getMenuType, "C", "M")
+            .orderByAsc(SysMenuEntity::getSort));
   }
 
   /** 某节点的直接子节点。 */
   default List<SysMenuEntity> selectByParentId(@Param("parentId") Long parentId) {
     return selectList(
-        new LambdaQueryWrapper<SysMenuEntity>().eq(SysMenuEntity::getParentId, parentId));
+        new LambdaQueryWrapper<SysMenuEntity>()
+            .eq(SysMenuEntity::getParentId, parentId)
+            .in(SysMenuEntity::getMenuType, "C", "M"));
   }
 
   /** 联表查询用户可见的有效菜单（经用户-角色-菜单两级关联）。 */
   @Select(
       """
       SELECT DISTINCT m.* FROM sys_menu m
-      JOIN sys_role_menu rm ON m.id = rm.menu_id
+      JOIN sys_role_navigation rm ON m.id = rm.menu_id
       JOIN sys_role r ON rm.role_id = r.id
       JOIN sys_user_role ur ON rm.role_id = ur.role_id
       WHERE ur.user_id = #{userId}
         AND r.deleted = 0 AND r.status = 1
         AND m.deleted = 0 AND m.status = 1 AND m.visible = 1
+        AND m.menu_type IN ('C', 'M')
       ORDER BY m.sort
       """)
   List<SysMenuEntity> selectByUserId(@Param("userId") Long userId);
-
-  /** 联表查询用户的接口权限菜单；MenuService 再按同一 capability registry 过滤。 */
-  @Select(
-      """
-      SELECT DISTINCT m.* FROM sys_menu m
-      JOIN sys_role_menu rm ON m.id = rm.menu_id
-      JOIN sys_role r ON rm.role_id = r.id
-      JOIN sys_user_role ur ON rm.role_id = ur.role_id
-      WHERE ur.user_id = #{userId}
-        AND r.deleted = 0 AND r.status = 1
-        AND m.deleted = 0 AND m.status = 1
-        AND m.perms IS NOT NULL AND m.perms <> ''
-      """)
-  List<SysMenuEntity> selectPermissionMenusByUserId(@Param("userId") Long userId);
 }

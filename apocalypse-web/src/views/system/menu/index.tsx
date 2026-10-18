@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
+import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 import { getMenuTree } from './menu.api'
@@ -56,6 +57,10 @@ function filterTree(nodes: MenuNode[], query: string, type: MenuFilter): MenuNod
 }
 
 export default function MenuPage() {
+  const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
+  return <MenuPageContent key={authorizationEpoch} />
+}
+function MenuPageContent() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
@@ -128,12 +133,10 @@ export default function MenuPage() {
             {t('common.菜单管理', { defaultValue: '菜单管理' })}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t('common.系统菜单（目录 / 菜单 / 按钮）的维护', {
-              defaultValue: '系统菜单（目录 / 菜单 / 按钮）的维护',
-            })}
+            {t('system:authorization.menuDescription')}
           </p>
         </div>
-        <Perm perm="system:menu:add">
+        <Perm perm="system:menu:add" requiresAllScope>
           <Button
             size="sm"
             onClick={() => setFormPayload({ mode: 'create', parentId: ROOT_PARENT_ID })}
@@ -146,9 +149,7 @@ export default function MenuPage() {
 
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <TriangleAlert className="size-3.5 shrink-0" />
-        {t('common.树数据来自菜单表，改动即影响全站路由与权限，请谨慎操作', {
-          defaultValue: '树数据来自菜单表，改动即影响全站路由与权限，请谨慎操作',
-        })}
+        {t('system:authorization.menuHint')}
       </p>
 
       <DynaQueryFeedback
@@ -171,9 +172,7 @@ export default function MenuPage() {
                   id="menu-search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('common.搜索菜单名称、路由或权限', {
-                    defaultValue: '搜索菜单名称、路由或权限',
-                  })}
+                  placeholder={t('system:authorization.menuSearch')}
                   className="pl-9"
                 />
               </div>
@@ -188,7 +187,7 @@ export default function MenuPage() {
                   ['ALL', '全部'],
                   ['C', '目录'],
                   ['M', '菜单'],
-                  ['F', '按钮'],
+                  ['F', '历史按钮'],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -203,7 +202,9 @@ export default function MenuPage() {
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                   )}
                 >
-                  {t(`dyna.${label}`, { defaultValue: label })}
+                  {value === 'F'
+                    ? t('system:authorization.legacyButton')
+                    : t(`dyna.${label}`, { defaultValue: label })}
                 </button>
               ))}
             </div>
@@ -240,7 +241,9 @@ export default function MenuPage() {
                 >
                   <item.icon className="size-4 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">
-                    {t(`dyna.${item.label}`, { defaultValue: item.label })}
+                    {item.type === 'F'
+                      ? t('system:authorization.legacyButton')
+                      : t(`dyna.${item.label}`, { defaultValue: item.label })}
                   </span>
                   <strong className="ml-auto text-sm font-semibold tabular-nums">
                     {item.count}

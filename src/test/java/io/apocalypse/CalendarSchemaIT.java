@@ -83,6 +83,25 @@ class CalendarSchemaIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void fullHistoryRevisionIndexIsValidNonUniqueAndUnfiltered() {
+    var index =
+        jdbcTemplate.queryForMap(
+            """
+        SELECT indisvalid AS valid, indisready AS ready, indisunique AS unique_index,
+               indpred IS NULL AS full_history, pg_get_indexdef(indexrelid) AS definition
+        FROM pg_index
+        WHERE indexrelid = 'idx_cal_event_revision_event_history'::regclass
+        """);
+    assertThat(index.get("valid")).isEqualTo(true);
+    assertThat(index.get("ready")).isEqualTo(true);
+    assertThat(index.get("unique_index")).isEqualTo(false);
+    assertThat(index.get("full_history")).isEqualTo(true);
+    assertThat(index.get("definition").toString())
+        .contains("USING btree (event_id)")
+        .doesNotContain(" INCLUDE ");
+  }
+
+  @Test
   void calendarIsAbsentFromRuntimeMenuAndPermissionsByDefault() {
     String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 

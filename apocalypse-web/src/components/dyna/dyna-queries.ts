@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { request } from '@/lib/api/client'
+import { captureRequestContext, request } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
 import type { ModuleOperation, ModuleScope, ScopedRequest } from '@/lib/query/module-scope'
 import type { DynaPageSchema, DynaStatusToggleAction } from './schema'
@@ -29,9 +29,13 @@ export function createDynaQueries(schema: DynaPageSchema, scope?: ModuleScope) {
   const operation = <Args extends unknown[], Data>(
     perm: string | undefined,
     execute: (transport: ScopedRequest, ...args: Args) => Promise<Data>,
+    requiresAllScope = false,
   ): ModuleOperation<Args, Data> => {
     const requiredPerms = perm ? [perm] : []
-    return scope?.operation(requiredPerms, execute) ?? { scope, requiredPerms, execute }
+    return {
+      ...(scope?.operation(requiredPerms, execute) ?? { scope, requiredPerms, execute }),
+      requiredAllScopePerms: requiresAllScope ? requiredPerms : [],
+    }
   }
   const update = (transport: ScopedRequest, input: { id: string; body: Row }) =>
     request<Row>(`${schema.endpoint}/${input.id}`, {
@@ -42,35 +46,49 @@ export function createDynaQueries(schema: DynaPageSchema, scope?: ModuleScope) {
   const toggles = new Map(
     (schema.rowActions ?? [])
       .filter((action): action is DynaStatusToggleAction => action.kind === 'status-toggle')
-      .map((action) => [action, operation(action.perm, update)]),
+      .map((action) => [action, operation(action.perm, update, action.requiresAllScope)]),
   )
   return {
-    list: (params: DynaListParams, enabled: boolean) =>
-      scopedList?.(params, enabled) ??
-      queryOptions({
-        queryKey: [
-          'dyna',
-          params.endpoint,
-          params.schemaKey,
-          params.page,
-          params.size,
-          params.search,
-        ] as readonly unknown[],
-        queryFn: ({ signal }: { signal: AbortSignal }) => listRequest(params, { signal }),
-        enabled,
-      }),
+    list: (params: DynaListParams, enabled: boolean) => {
+      const context = captureRequestContext()
+      return (
+        scopedList?.(params, enabled) ??
+        queryOptions({
+          queryKey: [
+            'dyna',
+            params.endpoint,
+            params.schemaKey,
+            params.page,
+            params.size,
+            params.search,
+            context.authorizationEpoch,
+          ] as readonly unknown[],
+          queryFn: ({ signal }: { signal: AbortSignal }) =>
+            listRequest(params, { signal, context }),
+          enabled,
+        })
+      )
+    },
     filter: () =>
       scopedList?.filter({ schemaKey: schema.key, endpoint: schema.endpoint }) ?? {
         queryKey: ['dyna', schema.endpoint, schema.key],
       },
-    create: operation(schema.createPerm, (transport, body: Row) =>
-      request<Row>(schema.endpoint, { method: 'POST', body, ...transport }),
+    create: operation(
+      schema.createPerm,
+      (transport, body: Row) =>
+        request<Row>(schema.endpoint, { method: 'POST', body, ...transport }),
+      schema.createRequiresAllScope,
     ),
-    edit: operation(schema.rowActions?.find((action) => action.kind === 'edit')?.perm, update),
+    edit: operation(
+      schema.rowActions?.find((action) => action.kind === 'edit')?.perm,
+      update,
+      schema.rowActions?.find((action) => action.kind === 'edit')?.requiresAllScope,
+    ),
     remove: operation(
       schema.rowActions?.find((action) => action.kind === 'delete')?.perm,
       (transport, id: string) =>
         request<void>(`${schema.endpoint}/${id}`, { method: 'DELETE', ...transport }),
+      schema.rowActions?.find((action) => action.kind === 'delete')?.requiresAllScope,
     ),
     toggles,
   }

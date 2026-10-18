@@ -24,8 +24,10 @@ export function pageLoginLogs(
   page: number,
   size: number,
   keyword?: string,
+  signal?: AbortSignal,
 ): Promise<PageResult<LoginLogRow>> {
   return request<PageResult<LoginLogRow>>('/system/logs/login', {
     query: { page, size, keyword: keyword || undefined },
+    signal,
   })
 }

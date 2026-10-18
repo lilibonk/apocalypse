@@ -1,9 +1,12 @@
 package io.apocalypse.system.infrastructure.config;
 
 import io.apocalypse.framework.module.ModuleConfiguration;
+import io.apocalypse.framework.security.PermissionActionDefinition;
+import io.apocalypse.system.authorization.service.SystemPermissionActions;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.context.TypeExcludeFilter;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
@@ -17,4 +20,9 @@ import org.springframework.context.annotation.FilterType;
       @ComponentScan.Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class)
     })
 @MapperScan("io.apocalypse.system.**.mapper")
-public class SystemModuleConfiguration {}
+public class SystemModuleConfiguration {
+  @Bean
+  public PermissionActionDefinition systemPermissionActionDefinition() {
+    return SystemPermissionActions.definition();
+  }
+}

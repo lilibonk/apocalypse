@@ -66,7 +66,9 @@ class TokenRevocationIT extends AbstractIntegrationTest {
             "sort",
             99,
             "status",
-            1),
+            1,
+            "expectedAuthorizationRevision",
+            roleRevision(roleId.asLong())),
         oldAccess);
 
     assertThat(exchangeRaw("/system/users/me", HttpMethod.GET, null, oldAccess).get("code").asInt())
@@ -156,7 +158,7 @@ class TokenRevocationIT extends AbstractIntegrationTest {
     assertThat(permissionCache).isNotNull();
     String permissionKey = userId + ":" + capabilityRegistry.cacheDiscriminator();
     permissionCache.put(permissionKey, List.of());
-    assertThat(menuService.permsByUserId(userId)).isEmpty();
+    assertThat(menuService.permsByUserId(userId)).contains("system:user:list");
     assertThat(menuService.freshPermsByUserId(userId)).contains("system:user:list");
 
     String userToken = loginAndGetToken("fresh_permission_user", "Fresh12345");
@@ -177,7 +179,19 @@ class TokenRevocationIT extends AbstractIntegrationTest {
             "/system/roles",
             Map.of("roleName", "禁用角色回归", "roleKey", roleKey, "sort", 99, "status", 1),
             adminToken);
-    putForData("/system/roles/" + roleId.asText() + "/menus", List.of(101L), adminToken);
+    JsonNode baseline = getForData("/system/roles/" + roleId.asText() + "/permissions", adminToken);
+    putForData(
+        "/system/roles/" + roleId.asText() + "/permissions",
+        Map.of(
+            "expectedRevision",
+            baseline.get("revision").asLong(),
+            "expectedCatalogRevision",
+            baseline.get("catalogRevision").asLong(),
+            "upsert",
+            List.of(Map.of("permissionId", 101L, "enabled", true, "scopeOverride", "INHERIT_ROLE")),
+            "remove",
+            List.of()),
+        adminToken);
     adminToken = loginAndGetToken("admin", ADMIN_PASSWORD);
 
     JsonNode user =
@@ -199,7 +213,17 @@ class TokenRevocationIT extends AbstractIntegrationTest {
 
     putForData(
         "/system/roles/" + roleId.asText(),
-        Map.of("roleName", "禁用角色回归", "roleKey", roleKey, "sort", 99, "status", 0),
+        Map.of(
+            "roleName",
+            "禁用角色回归",
+            "roleKey",
+            roleKey,
+            "sort",
+            99,
+            "status",
+            0,
+            "expectedAuthorizationRevision",
+            roleRevision(roleId.asLong())),
         adminToken);
     assertThat(exchangeRaw("/system/users/me", HttpMethod.GET, null, oldAccess).get("code").asInt())
         .isEqualTo(40100);
@@ -220,7 +244,17 @@ class TokenRevocationIT extends AbstractIntegrationTest {
     adminToken = loginAndGetToken("admin", ADMIN_PASSWORD);
     putForData(
         "/system/roles/" + roleId.asText(),
-        Map.of("roleName", "禁用角色回归", "roleKey", roleKey, "sort", 99, "status", 1),
+        Map.of(
+            "roleName",
+            "禁用角色回归",
+            "roleKey",
+            roleKey,
+            "sort",
+            99,
+            "status",
+            1,
+            "expectedAuthorizationRevision",
+            roleRevision(roleId.asLong())),
         adminToken);
     String restoredAccess = loginAndGetToken(username, "DisabledRole2026");
     assertThat(getForData("/system/users/page?page=1&size=1", restoredAccess).get("size").asInt())
@@ -238,6 +272,11 @@ class TokenRevocationIT extends AbstractIntegrationTest {
           return null;
         };
     redisTemplate.execute(flushDatabase);
+  }
+
+  private long roleRevision(long id) {
+    return jdbcTemplate.queryForObject(
+        "SELECT revision FROM sys_role_authorization_state WHERE role_id = ?", Long.class, id);
   }
 
   private JsonNode login(String username, String password) {

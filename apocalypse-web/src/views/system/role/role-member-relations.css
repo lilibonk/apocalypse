@@ -1,0 +1,80 @@
+.role-member-workspace {
+  container-type: inline-size;
+}
+
+.role-member-layout {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--spacing) * 4);
+}
+
+@container (min-width: 48rem) {
+  .role-member-layout {
+    grid-template-columns: minmax(0, 1fr) calc(var(--spacing) * 64);
+  }
+}
+
+.role-members-canvas {
+  aspect-ratio: 720 / 460;
+}
+
+.role-members-center {
+  left: 73.61%;
+  top: 45.65%;
+  width: calc(var(--spacing) * 16);
+  height: calc(var(--spacing) * 16);
+  translate: -50% -50%;
+}
+
+.role-members-center-label {
+  top: calc(100% + var(--spacing) * 3);
+  left: 50%;
+  translate: -50% 0;
+  width: calc(var(--spacing) * 36);
+}
+
+.role-members-node {
+  left: 5%;
+  width: 37%;
+  translate: 0 -50%;
+  border-color: var(--border-subtle);
+}
+
+.role-members-node[aria-pressed='true'] {
+  border-color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 10%, var(--card));
+}
+
+.role-members-node[data-state='added'] {
+  border-color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 12%, var(--card));
+}
+
+.role-members-node[data-state='removed'] {
+  border-color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 6%, var(--card));
+}
+
+.role-member-edit-edge {
+  stroke: var(--insight-edge);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.role-member-edit-edge[data-state='unlinked'] {
+  stroke-dasharray: 2 6;
+  opacity: 0.5;
+}
+
+.role-member-edit-edge[data-state='added'] {
+  stroke: var(--brand-text);
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+}
+
+.role-member-edit-edge[data-state='removed'] {
+  stroke: var(--destructive);
+  stroke-dasharray: 4 5;
+}

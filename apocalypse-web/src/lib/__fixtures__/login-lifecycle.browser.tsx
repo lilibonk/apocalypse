@@ -44,6 +44,10 @@ http.defaults.adapter = (config) => {
   if (config.url === '/system/users/me')
     return Promise.resolve(
       response(config, {
+        authorizationSnapshotId: 'login-fixture',
+        evaluatedAt: '2026-10-18T00:00:00Z',
+        nextTransitionAt: null,
+        allScopePerms: [],
         user: { id: '1', username: 'fixture-user', nickname: 'Fixture user' },
         roles: [],
         perms: [],

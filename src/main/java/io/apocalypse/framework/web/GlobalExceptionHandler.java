@@ -8,6 +8,7 @@ import jakarta.validation.ConstraintViolationException;
 
 import java.util.stream.Collectors;
 
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.BindException;
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
             .map(v -> v.getPropertyPath() + " " + v.getMessage())
             .collect(Collectors.joining("; "));
     return R.fail(ErrorCode.PARAM_INVALID.getCode(), message);
+  }
+
+  /** 无效 JSON、字段或时间格式属于请求错误，不将输入内容写入错误响应或日志。 */
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public R<Void> handleUnreadableRequest(HttpMessageNotReadableException e) {
+    return R.fail(ErrorCode.PARAM_INVALID.getCode(), "请求 JSON 字段或格式无效");
   }
 
   /** 已认证但无权限。 */

@@ -31,6 +31,11 @@ public final class SecurityUtils {
   /** 当前身份是否拥有指定权限。 */
   public static boolean hasAuthority(String authority) {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (!authority.startsWith("ROLE_") && !authority.startsWith("SCOPE_")) {
+      return AuthorizationInvocationContext.currentSnapshot()
+          .map(snapshot -> snapshot.allows(authority))
+          .orElse(false);
+    }
     return authentication != null
         && authentication.isAuthenticated()
         && authentication.getAuthorities().stream()

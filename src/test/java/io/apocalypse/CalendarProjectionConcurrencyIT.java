@@ -126,6 +126,74 @@ class CalendarProjectionConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void replacementProjectionDraftNeverReusesDeletedHistoryRevisionOrVersion() {
+    String target = target("retained-counters");
+    var initial =
+        api.upsert(batch(target, List.of(lesson("retained-counters", 1, 2)))).items().getFirst();
+    long eventId = initial.eventId();
+    long calendarId =
+        jdbcTemplate.queryForObject(
+            "SELECT calendar_id FROM cal_event WHERE id = ?", Long.class, eventId);
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    putForData(
+        "/calendar/calendars/" + calendarId + "/projection-grants/campus-concurrency",
+        Map.of("publishMode", "DRAFT_ONLY", "expectedVersion", 0),
+        token);
+    for (int version = 2; version <= 3; version++) {
+      assertThat(
+              api.upsert(batch(target, List.of(lesson("retained-counters", version, version + 1))))
+                  .items()
+                  .getFirst()
+                  .status())
+          .isEqualTo(ProjectionResultStatus.UPDATED);
+    }
+    long discardedId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM cal_event_revision WHERE event_id = ? AND state = 'DRAFT' AND deleted = 0",
+            Long.class,
+            eventId);
+    deleteForData(
+        "/calendar/calendars/" + calendarId + "/managed-events/" + eventId + "/draft", token);
+    var discarded =
+        jdbcTemplate.queryForMap(
+            "SELECT revision_no, version, deleted FROM cal_event_revision WHERE id = ?",
+            discardedId);
+    assertThat(((Number) discarded.get("deleted")).intValue()).isEqualTo(1);
+    assertThat(((Number) discarded.get("revision_no")).intValue()).isEqualTo(2);
+    assertThat(((Number) discarded.get("version")).intValue()).isGreaterThan(1);
+
+    var replacement =
+        api.upsert(batch(target, List.of(lesson("retained-counters", 4, 5)))).items().getFirst();
+    assertThat(replacement.status()).isEqualTo(ProjectionResultStatus.UPDATED);
+    assertThat(replacement.eventId()).isEqualTo(eventId);
+    var active =
+        jdbcTemplate.queryForMap(
+            "SELECT id, revision_no, version FROM cal_event_revision WHERE event_id = ? AND state = 'DRAFT' AND deleted = 0",
+            eventId);
+    assertThat(((Number) active.get("id")).longValue()).isNotEqualTo(discardedId);
+    assertThat(((Number) active.get("revision_no")).intValue())
+        .isEqualTo(((Number) discarded.get("revision_no")).intValue() + 1);
+    assertThat(((Number) active.get("version")).intValue())
+        .isEqualTo(((Number) discarded.get("version")).intValue() + 1);
+    assertThat(
+            api.upsert(batch(target, List.of(lesson("retained-counters", 3, 4))))
+                .items()
+                .getFirst()
+                .status())
+        .isEqualTo(ProjectionResultStatus.STALE);
+    assertThat(
+            jdbcTemplate.queryForMap(
+                "SELECT id, revision_no, version FROM cal_event_revision WHERE event_id = ? AND state = 'DRAFT' AND deleted = 0",
+                eventId))
+        .isEqualTo(active);
+    assertThat(
+            jdbcTemplate.queryForMap(
+                "SELECT revision_no, version, deleted FROM cal_event_revision WHERE id = ?",
+                discardedId))
+        .isEqualTo(discarded);
+  }
+
+  @Test
   void unchangedLegacyProjectionRetryChecksRetainedContentWithoutMutatingIt() throws Exception {
     String target = target("legacy-retry");
     ProjectedEventCommand command = lesson("legacy", 1, 2);

@@ -8,6 +8,7 @@ import io.apocalypse.framework.capability.CapabilityRegistry;
 
 import java.nio.file.Path;
 import java.sql.DriverManager;
+import java.util.List;
 import java.util.Map;
 import java.util.jar.JarFile;
 
@@ -18,6 +19,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -36,6 +38,7 @@ class OptionalModuleLifecycleIT {
         var redis = new GenericContainer<>("redis:8.10.1-alpine").withExposedPorts(6379)) {
       postgres.start();
       redis.start();
+      prepareFixture(postgres);
       FixtureRuntime.RESOURCE_READS.set(0);
       String oldToken;
       String preservedDay;
@@ -45,9 +48,6 @@ class OptionalModuleLifecycleIT {
       long relationCount;
       try (var enabled = start(postgres, redis, true, true)) {
         var jdbc = enabled.getBean(JdbcTemplate.class);
-        jdbc.update(
-            "INSERT INTO sys_menu(id,menu_name,menu_type,path,component,perms,module_key) VALUES(990001,'Fixture','M','fixture','fixture/index','fixture:status:read','fixture'),(990002,'Unknown','M','unknown','unknown/index','unknown:status:read','unknown')");
-        jdbc.update("INSERT INTO sys_role_menu(role_id,menu_id) VALUES(1,990001),(1,990002)");
         oldToken = login(enabled);
         assertThat(get(enabled, "/fixture/status", oldToken).at("/data").asInt()).isEqualTo(1);
         var me = get(enabled, "/system/users/me", oldToken);
@@ -107,11 +107,8 @@ class OptionalModuleLifecycleIT {
         assertThat(event.at("/code").asInt()).as("%s", event).isZero();
         eventId = event.at("/data/id").asText();
         preservedEvent = event.at("/data").toString();
-        preservedRelationships =
-            jdbc.queryForList(
-                    "SELECT role_id, menu_id FROM sys_role_menu ORDER BY role_id, menu_id")
-                .toString();
-        relationCount = jdbc.queryForObject("SELECT count(*) FROM sys_role_menu", Long.class);
+        preservedRelationships = relationships(jdbc);
+        relationCount = jdbc.queryForObject("SELECT count(*) FROM sys_role_permission", Long.class);
         assertThat(FixtureRuntime.RESOURCE_READS).hasValue(1);
       }
       try (var disabled = start(postgres, redis, false, false)) {
@@ -140,15 +137,10 @@ class OptionalModuleLifecycleIT {
         assertThat(
                 disabled
                     .getBean(JdbcTemplate.class)
-                    .queryForObject("SELECT count(*) FROM sys_role_menu", Long.class))
+                    .queryForObject("SELECT count(*) FROM sys_role_permission", Long.class))
             .isEqualTo(relationCount);
         disabled.getBean(Flyway.class).validate();
-        assertThat(
-                disabled
-                    .getBean(JdbcTemplate.class)
-                    .queryForList(
-                        "SELECT role_id, menu_id FROM sys_role_menu ORDER BY role_id, menu_id")
-                    .toString())
+        assertThat(relationships(disabled.getBean(JdbcTemplate.class)))
             .isEqualTo(preservedRelationships);
       }
       try (var enabled = start(postgres, redis, true, true)) {
@@ -196,6 +188,37 @@ class OptionalModuleLifecycleIT {
             .hasStackTraceContaining("Migration checksum mismatch");
       }
     }
+  }
+
+  private static String relationships(JdbcTemplate jdbc) {
+    return List.of(
+            jdbc.queryForList("SELECT * FROM sys_role_permission ORDER BY role_id,permission_id"),
+            jdbc.queryForList(
+                "SELECT role_id,menu_id FROM sys_role_navigation ORDER BY role_id,menu_id"))
+        .toString();
+  }
+
+  private static void prepareFixture(PostgreSQLContainer<?> postgres) {
+    var source =
+        new DriverManagerDataSource(
+            postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+    Flyway.configure().dataSource(source).load().migrate();
+    var jdbc = new JdbcTemplate(source);
+    jdbc.update(
+        """
+        INSERT INTO sys_menu(id,menu_name,menu_type,path,component,module_key)
+        VALUES(990001,'Fixture','M','fixture','fixture/index','fixture'),
+              (990002,'Unknown','M','unknown','unknown/index','unknown')
+        """);
+    jdbc.update(
+        """
+        INSERT INTO sys_permission(id,code,name,module_key,resource,action,status,lifecycle,declaration_source)
+        VALUES(990001,'fixture:status:read','Fixture','fixture','status','read',1,'ACTIVE','test:fixture'),
+              (990002,'unknown:status:read','Unknown','unknown','status','read',1,'LEGACY','test:unknown')
+        """);
+    jdbc.update(
+        "INSERT INTO sys_role_permission(role_id,permission_id) VALUES(1,990001),(1,990002)");
+    jdbc.update("INSERT INTO sys_role_navigation(role_id,menu_id) VALUES(1,990001),(1,990002)");
   }
 
   @Test

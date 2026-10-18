@@ -19,4 +19,6 @@ public record RoleSaveReq(
         @Schema(
             nullable = true,
             allowableValues = {"ALL", "DEPT", "DEPT_AND_CHILDREN"})
-        String dataScope) {}
+        String dataScope,
+    @Min(value = 0, message = "授权版本不能为负数") @Schema(nullable = true)
+        Long expectedAuthorizationRevision) {}

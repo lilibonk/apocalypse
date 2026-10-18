@@ -195,15 +195,16 @@ public class MybatisProjectionEventRepository implements ProjectionEventReposito
     EventRevisionDo draft = revisionMapper.selectDraftForUpdate(eventHead.getId());
     int draftVersion;
     if (draft == null) {
+      EventRevisionCounters counters = revisionMapper.selectRevisionCounters(eventHead.getId());
       draft =
           newRevision(
               eventHead.getId(),
-              revisionMapper.selectMaxRevisionNo(eventHead.getId()) + 1,
+              counters.revisionNo() + 1,
               EventRevisionState.DRAFT,
               event.content(),
               event.payloadHash(),
               actor);
-      draft.setVersion(Math.incrementExact(revisionMapper.selectMaxVersion(eventHead.getId())));
+      draft.setVersion(Math.incrementExact(counters.version()));
       revisionMapper.insert(draft);
       draftVersion = draft.getVersion();
     } else {

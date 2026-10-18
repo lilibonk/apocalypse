@@ -10,4 +10,5 @@ public record RoleResp(
     Integer sort,
     Integer status,
     @Schema(nullable = true) String remark,
-    @Schema(allowableValues = {"ALL", "DEPT", "DEPT_AND_CHILDREN"}) String dataScope) {}
+    @Schema(allowableValues = {"ALL", "DEPT", "DEPT_AND_CHILDREN"}) String dataScope,
+    Long authorizationRevision) {}

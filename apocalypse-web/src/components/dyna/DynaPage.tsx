@@ -32,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PixelScale } from '@/effects/PixelWave'
-import { ApiError } from '@/lib/api/client'
+import { ApiError, assertPermissionAccess } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
 import { ModuleAccess } from '@/lib/query/ModuleAccess'
 import type { ModuleOperation, ModuleScope } from '@/lib/query/module-scope'
@@ -92,6 +92,7 @@ export interface ScopedDynaAction {
 
 export function DynaPage(props: DynaPageProps) {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
+  const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   const queries = useMemo(
     () => createDynaQueries(props.schema, props.queryScope),
     [props.schema, props.queryScope],
@@ -100,6 +101,7 @@ export function DynaPage(props: DynaPageProps) {
     <DynaPageContent
       key={JSON.stringify([
         sessionEpoch,
+        authorizationEpoch,
         props.queryScope?.moduleKey,
         props.schema.endpoint,
         props.schema.key,
@@ -296,7 +298,7 @@ function DynaPageContent({
             </Tooltip>
           )
           return action.perm ? (
-            <Perm key="view" perm={action.perm}>
+            <Perm key="view" perm={action.perm} requiresAllScope={action.requiresAllScope}>
               {button}
             </Perm>
           ) : (
@@ -321,7 +323,7 @@ function DynaPageContent({
             </Tooltip>
           )
           return action.perm ? (
-            <Perm key="edit" perm={action.perm}>
+            <Perm key="edit" perm={action.perm} requiresAllScope={action.requiresAllScope}>
               {button}
             </Perm>
           ) : (
@@ -346,7 +348,7 @@ function DynaPageContent({
             </Tooltip>
           )
           return action.perm ? (
-            <Perm key="delete" perm={action.perm}>
+            <Perm key="delete" perm={action.perm} requiresAllScope={action.requiresAllScope}>
               {button}
             </Perm>
           ) : (
@@ -368,8 +370,17 @@ function DynaPageContent({
                 customMutation.isPending
               }
               onClick={() => {
-                if (typeof handler === 'function' && !queryScope) handler(row)
-                else if (handler && typeof handler !== 'function')
+                if (typeof handler === 'function' && !queryScope) {
+                  try {
+                    assertPermissionAccess(
+                      action.perm ? [action.perm] : [],
+                      action.requiresAllScope && action.perm ? [action.perm] : [],
+                    )
+                    handler(row)
+                  } catch {
+                    /* An obsolete action cannot reopen an editor. */
+                  }
+                } else if (handler && typeof handler !== 'function')
                   customMutation.mutate({ action: handler, row })
               }}
             >
@@ -377,7 +388,11 @@ function DynaPageContent({
             </Button>
           )
           return action.perm ? (
-            <Perm key={`custom-${action.key}`} perm={action.perm}>
+            <Perm
+              key={`custom-${action.key}`}
+              perm={action.perm}
+              requiresAllScope={action.requiresAllScope}
+            >
               {button}
             </Perm>
           ) : (
@@ -405,7 +420,7 @@ function DynaPageContent({
           </Tooltip>
         )
         return action.perm ? (
-          <Perm key="status-toggle" perm={action.perm}>
+          <Perm key="status-toggle" perm={action.perm} requiresAllScope={action.requiresAllScope}>
             {button}
           </Perm>
         ) : (
@@ -442,7 +457,7 @@ function DynaPageContent({
             <RefreshCw className="size-4" />
           </Button>
           {schema.createPerm && schema.form && (
-            <Perm perm={schema.createPerm}>
+            <Perm perm={schema.createPerm} requiresAllScope={schema.createRequiresAllScope}>
               <Button onClick={() => setDialog({ mode: 'create', row: null })}>
                 <Plus className="size-4" />
                 {schema.createLabel ? t(schema.createLabel) : t('create', { entity })}

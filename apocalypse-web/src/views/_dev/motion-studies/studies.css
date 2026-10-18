@@ -1,0 +1,243 @@
+.motion-studies {
+  display: grid;
+  grid-template-columns: calc(var(--spacing) * 56) minmax(0, 1fr);
+  min-height: 100svh;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.study-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  padding: calc(var(--spacing) * 7) calc(var(--spacing) * 4);
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-navigation);
+}
+
+.study-brand {
+  padding: 0 calc(var(--spacing) * 1);
+}
+.study-workspace {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 3);
+  margin-top: calc(var(--spacing) * 10);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+.study-workspace-icon {
+  color: var(--brand-text);
+}
+.study-navigation {
+  margin-top: calc(var(--spacing) * 8);
+}
+.study-nav-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3);
+  margin-bottom: calc(var(--spacing) * 1);
+  border-radius: var(--radius-control);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  transition:
+    background-color var(--motion-duration-feedback),
+    color var(--motion-duration-feedback);
+}
+.study-nav-item:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.study-nav-item.is-current {
+  background: var(--card);
+  color: var(--brand-text);
+  box-shadow: var(--shadow-surface);
+  font-weight: 600;
+}
+.study-nav-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.study-sidebar-note {
+  margin: auto calc(var(--spacing) * 1) calc(var(--spacing) * 7);
+  padding: calc(var(--spacing) * 4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--background);
+}
+.study-sidebar-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 calc(var(--spacing) * 3);
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  letter-spacing: 0.06em;
+}
+.study-shell {
+  min-width: 0;
+}
+.study-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 4);
+  min-height: calc(var(--spacing) * 18);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 8);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.study-main {
+  max-width: 100rem;
+  margin: 0 auto;
+  padding: calc(var(--spacing) * 9) calc(var(--spacing) * 8) calc(var(--spacing) * 6);
+}
+.study-page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: calc(var(--spacing) * 5);
+  margin-bottom: calc(var(--spacing) * 7);
+}
+.study-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+.study-sample-label {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+  font-size: 0.625rem;
+  color: var(--muted-foreground);
+}
+.study-card {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--study-card-radius);
+  box-shadow: var(--study-card-shadow);
+}
+.study-metric {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.055em;
+  line-height: 1.1;
+}
+.study-primary-action {
+  background: var(--study-blue);
+  color: var(--study-blue-foreground);
+}
+.study-primary-action:hover {
+  background: var(--study-blue);
+  opacity: 0.9;
+}
+.study-page-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 3);
+  margin-top: calc(var(--spacing) * 7);
+  padding-top: calc(var(--spacing) * 5);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.study-skip-link {
+  position: fixed;
+  top: calc(var(--spacing) * 2);
+  left: calc(var(--spacing) * 2);
+  transform: translateY(-200%);
+  z-index: 100;
+  padding: calc(var(--spacing) * 3);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-radius: var(--radius-control);
+}
+.study-skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (max-width: 80rem) {
+  .motion-studies {
+    grid-template-columns: calc(var(--spacing) * 48) minmax(0, 1fr);
+  }
+  .study-main {
+    padding: calc(var(--spacing) * 7) calc(var(--spacing) * 6);
+  }
+  .study-toolbar {
+    padding-inline: calc(var(--spacing) * 6);
+  }
+  .study-page-heading {
+    align-items: flex-start;
+  }
+  .study-page-heading > div:last-child {
+    flex-shrink: 0;
+  }
+  .study-page-heading .study-primary-action {
+    display: none;
+  }
+}
+
+@media (max-width: 48rem) {
+  .motion-studies {
+    display: block;
+  }
+  .study-sidebar {
+    position: static;
+    height: auto;
+    padding: calc(var(--spacing) * 4);
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .study-brand {
+    padding: 0;
+  }
+  .study-workspace,
+  .study-sidebar-note,
+  .study-sidebar-footer,
+  .study-navigation > p {
+    display: none;
+  }
+  .study-navigation {
+    display: flex;
+    gap: calc(var(--spacing) * 2);
+    margin-top: calc(var(--spacing) * 4);
+  }
+  .study-nav-item {
+    flex: 1;
+    margin: 0;
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+  .study-toolbar {
+    min-height: calc(var(--spacing) * 14);
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+    gap: calc(var(--spacing) * 2);
+  }
+  .study-main {
+    padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+  }
+  .study-page-heading {
+    gap: calc(var(--spacing) * 2);
+  }
+  .study-page-heading > div:first-child {
+    min-width: 0;
+  }
+  .study-page-footer {
+    line-height: 1.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-studies *,
+  .motion-studies *::before,
+  .motion-studies *::after {
+    scroll-behavior: auto !important;
+  }
+}

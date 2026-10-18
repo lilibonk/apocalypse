@@ -3,26 +3,38 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/client'
 import { normalizeMenuNode, type MenuNode } from '@/lib/api/types'
+import { pageLoginLogs } from '@/views/system/log/login/login-log.api'
+import { pageOperLogs } from '@/views/system/log/oper/oper-log.api'
+import { listOnlineUsers } from '@/views/system/online/online.api'
 
 import dashboardI18n from './i18n'
 import DashboardPage from './index'
+import { MobileDashboard } from './MobileDashboard'
 
 const { auth, query } = vi.hoisted(() => ({
   auth: {
-    user: { username: 'morgan', nickname: 'Morgan' },
+    user: { id: '9223372036854775001', username: 'morgan', nickname: 'Morgan' },
     perms: [] as string[],
     menus: [] as MenuNode[],
     meLoaded: true,
+    sessionEpoch: 3,
   },
   query: vi.fn(),
 }))
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: (select: (state: typeof auth) => unknown) => select(auth),
+  useAuthStore: Object.assign((select: (state: typeof auth) => unknown) => select(auth), {
+    getState: () => auth,
+  }),
 }))
+vi.mock('@/views/system/log/login/login-log.api', () => ({ pageLoginLogs: vi.fn() }))
+vi.mock('@/views/system/log/oper/oper-log.api', () => ({ pageOperLogs: vi.fn() }))
+vi.mock('@/views/system/online/online.api', () => ({ listOnlineUsers: vi.fn() }))
+vi.mock('@/hooks/useDesktopViewport', () => ({ useDesktopViewport: () => true }))
 vi.mock('@tanstack/react-query', async (original) => ({
   ...(await original<typeof import('@tanstack/react-query')>()),
   useQuery: query,
@@ -63,7 +75,7 @@ const cachedLogin = {
   ],
 }
 
-async function render(language = 'en') {
+async function render(language = 'en', mobile = false) {
   const instance = i18next.createInstance()
   await instance.init({
     lng: language,
@@ -76,11 +88,11 @@ async function render(language = 'en') {
     interpolation: { escapeValue: false },
   })
   return renderToStaticMarkup(
-    <I18nextProvider i18n={instance}>
-      <MemoryRouter>
-        <DashboardPage />
-      </MemoryRouter>
-    </I18nextProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <I18nextProvider i18n={instance}>
+        <MemoryRouter>{mobile ? <MobileDashboard /> : <DashboardPage />}</MemoryRouter>
+      </I18nextProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -88,6 +100,11 @@ beforeEach(() => {
   auth.perms = ['system:log:login', 'system:log:oper', 'system:online:list']
   auth.menus = []
   auth.meLoaded = true
+  auth.sessionEpoch = 3
+  auth.user.id = '9223372036854775001'
+  vi.mocked(pageLoginLogs).mockReset().mockResolvedValue({ list: [], total: 0, page: 1, size: 200 })
+  vi.mocked(pageOperLogs).mockReset().mockResolvedValue({ list: [], total: 0, page: 1, size: 200 })
+  vi.mocked(listOnlineUsers).mockReset().mockResolvedValue([])
   sources = {
     'login-logs': ready({ list: [] }),
     'oper-logs': ready({ list: [] }),
@@ -232,5 +249,117 @@ describe('dashboard truthful source states', () => {
     const html = await render()
     expect(html).toContain('Custom &lt;operation&gt; &amp; title')
     expect(html).not.toContain('Custom <operation>')
+  })
+
+  it('states the bounded sample scope and does not draw a time-spanning line for one instant', async () => {
+    sources['login-logs'] = ready({ ...cachedLogin, total: 9876, page: 1, size: 200 })
+    const html = await render()
+    expect(html).toContain('Total sign-in records currently retained')
+    expect(html).toContain('9,876')
+    expect(html).toContain('Latest 50')
+    expect(html).toContain('Latest 100')
+    expect(html).toContain('Latest 200')
+    expect(html).toContain('Sampled records: 1')
+    expect(html).toContain('not a complete reporting period')
+    expect(html).not.toContain('class="dashboard-trend-line"')
+    expect(html).not.toContain('24 hours')
+    expect(html).not.toContain('vs. previous')
+  })
+
+  it('does not present an empty operation source as a 100% success rate', async () => {
+    const html = await render()
+    expect(html).toContain('No rate available')
+    expect(html.replace(/<[^>]*>/g, '')).not.toContain('100.0')
+    expect(html).not.toContain('NaN')
+  })
+})
+
+interface CapturedQuery {
+  queryKey: readonly unknown[]
+  queryFn: (request: { signal: AbortSignal }) => Promise<unknown>
+  enabled: boolean
+}
+
+function sourceQuery(name: string): CapturedQuery {
+  const call = query.mock.calls.find(([options]) => options.queryKey[1] === name)
+  if (!call) throw new Error(`Missing query for ${name}`)
+  return call[0] as CapturedQuery
+}
+
+describe('dashboard bounded source lifecycle', () => {
+  it('requests one bounded first page per log source and forwards the query signal', async () => {
+    await render()
+    const controller = new AbortController()
+    for (const name of ['login-logs', 'oper-logs', 'online-users']) {
+      const options = sourceQuery(name)
+      expect(options.queryKey).toContain(auth.sessionEpoch)
+      expect(options.queryKey).toContain(auth.user.id)
+      await options.queryFn({ signal: controller.signal })
+    }
+    expect(pageLoginLogs).toHaveBeenCalledExactlyOnceWith(1, 200, undefined, controller.signal)
+    expect(pageOperLogs).toHaveBeenCalledExactlyOnceWith(1, 200, undefined, controller.signal)
+    expect(listOnlineUsers).toHaveBeenCalledExactlyOnceWith({ signal: controller.signal })
+  })
+
+  it.each(['revoke', 'refresh', 'identity', 'abort'] as const)(
+    'rejects a late login source result after %s',
+    async (change) => {
+      let finish: (() => void) | undefined
+      vi.mocked(pageLoginLogs).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ list: [], total: 0, page: 1, size: 200 })
+          }),
+      )
+      await render()
+      const controller = new AbortController()
+      const pending = sourceQuery('login-logs').queryFn({ signal: controller.signal })
+      if (change === 'revoke') auth.perms = []
+      if (change === 'refresh') auth.meLoaded = false
+      if (change === 'identity') auth.sessionEpoch++
+      if (change === 'abort') controller.abort()
+      finish?.()
+      await expect(pending).rejects.toMatchObject({ name: 'CanceledError' })
+    },
+  )
+})
+
+describe('unchanged mobile dashboard', () => {
+  it('keeps the previous layout and omits desktop statistics and sample controls', async () => {
+    const html = await render('en', true)
+    expect(html).toContain('Common tasks')
+    expect(html).toContain('Recent activity')
+    expect(html).toContain('Up to 4 recent records per available source')
+    expect(html).not.toContain('Recent record sample size')
+    expect(html).not.toContain('Audit operation success')
+    expect(html).not.toContain('Inspect activity:')
+    expect(html.indexOf('/brand/hero-light.png')).toBeLessThan(
+      html.indexOf('dashboard-tasks-title'),
+    )
+    expect(html.indexOf('dashboard-tasks-title')).toBeLessThan(
+      html.indexOf('dashboard-activity-title'),
+    )
+  })
+
+  it('reads only four records per source and isolates that cache from the desktop request', async () => {
+    await render('en', true)
+    const controller = new AbortController()
+    const loginQuery = sourceQuery('login-logs')
+    const operQuery = sourceQuery('oper-logs')
+    expect(loginQuery.queryKey.at(-1)).toBe(4)
+    expect(operQuery.queryKey.at(-1)).toBe(4)
+    await loginQuery.queryFn({ signal: controller.signal })
+    await operQuery.queryFn({ signal: controller.signal })
+    expect(pageLoginLogs).toHaveBeenCalledExactlyOnceWith(1, 4, undefined, controller.signal)
+    expect(pageOperLogs).toHaveBeenCalledExactlyOnceWith(1, 4, undefined, controller.signal)
+  })
+
+  it('retains the existing source denial and empty/failure semantics', async () => {
+    auth.perms = []
+    sources['login-logs'] = ready(cachedLogin)
+    const html = await render('en', true)
+    expect(html).toContain('does not have permission to view audit records')
+    expect(html).not.toContain('protected-actor')
+    expect(html).not.toContain('data-slot="session-count"')
   })
 })

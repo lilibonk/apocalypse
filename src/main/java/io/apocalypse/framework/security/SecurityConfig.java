@@ -1,12 +1,14 @@
 package io.apocalypse.framework.security;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,6 +57,12 @@ public class SecurityConfig {
   private final RestAccessDeniedHandler restAccessDeniedHandler;
 
   private final JwtBlacklistFilter jwtBlacklistFilter;
+
+  @Bean
+  @ConditionalOnMissingBean(Clock.class)
+  public Clock authorizationClock() {
+    return Clock.systemUTC();
+  }
 
   /** 匿名认证入口、文档与健康检查白名单；logout 和管理端点另行授权。 */
   private static final String[] PUBLIC_ENDPOINTS = {

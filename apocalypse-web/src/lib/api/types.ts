@@ -86,6 +86,10 @@ export interface CurrentUser {
   roles: string[]
   perms: string[]
   menus: RawMenuNode[]
+  authorizationSnapshotId: string
+  evaluatedAt: string
+  nextTransitionAt: string | null
+  allScopePerms: string[]
 }
 
 /** 字典数据项。 */

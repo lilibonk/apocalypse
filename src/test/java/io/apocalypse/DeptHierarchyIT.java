@@ -2,6 +2,7 @@ package io.apocalypse;
 
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.response.ErrorCode;
+import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.dept.dto.request.DeptSaveReq;
 import io.apocalypse.system.dept.entity.SysDeptEntity;
 import io.apocalypse.system.dept.mapper.SysDeptMapper;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -35,6 +37,8 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
   @Autowired private SysDeptMapper sysDeptMapper;
 
   @Autowired private PlatformTransactionManager transactionManager;
+
+  @Autowired private TokenVersionStore tokenVersionStore;
 
   @BeforeEach
   void authenticate() {
@@ -73,6 +77,12 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
             executor.submit(
                 () -> {
                   try {
+                    authenticateAdmin();
+                    assertThatThrownBy(
+                            () ->
+                                deptService.update(secondId, request(firstId, "concurrent-second")))
+                        .isInstanceOf(BadCredentialsException.class);
+                    // 前一事务提交会撤销旧 av；新身份重试仍须被部门防成环约束拒绝。
                     authenticateAdmin();
                     deptService.update(secondId, request(firstId, "concurrent-second"));
                     return 0;
@@ -132,11 +142,11 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
     assertThat(subtree)
         .extracting(SysDeptEntity::getId)
         .containsExactlyInAnyOrder(firstId, secondId);
-    assertThatThrownBy(() -> deptService.update(firstId, request(secondId, "corrupt-first")))
+    assertThatThrownBy(() -> update(firstId, secondId, "corrupt-first"))
         .isInstanceOf(BizException.class)
         .hasMessage("父部门不能是自身或其下级部门");
 
-    deptService.update(firstId, request(0L, "corrupt-first"));
+    update(firstId, 0L, "corrupt-first");
     assertThat(sysDeptMapper.selectSubTree(firstId))
         .extracting(SysDeptEntity::getId)
         .containsExactlyInAnyOrder(firstId, secondId);
@@ -157,7 +167,7 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
     Long child = create(firstRoot, "valid-child");
     Long grandchild = create(child, "valid-grandchild");
 
-    deptService.update(child, request(secondRoot, "valid-child"));
+    update(child, secondRoot, "valid-child");
 
     assertThat(sysDeptMapper.selectSubTree(firstRoot))
         .extracting(SysDeptEntity::getId)
@@ -165,37 +175,52 @@ class DeptHierarchyIT extends AbstractIntegrationTest {
     assertThat(sysDeptMapper.selectSubTree(secondRoot))
         .extracting(SysDeptEntity::getId)
         .containsExactlyInAnyOrder(secondRoot, child, grandchild);
-    assertThatThrownBy(() -> deptService.delete(secondRoot))
+    assertThatThrownBy(() -> delete(secondRoot))
         .isInstanceOf(BizException.class)
         .hasMessage("存在子部门，不允许删除");
-    assertThatThrownBy(() -> deptService.update(child, request(child, "valid-child")))
+    assertThatThrownBy(() -> update(child, child, "valid-child"))
         .isInstanceOf(BizException.class)
         .hasMessage("父部门不能是自身或其下级部门");
-    assertThatThrownBy(() -> deptService.create(request(Long.MAX_VALUE, "missing-parent")))
+    assertThatThrownBy(() -> create(Long.MAX_VALUE, "missing-parent"))
         .isInstanceOf(BizException.class)
         .hasMessage("父部门不存在");
 
-    deptService.delete(grandchild);
-    deptService.delete(child);
-    deptService.delete(secondRoot);
-    deptService.delete(firstRoot);
+    delete(grandchild);
+    delete(child);
+    delete(secondRoot);
+    delete(firstRoot);
     assertThat(sysDeptMapper.selectSubTree(secondRoot)).isEmpty();
   }
 
-  private static void authenticateAdmin() {
+  private void authenticateAdmin() {
+    var versions = tokenVersionStore.current("admin");
     Jwt jwt =
         Jwt.withTokenValue("hierarchy-fixture")
             .header("alg", "HS256")
             .subject("admin")
             .claim("uid", 1L)
             .claim("type", "access")
+            .claim("av", versions.globalAuthorization())
+            .claim("uv", versions.userAuthorization())
+            .claim("cv", versions.credential())
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
   }
 
   private Long create(Long parentId, String name) {
+    authenticateAdmin();
     return deptService.create(request(parentId, name));
+  }
+
+  private void update(Long id, Long parentId, String name) {
+    authenticateAdmin();
+    deptService.update(id, request(parentId, name));
+  }
+
+  private void delete(Long id) {
+    authenticateAdmin();
+    deptService.delete(id);
   }
 
   private static DeptSaveReq request(Long parentId, String name) {

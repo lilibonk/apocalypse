@@ -4,6 +4,7 @@ import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
+import io.apocalypse.framework.security.LiveAuthorizationService;
 import io.apocalypse.framework.security.LoginUser;
 import io.apocalypse.framework.security.LoginUserQuery;
 import io.apocalypse.framework.security.PasswordPolicy;
@@ -12,6 +13,7 @@ import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.api.UserApi;
 import io.apocalypse.system.api.UserSummary;
 import io.apocalypse.system.authorization.dto.response.DataScopeResp;
+import io.apocalypse.system.authorization.service.AuthorizationReadService;
 import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.service.DeptService;
@@ -31,6 +33,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -48,6 +51,8 @@ import lombok.RequiredArgsConstructor;
 public class UserService implements UserApi, LoginUserQuery {
 
   private final DataScopeService dataScopeService;
+
+  private final AuthorizationReadService authorizationReadService;
 
   private static final String BOOTSTRAP_DISABLED_PASSWORD = "{bootstrap-disabled}";
 
@@ -89,15 +94,22 @@ public class UserService implements UserApi, LoginUserQuery {
     return sysUserMapper
         .findByUsername(username)
         .map(
-            entity ->
-                new LoginUser(
-                    entity.getId(),
-                    entity.getUsername(),
-                    entity.getPassword(),
-                    entity.isEnabled(),
-                    roleService.roleKeysByUserId(entity.getId()),
-                    menuService.freshPermsByUserId(entity.getId()),
-                    tokenVersionStore.current(entity.getUsername())));
+            entity -> {
+              var authorization =
+                  entity.isEnabled()
+                      ? authorizationReadService.snapshotForUser(entity.getId())
+                      : null;
+              return new LoginUser(
+                  entity.getId(),
+                  entity.getUsername(),
+                  entity.getPassword(),
+                  entity.isEnabled(),
+                  authorization == null ? List.of() : authorization.roles(),
+                  authorization == null ? List.of() : authorization.permissions(),
+                  authorization == null
+                      ? tokenVersionStore.current(entity.getUsername())
+                      : authorization.versions());
+            });
   }
 
   /** 用户详情（缓存示例：两级缓存 user；更新/删除/重置密码时 evict）。 */
@@ -208,8 +220,10 @@ public class UserService implements UserApi, LoginUserQuery {
     SysUserEntity entity = requireById(id);
     dataScopeService.requireWritableTarget(scope, id, entity.getDeptId());
     entity.setUpdateBy(SecurityUtils.currentUsername().orElse(null));
+    List<Long> roleIds = sysUserMapper.selectRoleIdsByUserId(id);
     ConcurrencyGuard.requireSingleRow(sysUserMapper.deleteWithinScope(entity, scope));
     sysUserMapper.deleteRolesByUserId(id);
+    roleService.recordUserRoleChange(id, roleIds, List.of());
     tokenVersionStore.invalidateCredential(entity.getUsername());
   }
 
@@ -237,7 +251,9 @@ public class UserService implements UserApi, LoginUserQuery {
     SysUserEntity user = requireById(userId);
     List<Long> ids = roleIds == null ? List.of() : roleIds;
     roleService.requireValidRoleIds(ids);
+    List<Long> before = sysUserMapper.selectRoleIdsByUserId(userId);
     sysUserMapper.replaceRoles(userId, ids);
+    roleService.recordUserRoleChange(userId, before, ids);
     tokenVersionStore.invalidateUserAuthorization(user.getUsername());
   }
 
@@ -259,11 +275,23 @@ public class UserService implements UserApi, LoginUserQuery {
   }
 
   /** 当前登录用户视图（{@code /system/users/me}）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CurrentUserResp currentUser(Long userId) {
-    UserResp user = self.getObject().getIdentityDetail(userId);
-    List<String> roles = roleService.roleKeysByUserId(userId);
+    var authorization = authorizationReadService.snapshotForUser(userId);
+    LiveAuthorizationService.requireMatchingIdentity(
+        LiveAuthorizationService.requireUserToken(
+            SecurityContextHolder.getContext().getAuthentication()),
+        authorization);
+    UserResp user = withDeptName(userConvert.toResp(requireById(userId)));
     return new CurrentUserResp(
-        user, roles, menuService.permsByUserId(userId), menuService.treeByUserId(userId));
+        user,
+        authorization.roles(),
+        authorization.permissions(),
+        menuService.treeByUserId(userId),
+        authorization.snapshotId(),
+        authorization.evaluatedAt(),
+        authorization.nextTransitionAt(),
+        authorization.allScopePerms());
   }
 
   private SysUserEntity requireById(Long id) {

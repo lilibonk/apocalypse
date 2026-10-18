@@ -87,10 +87,44 @@
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
+  /* 2026-10-18: approved dashboard / role-insight surfaces; base product tokens stay independent. */
+  --insight-card-radius: 1.5rem;
+  --insight-card-shadow:
+    0 8px 32px oklch(0.2 0.008 260 / 0.045), 0 1px 3px oklch(0.2 0.008 260 / 0.025);
+  --insight-glow: color-mix(in oklch, var(--brand) 22%, transparent);
+  --insight-role: oklch(0.94 0.025 295);
+  --insight-role-foreground: oklch(0.47 0.135 295);
+  --insight-grid: oklch(0.89 0.005 260 / 0.55);
+  --insight-edge: oklch(0.78 0.015 260);
+  --insight-blue: oklch(0.54 0.19 258);
+  --insight-blue-foreground: oklch(0.99 0 0);
+  --insight-surface-raised: oklch(1 0 0);
+
+  /* Compatibility for the standalone design study. */
+  --study-card-radius: var(--insight-card-radius);
+  --study-card-shadow: var(--insight-card-shadow);
+  --study-glow: var(--insight-glow);
+  --study-role: var(--insight-role);
+  --study-role-foreground: var(--insight-role-foreground);
+  --study-grid: var(--insight-grid);
+  --study-edge: var(--insight-edge);
+  --study-blue: var(--insight-blue);
+  --study-blue-foreground: var(--insight-blue-foreground);
+  --study-surface-raised: var(--insight-surface-raised);
+
   color-scheme: light;
 }
 
 .dark {
+  --insight-card-shadow: 0 8px 32px oklch(0.08 0 0 / 0.22), 0 1px 3px oklch(0.08 0 0 / 0.16);
+  --insight-glow: color-mix(in oklch, var(--brand) 12%, transparent);
+  --insight-role: oklch(0.3 0.045 295);
+  --insight-role-foreground: oklch(0.8 0.1 295);
+  --insight-grid: oklch(0.38 0.01 260 / 0.5);
+  --insight-edge: oklch(0.45 0.025 260);
+  --insight-blue: oklch(0.72 0.14 258);
+  --insight-blue-foreground: oklch(0.17 0.015 258);
+  --insight-surface-raised: oklch(0.27 0.006 260);
   --slime-stage: #101314;
   --slime-body: #a1c6b3;
   --slime-cream: #e1e7cc;

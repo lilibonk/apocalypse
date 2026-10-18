@@ -1,5 +1,5 @@
 import { ESLint } from 'eslint'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 const eslint = new ESLint()
 async function typedRules(code: string) {
@@ -10,6 +10,11 @@ async function typedRules(code: string) {
 }
 
 describe('typed correctness gate', () => {
+  beforeAll(async () => {
+    // Construct the real project type graph in setup; each case checks the lint rules themselves.
+    await typedRules('export {}')
+  })
+
   it('rejects forgotten promises and promise predicates/void callbacks', async () => {
     expect(
       (await typedRules('export function run() { Promise.resolve(1) }')).map(

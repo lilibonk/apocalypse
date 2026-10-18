@@ -79,6 +79,15 @@ public interface EventRevisionMapper extends BaseMapper<EventRevisionDo> {
       """)
   int selectMaxVersion(@Param("eventId") Long eventId);
 
+  @Select(
+      """
+      SELECT COALESCE(MAX(revision_no), 0) AS revision_no,
+             COALESCE(MAX(version), -1) AS version
+      FROM cal_event_revision
+      WHERE event_id = #{eventId}
+      """)
+  EventRevisionCounters selectRevisionCounters(@Param("eventId") Long eventId);
+
   @Update(
       """
       UPDATE cal_event_revision

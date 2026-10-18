@@ -85,17 +85,17 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
     for (long roleId : List.of(LIMITED_ROLE, ALL_ROLE, CHILD_ROLE)) {
       jdbcTemplate.update(
           """
-          INSERT INTO sys_role_menu (role_id, menu_id)
-          SELECT ?, id FROM sys_menu WHERE deleted = 0 AND status = 1
-            AND (perms LIKE 'system:user:%' OR perms LIKE 'system:role:%'
-              OR perms LIKE 'system:dept:%' OR perms LIKE 'system:menu:%')
+          INSERT INTO sys_role_permission (role_id, permission_id)
+          SELECT ?, id FROM sys_permission WHERE deleted = 0 AND status = 1
+            AND (code LIKE 'system:user:%' OR code LIKE 'system:role:%'
+              OR code LIKE 'system:dept:%' OR code LIKE 'system:menu:%')
           """,
           roleId);
     }
     jdbcTemplate.update(
         """
-        INSERT INTO sys_role_menu (role_id, menu_id)
-        SELECT ?, id FROM sys_menu WHERE perms = 'system:config:list'
+        INSERT INTO sys_role_permission (role_id, permission_id)
+        SELECT ?, id FROM sys_permission WHERE code = 'system:config:list'
         """,
         UNRELATED_ALL_ROLE);
     String hash = passwordEncoder.encode(PASSWORD);
@@ -124,7 +124,13 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         BASE,
         BASE + 99);
     jdbcTemplate.update(
-        "DELETE FROM sys_role_menu WHERE role_id IN (SELECT id FROM sys_role WHERE role_key LIKE ?)",
+        "DELETE FROM sys_role_permission WHERE role_id IN (SELECT id FROM sys_role WHERE role_key LIKE ?)",
+        PREFIX + "%");
+    jdbcTemplate.update(
+        "DELETE FROM sys_role_navigation WHERE role_id IN (SELECT id FROM sys_role WHERE role_key LIKE ?)",
+        PREFIX + "%");
+    jdbcTemplate.update(
+        "DELETE FROM sys_role_authorization_state WHERE role_id IN (SELECT id FROM sys_role WHERE role_key LIKE ?)",
         PREFIX + "%");
     jdbcTemplate.update("DELETE FROM sys_user WHERE username LIKE ?", PREFIX + "%");
     jdbcTemplate.update("DELETE FROM sys_role WHERE role_key LIKE ?", PREFIX + "%");
@@ -170,7 +176,7 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
                     .get("list")))
         .containsExactlyInAnyOrder(OPERATOR, SAME_USER, CHILD_USER, PROTECTED_USER);
     jdbcTemplate.update(
-        "DELETE FROM sys_role_menu WHERE role_id = ? AND menu_id IN (SELECT id FROM sys_menu WHERE perms = 'system:user:list')",
+        "DELETE FROM sys_role_permission WHERE role_id = ? AND permission_id IN (SELECT id FROM sys_permission WHERE code = 'system:user:list')",
         CHILD_ROLE);
     assertThat(
             getForData("/system/users/page?keyword=" + PREFIX, operatorToken())
@@ -208,7 +214,7 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         .isEqualTo(3);
     jdbcTemplate.update("UPDATE sys_role SET deleted = 0 WHERE id = ?", ALL_ROLE);
     jdbcTemplate.update(
-        "DELETE FROM sys_role_menu WHERE role_id = ? AND menu_id IN (SELECT id FROM sys_menu WHERE perms <> 'system:user:edit')",
+        "DELETE FROM sys_role_permission WHERE role_id = ? AND permission_id IN (SELECT id FROM sys_permission WHERE code <> 'system:user:edit')",
         ALL_ROLE);
     String token = operatorToken();
     // The ALL user:edit grant allows global authorization management for that operation only.
@@ -255,7 +261,7 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         token,
         40000);
     jdbcTemplate.update(
-        "DELETE FROM sys_role_menu WHERE role_id = ? AND menu_id IN (SELECT id FROM sys_menu WHERE perms = 'system:user:edit')",
+        "DELETE FROM sys_role_permission WHERE role_id = ? AND permission_id IN (SELECT id FROM sys_permission WHERE code = 'system:user:edit')",
         LIMITED_ROLE);
     token = operatorToken();
     assertCode(
@@ -355,7 +361,19 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         token,
         40300);
     assertCode(
-        "/system/roles/" + LIMITED_ROLE + "/menus", HttpMethod.PUT, List.of(101L), token, 40300);
+        "/system/roles/" + LIMITED_ROLE + "/permissions",
+        HttpMethod.PUT,
+        Map.of(
+            "expectedRevision",
+            0,
+            "expectedCatalogRevision",
+            0,
+            "upsert",
+            List.of(Map.of("permissionId", 101L, "enabled", true, "scopeOverride", "INHERIT_ROLE")),
+            "remove",
+            List.of()),
+        token,
+        40300);
     assertCode(
         "/system/roles",
         HttpMethod.POST,
@@ -386,10 +404,10 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
     assertThat(page.get("total").asLong()).isEqualTo(1);
     assertThat(ids(page.get("list"))).containsExactly(SAME_USER);
     jdbcTemplate.update(
-        "DELETE FROM sys_role_menu WHERE role_id = ? AND menu_id IN (SELECT id FROM sys_menu WHERE perms = 'system:role:list')",
+        "DELETE FROM sys_role_permission WHERE role_id = ? AND permission_id IN (SELECT id FROM sys_permission WHERE code = 'system:role:list')",
         LIMITED_ROLE);
     jdbcTemplate.update(
-        "INSERT INTO sys_role_menu (role_id, menu_id) SELECT ?, id FROM sys_menu WHERE perms = 'system:role:list'",
+        "INSERT INTO sys_role_permission (role_id, permission_id) SELECT ?, id FROM sys_permission WHERE code = 'system:role:list'",
         UNRELATED_ALL_ROLE);
     assign(OPERATOR, UNRELATED_ALL_ROLE);
     assertThat(
@@ -432,7 +450,10 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
     String oldToken = operatorToken();
     getForData("/system/users/" + CHILD_USER, oldToken);
     assertThat(cacheManager.getCache("user").get(CHILD_USER)).isNotNull();
-    putForData("/system/roles/" + LIMITED_ROLE, roleRequest("limited", "DEPT"), adminToken());
+    putForData(
+        "/system/roles/" + LIMITED_ROLE,
+        roleRequest(LIMITED_ROLE, "limited", "DEPT"),
+        adminToken());
     assertCode("/system/users/" + CHILD_USER, HttpMethod.GET, null, oldToken, 40100);
     assertCode("/system/users/" + CHILD_USER, HttpMethod.GET, null, operatorToken(), 40400);
     assertThat(userApi.getById(CHILD_USER).id()).isEqualTo(CHILD_USER);
@@ -486,11 +507,27 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         .isEqualTo("DEPT");
     putForData(
         "/system/roles/" + newRole,
-        Map.of("roleName", "default", "roleKey", PREFIX + "default", "dataScope", "ALL"),
+        Map.of(
+            "roleName",
+            "default",
+            "roleKey",
+            PREFIX + "default",
+            "dataScope",
+            "ALL",
+            "expectedAuthorizationRevision",
+            roleRevision(newRole)),
         adminToken());
     putForData(
         "/system/roles/" + newRole,
-        Map.of("roleName", "default", "roleKey", PREFIX + "default", "status", 0),
+        Map.of(
+            "roleName",
+            "default",
+            "roleKey",
+            PREFIX + "default",
+            "status",
+            0,
+            "expectedAuthorizationRevision",
+            roleRevision(newRole)),
         adminToken());
     assertThat(
             jdbcTemplate.queryForObject(
@@ -598,6 +635,8 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
         PREFIX + name,
         PREFIX + name,
         scope);
+    jdbcTemplate.update(
+        "INSERT INTO sys_role_authorization_state(role_id, revision) VALUES (?, 0)", id);
   }
 
   private void user(long id, String name, Long departmentId, String hash) {
@@ -645,22 +684,40 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
     return result;
   }
 
-  private static Map<String, Object> roleRequest(String name, String scope) {
+  private Map<String, Object> roleRequest(long id, String name, String scope) {
     return Map.of(
-        "roleName", PREFIX + name, "roleKey", PREFIX + name, "dataScope", scope, "status", 1);
+        "roleName",
+        PREFIX + name,
+        "roleKey",
+        PREFIX + name,
+        "dataScope",
+        scope,
+        "status",
+        1,
+        "expectedAuthorizationRevision",
+        roleRevision(id));
+  }
+
+  private long roleRevision(long id) {
+    return jdbcTemplate.queryForObject(
+        "SELECT revision FROM sys_role_authorization_state WHERE role_id = ?", Long.class, id);
   }
 
   private static Map<String, Object> deptRequest(long parent, String name, int status) {
     return Map.of("parentId", parent, "deptName", PREFIX + name, "status", status);
   }
 
-  private static void authenticate(String username, long id) {
+  private void authenticate(String username, long id) {
+    var versions = tokenVersionStore.current(username);
     Jwt jwt =
         Jwt.withTokenValue("scope-fixture")
             .header("alg", "HS256")
             .subject(username)
             .claim("uid", id)
             .claim("type", "access")
+            .claim("av", versions.globalAuthorization())
+            .claim("uv", versions.userAuthorization())
+            .claim("cv", versions.credential())
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));

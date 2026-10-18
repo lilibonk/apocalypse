@@ -10,6 +10,7 @@ export interface ScopedRequest {
 export interface ModuleOperation<Args extends unknown[], Data> {
   readonly scope: ModuleScope | undefined
   readonly requiredPerms: readonly string[]
+  readonly requiredAllScopePerms?: readonly string[]
   readonly execute: (request: ScopedRequest, ...args: Args) => Promise<Data>
 }
 

@@ -1,0 +1,83 @@
+.dashboard-insight-hero {
+  background: radial-gradient(ellipse at 0% 0%, var(--insight-glow), transparent 68%), var(--card);
+}
+
+.dashboard-sample-control {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.dashboard-sample-control button[aria-pressed='true'] {
+  background: var(--insight-surface-raised);
+  color: var(--foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.dashboard-insight-action {
+  background: var(--insight-blue);
+  color: var(--insight-blue-foreground);
+}
+
+.dashboard-insight-action:hover {
+  background: color-mix(in srgb, var(--insight-blue) 88%, var(--foreground));
+}
+
+.dashboard-trend-grid {
+  stroke: var(--insight-grid);
+  stroke-dasharray: 2 6;
+}
+
+.dashboard-trend-line {
+  fill: none;
+  stroke: var(--foreground);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-trend-point {
+  fill: var(--card);
+  stroke: var(--foreground);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-gauge-tick {
+  stroke: var(--border-subtle);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.dashboard-gauge-tick[data-active='true'] {
+  stroke: var(--brand);
+}
+
+.dashboard-distribution-bar[data-category='0'] {
+  background: var(--brand);
+}
+
+.dashboard-distribution-bar[data-category='1'] {
+  background: var(--insight-blue);
+}
+
+.dashboard-distribution-bar[data-category='2'] {
+  background: var(--insight-role-foreground);
+}
+
+.dashboard-distribution-bar[data-category='3'] {
+  background: var(--warning-foreground);
+}
+
+.dashboard-distribution-bar[data-category='4'] {
+  background: var(--muted-foreground);
+}
+
+@media (min-width: 80rem) {
+  .dashboard-insight-top {
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+  }
+
+  .dashboard-insight-bottom {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+}

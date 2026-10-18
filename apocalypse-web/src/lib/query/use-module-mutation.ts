@@ -1,7 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CanceledError, isCancel } from 'axios'
 import { useLayoutEffect, useRef } from 'react'
-import { captureRequestContext } from '@/lib/api/client'
+import {
+  assertPermissionAccess,
+  captureRequestContext,
+  subscribeAuthorization,
+} from '@/lib/api/client'
 
 import { accessLifecycle, type AccessLease, type OperationLease } from './access-lease'
 import type { ModuleOperation, ModuleScope } from './module-scope'
@@ -53,6 +57,7 @@ export function useModuleMutation<Variables = void, Data = unknown>(
       if (!invocation.current()) throw new CanceledError()
       const run: RunModuleOperation = async (definition, ...args) => {
         if (definition.scope !== scope || !invocation.current()) throw new CanceledError()
+        assertPermissionAccess(definition.requiredPerms, definition.requiredAllScopePerms)
         const operation = invocation.permissions
           ? accessLifecycle.begin(
               accessLifecycle.subset(invocation.permissions, definition.requiredPerms),
@@ -95,7 +100,13 @@ export function useModuleMutation<Variables = void, Data = unknown>(
     const generation = local.current
     if (!generation.active || generation.key !== options.localKey) return
     const lease = scope ? accessLifecycle.capture(scope.moduleKey, []) : undefined
-    if (lease && !accessLifecycle.isCurrent(lease)) return
+    try {
+      if (lease) accessLifecycle.assertCurrent(lease)
+      else captureRequestContext().assertCurrent()
+    } catch (error) {
+      if (isCancel(error)) return
+      throw error
+    }
     const base = lease ? accessLifecycle.begin(lease) : coreOperation()
     const operations: OperationLease[] = []
     const invocation: Invocation = {
@@ -125,17 +136,27 @@ export function useModuleMutation<Variables = void, Data = unknown>(
 
 function coreOperation(): Pick<OperationLease, 'signal' | 'context' | 'isCurrent' | 'finish'> {
   const context = captureRequestContext()
+  const controller = new AbortController()
+  let finished = false
+  const isCurrent = () => {
+    if (finished || controller.signal.aborted) return false
+    try {
+      context.assertCurrent()
+      return true
+    } catch {
+      return false
+    }
+  }
+  const unsubscribe = subscribeAuthorization(() => {
+    if (!isCurrent()) controller.abort()
+  })
   return {
-    signal: new AbortController().signal,
+    signal: controller.signal,
     context,
-    isCurrent: () => {
-      try {
-        context.assertCurrent()
-        return true
-      } catch {
-        return false
-      }
+    isCurrent,
+    finish: () => {
+      finished = true
+      unsubscribe()
     },
-    finish: () => {},
   }
 }

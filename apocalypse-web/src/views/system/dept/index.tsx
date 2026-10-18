@@ -10,7 +10,7 @@
  * - 删除   DELETE /system/depts/{id}（system:dept:remove；存在子部门/挂接用户时后端拒绝）
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -42,6 +42,8 @@ import {
 } from '@/components/ui/table'
 import { ApiError } from '@/lib/api/client'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
+import { useModuleMutation } from '@/lib/query/use-module-mutation'
+import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 import { createDept, deleteDept, getDeptTree, updateDept } from './api'
@@ -50,6 +52,11 @@ import { flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } from './types'
 
 export default function DeptPage() {
+  const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
+  return <DeptWorkspace key={authorizationEpoch} />
+}
+
+function DeptWorkspace() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   /** 展开的部门 id 集（默认空 = 只显示根节点）。 */
@@ -77,8 +84,10 @@ export default function DeptPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'depts'] })
 
-  const saveMutation = useMutation({
-    mutationFn: async (values: DeptFormValues) => {
+  const localKey = JSON.stringify([dialogOpen, editing?.id, deleting?.id])
+  const saveMutation = useModuleMutation(undefined, {
+    localKey,
+    mutationFn: async (run, values: DeptFormValues) => {
       const body: DeptSaveReq = {
         parentId: values.parentId,
         deptName: values.deptName,
@@ -88,10 +97,16 @@ export default function DeptPage() {
         status: values.status ? 1 : 0,
         remark: values.remark || undefined,
       }
-      if (editing) {
-        return updateDept(editing.id, body)
-      }
-      return createDept(body)
+      const permission = editing ? 'system:dept:edit' : 'system:dept:add'
+      return run({
+        scope: undefined,
+        requiredPerms: [permission],
+        requiredAllScopePerms: [permission],
+        execute: async (transport) => {
+          if (editing) await updateDept(editing.id, body, transport)
+          else await createDept(body, transport)
+        },
+      })
     },
     onSuccess: () => {
       toast.success(
@@ -111,8 +126,15 @@ export default function DeptPage() {
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: SnowflakeId) => deleteDept(id),
+  const deleteMutation = useModuleMutation(undefined, {
+    localKey,
+    mutationFn: (run, id: SnowflakeId) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dept:remove'],
+        requiredAllScopePerms: ['system:dept:remove'],
+        execute: (transport) => deleteDept(id, transport),
+      }),
     onSuccess: () => {
       toast.success(t('common.部门已删除', { defaultValue: '部门已删除' }))
       setDeleting(null)
@@ -178,7 +200,7 @@ export default function DeptPage() {
             {t('common.组织部门的树形维护', { defaultValue: '组织部门的树形维护' })}
           </p>
         </div>
-        <Perm perm="system:dept:add">
+        <Perm perm="system:dept:add" requiresAllScope>
           <Button size="sm" onClick={() => openCreate(ROOT_DEPT_ID)}>
             <Plus className="size-4" />
             {t('common.新增部门', { defaultValue: '新增部门' })}
@@ -278,7 +300,7 @@ export default function DeptPage() {
                       {node.remark ?? '-'}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      <Perm perm="system:dept:add">
+                      <Perm perm="system:dept:add" requiresAllScope>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -288,7 +310,7 @@ export default function DeptPage() {
                           <Plus className="size-3.5" />
                         </Button>
                       </Perm>
-                      <Perm perm="system:dept:edit">
+                      <Perm perm="system:dept:edit" requiresAllScope>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -298,7 +320,7 @@ export default function DeptPage() {
                           <Pencil className="size-3.5" />
                         </Button>
                       </Perm>
-                      <Perm perm="system:dept:remove">
+                      <Perm perm="system:dept:remove" requiresAllScope>
                         <Button
                           variant="ghost"
                           size="icon"

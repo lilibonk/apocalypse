@@ -50,27 +50,13 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
       """)
   List<SysRoleEntity> selectByUserId(@Param("userId") Long userId);
 
-  /** 查询角色当前关联的菜单主键。 */
-  @Select("SELECT menu_id FROM sys_role_menu WHERE role_id = #{roleId} ORDER BY menu_id")
-  List<Long> selectMenuIdsByRoleId(@Param("roleId") Long roleId);
-
-  /** 写入角色-菜单关联。 */
-  @Insert("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (#{roleId}, #{menuId})")
-  int insertRoleMenu(@Param("roleId") Long roleId, @Param("menuId") Long menuId);
-
-  /** 清空角色的全部菜单关联。 */
-  @Delete("DELETE FROM sys_role_menu WHERE role_id = #{roleId}")
-  int deleteMenusByRoleId(@Param("roleId") Long roleId);
-
-  /** 重置角色菜单：先清空再批量写入。 */
-  default void replaceMenus(Long roleId, List<Long> menuIds) {
-    deleteMenusByRoleId(roleId);
-    menuIds.forEach(menuId -> insertRoleMenu(roleId, menuId));
-  }
-
   /** 清空角色下的全部用户关联（角色-用户整体替换前调用）。 */
   @Delete("DELETE FROM sys_user_role WHERE role_id = #{roleId}")
   int deleteUsersByRoleId(@Param("roleId") Long roleId);
+
+  /** 原始完整成员关联，不通过用户资料或部门范围过滤。 */
+  @Select("SELECT user_id FROM sys_user_role WHERE role_id = #{roleId} ORDER BY user_id")
+  List<Long> selectUserIdsByRoleId(@Param("roleId") Long roleId);
 
   /** 联表分页查询某角色下的用户；直接投影为角色域视图，避免依赖用户域实体/转换器。 */
   @Select(

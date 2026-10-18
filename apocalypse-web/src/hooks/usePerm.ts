@@ -5,6 +5,9 @@
 
 import { useAuthStore } from '@/stores/auth'
 
-export function usePerm(perm: string): boolean {
-  return useAuthStore((state) => state.perms.includes(perm))
+export function usePerm(perm: string, requiresAllScope = false): boolean {
+  return useAuthStore(
+    (state) =>
+      state.perms.includes(perm) && (!requiresAllScope || state.allScopePerms.includes(perm)),
+  )
 }

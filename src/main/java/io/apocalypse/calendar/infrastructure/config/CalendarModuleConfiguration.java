@@ -4,6 +4,7 @@ import io.apocalypse.calendar.application.CalendarCapabilityGuard;
 import io.apocalypse.calendar.application.GuardedCalendarProjectionApi;
 import io.apocalypse.framework.capability.CapabilityDefinition;
 import io.apocalypse.framework.module.ModuleConfiguration;
+import io.apocalypse.framework.security.PermissionActionDefinition;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -20,5 +21,10 @@ public class CalendarModuleConfiguration {
   @Bean
   public CapabilityDefinition calendarCapabilityDefinition() {
     return new CapabilityDefinition(CalendarCapabilityGuard.MODULE_KEY);
+  }
+
+  @Bean
+  public PermissionActionDefinition calendarPermissionActionDefinition() {
+    return CalendarPermissionActions.definition();
   }
 }

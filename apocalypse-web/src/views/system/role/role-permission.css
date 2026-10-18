@@ -1,0 +1,222 @@
+.role-choice-card {
+  border-color: var(--border-subtle);
+  background: var(--card);
+}
+
+.role-choice-card[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--insight-role) 50%, var(--border));
+  background: color-mix(in oklch, var(--insight-role) 8%, var(--card));
+}
+
+.role-choice-check {
+  color: var(--insight-role-foreground);
+}
+
+@media (min-width: 1280px) {
+  .role-permission-main-layout {
+    grid-template-columns: calc(var(--spacing) * 52) minmax(0, 1fr);
+  }
+
+  .role-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.role-permission-content button:focus-visible {
+  outline: calc(var(--spacing) / 2) solid var(--ring);
+  outline-offset: var(--spacing);
+}
+
+.role-permission-content button {
+  cursor: pointer;
+}
+
+.role-permission-content button:disabled {
+  cursor: default;
+}
+
+.role-permission-role-icon {
+  color: var(--insight-role-foreground);
+  background: color-mix(in oklch, var(--insight-role) 14%, var(--card));
+}
+
+.role-permission-explanation,
+.role-permission-code {
+  border-color: var(--border-subtle);
+  background: var(--insight-surface-raised);
+}
+
+.role-permission-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1280px) {
+  .role-permission-workspace {
+    grid-template-columns: minmax(0, 1fr) calc(var(--spacing) * 64);
+  }
+}
+
+.role-permission-feedback {
+  min-height: calc(var(--spacing) * 64);
+}
+
+.role-permission-view {
+  background: var(--muted);
+}
+
+.role-permission-view button {
+  color: var(--muted-foreground);
+}
+
+.role-permission-view button[aria-pressed='true'] {
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+
+.role-permission-content input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.role-permission-canvas {
+  aspect-ratio: 820 / 550;
+  background-image: radial-gradient(
+    var(--insight-grid) calc(var(--spacing) / 5),
+    transparent calc(var(--spacing) / 5)
+  );
+  background-size: calc(var(--spacing) * 5) calc(var(--spacing) * 5);
+}
+
+.role-graph-edge,
+.role-graph-ticks {
+  stroke: var(--insight-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.role-graph-edge[data-direct='true'] {
+  stroke: var(--brand-text);
+  stroke-width: 1.4;
+}
+
+.role-graph-edge[data-direct='false'] {
+  stroke-dasharray: 4 5;
+}
+
+.role-graph-node {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+  min-width: calc(var(--spacing) * 11);
+}
+
+.role-graph-node-circle {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+}
+
+.role-graph-node[data-direct='false'] .role-graph-node-circle {
+  border-style: dashed;
+}
+
+.role-graph-node[data-role='true'] .role-graph-node-circle {
+  color: var(--insight-role-foreground);
+  border-color: color-mix(in oklch, var(--insight-role) 40%, var(--border));
+  background: color-mix(in oklch, var(--insight-role) 14%, var(--card));
+  box-shadow: 0 0 calc(var(--spacing) * 14)
+    color-mix(in oklch, var(--insight-role) 14%, transparent);
+}
+
+.role-graph-node[data-active='true'][data-role='false'] .role-graph-node-circle {
+  color: var(--brand-text);
+  border-color: color-mix(in oklch, var(--brand-text) 55%, var(--border));
+  background: color-mix(in oklch, var(--primary) 14%, var(--card));
+  box-shadow: 0 0 calc(var(--spacing) * 12) var(--insight-glow);
+}
+
+.role-graph-node:hover .role-graph-node-circle {
+  border-color: var(--brand-text);
+}
+
+.role-graph-node-label {
+  position: absolute;
+  top: calc(100% + var(--spacing) * 3);
+  left: 50%;
+  translate: -50% 0;
+  width: calc(var(--spacing) * 36);
+  text-align: center;
+  pointer-events: none;
+}
+
+.role-graph-node[data-active='true'] .role-graph-node-label {
+  top: calc(100% + var(--spacing) * 5);
+}
+
+.role-graph-leaf {
+  left: 64%;
+  top: 38%;
+  width: 32%;
+  border-color: var(--border-subtle);
+  background: var(--insight-surface-raised);
+  color: var(--brand-text);
+}
+
+.role-graph-legend-direct {
+  background: var(--brand-text);
+}
+
+.role-graph-legend-context {
+  border-color: var(--insight-edge);
+}
+
+.role-permission-list-node {
+  border-color: var(--border-subtle);
+  background: var(--insight-surface-raised);
+}
+
+.role-permission-list-node:hover {
+  border-color: var(--border);
+}
+
+.role-permission-list-node[aria-pressed='true'] {
+  border-color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 8%, var(--card));
+}
+
+.role-permission-list-icon {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 12%, var(--card));
+}
+
+.role-permission-assignment {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.role-permission-assignment[data-direct='true'] {
+  color: var(--brand-text);
+  background: color-mix(in oklch, var(--primary) 14%, var(--card));
+}
+
+.role-permission-summary-header {
+  border-bottom: 1px solid var(--border-subtle);
+  background:
+    radial-gradient(ellipse at 90% 15%, var(--insight-glow), transparent 70%),
+    var(--insight-surface-raised);
+}
+
+.role-permission-summary-header > div:first-child > svg {
+  color: var(--brand-text);
+}

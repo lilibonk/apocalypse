@@ -6,6 +6,7 @@ import type { MenuNode } from '@/lib/api/types'
 /** Local result validity only; the server remains the authorization authority. */
 export interface AccessLease {
   readonly principalEpoch: number
+  readonly authorizationEpoch: number
   readonly moduleKey: string
   readonly moduleEpoch: number
   readonly permissions: ReadonlyArray<readonly [string, number]>
@@ -14,6 +15,7 @@ export interface AccessLease {
 
 export interface RequestContext {
   readonly principalEpoch: number
+  readonly authorizationEpoch?: number
   readonly scoped: boolean
   readonly assertCurrent: () => void
 }
@@ -29,6 +31,8 @@ export interface OperationLease {
 /** No business data or module registry: only accepted authorization generations and live work. */
 export class AccessLifecycle {
   private principalEpoch = 0
+  private authorizationEpoch = 0
+  private deadline = Number.POSITIVE_INFINITY
   private ready = false
   private revision = 0
   private modules = new Map<string, string>()
@@ -37,6 +41,12 @@ export class AccessLifecycle {
   private permissionEpochs = new Map<string, number>()
   private listeners = new Set<() => void>()
   private operations = new Set<{ lease: AccessLease; controller: AbortController }>()
+  private assertAuthorization: ((epoch: number) => void) | undefined
+
+  /** Installed by the auth boundary; render-time isCurrent remains side-effect free. */
+  configureAuthorizationGuard(guard: (epoch: number) => void) {
+    this.assertAuthorization = guard
+  }
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
@@ -52,6 +62,8 @@ export class AccessLifecycle {
 
   reset(principalEpoch: number, client: QueryClient) {
     this.principalEpoch = principalEpoch
+    this.authorizationEpoch++
+    this.deadline = Number.POSITIVE_INFINITY
     this.ready = false
     this.modules.clear()
     this.permissions.clear()
@@ -62,6 +74,7 @@ export class AccessLifecycle {
 
   pause(client: QueryClient) {
     this.ready = false
+    this.authorizationEpoch++
     // Refresh must not revive old callbacks even if /me later returns identical grants.
     for (const key of this.modules.keys()) this.bump(this.moduleEpochs, key)
     const cleanup = this.reconcile(client)
@@ -69,8 +82,18 @@ export class AccessLifecycle {
     return cleanup
   }
 
-  accept(principalEpoch: number, menus: MenuNode[], perms: string[], client: QueryClient) {
+  accept(
+    principalEpoch: number,
+    menus: MenuNode[],
+    perms: string[],
+    client: QueryClient,
+    authorization?: { epoch: number; deadline: number },
+  ) {
     if (principalEpoch !== this.principalEpoch) return
+    if (authorization) {
+      this.authorizationEpoch = authorization.epoch
+      this.deadline = authorization.deadline
+    }
     const nextModules = new Map<string, string[]>()
     const visit = (nodes: MenuNode[], inherited: string | null, parent: string) => {
       for (const node of nodes) {
@@ -115,16 +138,19 @@ export class AccessLifecycle {
       .map((perm) => [perm, this.permissionEpochs.get(perm) ?? 0] as const)
     return Object.freeze({
       principalEpoch: this.principalEpoch,
+      authorizationEpoch: this.authorizationEpoch,
       moduleKey,
       moduleEpoch,
       permissions,
-      key: JSON.stringify([this.principalEpoch, moduleEpoch, permissions]),
+      key: JSON.stringify([this.principalEpoch, this.authorizationEpoch, moduleEpoch, permissions]),
     })
   }
 
   isCurrent = (lease: AccessLease): boolean =>
     this.ready &&
+    performance.now() < this.deadline &&
     lease.principalEpoch === this.principalEpoch &&
+    lease.authorizationEpoch === this.authorizationEpoch &&
     this.modules.has(lease.moduleKey) &&
     lease.moduleEpoch === (this.moduleEpochs.get(lease.moduleKey) ?? 0) &&
     lease.permissions.every(
@@ -141,17 +167,24 @@ export class AccessLifecycle {
     return Object.freeze({
       ...lease,
       permissions,
-      key: JSON.stringify([lease.principalEpoch, lease.moduleEpoch, permissions]),
+      key: JSON.stringify([
+        lease.principalEpoch,
+        lease.authorizationEpoch,
+        lease.moduleEpoch,
+        permissions,
+      ]),
     })
   }
 
   assertCurrent(lease: AccessLease) {
+    this.assertAuthorization?.(lease.authorizationEpoch)
     if (!this.isCurrent(lease)) throw new CanceledError('Authorization changed')
   }
 
   context(lease: AccessLease): RequestContext {
     return {
       principalEpoch: lease.principalEpoch,
+      authorizationEpoch: lease.authorizationEpoch,
       scoped: true,
       assertCurrent: () => this.assertCurrent(lease),
     }
@@ -165,7 +198,15 @@ export class AccessLifecycle {
       lease,
       signal: operation.controller.signal,
       context: this.context(lease),
-      isCurrent: () => !operation.controller.signal.aborted && this.isCurrent(lease),
+      isCurrent: () => {
+        if (operation.controller.signal.aborted) return false
+        try {
+          this.assertCurrent(lease)
+          return true
+        } catch {
+          return false
+        }
+      },
       finish: () => this.operations.delete(operation),
     }
   }

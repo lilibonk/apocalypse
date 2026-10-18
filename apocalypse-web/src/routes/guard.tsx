@@ -8,6 +8,8 @@ import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth'
 
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -15,20 +17,33 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const meLoaded = useAuthStore((state) => state.meLoaded)
   const bootstrapped = useAuthStore((state) => state.bootstrapped)
   const ensureMe = useAuthStore((state) => state.ensureMe)
+  const authorizationError = useAuthStore((state) => state.authorizationError)
+  const { t } = useTranslation()
   const location = useLocation()
 
   useEffect(() => {
-    if (bootstrapped && tokens && !meLoaded) {
+    if (bootstrapped && tokens && !meLoaded && !authorizationError) {
       // The store owns sequence-bound failure handling; an old effect cannot clear a new user.
       void ensureMe().catch(() => {})
     }
-  }, [bootstrapped, tokens, meLoaded, ensureMe])
+  }, [bootstrapped, tokens, meLoaded, ensureMe, authorizationError])
 
   if (bootstrapped && !tokens) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
   if (!bootstrapped || !meLoaded) {
+    if (tokens && authorizationError)
+      return (
+        <div className="flex min-h-svh items-center justify-center p-6">
+          <div className="max-w-md space-y-4 text-center" role="alert">
+            <p className="text-sm text-muted-foreground">{authorizationError}</p>
+            <Button onClick={() => void ensureMe().catch(() => {})}>
+              {t('common.重试', { defaultValue: '重试' })}
+            </Button>
+          </div>
+        </div>
+      )
     return (
       <div className="flex min-h-svh items-center justify-center">
         <div className="w-64 space-y-3">

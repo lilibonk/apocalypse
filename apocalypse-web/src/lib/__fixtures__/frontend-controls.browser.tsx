@@ -7,6 +7,7 @@ import { queryClient } from '@/app/query-client'
 import { DynaForm } from '@/components/dyna/DynaForm'
 import { http } from '@/lib/api/client'
 import { useSettingsStore } from '@/stores/settings'
+import { useAuthStore } from '@/stores/auth'
 import { UserForm } from '@/views/system/user/UserForm'
 import userSchema from '@/views/system/user/user.schema'
 import { RoleForm } from '@/views/system/role/RoleForm'
@@ -14,6 +15,11 @@ import roleSchema from '@/views/system/role/role.schema'
 import '@/index.css'
 
 if (!import.meta.env.DEV) throw new Error('Test fixture is dev-only')
+useAuthStore.setState({
+  meLoaded: true,
+  authorizationSnapshotId: 'controls-fixture',
+  authorizationDeadline: Number.POSITIVE_INFINITY,
+})
 let denied = false
 let empty = false
 let operation = ''
@@ -120,7 +126,13 @@ function Controls() {
         open={open === 'role-edit'}
         initialRow={
           open === 'role-edit'
-            ? { id: '1', roleName: 'Legacy', roleKey: 'legacy', status: 1 }
+            ? {
+                id: '1',
+                roleName: 'Legacy',
+                roleKey: 'legacy',
+                status: 1,
+                authorizationRevision: '0',
+              }
             : null
         }
         submitting={false}
