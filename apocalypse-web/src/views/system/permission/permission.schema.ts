@@ -31,17 +31,17 @@ export default definePageSchema({
       key: 'status',
       title: '定义状态',
       options: [
-        { value: '1', label: '启用' },
-        { value: '0', label: '停用' },
+        { value: '1', label: '启用', tone: 'success' },
+        { value: '0', label: '停用', tone: 'secondary' },
       ],
     },
     {
       key: 'lifecycle',
       title: '生命周期',
       options: [
-        { value: 'ACTIVE', label: '可配置' },
-        { value: 'DEPRECATED', label: '已弃用' },
-        { value: 'LEGACY', label: '历史兼容' },
+        { value: 'ACTIVE', label: '可配置', tone: 'secondary' },
+        { value: 'DEPRECATED', label: '已弃用', tone: 'warning' },
+        { value: 'LEGACY', label: '历史兼容', tone: 'secondary' },
       ],
     },
   ],
@@ -68,7 +68,13 @@ export default definePageSchema({
     ],
   },
   rowActions: [
-    { kind: 'custom', key: 'permission-details', label: '详情', perm: 'system:permission:list' },
+    {
+      kind: 'custom',
+      key: 'permission-details',
+      label: '详情',
+      icon: 'view',
+      perm: 'system:permission:list',
+    },
     { kind: 'edit', perm: 'system:permission:edit', requiresAllScope: true },
   ],
   detail: {

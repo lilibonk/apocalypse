@@ -4,8 +4,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import {
-  Check,
   ChevronRight,
+  KeyRound,
+  LayoutList,
   Network,
   Plus,
   RefreshCw,
@@ -14,7 +15,10 @@ import {
   Users,
 } from 'lucide-react'
 
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/client'
@@ -235,29 +239,17 @@ export function RolePermissionWorkspace({
   }
   return (
     <div ref={workspaceRef} className="role-permission-workspace-page min-w-0 space-y-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('roleManage.title', { defaultValue: '角色管理' })}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t('roleManage.description', {
-              defaultValue: '选择角色节点，管理属性、菜单授权与成员关系。',
-            })}
-          </p>
-        </div>
-        {viewControl}
-      </header>
-      <div className="role-permission-main-layout grid min-w-0 items-start gap-5">
-        <section
-          className="role-choice-panel min-w-0 space-y-4"
-          aria-label={t('roleGraph.rolePicker')}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-medium">{t('roleGraph.rolePicker')}</h2>
+      <PageHeader
+        title={t('roleManage.title', { defaultValue: '角色管理' })}
+        description={t('roleManage.description', {
+          defaultValue: '管理角色属性、业务权限、导航分配与成员关系。',
+        })}
+        view={viewControl}
+        actions={
+          <>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="icon"
               disabled={result.isFetching || busy}
               aria-label={t('roleGraph.refreshRoles')}
@@ -268,21 +260,27 @@ export function RolePermissionWorkspace({
             >
               <RefreshCw className="size-4" />
             </Button>
-          </div>
-          {auth.allScopePerms.includes('system:role:add') && (
-            <Button
-              className="w-full"
-              variant="outline"
-              data-create-role
-              disabled={busy || mutationDenied}
-              onClick={() => beginCommand('create')}
-            >
-              <Plus className="size-4" />
-              {t('roleManage.create', { defaultValue: '新增角色' })}
-            </Button>
-          )}
+            {auth.allScopePerms.includes('system:role:add') && (
+              <Button
+                data-create-role
+                disabled={busy || mutationDenied}
+                onClick={() => beginCommand('create')}
+              >
+                <Plus className="size-4" />
+                {t('roleManage.create', { defaultValue: '新增角色' })}
+              </Button>
+            )}
+          </>
+        }
+      />
+      <div className="role-permission-main-layout grid min-w-0 items-start gap-6">
+        <section
+          className="role-choice-panel min-w-0 space-y-3 rounded-panel border border-border-subtle bg-card p-3 shadow-surface"
+          aria-label={t('roleGraph.rolePicker')}
+        >
           <form
-            className="flex flex-wrap items-center justify-between gap-3"
+            role="search"
+            className="flex items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault()
               if (busy || mutationDenied) return
@@ -291,31 +289,29 @@ export function RolePermissionWorkspace({
               setKeyword(draft.trim())
             }}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="relative min-w-0 flex-1 sm:max-w-sm">
-                <Search
-                  aria-hidden="true"
-                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  aria-label={t('roleGraph.roleSearchLabel')}
-                  placeholder={t('roleGraph.roleSearchPlaceholder')}
-                  value={draft}
-                  disabled={busy || mutationDenied}
-                  onChange={(event) => setDraft(event.target.value)}
-                  className="h-10 pl-9"
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="outline"
-                size="icon"
+            <div className="relative min-w-0 flex-1">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                aria-label={t('roleGraph.roleSearchLabel')}
+                placeholder={t('roleGraph.roleSearchPlaceholder')}
+                value={draft}
                 disabled={busy || mutationDenied}
-                aria-label={t('roleGraph.query')}
-              >
-                <Search className="size-4" />
-              </Button>
+                onChange={(event) => setDraft(event.target.value)}
+                className="pl-9"
+              />
             </div>
+            <Button
+              type="submit"
+              variant="ghost"
+              size="icon"
+              disabled={busy || mutationDenied}
+              aria-label={t('roleGraph.query')}
+            >
+              <Search className="size-4" />
+            </Button>
           </form>
           {denied || mutationDenied || (!result.data && result.error) ? (
             <div className="rounded-2xl border border-border bg-card p-5" role="alert">
@@ -345,12 +341,12 @@ export function RolePermissionWorkspace({
             </div>
           ) : !result.data ? (
             <div
-              className="role-choice-grid grid grid-cols-4 gap-3"
+              className="role-choice-grid grid gap-1"
               role="status"
               aria-label={t('roleGraph.rolesLoading')}
             >
               {Array.from({ length: ROLE_CHOICES_PAGE_SIZE }, (_, index) => (
-                <Skeleton key={index} className="h-20 rounded-2xl" />
+                <Skeleton key={index} className="h-12 rounded-control" />
               ))}
             </div>
           ) : (
@@ -364,29 +360,36 @@ export function RolePermissionWorkspace({
                 </p>
               )}
               {roles.length > 0 ? (
-                <div className="role-choice-grid grid grid-cols-4 gap-3">
-                  {roles.map((role) => (
-                    <button
-                      type="button"
-                      data-role-choice
-                      disabled={busy}
-                      key={role.id}
-                      className="role-choice-card flex min-w-0 items-center gap-2 rounded-2xl border p-3 text-left"
-                      aria-pressed={opening?.role.id === role.id}
-                      aria-label={t('roleGraph.chooseRole', { name: role.roleName })}
-                      onClick={() => chooseRole(role)}
-                    >
-                      <span className="role-permission-role-icon flex size-9 shrink-0 items-center justify-center rounded-xl">
-                        <ShieldCheck aria-hidden="true" className="size-4" strokeWidth={1.5} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className="block truncate text-sm font-semibold"
-                          title={role.roleName}
-                        >
-                          {role.roleName}
+                <div className="role-choice-grid grid gap-1">
+                  {roles.map((role) => {
+                    const selected = opening?.role.id === role.id
+                    return (
+                      <button
+                        type="button"
+                        data-role-choice
+                        disabled={busy}
+                        key={role.id}
+                        className="role-choice-row flex min-w-0 items-center gap-3 rounded-control px-3 py-2 text-left"
+                        aria-pressed={selected}
+                        aria-label={t('roleGraph.chooseRole', { name: role.roleName })}
+                        onClick={() => chooseRole(role)}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className="block truncate text-sm font-medium"
+                            title={role.roleName}
+                          >
+                            {role.roleName}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {role.roleKey}
+                          </span>
                         </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
+                        <span
+                          className="role-choice-status inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                          data-status={role.status}
+                        >
+                          <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
                           {t(
                             role.status === 1
                               ? 'roleGraph.enabled'
@@ -395,22 +398,19 @@ export function RolePermissionWorkspace({
                                 : 'roleGraph.unknown',
                           )}
                         </span>
-                      </span>
-                      {opening?.role.id === role.id && (
-                        <Check aria-hidden="true" className="role-choice-check size-4 shrink-0" />
-                      )}
-                    </button>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-border bg-card p-5">
+                <div className="rounded-control bg-muted/40 p-4">
                   <h2 className="text-sm font-semibold">{t('roleGraph.rolesEmpty')}</h2>
                   <p className="mt-2 text-xs text-muted-foreground">
                     {t('roleGraph.rolesEmptyHelp')}
                   </p>
                 </div>
               )}
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-1 pt-3">
                 <span className="text-xs text-muted-foreground" role="status">
                   {t('roleGraph.rolesCount', { count: result.data.total })}
                 </span>
@@ -555,58 +555,67 @@ export function RolePermissionWorkspace({
                     </span>
                   </nav>
                 )}
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="role-permission-role-icon flex size-10 shrink-0 items-center justify-center rounded-xl">
+                    <span className="role-permission-role-icon flex size-10 shrink-0 items-center justify-center rounded-control">
                       <ShieldCheck className="size-5" strokeWidth={1.5} />
                     </span>
                     <div className="min-w-0">
-                      <h2 className="break-words text-base font-semibold">
+                      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold break-words">
                         {opening.role.roleName}
+                        <Badge variant={opening.role.status === 1 ? 'success' : 'secondary'}>
+                          {t(
+                            opening.role.status === 1
+                              ? 'roleGraph.enabled'
+                              : opening.role.status === 0
+                                ? 'roleGraph.disabled'
+                                : 'roleGraph.unknown',
+                          )}
+                        </Badge>
                       </h2>
-                      <p className="mt-1 break-all text-xs text-muted-foreground">
+                      <p className="mt-0.5 font-mono text-xs break-all text-muted-foreground">
                         {opening.role.roleKey}
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <RoleGraphObjectActions
-                      role={opening.role}
-                      disabled={busy}
-                      onCommand={beginCommand}
-                    />
-                    {(
-                      [
-                        ...(presentation === 'graph' ? (['chain'] as const) : []),
-                        'permissions',
-                        'navigation',
-                        'members',
-                      ] as const
-                    ).map((target) => (
-                      <Button
-                        key={target}
-                        size="sm"
-                        variant={relation === target ? 'default' : 'outline'}
-                        disabled={busy}
-                        aria-pressed={relation === target}
-                        onClick={() => {
-                          setRelation(target)
-                          setSearchParams(
-                            (previous) => {
-                              const next = new URLSearchParams(previous)
-                              next.set('roleRelation', target)
-                              return next
-                            },
-                            { replace: true },
-                          )
-                        }}
-                      >
-                        {target === 'members' && <Users className="size-3.5" />}
-                        {target === 'chain' ? t('panorama.chain') : t(`authorization.${target}`)}
-                      </Button>
-                    ))}
-                  </div>
+                  <RoleGraphObjectActions
+                    role={opening.role}
+                    disabled={busy}
+                    onCommand={beginCommand}
+                  />
                 </div>
+                <SegmentedControl
+                  label={t('roleGraph.relations')}
+                  value={relation}
+                  disabled={busy}
+                  onChange={(target) => {
+                    setRelation(target)
+                    setSearchParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.set('roleRelation', target)
+                        return next
+                      },
+                      { replace: true },
+                    )
+                  }}
+                  options={[
+                    ...(presentation === 'graph'
+                      ? [{ value: 'chain' as const, label: t('panorama.chain'), icon: Network }]
+                      : []),
+                    {
+                      value: 'permissions' as const,
+                      label: t('authorization.permissions'),
+                      icon: KeyRound,
+                    },
+                    {
+                      value: 'navigation' as const,
+                      label: t('authorization.navigation'),
+                      icon: LayoutList,
+                    },
+                    { value: 'members' as const, label: t('authorization.members'), icon: Users },
+                  ]}
+                />
                 {relation === 'chain' && presentation === 'graph' ? (
                   <RoleAuthorizationChain
                     key={opening.openId}

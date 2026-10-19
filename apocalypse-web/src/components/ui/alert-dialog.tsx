@@ -54,7 +54,7 @@ function AlertDialogContent({
         data-size={size}
         data-motion-preset="surface"
         className={cn(
-          'group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg',
+          'group/alert-dialog-content fixed z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}

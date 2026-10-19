@@ -44,6 +44,8 @@ Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/�
 
 命令面板输入 `?` 进入规则查询（非 AI）。模块可在 `src/views/**/command-questions.tsx` 默认导出 `CommandQuestionProvider` 注册问题，构建时自动发现；描述对象常驻，面板组件应懒加载。页面草稿经 `usePageDraft` 只保存在内存中，绑定当前身份与授权代次，关闭含草稿的页签前会确认。
 
+页面统一使用 `PageHeader`（标题、说明、视图切换、操作）；视图、关系与时间范围切换使用 `SegmentedControl`。列表与概览分开：DynaPage 传入 `overview` 即在桌面页头出现“列表 | 概览”（URL `view=`），列表视图只保留搜索与表格；页内分区里的 DynaPage 用 `embedded` 只显示工具条。传给 DynaTable 的回调需保持稳定（`useCallback` / `useStableCallback`），打开弹层时只重渲被标记的来源行。
+
 ## 本地交互样板
 
 运行 `pnpm dev` 后，可打开 `http://localhost:5173/test-fixtures/motion-studies.html`，体验工作台卡片和权限图谱。工作台支持时间范围切换与登录/活动明细；图谱支持角色选择、分组展开、权限搜索与列表视图。预览提供明暗主题、密度、语言和动画开关，并遵循系统减少动态设置。

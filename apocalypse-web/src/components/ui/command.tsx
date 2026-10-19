@@ -46,7 +46,7 @@ function CommandDialog({
     <Dialog {...props}>
       <DialogContent
         depth={depth}
-        backdrop="blur"
+        data-anchor="top"
         className={cn('overflow-hidden p-0', className)}
         showCloseButton={showCloseButton}
       >

@@ -3,6 +3,7 @@ import { AlertCircle, CalendarDays } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -22,18 +23,11 @@ export function CalendarPageFrame({
 }) {
   return (
     <div data-slot="calendar-page" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <header>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
-        </div>
-      </header>
+      <PageHeader title={title} description={description} />
       {actions && (
         <div
           data-slot="calendar-toolbar"
-          className="flex flex-wrap items-end gap-3 rounded-xl border border-border-subtle bg-card p-4"
+          className="flex flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-card p-4"
         >
           {actions}
         </div>

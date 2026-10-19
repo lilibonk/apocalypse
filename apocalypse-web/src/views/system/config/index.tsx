@@ -4,54 +4,47 @@
  */
 
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router'
 
 import { DynaPage } from '@/components/dyna'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { usePageView } from '@/hooks/usePageView'
 
 import { ConfigForm } from './ConfigForm'
 import { ConfigWorkspace } from './ConfigWorkspace'
 import schema from './config.schema'
 
+const CONFIG_VIEWS = ['values', 'definitions'] as const
+
 export default function ConfigPage() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
-  const [params, setParams] = useSearchParams()
-  const tab = params.get('configView') === 'definitions' ? 'definitions' : 'values'
+  const [view, setView] = usePageView(CONFIG_VIEWS, 'configView')
   return (
-    <Tabs
-      value={tab}
-      onValueChange={(value) =>
-        setParams(
-          (previous) => {
-            const next = new URLSearchParams(previous)
-            next.set('configView', value)
-            return next
-          },
-          { replace: true },
-        )
-      }
-    >
-      <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-4 sm:px-6 sm:pt-6">
-        {tab === 'values' && (
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t('common.参数设置', { defaultValue: '参数设置' })}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">{systemT('configWorkspace.hint')}</p>
-          </div>
-        )}
-        <TabsList className="ml-auto">
-          <TabsTrigger value="values">{systemT('configWorkspace.values')}</TabsTrigger>
-          <TabsTrigger value="definitions">{systemT('configWorkspace.definitions')}</TabsTrigger>
-        </TabsList>
-      </div>
-      <TabsContent value="values" className="p-4 pb-24 sm:p-6 sm:pb-24">
-        <ConfigWorkspace />
-      </TabsContent>
-      <TabsContent value="definitions">
-        <DynaPage schema={schema} formComponent={ConfigForm} />
-      </TabsContent>
-    </Tabs>
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <PageHeader
+        title={t('common.参数设置', { defaultValue: '参数设置' })}
+        description={systemT('configWorkspace.hint')}
+        view={
+          <SegmentedControl
+            label={t('dyna.pageView')}
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'values', label: systemT('configWorkspace.values') },
+              { value: 'definitions', label: systemT('configWorkspace.definitions') },
+            ]}
+          />
+        }
+      />
+      {view === 'values' ? (
+        // Bottom room for the floating draft bar.
+        <div className="pb-24">
+          <ConfigWorkspace />
+        </div>
+      ) : (
+        <DynaPage schema={schema} formComponent={ConfigForm} embedded />
+      )}
+    </div>
   )
 }

@@ -110,24 +110,38 @@ test('config workspace keeps a multi-item draft, refuses a stale batch and rebas
   expect(body.find((item) => item.id === 'c1')?.expectedVersion).toBe(2)
 })
 
-test('operation log detail grows from its row and returns focus on close', async ({ page }) => {
+test('operation log detail keeps its source row marked and returns focus on close', async ({
+  page,
+}) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=oper')
   const trigger = page.getByRole('button', { name: '详情', exact: true }).first()
   await trigger.click()
   const sheet = page.getByRole('dialog')
   await expect(sheet).toBeVisible()
-  await expect(page.locator('.origin-ghost')).toHaveCount(1)
+  // The opening row stays highlighted while its detail is open; nothing travels or stretches.
+  await expect(page.locator('tr[data-origin-active]')).toHaveCount(1)
+  await expect(page.locator('tr[data-origin-active]')).toContainText('fixture-operator')
   await expect(sheet.getByText('io.apocalypse.Fixture.update()')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
+  await expect(page.locator('tr[data-origin-active]')).toHaveCount(0)
   await expect(trigger).toBeFocused()
 })
 
-test('with motion off the operation log detail opens without an origin ghost', async ({ page }) => {
+test('with motion off the detail sheet is in its final place on the first frame', async ({
+  page,
+}) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=oper&motionOff')
   await page.getByRole('button', { name: '详情', exact: true }).first().click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.locator('.origin-ghost')).toHaveCount(0)
+  const sheet = page.getByRole('dialog')
+  await expect(sheet).toBeVisible()
+  const placement = await sheet.evaluate((node) => ({
+    running: node.getAnimations().filter((animation) => animation.playState === 'running').length,
+    right: Math.round(node.getBoundingClientRect().right),
+  }))
+  expect(placement.running).toBe(0)
+  expect(placement.right).toBe(await page.evaluate(() => window.innerWidth))
+  await expect(page.locator('tr[data-origin-active]')).toHaveCount(1)
 })
 
 test('department chart is a keyboard tree: arrows move, Enter selects, minus collapses', async ({
@@ -177,4 +191,99 @@ test('config workspace and draft bar fit a 320px phone without horizontal scroll
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   )
   expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('frozen log columns sit edge to edge and shade only while content is beneath them', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 800, height: 700 })
+  await page.goto('/test-fixtures/video-surfaces.html?surface=oper')
+  const table = page.locator('[data-slot="table-container"]').first()
+  await expect(table.getByRole('cell', { name: '修改' }).first()).toBeVisible()
+  await expect(table.getByText('UPDATE', { exact: true })).toHaveCount(0)
+
+  const frozen = async () =>
+    table.evaluate((container) => {
+      const heads = [...container.querySelectorAll<HTMLElement>('thead th[data-frozen]')].sort(
+        (a, b) => Number(a.dataset.frozen) - Number(b.dataset.frozen),
+      )
+      const rects = heads.map((head) => head.getBoundingClientRect())
+      const gaps = rects.slice(1).map((rect, index) => Math.abs(rect.right - rects[index].left))
+      const edge = heads.at(-1)!
+      return {
+        overflowing: container.scrollWidth > container.clientWidth + 1,
+        maxGap: Math.max(0, ...gaps),
+        shaded: getComputedStyle(edge, '::before').content !== 'none',
+      }
+    })
+
+  const start = await frozen()
+  expect(start.overflowing).toBe(true)
+  expect(start.maxGap).toBeLessThanOrEqual(1)
+  expect(start.shaded).toBe(true)
+
+  await table.evaluate((container) => {
+    container.scrollLeft = container.scrollWidth
+  })
+  await expect.poll(async () => (await frozen()).shaded).toBe(false)
+})
+
+test('online sessions keep the list and the overview apart, and the detail offers the kick', async ({
+  page,
+}) => {
+  await page.goto('/test-fixtures/video-surfaces.html?surface=online')
+  const views = page.getByRole('group', { name: '页面视图' })
+  // The list view is the classic table only; the counts live in the overview view.
+  await expect(page.getByRole('table')).toBeVisible()
+  await expect(page.locator('#online-insights-title')).toHaveCount(0)
+  await views.getByRole('button', { name: '概览', exact: true }).click()
+  await expect(page.getByRole('table')).toHaveCount(0)
+  const figure = (label: string) =>
+    page.locator('dl > div').filter({ hasText: label }).locator('.sr-only')
+  await expect(figure('在线会话')).toHaveText('3')
+  await expect(figure('在线账号')).toHaveText('2')
+  await expect(figure('来源 IP')).toHaveText('2')
+  await expect(figure('多会话账号')).toHaveText('1')
+  await views.getByRole('button', { name: '列表', exact: true }).click()
+
+  const trigger = page.getByRole('button', { name: '详情', exact: true }).first()
+  await trigger.click()
+  const sheet = page.getByRole('dialog')
+  await expect(sheet).toBeVisible()
+  await expect(page.locator('tr[data-origin-active]')).toHaveCount(1)
+  await expect(sheet.getByText('该账号在线会话')).toBeVisible()
+  await sheet.getByRole('button', { name: '强退该账号' }).click()
+  await expect(page.getByRole('alertdialog')).toContainText('alice')
+})
+
+test('permission module chips open the catalog list filtered to that module', async ({ page }) => {
+  await page.goto('/test-fixtures/video-surfaces.html?surface=permission')
+  const views = page.getByRole('group', { name: '页面视图' })
+  await views.getByRole('button', { name: '概览', exact: true }).click()
+  const chip = page.getByRole('button', { name: /查看模块 calendar 的/ })
+  await expect(chip).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByText('核心', { exact: true })).toBeVisible()
+  await chip.click()
+  // The chip leads into the list view with the existing module filter applied.
+  await expect(views.getByRole('button', { name: '列表', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByTestId('fixture-saves')).toHaveAttribute(
+    'data-permission-module',
+    'calendar',
+  )
+  await expect(page.getByRole('cell', { name: 'calendar:day:list' }).first()).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'system:user:list' })).toHaveCount(0)
+  await expect(page.getByPlaceholder('如 calendar')).toHaveValue('calendar')
+  await views.getByRole('button', { name: '概览', exact: true }).click()
+  await expect(page.getByRole('button', { name: /查看模块 calendar 的/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await views.getByRole('button', { name: '列表', exact: true }).click()
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  // The unfiltered page comes back from the query cache, so assert on the rows, not the request.
+  await expect(page.getByRole('cell', { name: 'system:user:list' })).toBeVisible()
+  await expect(page.getByPlaceholder('如 calendar')).toHaveValue('')
 })

@@ -5,6 +5,7 @@
  * - useFieldOptions：select/radio 静态 options 或 dict 动态 options 的统一出口。
  */
 
+import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useDict } from '@/components/DictTag'
@@ -13,7 +14,12 @@ import type { DynaOption } from './schema'
 
 export function useDynaText(): (text: string, params?: Record<string, string | number>) => string {
   const { t } = useTranslation()
-  return (text, params) => t(`dyna.${text}`, { defaultValue: text, ...params })
+  // Stable per language so memoised tables and row actions only re-render when the text changes.
+  return useCallback(
+    (text: string, params?: Record<string, string | number>) =>
+      t(`dyna.${text}`, { defaultValue: text, ...params }),
+    [t],
+  )
 }
 
 /** 静态 options 优先；绑了 dictType 走字典（react-query 缓存，见 DictTag.tsx 的 useDict）。 */

@@ -4,12 +4,12 @@
  * and explained in the legend; every cell is keyboard reachable with a text readout.
  */
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
 import { useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
 import { stateMotion } from '@/design/motion'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
@@ -42,21 +42,18 @@ export function LoginActivitySection() {
   const motionEnabled = useMotionPreference()
   const epoch = useAuthStore((state) => state.sessionEpoch)
   const [range, setRange] = useState<HeatRange>('WEEK')
-  const [open, setOpen] = useState(true)
   const insights = useQuery({
     queryKey: ['system', 'logs', 'login', 'insights', epoch, range],
     queryFn: ({ signal }) => getLoginInsights(range, signal),
-    enabled: open,
   })
   const heatmap = useQuery({
     queryKey: ['system', 'logs', 'login', 'heatmap', epoch, range],
     queryFn: ({ signal }) => getLoginHeatmap(range, signal),
-    enabled: open,
   })
   const stats = insights.data
   const successRate = stats && stats.total > 0 ? (stats.succeeded / stats.total) * 100 : null
   return (
-    <section aria-labelledby="login-activity-title" className="login-activity rounded-panel p-5">
+    <section aria-labelledby="login-activity-title" className="login-activity p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="login-activity-title" className="font-semibold">
@@ -64,109 +61,81 @@ export function LoginActivitySection() {
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('logInsight.hint')}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {open && (
-            <div
-              className="login-activity-range flex gap-1 rounded-full p-1"
-              role="group"
-              aria-label={t('logInsight.range')}
-            >
-              {(['WEEK', 'MONTH'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={range === option}
-                  className="rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setRange(option)}
-                >
-                  {t(`logInsight.range${option}`)}
-                </button>
-              ))}
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={open}
-            aria-controls="login-activity-body"
-            onClick={() => setOpen((value) => !value)}
-          >
-            <ChevronDown
-              data-slot="motion-disclosure-indicator"
-              className={open ? 'rotate-180' : undefined}
-              aria-hidden="true"
-            />
-            {t(open ? 'logInsight.collapse' : 'logInsight.expand')}
-          </Button>
-        </div>
+        <SegmentedControl
+          label={t('logInsight.range')}
+          value={range}
+          onChange={setRange}
+          options={(['WEEK', 'MONTH'] as const).map((option) => ({
+            value: option,
+            label: t(`logInsight.range${option}`),
+          }))}
+        />
       </div>
-      {open && (
-        <div id="login-activity-body" className="mt-4 space-y-4">
-          {insights.isError || heatmap.isError ? (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-3 rounded-control bg-muted p-3 text-sm"
+      <div id="login-activity-body" className="mt-4 space-y-4">
+        {insights.isError || heatmap.isError ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-control bg-muted p-3 text-sm"
+          >
+            <span className="min-w-0 flex-1">
+              {(insights.error ?? heatmap.error) instanceof ApiError
+                ? ((insights.error ?? heatmap.error) as ApiError).message
+                : t('logInsight.failed')}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void insights.refetch()
+                void heatmap.refetch()
+              }}
             >
-              <span className="min-w-0 flex-1">
-                {(insights.error ?? heatmap.error) instanceof ApiError
-                  ? ((insights.error ?? heatmap.error) as ApiError).message
-                  : t('logInsight.failed')}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  void insights.refetch()
-                  void heatmap.refetch()
-                }}
-              >
-                {t('logInsight.retry')}
-              </Button>
-            </div>
-          ) : null}
-          {!stats ? (
-            insights.isPending && <Skeleton className="h-14 w-full" />
-          ) : (
-            <dl className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-5">
-              {(
-                [
-                  ['total', stats.total, 0],
-                  ['successRate', successRate, 1],
-                  ['failedCount', stats.failed, 0],
-                  ['accounts', stats.distinctUsers, 0],
-                  ['ips', stats.distinctIps, 0],
-                ] as const
-              ).map(([key, value, decimals]) => (
-                <div key={key}>
-                  <dt className="text-muted-foreground">{t(`logInsight.${key}`)}</dt>
-                  <dd className="insight-metric mt-1 text-2xl font-medium">
-                    {value === null ? (
-                      '—'
-                    ) : (
-                      <>
-                        <AnimatedNumber
-                          value={value}
-                          decimals={decimals}
-                          language={language}
-                          variant="odometer"
-                        />
-                        {key === 'successRate' && (
-                          <span className="ml-0.5 text-sm text-muted-foreground">%</span>
-                        )}
-                      </>
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )}
-          {heatmap.data ? (
-            <Heatmap data={heatmap.data} motionEnabled={motionEnabled} />
-          ) : (
-            heatmap.isPending && <Skeleton className="h-48 w-full" />
-          )}
-        </div>
-      )}
+              {t('logInsight.retry')}
+            </Button>
+          </div>
+        ) : null}
+        {!stats ? (
+          insights.isPending && <Skeleton className="h-14 w-full" />
+        ) : (
+          <dl className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-5">
+            {(
+              [
+                ['total', stats.total, 0],
+                ['successRate', successRate, 1],
+                ['failedCount', stats.failed, 0],
+                ['accounts', stats.distinctUsers, 0],
+                ['ips', stats.distinctIps, 0],
+              ] as const
+            ).map(([key, value, decimals]) => (
+              <div key={key}>
+                <dt className="text-muted-foreground">{t(`logInsight.${key}`)}</dt>
+                <dd className="insight-metric mt-1 text-2xl font-medium">
+                  {value === null ? (
+                    '—'
+                  ) : (
+                    <>
+                      <AnimatedNumber
+                        value={value}
+                        decimals={decimals}
+                        language={language}
+                        variant="odometer"
+                      />
+                      {key === 'successRate' && (
+                        <span className="ml-0.5 text-sm text-muted-foreground">%</span>
+                      )}
+                    </>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {heatmap.data ? (
+          <Heatmap data={heatmap.data} motionEnabled={motionEnabled} />
+        ) : (
+          heatmap.isPending && <Skeleton className="h-48 w-full" />
+        )}
+      </div>
     </section>
   )
 }

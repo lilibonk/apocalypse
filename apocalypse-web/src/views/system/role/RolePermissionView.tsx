@@ -22,6 +22,7 @@ import {
 import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/client'
@@ -295,34 +296,21 @@ function RolePermissionContent({
                 </button>
               )}
             </div>
-            <div
-              className="role-permission-view flex rounded-xl p-1"
-              role="group"
-              aria-label={t('roleGraph.view')}
-            >
-              <button
-                type="button"
-                aria-pressed={showGraph}
-                className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-medium"
-                onClick={() => {
-                  setView('graph')
+            <SegmentedControl
+              label={t('roleGraph.view')}
+              value={showGraph ? 'graph' : 'list'}
+              onChange={(next) => {
+                setView(next)
+                if (next === 'graph') {
                   setKeyword('')
                   setListPage(0)
-                }}
-              >
-                <Network aria-hidden="true" className="size-3.5" />
-                {t('roleGraph.graph')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={!showGraph}
-                className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-medium"
-                onClick={() => setView('list')}
-              >
-                <List aria-hidden="true" className="size-3.5" />
-                {t('roleGraph.list')}
-              </button>
-            </div>
+                }
+              }}
+              options={[
+                { value: 'graph', label: t('roleGraph.graph'), icon: Network },
+                { value: 'list', label: t('roleGraph.list'), icon: List },
+              ]}
+            />
             <Button
               type="button"
               variant="outline"

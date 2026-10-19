@@ -15,6 +15,8 @@ import { ConfigWorkspace } from '@/views/system/config/ConfigWorkspace'
 import { DeptOrgChart } from '@/views/system/dept/DeptOrgChart'
 import type { DeptTreeNode } from '@/views/system/dept/types'
 import OperLogPage from '@/views/system/log/oper'
+import OnlineUserPage from '@/views/system/online'
+import PermissionPage from '@/views/system/permission'
 import '@/index.css'
 
 if (!import.meta.env.DEV) throw new Error('Video surfaces fixture is dev-only')
@@ -28,6 +30,8 @@ const permissions = [
   'system:user:list',
   'system:role:list',
   'system:permission:list',
+  'system:online:list',
+  'system:online:kick',
 ]
 useAuthStore.setState({
   tokens: null,
@@ -65,7 +69,27 @@ const configs = [
     remark: null,
   },
 ].map((row) => ({ ...row, version: 1 }))
-let saves = { count: 0, body: '' }
+let saves = { count: 0, body: '', permissionModule: '' }
+const permissionRows = [
+  { moduleKey: null, code: 'system:user:list', name: '读取用户' },
+  { moduleKey: null, code: 'system:user:edit', name: '修改用户' },
+  { moduleKey: null, code: 'system:role:list', name: '读取角色' },
+  { moduleKey: 'calendar', code: 'calendar:day:list', name: '日历视图' },
+  { moduleKey: 'calendar', code: 'calendar:day:read', name: '读取日期详情' },
+].map((row, index) => ({
+  ...row,
+  id: `p${index + 1}`,
+  resource: row.code.split(':')[1],
+  action: row.code.split(':')[2],
+  status: 1,
+  lifecycle: 'ACTIVE',
+  registered: true,
+}))
+const onlineRows = [
+  { jti: 'j1', username: 'alice', ip: '10.0.0.1', loginTime: '2026-10-18 09:00:00' },
+  { jti: 'j2', username: 'alice', ip: '10.0.0.2', loginTime: '2026-10-18 10:00:00' },
+  { jti: 'j3', username: 'bob', ip: '10.0.0.1', loginTime: '2026-10-18 11:00:00' },
+].map((row) => ({ ...row, userAgent: 'Mozilla/5.0 (Macintosh) Chrome/153' }))
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach((listener) => listener())
 
@@ -127,7 +151,10 @@ const overview = {
   unassignedNavigationCount: 0,
   unassignedNavigation: [],
   roleScopeDistribution: [],
-  permissionModules: [],
+  permissionModules: [
+    { key: null, count: 3, enabled: true },
+    { key: 'calendar', count: 2, enabled: false },
+  ],
 }
 
 http.defaults.adapter = async (config) => {
@@ -140,7 +167,7 @@ http.defaults.adapter = async (config) => {
     const items = (
       body as { items: { id: string; expectedVersion: number; configValue: string }[] }
     ).items
-    saves = { count: saves.count + 1, body: JSON.stringify(items) }
+    saves = { ...saves, count: saves.count + 1, body: JSON.stringify(items) }
     notify()
     const stale = items.filter(
       (item) => configs.find((row) => row.id === item.id)?.version !== item.expectedVersion,
@@ -172,7 +199,20 @@ http.defaults.adapter = async (config) => {
       size: 10,
     }
   else if (path === '/system/authorization/insights/overview') data = overview
-  else if (path === '/system/permissions/page') data = { list: [], total: 0, page: 1, size: 8 }
+  else if (path === '/system/permissions/page') {
+    const params = (config.params ?? {}) as Record<string, unknown>
+    // Summary counts ask for size 1; the table asks for a page. Record the table's filter only.
+    if (Number(params.size) > 1) {
+      saves = { ...saves, permissionModule: String(params.moduleKey ?? '') }
+      notify()
+    }
+    const rows = permissionRows.filter(
+      (row) =>
+        (!params.moduleKey || row.moduleKey === params.moduleKey) &&
+        (params.status === undefined || String(row.status) === String(params.status)),
+    )
+    data = { list: rows, total: rows.length, page: 1, size: Number(params.size ?? 10) }
+  } else if (path === '/system/online-users') data = onlineRows
   else if (path.startsWith('/system/dicts')) data = []
   else throw new Error(`Unexpected fixture request: ${path}`)
   return { status: 200, statusText: 'OK', headers: {}, config, data: { code: 0, data } }
@@ -189,7 +229,12 @@ function Fixture() {
   const [paletteOpen, setPaletteOpen] = useState(true)
   return (
     <main className="min-h-screen bg-background p-6 text-foreground">
-      <output data-testid="fixture-saves" data-count={saved.count} data-body={saved.body} />
+      <output
+        data-testid="fixture-saves"
+        data-count={saved.count}
+        data-body={saved.body}
+        data-permission-module={saved.permissionModule}
+      />
       <button
         type="button"
         onClick={() => {
@@ -202,6 +247,8 @@ function Fixture() {
       </button>
       {surface === 'config' && <ConfigWorkspace />}
       {surface === 'oper' && <OperLogPage />}
+      {surface === 'online' && <OnlineUserPage />}
+      {surface === 'permission' && <PermissionPage />}
       {surface === 'dept' && (
         <DeptOrgChart tree={tree} onCreateChild={() => {}} onEdit={() => {}} onDelete={() => {}} />
       )}

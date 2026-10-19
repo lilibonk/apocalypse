@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Perm } from '@/components/Perm'
 import { DynaQueryFeedback } from '@/components/dyna'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -148,25 +149,18 @@ function MenuPageContent() {
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('common.菜单管理', { defaultValue: '菜单管理' })}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('system:authorization.menuDescription')}
-          </p>
-        </div>
-        <Perm perm="system:menu:add" requiresAllScope>
-          <Button
-            size="sm"
-            onClick={() => setFormPayload({ mode: 'create', parentId: ROOT_PARENT_ID })}
-          >
-            <Plus className="size-4" />
-            {t('common.新增菜单', { defaultValue: '新增菜单' })}
-          </Button>
-        </Perm>
-      </div>
+      <PageHeader
+        title={t('common.菜单管理', { defaultValue: '菜单管理' })}
+        description={t('system:authorization.menuDescription')}
+        actions={
+          <Perm perm="system:menu:add" requiresAllScope>
+            <Button onClick={() => setFormPayload({ mode: 'create', parentId: ROOT_PARENT_ID })}>
+              <Plus className="size-4" />
+              {t('common.新增菜单', { defaultValue: '新增菜单' })}
+            </Button>
+          </Perm>
+        }
+      />
 
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <TriangleAlert className="size-3.5 shrink-0" />
@@ -181,7 +175,7 @@ function MenuPageContent() {
       />
       {(!error || canShowTree) && (
         <section
-          className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
           aria-busy={isFetching}
         >
           <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 xl:flex-row xl:items-end">

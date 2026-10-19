@@ -5,12 +5,14 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Eye } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Eye, LayoutDashboard, List, RefreshCw } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   Dialog,
   DialogContent,
@@ -23,6 +25,7 @@ import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
 
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
 
 import { LoginActivitySection } from './LoginActivitySection'
 import { pageLoginLogs, type LoginLogRow } from './login-log.api'
@@ -48,6 +51,8 @@ const searchFields: DynaSearchField[] = [
   { name: 'keyword', label: '用户名 / IP', type: 'input', placeholder: '用户名 / IP' },
 ]
 
+const LOGIN_LOG_VIEWS = ['list', 'overview'] as const
+
 export default function LoginLogPage() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
@@ -57,6 +62,9 @@ export default function LoginLogPage() {
   const [detail, setDetail] = useState<LoginLogRow | null>(null)
   const desktop = useDesktopViewport()
   const canViewStats = useAuthStore((state) => state.perms.includes('system:log:login'))
+  const hasOverview = desktop && canViewStats
+  const [requestedView, setView] = usePageView(LOGIN_LOG_VIEWS)
+  const view = hasOverview ? requestedView : 'list'
 
   const keyword = appliedSearch.keyword ?? ''
 
@@ -78,69 +86,99 @@ export default function LoginLogPage() {
     [data],
   )
 
+  // Stable callbacks: opening the detail re-renders only the highlighted row.
+  const retry = useCallback(() => void refetch(), [refetch])
+  const resetFilters = useCallback(() => {
+    setDraftSearch({})
+    setAppliedSearch({})
+    setPage(1)
+  }, [])
+  const changePageSize = useCallback((size: number) => {
+    setPage(1)
+    setPageSize(size)
+  }, [])
+  const renderActions = useCallback(
+    (row: Record<string, unknown>) => (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('common.详情', { defaultValue: '详情' })}
+        onClick={() => setDetail(row as LoginLogRow)}
+      >
+        <Eye className="size-3.5" />
+      </Button>
+    ),
+    [t],
+  )
+
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t('common.登录日志', { defaultValue: '登录日志' })}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('common.系统登录成功与失败记录（只读）', {
-            defaultValue: '系统登录成功与失败记录（只读）',
-          })}
-        </p>
-      </div>
-
-      {desktop && canViewStats && <LoginActivitySection />}
-
-      <DynaSearch
-        fields={searchFields}
-        values={draftSearch}
-        onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
-        onSearch={() => {
-          setPage(1)
-          setAppliedSearch({ ...draftSearch })
-        }}
-        onReset={() => {
-          setDraftSearch({})
-          setAppliedSearch({})
-          setPage(1)
-        }}
-      />
-
-      <DynaTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        error={error}
-        refreshing={isFetching}
-        onRetry={() => void refetch()}
-        filtered={keyword.trim().length > 0}
-        onResetFilters={() => {
-          setDraftSearch({})
-          setAppliedSearch({})
-          setPage(1)
-        }}
-        rowKey="id"
-        actions={(row) => (
+      <PageHeader
+        title={t('common.登录日志', { defaultValue: '登录日志' })}
+        description={t('common.系统登录成功与失败记录（只读）', {
+          defaultValue: '系统登录成功与失败记录（只读）',
+        })}
+        view={
+          hasOverview ? (
+            <SegmentedControl
+              label={t('dyna.pageView')}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'list', label: t('dyna.viewList'), icon: List },
+                { value: 'overview', label: t('dyna.viewOverview'), icon: LayoutDashboard },
+              ]}
+            />
+          ) : undefined
+        }
+        actions={
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
-            aria-label={t('common.详情', { defaultValue: '详情' })}
-            onClick={() => setDetail(row as LoginLogRow)}
+            aria-label={t('dyna.queryRefresh')}
+            onClick={retry}
+            disabled={isFetching}
           >
-            <Eye className="size-3.5" />
+            <RefreshCw className="size-4" />
           </Button>
-        )}
-        page={page}
-        size={pageSize}
-        total={data?.total ?? 0}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPage(1)
-          setPageSize(size)
-        }}
+        }
       />
+
+      {view === 'overview' ? (
+        <LoginActivitySection />
+      ) : (
+        <>
+          <DynaSearch
+            fields={searchFields}
+            values={draftSearch}
+            onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
+            onSearch={() => {
+              setPage(1)
+              setAppliedSearch({ ...draftSearch })
+            }}
+            onReset={resetFilters}
+          />
+
+          <DynaTable
+            columns={columns}
+            rows={rows}
+            loading={isLoading}
+            error={error}
+            refreshing={isFetching}
+            onRetry={retry}
+            filtered={keyword.trim().length > 0}
+            onResetFilters={resetFilters}
+            rowKey="id"
+            actions={renderActions}
+            page={page}
+            size={pageSize}
+            total={data?.total ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={changePageSize}
+            activeRowKey={detail ? String(detail.id) : null}
+          />
+        </>
+      )}
 
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent>

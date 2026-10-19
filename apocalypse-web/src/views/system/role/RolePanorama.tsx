@@ -101,7 +101,7 @@ function PanoramaBody({
   onRolePage: (page: number) => void
   onChooseRole: (role: RolePermissionTarget) => void
 }) {
-  const { t } = useTranslation('system')
+  const { t, i18n } = useTranslation('system')
   const navigate = useNavigate()
   const menus = useAuthStore((state) => state.menus)
   const motionEnabled = useMotionPreference()
@@ -291,11 +291,10 @@ function PanoramaBody({
           {dials.map((dial) => {
             const point = dialPoint(dial)
             const visible = branch === null || branch === dial
-            const ticks = 36
-            const active = Math.round(dialMeta[dial].ratio * ticks)
+            // One ring per dial: the filled share is the ratio its hint explains (e.g. users with roles).
             return (
               <motion.g
-                key={`ticks-${dial}`}
+                key={`ring-${dial}`}
                 data-dim-member
                 data-related={focus === dial || undefined}
                 initial={grow ? { x: HUB.x, y: HUB.y, opacity: 0 } : false}
@@ -303,26 +302,17 @@ function PanoramaBody({
                   x: point.x,
                   y: point.y,
                   opacity: visible ? 1 : 0,
-                  scale: visible ? 1 : 0.6,
                 }}
                 transition={transition}
               >
-                {Array.from({ length: ticks }, (_, tick) => {
-                  const angle = (tick / ticks) * Math.PI * 2 - Math.PI / 2
-                  const inner = DIAL_R + 6
-                  const outer = DIAL_R + (tick % 3 === 0 ? 14 : 11)
-                  return (
-                    <line
-                      key={tick}
-                      x1={Math.cos(angle) * inner}
-                      y1={Math.sin(angle) * inner}
-                      x2={Math.cos(angle) * outer}
-                      y2={Math.sin(angle) * outer}
-                      className="role-panorama-tick"
-                      data-active={tick < active || undefined}
-                    />
-                  )
-                })}
+                <circle r={DIAL_R + 8} className="role-panorama-track" />
+                <circle
+                  r={DIAL_R + 8}
+                  className="role-panorama-share"
+                  pathLength={1}
+                  strokeDasharray={`${dialMeta[dial].ratio} 1`}
+                  transform="rotate(-90)"
+                />
               </motion.g>
             )
           })}
@@ -338,8 +328,14 @@ function PanoramaBody({
           {branch === null && (
             <>
               <span className="text-xs text-muted-foreground">{t('panorama.hub')}</span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(data.evaluatedAt).toLocaleTimeString()}
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {t('panorama.asOf', {
+                  time: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'zh', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  }).format(new Date(data.evaluatedAt)),
+                })}
               </span>
             </>
           )}

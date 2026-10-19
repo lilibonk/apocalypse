@@ -48,6 +48,10 @@
   --navigation-blur: 20px;
   --shadow-surface: 0 1px 2px oklch(0.2 0.008 260 / 0.035);
   --shadow-floating: 0 16px 48px oklch(0.2 0.008 260 / 0.12), 0 2px 8px oklch(0.2 0.008 260 / 0.06);
+  /* Opaque table header (muted 40% over card) so frozen columns never show content beneath. */
+  --table-head: color-mix(in oklch, var(--muted) 40%, var(--card));
+  /* Shade at the left edge of frozen columns, shown only while scrolled content is beneath them. */
+  --table-frozen-shade: oklch(0.2 0.008 260 / 0.1);
   --overlay-backdrop: oklch(0.16 0.008 260 / 0.34);
   --overlay-backdrop-nested: oklch(0.16 0.008 260 / 0.18);
 
@@ -78,6 +82,8 @@
 
   /* 与 motion.ts 同源：完整表面同步进入，内容不等待分段揭示。 */
   --motion-duration-feedback: 120ms;
+  /* Dialog surfaces become opaque this fast; movement continues on --motion-duration-layer. */
+  --motion-duration-fade: 120ms;
   --motion-duration-exit: 160ms;
   --motion-duration-enter: 180ms;
   --motion-duration-layer: 220ms;
@@ -121,11 +127,9 @@
   --draft-bar: oklch(0.22 0.008 260);
   --draft-bar-foreground: oklch(0.98 0 0);
   --draft-bar-muted: oklch(0.78 0.006 260);
-  /* Origin ghost for source-anchored details. */
-  --origin-ghost: color-mix(in oklch, var(--brand) 14%, var(--card));
-  --origin-ghost-border: color-mix(in oklch, var(--brand) 40%, transparent);
-  /* Command palette backdrop blur, progressive enhancement only. */
-  --overlay-backdrop-blur: 6px;
+  /* Source row of an open detail Sheet stays marked until the Sheet closes. */
+  --origin-active: color-mix(in oklch, var(--brand) 10%, var(--card));
+  --origin-active-edge: var(--brand-text);
 
   /* Compatibility for the standalone design study. */
   --study-card-radius: var(--insight-card-radius);
@@ -164,7 +168,7 @@
   --draft-bar: oklch(0.93 0.004 260);
   --draft-bar-foreground: oklch(0.2 0.008 260);
   --draft-bar-muted: oklch(0.42 0.008 260);
-  --origin-ghost: color-mix(in oklch, var(--brand) 18%, var(--card));
+  --origin-active: color-mix(in oklch, var(--brand) 14%, var(--card));
   --slime-stage: #101314;
   --slime-body: #a1c6b3;
   --slime-cream: #e1e7cc;
@@ -210,6 +214,7 @@
   --surface-navigation-glass: oklch(0.235 0.007 260 / 0.9);
   --shadow-surface: 0 1px 2px oklch(0.08 0 0 / 0.16);
   --shadow-floating: 0 16px 48px oklch(0.08 0 0 / 0.36), 0 2px 8px oklch(0.08 0 0 / 0.24);
+  --table-frozen-shade: oklch(0.02 0 0 / 0.45);
   --overlay-backdrop: oklch(0.08 0 0 / 0.56);
   --overlay-backdrop-nested: oklch(0.08 0 0 / 0.28);
 
@@ -431,25 +436,20 @@ html[data-gray='on'] {
   }
 }
 
-@keyframes surface-dialog-enter {
+/* Opacity and movement run on separate curves: the surface is opaque after the short fade, so the
+   page never shows through the form while it is still settling. */
+@keyframes surface-dialog-rise {
   from {
-    opacity: 0;
     transform: translateY(calc(var(--spacing) * 2)) scale(0.98);
   }
   to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
-@keyframes surface-dialog-exit {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
+@keyframes surface-dialog-settle {
   to {
-    opacity: 0;
-    transform: scale(0.985);
+    transform: scale(0.98);
   }
 }
 
@@ -563,23 +563,31 @@ html[data-gray='on'] {
   isolation: isolate;
 }
 
+/* Centred with inset + auto margins (no translate(-50%)), so the resting box sits on whole pixels. */
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-content'] {
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+}
+
+/* Surfaces whose height follows results (command palette) keep their top edge still. */
+[data-slot='dialog-content'][data-anchor='top'] {
+  margin-top: min(12dvh, calc(var(--spacing) * 24));
+}
+
 [data-slot='dialog-content'][data-state='open'],
 [data-slot='alert-dialog-content'][data-state='open'] {
-  animation: surface-dialog-enter var(--motion-duration-layer) var(--motion-ease-enter) both;
+  animation:
+    surface-overlay-enter var(--motion-duration-fade) linear both,
+    surface-dialog-rise var(--motion-duration-layer) var(--motion-ease-enter) both;
 }
 
 [data-slot='dialog-content'][data-state='closed'],
 [data-slot='alert-dialog-content'][data-state='closed'] {
-  animation: surface-dialog-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
-}
-
-body:has([data-slot='dialog-content'][data-depth='nested'][data-state='open'])
-  [data-slot='dialog-content'][data-depth='root'][data-state='open'] {
-  opacity: 0.72 !important;
-  scale: 0.98 !important;
-  transition-duration: var(--motion-duration-feedback);
-  transition-property: opacity, scale;
-  transition-timing-function: var(--motion-ease-enter);
+  animation:
+    surface-overlay-exit var(--motion-duration-exit) var(--motion-ease-exit) both,
+    surface-dialog-settle var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
 [data-slot='sheet-content'][data-state='open'] {
@@ -760,61 +768,14 @@ html[data-motion='off'] [data-appearance='scale'] [data-slot='pixel-scale-bar'] 
   animation: none !important;
 }
 
-/* 2026-10-18 source-anchored detail ghost: decorative only; the real layer is readable at once. */
-.origin-ghost-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
+/* Source-anchored details: the row that opened a Sheet keeps a stable highlight while it is open.
+   Sticky (frozen) cells repaint their own background, so they take the same tint. */
+tr[data-origin-active] > td {
+  background: var(--origin-active);
 }
 
-.origin-ghost {
-  position: fixed;
-  pointer-events: none;
-  background: var(--origin-ghost);
-  border: 1px solid var(--origin-ghost-border);
-  border-radius: var(--radius-panel);
-  transform-origin: top left;
-  animation: origin-ghost-travel var(--motion-duration-morph) var(--motion-ease-enter) both;
-}
-
-@keyframes origin-ghost-travel {
-  from {
-    transform: var(--origin-ghost-from);
-    opacity: 1;
-  }
-  75% {
-    opacity: 0.85;
-  }
-  to {
-    transform: none;
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .origin-ghost {
-    display: none;
-  }
-}
-
-html[data-motion='off'] .origin-ghost {
-  display: none;
-}
-
-/* Command palette backdrop: dim first, blur only where supported and transparency is welcome. */
-@supports (backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)) {
-  [data-slot='dialog-overlay'][data-backdrop='blur'] {
-    -webkit-backdrop-filter: blur(var(--overlay-backdrop-blur));
-    backdrop-filter: blur(var(--overlay-backdrop-blur));
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  [data-slot='dialog-overlay'][data-backdrop='blur'] {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+tr[data-origin-active] > td:first-child {
+  box-shadow: inset 2px 0 0 var(--origin-active-edge);
 }
 
 /* Command palette list follows its content height (cmdk measures it); instant when motion is off. */

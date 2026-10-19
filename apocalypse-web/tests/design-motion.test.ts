@@ -39,6 +39,7 @@ describe('application surface motion contract', () => {
       feedback: 120,
       exit: 160,
       enter: 180,
+      fade: 120,
       layer: 220,
       standard: 200,
       panelExit: 180,
@@ -63,12 +64,17 @@ describe('application surface motion contract', () => {
       expect(component).not.toContain('onAnimationEnd')
       expect(component).not.toContain('useAnimate')
     }
-    expect(tokensCss).toContain('@keyframes surface-dialog-enter')
+    // Opacity and movement are separate curves: the surface is opaque long before it settles.
+    expect(tokensCss).toContain('@keyframes surface-dialog-rise')
     expect(tokensCss).toContain('@keyframes surface-sheet-enter-right')
     expect(tokensCss).toContain('@keyframes surface-float-enter')
     expect(tokensCss).toContain(
-      'animation: surface-dialog-enter var(--motion-duration-layer) var(--motion-ease-enter) both',
+      'surface-overlay-enter var(--motion-duration-fade) linear both,\n    surface-dialog-rise var(--motion-duration-layer) var(--motion-ease-enter) both',
     )
+    expect(motionDuration.fade).toBeLessThan(motionDuration.layer)
+    // Whole-pixel resting position (no translate(-50%) centring) and no stretched origin ghost.
+    expect(layerComponents.join('\n')).not.toContain('-translate-x-1/2')
+    expect(tokensCss).not.toContain('origin-ghost')
     expect(tokensCss).not.toContain('clip-path:')
     expect(tokensCss).not.toContain('data-pixel-dialog-stage')
     expect(tokensCss).not.toContain('--motion-duration-dialog-reveal')

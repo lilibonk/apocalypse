@@ -82,7 +82,7 @@ export function DynaSearch({ fields, values, onChange, onSearch, onReset }: Dyna
 
   return (
     <form
-      className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 sm:flex sm:flex-wrap sm:items-end"
+      className="grid grid-cols-2 gap-3 rounded-panel bg-muted/40 p-4 sm:flex sm:flex-wrap sm:items-end"
       aria-label={t('queryFilters')}
       onSubmit={(event) => {
         event.preventDefault()

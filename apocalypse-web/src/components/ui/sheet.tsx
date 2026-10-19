@@ -5,9 +5,6 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 import { useLayerFocusReturn } from '@/components/ui/layer-focus-return'
-import { OriginGhost } from '@/components/layer/OriginGhost'
-import type { OriginRect } from '@/components/layer/origin'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -38,79 +35,27 @@ function SheetOverlay({
   )
 }
 
-interface GhostRun {
-  origin: OriginRect
-  target: OriginRect
-}
-
-/**
- * Measures the opened right-side sheet (layout width, unaffected by its enter transform) and runs one
- * decorative ghost from `origin`. A new origin object interrupts and restarts; motion-off skips it.
- */
-function useOriginGhost(origin: OriginRect | null | undefined, side: string) {
-  const enabled = useMotionPreference()
-  // State-backed ref: Radix mounts the content a commit after `open`, so the measurement must re-run.
-  const [node, setNode] = React.useState<HTMLDivElement | null>(null)
-  const [run, setRun] = React.useState<GhostRun | null>(null)
-  const [measured, setMeasured] = React.useState<OriginRect | null | undefined>(undefined)
-  if (measured !== origin) {
-    setMeasured(origin)
-    setRun(null)
-  }
-  React.useLayoutEffect(() => {
-    if (!origin || !enabled || side !== 'right' || !node) return
-    const width = node.offsetWidth
-    const height = node.offsetHeight
-    if (!width || !height) return
-    const target = { top: 0, left: window.innerWidth - width, width, height }
-    const frame = requestAnimationFrame(() => setRun({ origin, target }))
-    return () => cancelAnimationFrame(frame)
-  }, [origin, enabled, side, node])
-  // A stable layer is a Portal child from the first open commit, so it stays stacked between the
-  // overlay and the content; only the keyed ghost inside it is replaced or removed.
-  const ghost =
-    side === 'right' && origin ? (
-      <div aria-hidden="true" className="origin-ghost-layer">
-        {run && (
-          <OriginGhost
-            key={`${run.origin.top}:${run.origin.left}:${run.origin.width}`}
-            origin={run.origin}
-            target={run.target}
-            onDone={() => setRun(null)}
-          />
-        )}
-      </div>
-    ) : null
-  return { setNode, ghost }
-}
-
 function SheetContent({
   className,
   children,
   side = 'right',
   showCloseButton = true,
-  origin,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: 'top' | 'right' | 'bottom' | 'left'
   showCloseButton?: boolean
-  /** Source element rectangle; adds a decorative origin ghost. Content stays visible at once. */
-  origin?: OriginRect | null
 }) {
   const { t } = useTranslation()
   const { handleCloseAutoFocus, handleOpenAutoFocus } = useLayerFocusReturn(
     onOpenAutoFocus,
     onCloseAutoFocus,
   )
-  const { setNode, ghost } = useOriginGhost(origin, side)
   return (
     <SheetPortal>
       <SheetOverlay data-motion-preset="surface" />
-      {ghost}
       <SheetPrimitive.Content
-        ref={setNode}
         data-slot="sheet-content"
         data-side={side}
         data-motion-preset="surface"

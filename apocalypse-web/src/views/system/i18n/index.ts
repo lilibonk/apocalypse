@@ -8,6 +8,8 @@ import { dictBookCopy } from './dict-book'
 import { configWorkspaceCopy } from './config-workspace'
 import { deptChartCopy } from './dept-chart'
 import { panoramaCopy } from './panorama'
+import { operLogCopy } from './oper-log'
+import { listInsightsCopy } from './list-insights'
 
 const systemI18n = {
   namespace: 'system',
@@ -24,6 +26,8 @@ const systemI18n = {
       configWorkspace: configWorkspaceCopy.zh,
       deptChart: deptChartCopy.zh,
       panorama: panoramaCopy.zh,
+      operLog: operLogCopy.zh,
+      listInsights: listInsightsCopy.zh,
       permissionCatalog: permissionCatalogCopy.zh,
       roleManage: roleManagementCopy.zh,
       roleMemberEdit: roleMemberEditorCopy.zh,
@@ -32,6 +36,7 @@ const systemI18n = {
         roleList: '角色列表',
         roleListHelp: '图谱与列表都可管理角色，选择适合你的操作方式。',
         rolePicker: '选择角色',
+        relations: '角色关系',
         chooseRole: '选择角色：{{name}}',
         roleSearchLabel: '搜索角色',
         roleSearchPlaceholder: '角色名称或标识',
@@ -91,7 +96,7 @@ const systemI18n = {
         F: '按钮',
         definitionState: '菜单定义状态',
         enabled: '启用',
-        disabled: '禁用',
+        disabled: '停用',
         unknown: '未提供',
         visibility: '导航显示',
         visible: '显示',
@@ -157,6 +162,8 @@ const systemI18n = {
       configWorkspace: configWorkspaceCopy.en,
       deptChart: deptChartCopy.en,
       panorama: panoramaCopy.en,
+      operLog: operLogCopy.en,
+      listInsights: listInsightsCopy.en,
       permissionCatalog: permissionCatalogCopy.en,
       roleManage: roleManagementCopy.en,
       roleMemberEdit: roleMemberEditorCopy.en,
@@ -165,9 +172,10 @@ const systemI18n = {
         roleList: 'Role list',
         roleListHelp: 'Manage roles in either view. Choose the way you prefer to work.',
         rolePicker: 'Choose a role',
+        relations: 'Role relationships',
         chooseRole: 'Choose role: {{name}}',
         roleSearchLabel: 'Search roles',
-        roleSearchPlaceholder: 'Role name or key',
+        roleSearchPlaceholder: 'Name or key',
         query: 'Search',
         refreshRoles: 'Refresh role list',
         rolesLoading: 'Loading roles…',

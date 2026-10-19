@@ -1,20 +1,44 @@
-.role-choice-card {
-  border-color: var(--border-subtle);
-  background: var(--card);
+.role-choice-row {
+  color: var(--foreground);
+  transition: background-color var(--motion-duration-feedback) var(--motion-ease-enter);
 }
 
-.role-choice-card[aria-pressed='true'] {
-  border-color: color-mix(in oklch, var(--insight-role) 50%, var(--border));
-  background: color-mix(in oklch, var(--insight-role) 8%, var(--card));
+.role-choice-row:hover:not(:disabled) {
+  background: var(--accent);
 }
 
-.role-choice-check {
-  color: var(--insight-role-foreground);
+.role-choice-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
-@media (min-width: 1280px) {
+/* Selected role: brand tint with an inset edge, same language as an active sidebar item. */
+.role-choice-row[aria-pressed='true'] {
+  background: color-mix(in oklch, var(--brand) 12%, var(--card));
+  box-shadow: inset 2px 0 0 var(--brand-text);
+}
+
+.role-choice-status[data-status='1'] {
+  color: var(--success-foreground);
+}
+
+/* Rail beside the detail from 1024px; above it the rail lists roles in columns. */
+.role-permission-main-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.role-choice-grid {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--spacing) * 56), 1fr));
+}
+
+@media (min-width: 1024px) {
   .role-permission-main-layout {
-    grid-template-columns: calc(var(--spacing) * 52) minmax(0, 1fr);
+    grid-template-columns: calc(var(--spacing) * 68) minmax(0, 1fr);
+  }
+
+  .role-choice-panel {
+    position: sticky;
+    top: calc(var(--spacing) * 4);
   }
 
   .role-choice-grid {
@@ -58,20 +82,6 @@
 
 .role-permission-feedback {
   min-height: calc(var(--spacing) * 64);
-}
-
-.role-permission-view {
-  background: var(--muted);
-}
-
-.role-permission-view button {
-  color: var(--muted-foreground);
-}
-
-.role-permission-view button[aria-pressed='true'] {
-  color: var(--foreground);
-  background: var(--card);
-  box-shadow: var(--shadow-surface);
 }
 
 .role-permission-content input::-webkit-search-cancel-button {

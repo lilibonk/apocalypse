@@ -12,6 +12,7 @@ import { BrandHero } from '@/components/BrandHero'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { resolveMenuIcon } from '@/components/layout/menu-icons'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -189,42 +190,38 @@ function DesktopDashboard() {
 
   return (
     <div className="min-w-0 space-y-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <p className="insight-eyebrow">{t('title')}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {name ? t('welcome', { name }) : t('welcomeAnonymous')}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-        </div>
-        {(login.allowed || operation.allowed || online.allowed) && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              login.isFetching ||
-              operation.isFetching ||
-              online.isFetching ||
-              loginInsights.isFetching ||
-              operationInsights.isFetching
-            }
-            onClick={() => {
-              if (login.allowed) {
-                login.retry()
-                loginInsights.retry()
+      <PageHeader
+        title={name ? t('welcome', { name }) : t('welcomeAnonymous')}
+        description={t('subtitle')}
+        actions={
+          (login.allowed || operation.allowed || online.allowed) && (
+            <Button
+              variant="outline"
+              disabled={
+                login.isFetching ||
+                operation.isFetching ||
+                online.isFetching ||
+                loginInsights.isFetching ||
+                operationInsights.isFetching
               }
-              if (operation.allowed) {
-                operation.retry()
-                operationInsights.retry()
-              }
-              if (online.allowed) online.retry()
-            }}
-          >
-            <RefreshCw className="size-3.5" aria-hidden="true" />
-            {t('refresh')}
-          </Button>
-        )}
-      </header>
+              onClick={() => {
+                if (login.allowed) {
+                  login.retry()
+                  loginInsights.retry()
+                }
+                if (operation.allowed) {
+                  operation.retry()
+                  operationInsights.retry()
+                }
+                if (online.allowed) online.retry()
+              }}
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              {t('refresh')}
+            </Button>
+          )
+        }
+      />
 
       <DashboardInsights
         login={loginInsights}

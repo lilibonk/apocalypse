@@ -12,15 +12,6 @@
   box-shadow: var(--shadow-surface);
 }
 
-.dashboard-insight-action {
-  background: var(--insight-blue);
-  color: var(--insight-blue-foreground);
-}
-
-.dashboard-insight-action:hover {
-  background: color-mix(in srgb, var(--insight-blue) 88%, var(--foreground));
-}
-
 .dashboard-trend-grid {
   stroke: var(--insight-grid);
   stroke-dasharray: 2 6;

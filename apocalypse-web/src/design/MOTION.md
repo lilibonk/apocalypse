@@ -7,6 +7,7 @@
 | feedback  | 120ms | hover、press、选中           |
 | exit      | 160ms | 菜单/浮层退出                |
 | enter     | 180ms | Select、Dropdown、Tooltip    |
+| fade      | 120ms | Dialog 表面变为不透明        |
 | layer     | 220ms | Dialog、AlertDialog 整体进入 |
 | standard  | 200ms | 页面和已有信息展开           |
 | panel     | 280ms | Sheet / Drawer 方向性进入    |
@@ -30,12 +31,12 @@
 
 | 语义      |      时长 | 行为                                    |
 | --------- | --------: | --------------------------------------- |
-| morph     |     240ms | 提交按钮收拢/复原、来源幽灵层           |
+| morph     |     240ms | 提交按钮收拢/复原                       |
 | odometer  |     480ms | 单列数字滚动，列间 30ms                 |
 | growth    | ≤700ms 总 | 全景/组织图首次生长，错峰 60ms          |
 | pathPulse |     520ms | 选择后沿祖先/授权路径一次脉冲           |
 | heatCell  |     180ms | 热力格淡入，列延迟 12ms，数据到达时一次 |
-| entrance  |      弹簧 | 洞察卡片首次入场（会话内一次）          |
+| entrance  |     320ms | 洞察卡片首次入场（会话内一次，不缩放）  |
 | yield     |      弹簧 | 邻卡让位，复用 `insightMotion.layout`   |
 
-来源幽灵层不改变浮层规则：真实 Sheet 的标题、正文与操作仍首帧可见，幽灵层 `aria-hidden` 且不拦截指针。所有新运动在 `prefers-reduced-motion` 或 `data-motion='off'` 下直接终态，运行时切换立即停止；无循环装饰。
+2026-10-19：来源幽灵层取消，改为来源行在弹层打开期间保持标记；Dialog 的不透明度（fade）与位移（layer）分开，避免内容透出；打开弹层不得同步重渲列表。所有新运动在 `prefers-reduced-motion` 或 `data-motion='off'` 下直接终态，运行时切换立即停止；无循环装饰。

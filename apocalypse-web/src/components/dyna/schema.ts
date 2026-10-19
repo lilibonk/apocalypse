@@ -35,7 +35,14 @@ export type DynaFieldType =
 export interface DynaOption {
   label: string
   value: string
+  /**
+   * Table columns only: render the label as a status chip with this tone (same look as DictTag).
+   * Without a tone the label stays plain text.
+   */
+  tone?: DynaOptionTone
 }
+
+export type DynaOptionTone = 'success' | 'warning' | 'destructive' | 'secondary'
 
 /** 表单字段（DynaForm 渲染 + 校验 + 提交转换的事实来源）。 */
 export interface DynaFormField {
@@ -153,6 +160,10 @@ export interface DynaStatusToggleAction {
   requiresAllScope?: boolean
 }
 
+/** Icons a custom row action may use; each maps to one Lucide glyph in DynaPage. */
+export const DYNA_ACTION_ICONS = ['view', 'power', 'permissions', 'navigation', 'members'] as const
+export type DynaActionIcon = (typeof DYNA_ACTION_ICONS)[number]
+
 /**
  * 行操作：自定义按钮（越出标准 CRUD 的行级动作，如授权/分配弹窗）。
  * 点击行为不由 DynaLayer 实现 —— 页面经 DynaPage 的 customActions prop 按 key 注入 handler；
@@ -164,6 +175,11 @@ export interface DynaCustomAction {
   key: string
   /** 按钮文案原文；渲染层走 t() 兜底原文。 */
   label: string
+  /**
+   * Renders as the shared icon button (label becomes tooltip and accessible name) so custom
+   * entries match the built-in row actions; omitted, the label stays a text button.
+   */
+  icon?: DynaActionIcon
   perm?: string
   /** This particular execution entry requires the effective ALL scope. */
   requiresAllScope?: boolean
@@ -229,6 +245,7 @@ const permsString = z.string().regex(PERMS_PATTERN, 'perms 必须是 域:对象:
 const optionSchema = z.object({
   label: z.string().min(1),
   value: z.string(),
+  tone: z.enum(['success', 'warning', 'destructive', 'secondary']).optional(),
 })
 
 const formFieldSchema = z
@@ -353,6 +370,7 @@ const rowActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('custom'),
     key: z.string().min(1),
     label: z.string().min(1),
+    icon: z.enum(DYNA_ACTION_ICONS).optional(),
     perm: permsString.optional(),
     requiresAllScope: z.boolean().optional(),
   }),

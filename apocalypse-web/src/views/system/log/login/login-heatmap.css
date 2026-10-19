@@ -1,16 +1,9 @@
+/* Overview workspace card: same surface as the other insight cards. */
 .login-activity {
   border: 1px solid var(--border-subtle);
+  border-radius: var(--insight-card-radius);
   background: var(--card);
-}
-
-.login-activity-range {
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
-}
-
-.login-activity-range button[aria-pressed='true'] {
-  background: var(--insight-surface-raised);
-  color: var(--foreground);
-  box-shadow: var(--shadow-surface);
+  box-shadow: var(--insight-card-shadow);
 }
 
 .login-heatmap {

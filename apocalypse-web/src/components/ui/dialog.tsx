@@ -41,15 +41,12 @@ function DialogContent({
   children,
   depth = 'root',
   showCloseButton = true,
-  backdrop = 'dim',
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   depth?: 'root' | 'nested'
   showCloseButton?: boolean
-  /** `blur` adds a progressive-enhancement backdrop blur; readability never depends on it. */
-  backdrop?: 'dim' | 'blur'
 }) {
   const { t } = useTranslation()
   const { handleCloseAutoFocus, handleOpenAutoFocus } = useLayerFocusReturn(
@@ -73,17 +70,13 @@ function DialogContent({
 
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay
-        data-depth={depth}
-        data-motion-preset="surface"
-        data-backdrop={backdrop === 'blur' ? 'blur' : undefined}
-      />
+      <DialogOverlay data-depth={depth} data-motion-preset="surface" />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-depth={depth}
         data-motion-preset="surface"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating outline-none sm:max-w-lg',
+          'fixed z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating outline-none sm:max-w-lg',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}

@@ -8,7 +8,14 @@ import { DynaPage } from '@/components/dyna'
 
 import schema from './user.schema'
 import { UserForm } from './UserForm'
+import { UserInsights } from './UserInsights'
 
 export default function UserPage() {
-  return <DynaPage schema={schema} formComponent={UserForm} />
+  return (
+    <DynaPage
+      schema={schema}
+      formComponent={UserForm}
+      overview={({ queryKey }) => <UserInsights queryKey={queryKey} />}
+    />
+  )
 }

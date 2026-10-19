@@ -46,15 +46,19 @@ import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
-import { useSearchParams } from 'react-router'
 import { Network, Rows3 } from 'lucide-react'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 
 import { createDept, deleteDept, getDeptTree, updateDept } from './api'
 import { DeptOrgChart } from './DeptOrgChart'
 import { DeptFormDialog, type DeptFormValues } from './DeptFormDialog'
 import { flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } from './types'
+
+const DEPT_VIEWS = ['chart', 'table'] as const
 
 export default function DeptPage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
@@ -65,8 +69,9 @@ function DeptWorkspace() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const desktop = useDesktopViewport()
-  const [params, setParams] = useSearchParams()
-  const view = desktop && params.get('deptView') !== 'table' ? 'chart' : 'table'
+  const [requestedView, setView] = usePageView(DEPT_VIEWS, 'deptView')
+  // The organisation chart is a desktop workspace; narrow screens keep the tree table.
+  const view = desktop ? requestedView : 'table'
   const queryClient = useQueryClient()
   /** 展开的部门 id 集（默认空 = 只显示根节点）。 */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
@@ -200,57 +205,31 @@ function DeptWorkspace() {
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('common.部门管理', { defaultValue: '部门管理' })}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('common.组织部门的树形维护', { defaultValue: '组织部门的树形维护' })}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {desktop && (
-            <div
-              className="view-switch flex rounded-xl p-1"
-              role="group"
-              aria-label={systemT('deptChart.view')}
-            >
-              {(['chart', 'table'] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium"
-                  aria-pressed={view === kind}
-                  onClick={() =>
-                    setParams(
-                      (previous) => {
-                        const next = new URLSearchParams(previous)
-                        next.set('deptView', kind)
-                        return next
-                      },
-                      { replace: true },
-                    )
-                  }
-                >
-                  {kind === 'chart' ? (
-                    <Network aria-hidden className="size-4" />
-                  ) : (
-                    <Rows3 aria-hidden className="size-4" />
-                  )}
-                  {systemT(`deptChart.${kind}`)}
-                </button>
-              ))}
-            </div>
-          )}
+      <PageHeader
+        title={t('common.部门管理', { defaultValue: '部门管理' })}
+        description={t('common.组织部门的树形维护', { defaultValue: '组织部门的树形维护' })}
+        view={
+          desktop ? (
+            <SegmentedControl
+              label={systemT('deptChart.view')}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'chart', label: systemT('deptChart.chart'), icon: Network },
+                { value: 'table', label: systemT('deptChart.table'), icon: Rows3 },
+              ]}
+            />
+          ) : undefined
+        }
+        actions={
           <Perm perm="system:dept:add" requiresAllScope>
-            <Button size="sm" onClick={() => openCreate(ROOT_DEPT_ID)}>
+            <Button onClick={() => openCreate(ROOT_DEPT_ID)}>
               <Plus className="size-4" />
               {t('common.新增部门', { defaultValue: '新增部门' })}
             </Button>
           </Perm>
-        </div>
-      </div>
+        }
+      />
 
       <DynaQueryFeedback
         error={error}
@@ -269,7 +248,7 @@ function DeptWorkspace() {
       )}
       {view === 'table' && (!error || tree !== undefined) && (
         <div
-          className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
           aria-busy={isFetching}
         >
           <Table>

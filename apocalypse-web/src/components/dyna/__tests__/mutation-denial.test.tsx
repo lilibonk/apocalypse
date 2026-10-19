@@ -33,6 +33,7 @@ const harness = vi.hoisted(() => ({
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useMemo: <T,>(factory: () => T) => factory(),
+  useCallback: <T,>(callback: T) => callback,
   useState: <T,>(initial: T | (() => T)) => {
     const index = harness.stateIndex++
     if (!(index in harness.states))

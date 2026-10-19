@@ -89,7 +89,7 @@ vi.mock('@/lib/query/use-resource-denial', () => ({
   useResourceDenial: () => ({ handle: vi.fn(), isCurrent: () => true }),
 }))
 vi.mock('./role-permission.queries', () => ({
-  ROLE_CHOICES_PAGE_SIZE: 4,
+  ROLE_CHOICES_PAGE_SIZE: 10,
   createRoleChoicesQuery: () => ({
     options: {},
     filter: {},

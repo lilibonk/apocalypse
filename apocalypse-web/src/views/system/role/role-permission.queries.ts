@@ -96,7 +96,7 @@ export function createRoleMenuDraftQuery(opening: RoleResourceOpening) {
   )
 }
 
-export const ROLE_CHOICES_PAGE_SIZE = 4
+export const ROLE_CHOICES_PAGE_SIZE = 10
 export const ROLE_MEMBERS_PAGE_SIZE = 4
 
 export interface RoleGraphMember {

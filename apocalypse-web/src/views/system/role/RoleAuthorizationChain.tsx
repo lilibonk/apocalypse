@@ -147,21 +147,20 @@ function ChainBody({
     const middle = (from.x + to.x) / 2
     return `M ${from.x} ${from.y} C ${middle} ${from.y}, ${middle} ${to.y}, ${to.x} ${to.y}`
   }
-  const stats: [string, number | string, Relation | null][] = [
+  // Status is already the badge in the role header; these open the matching relation.
+  const stats: [string, number, Relation][] = [
     ['statPermissions', data.grants.length, 'permissions'],
     ['statNavigation', data.navigation.length, 'navigation'],
     ['statMembers', data.members.total, 'members'],
-    ['statStatus', t(opening.role.status === 1 ? 'roleGraph.enabled' : 'roleGraph.disabled'), null],
   ]
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         {stats.map(([key, value, relation]) => (
           <button
             key={key}
             type="button"
-            disabled={!relation}
-            onClick={() => relation && onEdit(relation)}
+            onClick={() => onEdit(relation)}
             className="rounded-control border border-border-subtle bg-card p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring enabled:hover:border-[var(--insight-path)]"
           >
             <span className="block text-xs text-muted-foreground">{t(`panorama.${key}`)}</span>
@@ -170,7 +169,7 @@ function ChainBody({
         ))}
       </div>
       <div
-        className="role-panorama-canvas relative overflow-hidden rounded-2xl border bg-card"
+        className="role-panorama-canvas relative overflow-hidden rounded-panel border border-border-subtle bg-card"
         style={{ aspectRatio: `${VIEW.width} / ${VIEW.height}` }}
         role="group"
         aria-label={t('panorama.chainTitle', { name: opening.role.roleName })}

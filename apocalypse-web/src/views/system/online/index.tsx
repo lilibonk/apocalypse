@@ -1,11 +1,12 @@
 /**
  * 在线用户（逃逸舱手写）：GET /system/online-users（List 非分页）+ 强退 DELETE /system/online-users/{jti}。
  * DynaTable rowKey=jti，分页禁用（page 固定 1、size 取列表长度）；空态文案「暂无在线用户」。
+ * 会话概况由同一列表实时计算（不额外请求）；会话详情为从来源行展开的 Sheet，可在其中强退该账号。
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, LogOut } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Eye, LayoutDashboard, List, LogOut, RefreshCw } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -23,12 +24,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { InsightStrip } from '@/components/insights/InsightStrip'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
 import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import { summarizeUserAgent } from '@/lib/user-agent'
@@ -47,6 +54,9 @@ const columns: DynaColumn[] = [
   { key: 'loginTime', title: '登录时间', type: 'datetime', sticky: 'right' },
 ]
 
+const ONLINE_VIEWS = ['list', 'overview'] as const
+const noPageChange = () => {}
+
 export default function OnlineUserPage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   return <OnlineUserWorkspace key={authorizationEpoch} />
@@ -54,9 +64,13 @@ export default function OnlineUserPage() {
 
 function OnlineUserWorkspace() {
   const { t } = useTranslation()
+  const { t: systemT } = useTranslation('system')
   const queryClient = useQueryClient()
   const [kicking, setKicking] = useState<OnlineUserRow | null>(null)
   const [detail, setDetail] = useState<OnlineUserRow | null>(null)
+  const desktop = useDesktopViewport()
+  const [requestedView, setView] = usePageView(ONLINE_VIEWS)
+  const view = desktop ? requestedView : 'list'
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: QUERY_KEY,
@@ -102,89 +116,186 @@ function OnlineUserWorkspace() {
       })),
     [data],
   )
+  // Counted from the list already on screen: no extra request, always consistent with the table.
+  const summary = useMemo(() => {
+    if (!data) return null
+    const perAccount = new Map<string, number>()
+    for (const row of data) perAccount.set(row.username, (perAccount.get(row.username) ?? 0) + 1)
+    return {
+      sessions: data.length,
+      accounts: perAccount.size,
+      ips: new Set(data.map((row) => row.ip).filter(Boolean)).size,
+      multiSession: [...perAccount.values()].filter((count) => count > 1).length,
+    }
+  }, [data])
+  const retry = useCallback(() => void refetch(), [refetch])
+  // Stable so opening the detail Sheet re-renders only the highlighted row.
+  const renderActions = useCallback(
+    (row: Record<string, unknown>) => {
+      const record = row as OnlineUserRow
+      return (
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('common.详情', { defaultValue: '详情' })}
+            onClick={() => setDetail(record)}
+          >
+            <Eye className="size-3.5" />
+          </Button>
+          <Perm perm="system:online:kick">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('common.强退', { defaultValue: '强退' })}
+              onClick={() => setKicking(record)}
+            >
+              <LogOut className="size-3.5 text-destructive" />
+            </Button>
+          </Perm>
+        </div>
+      )
+    },
+    [t],
+  )
+  const sessionsOf = (username: string) =>
+    data?.filter((row) => row.username === username).length ?? 0
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t('common.在线用户', { defaultValue: '在线用户' })}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('common.当前在线的登录会话，强退将使该用户全部设备下线', {
-            defaultValue: '当前在线的登录会话，强退将使该用户全部设备下线',
-          })}
-        </p>
-      </div>
-
-      <DynaTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        error={error}
-        refreshing={isFetching}
-        onRetry={() => void refetch()}
-        emptyText="queryNoOnlineUsers"
-        rowKey="jti"
-        actions={(row) => {
-          const record = row as OnlineUserRow
-          return (
-            <div className="flex justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('common.详情', { defaultValue: '详情' })}
-                onClick={() => setDetail(record)}
-              >
-                <Eye className="size-3.5" />
-              </Button>
-              <Perm perm="system:online:kick">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('common.强退', { defaultValue: '强退' })}
-                  onClick={() => setKicking(record)}
-                >
-                  <LogOut className="size-3.5 text-destructive" />
-                </Button>
-              </Perm>
-            </div>
-          )
-        }}
-        page={1}
-        size={Math.max(rows?.length ?? 0, 1)}
-        total={rows?.length ?? 0}
-        onPageChange={() => {}}
-        paginated={false}
+      <PageHeader
+        title={t('common.在线用户', { defaultValue: '在线用户' })}
+        description={t('common.当前在线的登录会话，强退将使该用户全部设备下线', {
+          defaultValue: '当前在线的登录会话，强退将使该用户全部设备下线',
+        })}
+        view={
+          desktop ? (
+            <SegmentedControl
+              label={t('dyna.pageView')}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'list', label: t('dyna.viewList'), icon: List },
+                { value: 'overview', label: t('dyna.viewOverview'), icon: LayoutDashboard },
+              ]}
+            />
+          ) : undefined
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t('dyna.queryRefresh')}
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+        }
       />
 
-      <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('common.sessionDetails')}</DialogTitle>
-            <DialogDescription>
+      {view === 'overview' ? (
+        summary && (
+          <InsightStrip
+            id="online-insights"
+            title={systemT('listInsights.online.title')}
+            hint={systemT('listInsights.online.hint')}
+            entranceKey="system:online:insights"
+            stats={[
+              {
+                key: 'sessions',
+                label: systemT('listInsights.online.sessions'),
+                value: summary.sessions,
+              },
+              {
+                key: 'accounts',
+                label: systemT('listInsights.online.accounts'),
+                value: summary.accounts,
+              },
+              { key: 'ips', label: systemT('listInsights.online.ips'), value: summary.ips },
+              {
+                key: 'multiSession',
+                label: systemT('listInsights.online.multiSession'),
+                hint: systemT('listInsights.online.multiSessionHint'),
+                value: summary.multiSession,
+              },
+            ]}
+          />
+        )
+      ) : (
+        <DynaTable
+          columns={columns}
+          rows={rows}
+          loading={isLoading}
+          error={error}
+          refreshing={isFetching}
+          onRetry={retry}
+          emptyText="queryNoOnlineUsers"
+          rowKey="jti"
+          actions={renderActions}
+          page={1}
+          size={Math.max(rows?.length ?? 0, 1)}
+          total={rows?.length ?? 0}
+          onPageChange={noPageChange}
+          paginated={false}
+          activeRowKey={detail?.jti ?? kicking?.jti ?? null}
+        />
+      )}
+
+      <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
+        <SheetContent className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>{t('common.sessionDetails')}</SheetTitle>
+            <SheetDescription>
               {detail ? `${detail.username} · ${detail.ip ?? t('common.unknownIp')}` : ''}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           {detail && (
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div className="rounded-md border border-border p-3">
-                <dt className="text-muted-foreground">
-                  {t('dyna.登录时间', { defaultValue: '登录时间' })}
-                </dt>
-                <dd className="mt-1 font-medium">{detail.loginTime.replace('T', ' ')}</dd>
+            <div className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('dyna.登录时间', { defaultValue: '登录时间' })}
+                  </dt>
+                  <dd className="mt-1 tabular-nums">{detail.loginTime.replace('T', ' ')}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">{t('common.deviceSummary')}</dt>
+                  <dd className="mt-1">{summarizeUserAgent(detail.userAgent)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {systemT('listInsights.online.accountSessions')}
+                  </dt>
+                  <dd className="mt-1 tabular-nums">{sessionsOf(detail.username)}</dd>
+                </div>
+              </dl>
+              <div className="space-y-1">
+                <div className="text-sm text-muted-foreground">{t('common.rawUserAgent')}</div>
+                <pre className="max-h-40 overflow-auto rounded-control bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap">
+                  {detail.userAgent ?? '-'}
+                </pre>
               </div>
-              <div className="rounded-md border border-border p-3">
-                <dt className="text-muted-foreground">{t('common.deviceSummary')}</dt>
-                <dd className="mt-1 font-medium">{summarizeUserAgent(detail.userAgent)}</dd>
-              </div>
-              <div className="rounded-md border border-border p-3 sm:col-span-2">
-                <dt className="text-muted-foreground">{t('common.rawUserAgent')}</dt>
-                <dd className="mt-1 break-all font-mono text-xs">{detail.userAgent ?? '-'}</dd>
-              </div>
-            </dl>
+            </div>
           )}
-        </DialogContent>
-      </Dialog>
+          {detail && (
+            <Perm perm="system:online:kick">
+              <SheetFooter>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setKicking(detail)
+                    setDetail(null)
+                  }}
+                >
+                  <LogOut aria-hidden="true" />
+                  {systemT('listInsights.online.kick')}
+                </Button>
+              </SheetFooter>
+            </Perm>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog
         open={kicking !== null}

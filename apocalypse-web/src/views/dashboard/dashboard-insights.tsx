@@ -576,7 +576,7 @@ export function DashboardInsights({
               <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
                 <WindowNote insight={insight} />
                 {loginHref && (
-                  <Button className="dashboard-insight-action rounded-full" asChild>
+                  <Button variant="outline" asChild>
                     <Link to={loginHref}>
                       {t('viewLogin')}
                       <ArrowUpRight aria-hidden="true" />

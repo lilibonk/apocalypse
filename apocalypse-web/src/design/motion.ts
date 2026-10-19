@@ -5,6 +5,8 @@
 
 export const motionDuration = {
   feedback: 0.12,
+  /** Dialog surfaces turn opaque this fast while their movement continues on `layer`. */
+  fade: 0.12,
   exit: 0.16,
   enter: 0.18,
   layer: 0.22,
@@ -56,9 +58,12 @@ export const studyMotion = insightMotion
 export const stateMotion = {
   /** Submit button collapse/expand and the detail origin ghost. */
   morph: { duration: 0.24, ease: motionEase.enter },
-  /** First-entry "bounce home" for insight cards; refreshes never replay it. */
-  entrance: { type: 'spring', stiffness: 300, damping: 22, mass: 0.85 },
-  entranceScale: 0.96,
+  /**
+   * First entry of overview cards; refreshes never replay it. A settled ease-out without scale:
+   * an underdamped spring overshot and resampled text, which read as wobble.
+   */
+  entrance: { duration: 0.32, ease: motionEase.enter },
+  entranceScale: 1,
   /** One odometer column; neighbouring columns start `odometerStagger` seconds apart. */
   odometer: { duration: 0.48, ease: motionEase.enter },
   odometerStagger: 0.03,

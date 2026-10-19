@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { DynaPage } from '@/components/dyna'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   Dialog,
   DialogContent,
@@ -106,7 +107,11 @@ function RolePageContent() {
   const client = useQueryClient()
   const desktop = useDesktopViewport()
   const canInspectGraph = desktop && canReadRoleWorkspace(auth)
-  const localizedSchema = useMemo(() => localizeRoleSchema(schema, t), [t])
+  // One description for both views, so switching never changes the header.
+  const localizedSchema = useMemo(
+    () => ({ ...localizeRoleSchema(schema, t), description: t('roleManage.description') }),
+    [t],
+  )
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('roleView') === 'list' ? 'list' : 'graph'
   const setView = useCallback(
@@ -158,29 +163,16 @@ function RolePageContent() {
     closeRelation()
   }
   const viewControl = canInspectGraph ? (
-    <div
-      className="role-permission-view flex rounded-xl p-1"
-      role="group"
-      aria-label={t('roleGraph.pageView')}
-    >
-      {(['graph', 'list'] as const).map((kind) => (
-        <button
-          key={kind}
-          type="button"
-          className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium"
-          aria-pressed={view === kind}
-          disabled={graphBusy}
-          onClick={() => setView(kind)}
-        >
-          {kind === 'graph' ? (
-            <Network aria-hidden className="size-4" />
-          ) : (
-            <List aria-hidden className="size-4" />
-          )}
-          {t(kind === 'graph' ? 'roleGraph.action' : 'roleGraph.roleList')}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label={t('roleGraph.pageView')}
+      value={view}
+      disabled={graphBusy}
+      onChange={setView}
+      options={[
+        { value: 'graph', label: t('roleGraph.action'), icon: Network },
+        { value: 'list', label: t('roleGraph.roleList'), icon: List },
+      ]}
+    />
   ) : null
   return (
     <>
@@ -193,9 +185,9 @@ function RolePageContent() {
         />
       ) : (
         <>
-          {viewControl && <div className="flex justify-end px-4 pt-4 sm:px-6">{viewControl}</div>}
           <DynaPage
             schema={localizedSchema}
+            headerView={viewControl}
             customActions={customActions}
             formComponent={RoleForm}
           />

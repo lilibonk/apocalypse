@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import schema from './permission.schema'
 import { DynaDetail } from '@/components/dyna/DynaDetail'
 import { permissionMetadataBody } from './permission.model'
+import { PermissionInsights } from './PermissionInsights'
 
 function PermissionForm(props: DynaFormProps) {
   const { t } = useTranslation('system')
@@ -66,18 +67,22 @@ function PermissionPageContent() {
   const localized = useMemo(() => {
     const fieldTitle = (key: string) =>
       key === 'description' ? t('permissionCatalog.descriptionField') : t(`authorization.${key}`)
+    // Localize labels while keeping each option's schema-defined value and chip tone.
     const options = (key: string) =>
-      key === 'status'
-        ? [
-            { value: '1', label: t('authorization.active') },
-            { value: '0', label: t('authorization.inactive') },
-          ]
-        : key === 'lifecycle'
-          ? ['ACTIVE', 'DEPRECATED', 'LEGACY'].map((value) => ({
-              value,
-              label: t(`authorization.${value}`),
+      key === 'status' || key === 'lifecycle'
+        ? schema.columns
+            .find((column) => column.key === key)
+            ?.options?.map((option) => ({
+              ...option,
+              label: t(
+                key === 'status'
+                  ? option.value === '1'
+                    ? 'authorization.active'
+                    : 'authorization.inactive'
+                  : `authorization.${option.value}`,
+              ),
             }))
-          : undefined
+        : undefined
     return {
       ...schema,
       title: t('permissionCatalog.title'),
@@ -89,6 +94,14 @@ function PermissionPageContent() {
       search: schema.search?.map((field) => ({
         ...field,
         label: field.name === 'keyword' ? t('permissionCatalog.keyword') : fieldTitle(field.name),
+        placeholder:
+          field.name === 'keyword'
+            ? t('permissionCatalog.keywordPlaceholder')
+            : field.name === 'moduleKey'
+              ? t('permissionCatalog.modulePlaceholder')
+              : field.name === 'resource'
+                ? t('permissionCatalog.resourcePlaceholder')
+                : field.placeholder,
         options: options(field.name),
       })),
       columns: schema.columns.map((column) => ({
@@ -123,6 +136,8 @@ function PermissionPageContent() {
       },
     }
   }, [t])
+  // Stable so opening the detail does not re-render every catalog row.
+  const customActions = useMemo(() => ({ 'permission-details': setDetail }), [])
   const scopes = Array.isArray(detail?.supportedScopeOverrides)
     ? detail.supportedScopeOverrides
     : []
@@ -142,7 +157,8 @@ function PermissionPageContent() {
       <DynaPage
         schema={localized}
         formComponent={PermissionForm}
-        customActions={{ 'permission-details': setDetail }}
+        customActions={customActions}
+        overview={(controls) => <PermissionInsights {...controls} />}
       />
       <DynaDetail
         title={localized.detail.title}

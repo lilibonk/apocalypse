@@ -5,11 +5,13 @@
 
 import { BookOpen, List } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router'
 
 import { DynaPage } from '@/components/dyna'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
 
 import { DictBook } from './DictBook'
 import dataSchema from './dict-data.schema'
@@ -18,85 +20,50 @@ import typeSchema from './dict-type.schema'
 function DictTabs() {
   const { t } = useTranslation()
   return (
-    <Tabs defaultValue="type">
-      <div className="w-full px-4 pt-4 sm:px-6 sm:pt-6">
-        <TabsList>
-          <TabsTrigger value="type">{t('dyna.字典类型', { defaultValue: '字典类型' })}</TabsTrigger>
-          <TabsTrigger value="data">{t('dyna.字典数据', { defaultValue: '字典数据' })}</TabsTrigger>
-        </TabsList>
-      </div>
+    <Tabs defaultValue="type" className="gap-5">
+      <TabsList variant="line">
+        <TabsTrigger value="type">{t('dyna.字典类型', { defaultValue: '字典类型' })}</TabsTrigger>
+        <TabsTrigger value="data">{t('dyna.字典数据', { defaultValue: '字典数据' })}</TabsTrigger>
+      </TabsList>
       <TabsContent value="type">
-        <DynaPage schema={typeSchema} />
+        <DynaPage schema={typeSchema} embedded />
       </TabsContent>
       <TabsContent value="data">
-        <DynaPage schema={dataSchema} />
+        <DynaPage schema={dataSchema} embedded />
       </TabsContent>
     </Tabs>
   )
 }
 
+const DICT_VIEWS = ['cards', 'list'] as const
+
 export default function DictPage() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const desktop = useDesktopViewport()
-  const [params, setParams] = useSearchParams()
-  if (!desktop) return <DictTabs />
-  const view = params.get('dictView') === 'list' ? 'list' : 'cards'
-  const switcher = (
-    <div
-      className="view-switch flex rounded-xl p-1"
-      role="group"
-      aria-label={systemT('dictBook.view')}
-    >
-      {(['cards', 'list'] as const).map((kind) => (
-        <button
-          key={kind}
-          type="button"
-          className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium"
-          aria-pressed={view === kind}
-          onClick={() =>
-            setParams(
-              (previous) => {
-                const next = new URLSearchParams(previous)
-                next.set('dictView', kind)
-                return next
-              },
-              { replace: true },
-            )
-          }
-        >
-          {kind === 'cards' ? (
-            <BookOpen aria-hidden className="size-4" />
-          ) : (
-            <List aria-hidden className="size-4" />
-          )}
-          {systemT(`dictBook.${kind}`)}
-        </button>
-      ))}
-    </div>
-  )
+  const [requestedView, setView] = usePageView(DICT_VIEWS, 'dictView')
+  // Narrow screens keep the established list; the card book is a desktop workspace.
+  const view = desktop ? requestedView : 'list'
   return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-4 sm:px-6 sm:pt-6">
-        {view === 'cards' && (
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t('common.字典管理', { defaultValue: '字典管理' })}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t('common.字典类型与取值', { defaultValue: '字典类型与取值' })}
-            </p>
-          </div>
-        )}
-        <div className="ml-auto">{switcher}</div>
-      </div>
-      {view === 'cards' ? (
-        <div className="p-4 sm:p-6">
-          <DictBook />
-        </div>
-      ) : (
-        <DictTabs />
-      )}
+    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <PageHeader
+        title={t('common.字典管理', { defaultValue: '字典管理' })}
+        description={t('common.字典类型与取值', { defaultValue: '字典类型与取值' })}
+        view={
+          desktop ? (
+            <SegmentedControl
+              label={systemT('dictBook.view')}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'cards', label: systemT('dictBook.cards'), icon: BookOpen },
+                { value: 'list', label: systemT('dictBook.list'), icon: List },
+              ]}
+            />
+          ) : undefined
+        }
+      />
+      {view === 'cards' ? <DictBook /> : <DictTabs />}
     </div>
   )
 }

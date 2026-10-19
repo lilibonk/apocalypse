@@ -24,14 +24,19 @@
   stroke-width: 2.5;
 }
 
-.role-panorama-tick {
-  stroke: var(--border);
-  stroke-width: 2;
-  stroke-linecap: round;
+.role-panorama-track,
+.role-panorama-share {
+  fill: none;
+  stroke-width: 3;
 }
 
-.role-panorama-tick[data-active] {
+.role-panorama-track {
+  stroke: var(--border-subtle);
+}
+
+.role-panorama-share {
   stroke: var(--brand);
+  stroke-linecap: round;
 }
 
 .role-panorama-hub,

@@ -13,12 +13,26 @@
  */
 
 import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, Pencil, Plus, Power, RefreshCw, Trash2 } from 'lucide-react'
-import { useMemo, useState, type ComponentType } from 'react'
+import {
+  Eye,
+  KeyRound,
+  LayoutDashboard,
+  LayoutList,
+  List,
+  Pencil,
+  Plus,
+  Power,
+  RefreshCw,
+  Trash2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
+import { useCallback, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { PageHeader } from '@/components/layout/PageHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +44,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PixelScale } from '@/effects/PixelWave'
 import { ApiError, assertPermissionAccess } from '@/lib/api/client'
@@ -38,14 +53,23 @@ import { ModuleAccess } from '@/lib/query/ModuleAccess'
 import type { ModuleOperation, ModuleScope } from '@/lib/query/module-scope'
 import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
+import { useStableCallback } from '@/hooks/useStableCallback'
 import { createDynaQueries } from './dyna-queries'
 
 import { DynaDetail } from './DynaDetail'
 import { DynaForm, type DynaFormProps } from './DynaForm'
 import { DynaSearch } from './DynaSearch'
 import { DynaTable } from './DynaTable'
-import { validatePageSchema, type DynaPageSchema, type DynaStatusToggleAction } from './schema'
+import {
+  validatePageSchema,
+  type DynaActionIcon,
+  type DynaPageSchema,
+  type DynaStatusToggleAction,
+} from './schema'
 import { useDynaText } from './use-dyna'
 
 type Row = Record<string, unknown>
@@ -83,6 +107,44 @@ export interface DynaPageProps {
    * schema 里声明了 custom 但未注册 handler 的 key 渲染为禁用按钮（失配可见）。
    */
   customActions?: Record<string, ((row: Row) => void) | ScopedDynaAction>
+  /**
+   * Optional overview workspace (insight cards, distributions). On desktop the header offers a
+   * List | Overview switch; the list view stays the classic search + table and never mixes in
+   * overview surfaces. Queries should nest under `controls.queryKey` so page refresh, writes and
+   * resource denial reach them too.
+   */
+  overview?: (controls: DynaOverviewControls) => ReactNode
+  /** A page-owned view switch shown in the header slot (e.g. role graph | list). */
+  headerView?: ReactNode
+  /**
+   * Section inside a page that already has its PageHeader (e.g. a dictionary tab): no title or
+   * outer padding, only a toolbar with refresh and create.
+   */
+  embedded?: boolean
+}
+
+const ACTION_ICONS: Record<DynaActionIcon, LucideIcon> = {
+  view: Eye,
+  power: Power,
+  permissions: KeyRound,
+  navigation: LayoutList,
+  members: Users,
+}
+
+type DynaView = 'list' | 'overview'
+const DYNA_VIEWS = ['list', 'overview'] as const
+
+export interface DynaOverviewControls {
+  /** Applied search values (what the table currently shows). */
+  filters: Readonly<Record<string, string>>
+  /** Replaces the search (draft and applied), returns to page 1 and shows the list view. */
+  applyFilters: (values: Record<string, string>) => void
+  /**
+   * Prefix for overview queries (`[...queryKey, ...]`): nested under the page key so writes and
+   * resource denial reach them, and refreshed by the page refresh button. Undefined for
+   * module-scoped pages, whose filters are not key-based.
+   */
+  queryKey: readonly unknown[] | undefined
 }
 
 export interface ScopedDynaAction {
@@ -97,19 +159,24 @@ export function DynaPage(props: DynaPageProps) {
     () => createDynaQueries(props.schema, props.queryScope),
     [props.schema, props.queryScope],
   )
-  const content = (
+  const key = JSON.stringify([
+    sessionEpoch,
+    authorizationEpoch,
+    props.queryScope?.moduleKey,
+    props.schema.endpoint,
+    props.schema.key,
+  ])
+  // The view is not part of the key: switching views keeps paging, filters and open layers.
+  const render = (view: DynaView, onViewChange?: (view: DynaView) => void) => (
     <DynaPageContent
-      key={JSON.stringify([
-        sessionEpoch,
-        authorizationEpoch,
-        props.queryScope?.moduleKey,
-        props.schema.endpoint,
-        props.schema.key,
-      ])}
+      key={key}
       {...props}
       queries={queries}
+      view={view}
+      onViewChange={onViewChange}
     />
   )
+  const content = props.overview ? <DynaPageViews>{render}</DynaPageViews> : render('list')
   return props.queryScope ? (
     <ModuleAccess scope={props.queryScope}>{content}</ModuleAccess>
   ) : (
@@ -117,13 +184,33 @@ export function DynaPage(props: DynaPageProps) {
   )
 }
 
+/** Overview is a desktop workspace; narrow screens keep the list only. */
+function DynaPageViews({
+  children,
+}: {
+  children: (view: DynaView, onViewChange?: (view: DynaView) => void) => ReactNode
+}) {
+  const desktop = useDesktopViewport()
+  const [view, setView] = usePageView(DYNA_VIEWS)
+  return children(desktop ? view : 'list', desktop ? setView : undefined)
+}
+
 function DynaPageContent({
   schema,
   customActions,
   queryScope,
   queries,
+  overview,
+  headerView,
+  embedded = false,
+  view,
+  onViewChange,
   formComponent: FormComponent = DynaForm,
-}: DynaPageProps & { queries: ReturnType<typeof createDynaQueries> }) {
+}: DynaPageProps & {
+  queries: ReturnType<typeof createDynaQueries>
+  view: DynaView
+  onViewChange?: (view: DynaView) => void
+}) {
   const t = useDynaText()
   const { t: commonText } = useTranslation()
   const queryClient = useQueryClient()
@@ -176,8 +263,14 @@ function DynaPageContent({
       resourceDenial.handle(error)
     },
   }
+  const pageFilter = queries.filter()
+  const overviewKey =
+    'queryKey' in pageFilter && pageFilter.queryKey
+      ? [...pageFilter.queryKey, 'overview']
+      : undefined
   const retryList = async () => {
     const denied = mutationDenial
+    if (overview && overviewKey) void queryClient.invalidateQueries({ queryKey: overviewKey })
     const result = await refetch()
     // Cache clearing is not a successful empty result; keep the denial until recovery.
     // A newer denial must not be cleared by an older in-flight retry.
@@ -248,6 +341,200 @@ function DynaPageContent({
     onError: (error) => toast.error(errorText(error, t('操作失败'))),
   })
 
+  const customPending = customMutation.isPending
+  const togglePending = toggleMutation.isPending
+  // Stable handlers keep the memoised table and its rows from re-rendering when a layer opens.
+  const runCustom = useStableCallback((action: ScopedDynaAction, row: Row) =>
+    customMutation.mutate({ action, row }),
+  )
+  const retryTable = useStableCallback(() => void retryList())
+  const resetFilters = useCallback(() => {
+    setDraftSearch({})
+    setAppliedSearch({})
+    setPage(1)
+  }, [])
+  const changePageSize = useCallback((size: number) => {
+    setPage(1)
+    setPageSize(size)
+  }, [])
+  // The row a layer was opened from stays marked while that layer is open.
+  const activeRow = viewing ?? dialog?.row ?? deleting ?? toggling?.row ?? null
+  const activeRowKey = activeRow ? String(activeRow[rowKey] ?? '') : null
+  const renderActions = useCallback(
+    (row: Row) => (
+      <>
+        {(schema.rowActions ?? []).map((action) => {
+          if (action.kind === 'view') {
+            const label = action.label
+              ? t(action.label)
+              : commonText('common.查看', { defaultValue: '查看' })
+            const button = (
+              <Tooltip key="view">
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={label}
+                    onClick={() => setViewing(row)}
+                  >
+                    <Eye className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            )
+            return action.perm ? (
+              <Perm key="view" perm={action.perm} requiresAllScope={action.requiresAllScope}>
+                {button}
+              </Perm>
+            ) : (
+              button
+            )
+          }
+          if (action.kind === 'edit') {
+            const label = t(action.label ?? '编辑')
+            const button = (
+              <Tooltip key="edit">
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={label}
+                    onClick={() => setDialog({ mode: 'edit', row })}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            )
+            return action.perm ? (
+              <Perm key="edit" perm={action.perm} requiresAllScope={action.requiresAllScope}>
+                {button}
+              </Perm>
+            ) : (
+              button
+            )
+          }
+          if (action.kind === 'delete') {
+            const label = t(action.label ?? '删除')
+            const button = (
+              <Tooltip key="delete">
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={label}
+                    onClick={() => setDeleting(row)}
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            )
+            return action.perm ? (
+              <Perm key="delete" perm={action.perm} requiresAllScope={action.requiresAllScope}>
+                {button}
+              </Perm>
+            ) : (
+              button
+            )
+          }
+          // custom：文案按钮，点击调页面注入的 handler；未注册 handler 时禁用（失配可见）
+          if (action.kind === 'custom') {
+            const handler = customActions?.[action.key]
+            const Icon = action.icon ? ACTION_ICONS[action.icon] : null
+            const control = (
+              <Button
+                key={`custom-${action.key}`}
+                variant="ghost"
+                size={Icon ? 'icon' : 'sm'}
+                aria-label={t(action.label)}
+                disabled={
+                  !handler ||
+                  (queryScope !== undefined && typeof handler === 'function') ||
+                  customPending
+                }
+                onClick={() => {
+                  if (typeof handler === 'function' && !queryScope) {
+                    try {
+                      assertPermissionAccess(
+                        action.perm ? [action.perm] : [],
+                        action.requiresAllScope && action.perm ? [action.perm] : [],
+                      )
+                      handler(row)
+                    } catch {
+                      /* An obsolete action cannot reopen an editor. */
+                    }
+                  } else if (handler && typeof handler !== 'function') runCustom(handler, row)
+                }}
+              >
+                {Icon ? <Icon className="size-3.5" /> : t(action.label)}
+              </Button>
+            )
+            const button = Icon ? (
+              <Tooltip key={`custom-${action.key}`}>
+                <TooltipTrigger asChild>{control}</TooltipTrigger>
+                <TooltipContent>{t(action.label)}</TooltipContent>
+              </Tooltip>
+            ) : (
+              control
+            )
+            return action.perm ? (
+              <Perm
+                key={`custom-${action.key}`}
+                perm={action.perm}
+                requiresAllScope={action.requiresAllScope}
+              >
+                {button}
+              </Perm>
+            ) : (
+              button
+            )
+          }
+          // status-toggle：当前为 on 时按钮意为「禁用」，反之为「启用」
+          const isOn = row[action.field] === action.onValue
+          const label = isOn ? (action.offLabel ?? '禁用') : (action.onLabel ?? '启用')
+          const translatedLabel = t(label)
+          const button = (
+            <Tooltip key="status-toggle">
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={translatedLabel}
+                  disabled={togglePending}
+                  onClick={() => setToggling({ row, action, label })}
+                >
+                  <Power className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{translatedLabel}</TooltipContent>
+            </Tooltip>
+          )
+          return action.perm ? (
+            <Perm key="status-toggle" perm={action.perm} requiresAllScope={action.requiresAllScope}>
+              {button}
+            </Perm>
+          ) : (
+            button
+          )
+        })}
+      </>
+    ),
+    [
+      schema.rowActions,
+      t,
+      commonText,
+      customActions,
+      queryScope,
+      customPending,
+      togglePending,
+      runCustom,
+    ],
+  )
+
   if (!validation.success) {
     return (
       <div className="w-full space-y-4 p-4 sm:p-6">
@@ -275,161 +562,6 @@ function DynaPageContent({
     toggleMutation.mutate({ id: rowIdOf(row, rowKey), body, action })
   }
 
-  const renderActions = (row: Row) => (
-    <>
-      {(schema.rowActions ?? []).map((action) => {
-        if (action.kind === 'view') {
-          const label = action.label
-            ? t(action.label)
-            : commonText('common.查看', { defaultValue: '查看' })
-          const button = (
-            <Tooltip key="view">
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={label}
-                  onClick={() => setViewing(row)}
-                >
-                  <Eye className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
-            </Tooltip>
-          )
-          return action.perm ? (
-            <Perm key="view" perm={action.perm} requiresAllScope={action.requiresAllScope}>
-              {button}
-            </Perm>
-          ) : (
-            button
-          )
-        }
-        if (action.kind === 'edit') {
-          const label = t(action.label ?? '编辑')
-          const button = (
-            <Tooltip key="edit">
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={label}
-                  onClick={() => setDialog({ mode: 'edit', row })}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
-            </Tooltip>
-          )
-          return action.perm ? (
-            <Perm key="edit" perm={action.perm} requiresAllScope={action.requiresAllScope}>
-              {button}
-            </Perm>
-          ) : (
-            button
-          )
-        }
-        if (action.kind === 'delete') {
-          const label = t(action.label ?? '删除')
-          const button = (
-            <Tooltip key="delete">
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={label}
-                  onClick={() => setDeleting(row)}
-                >
-                  <Trash2 className="size-3.5 text-destructive" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
-            </Tooltip>
-          )
-          return action.perm ? (
-            <Perm key="delete" perm={action.perm} requiresAllScope={action.requiresAllScope}>
-              {button}
-            </Perm>
-          ) : (
-            button
-          )
-        }
-        // custom：文案按钮，点击调页面注入的 handler；未注册 handler 时禁用（失配可见）
-        if (action.kind === 'custom') {
-          const handler = customActions?.[action.key]
-          const button = (
-            <Button
-              key={`custom-${action.key}`}
-              variant="ghost"
-              size="sm"
-              aria-label={t(action.label)}
-              disabled={
-                !handler ||
-                (queryScope !== undefined && typeof handler === 'function') ||
-                customMutation.isPending
-              }
-              onClick={() => {
-                if (typeof handler === 'function' && !queryScope) {
-                  try {
-                    assertPermissionAccess(
-                      action.perm ? [action.perm] : [],
-                      action.requiresAllScope && action.perm ? [action.perm] : [],
-                    )
-                    handler(row)
-                  } catch {
-                    /* An obsolete action cannot reopen an editor. */
-                  }
-                } else if (handler && typeof handler !== 'function')
-                  customMutation.mutate({ action: handler, row })
-              }}
-            >
-              {t(action.label)}
-            </Button>
-          )
-          return action.perm ? (
-            <Perm
-              key={`custom-${action.key}`}
-              perm={action.perm}
-              requiresAllScope={action.requiresAllScope}
-            >
-              {button}
-            </Perm>
-          ) : (
-            button
-          )
-        }
-        // status-toggle：当前为 on 时按钮意为「禁用」，反之为「启用」
-        const isOn = row[action.field] === action.onValue
-        const label = isOn ? (action.offLabel ?? '禁用') : (action.onLabel ?? '启用')
-        const translatedLabel = t(label)
-        const button = (
-          <Tooltip key="status-toggle">
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={translatedLabel}
-                disabled={toggleMutation.isPending}
-                onClick={() => setToggling({ row, action, label })}
-              >
-                <Power className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{translatedLabel}</TooltipContent>
-          </Tooltip>
-        )
-        return action.perm ? (
-          <Perm key="status-toggle" perm={action.perm} requiresAllScope={action.requiresAllScope}>
-            {button}
-          </Perm>
-        ) : (
-          button
-        )
-      })}
-    </>
-  )
-
   const deletingDisplay = deleting
     ? String(deleting[schema.deleteNameKey ?? rowKey] ?? rowIdOf(deleting, rowKey))
     : ''
@@ -437,77 +569,108 @@ function DynaPageContent({
     ? String(toggling.row[schema.deleteNameKey ?? rowKey] ?? rowIdOf(toggling.row, rowKey))
     : ''
 
-  return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t(schema.title)}</h1>
-          {schema.description && (
-            <p className="mt-1 text-sm text-muted-foreground">{t(schema.description)}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t('queryRefresh')}
-            onClick={() => void retryList()}
-            disabled={isFetching}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
-          {schema.createPerm && schema.form && (
-            <Perm perm={schema.createPerm} requiresAllScope={schema.createRequiresAllScope}>
-              <Button onClick={() => setDialog({ mode: 'create', row: null })}>
-                <Plus className="size-4" />
-                {schema.createLabel ? t(schema.createLabel) : t('create', { entity })}
-              </Button>
-            </Perm>
-          )}
-        </div>
-      </div>
+  const viewControl = onViewChange ? (
+    <SegmentedControl
+      label={t('pageView')}
+      value={view}
+      onChange={onViewChange}
+      options={[
+        { value: 'list', label: t('viewList'), icon: List },
+        { value: 'overview', label: t('viewOverview'), icon: LayoutDashboard },
+      ]}
+    />
+  ) : (
+    headerView
+  )
 
-      {schema.search && schema.search.length > 0 && (
-        <DynaSearch
-          fields={schema.search}
-          values={draftSearch}
-          onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
-          onSearch={() => {
-            setPage(1)
-            setAppliedSearch({ ...draftSearch })
-          }}
-          onReset={() => {
-            setDraftSearch({})
-            setAppliedSearch({})
-            setPage(1)
-          }}
+  const headerActions = (
+    <>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={t('queryRefresh')}
+        onClick={() => void retryList()}
+        disabled={isFetching}
+      >
+        <RefreshCw className="size-4" />
+      </Button>
+      {schema.createPerm && schema.form && (
+        <Perm perm={schema.createPerm} requiresAllScope={schema.createRequiresAllScope}>
+          <Button onClick={() => setDialog({ mode: 'create', row: null })}>
+            <Plus className="size-4" />
+            {schema.createLabel ? t(schema.createLabel) : t('create', { entity })}
+          </Button>
+        </Perm>
+      )}
+    </>
+  )
+
+  return (
+    <div className={cn('w-full min-w-0 space-y-6', !embedded && 'p-4 sm:p-6')}>
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {schema.description ? (
+            <p className="text-sm text-muted-foreground">{t(schema.description)}</p>
+          ) : (
+            <span />
+          )}
+          <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+        </div>
+      ) : (
+        <PageHeader
+          title={t(schema.title)}
+          description={schema.description ? t(schema.description) : undefined}
+          view={viewControl}
+          actions={headerActions}
         />
       )}
 
-      <DynaTable
-        columns={schema.columns}
-        rows={data?.list}
-        loading={isLoading}
-        error={feedbackError}
-        refreshing={isFetching}
-        onRetry={() => void retryList()}
-        filtered={Object.values(appliedSearch).some((value) => value.trim().length > 0)}
-        onResetFilters={() => {
-          setDraftSearch({})
-          setAppliedSearch({})
-          setPage(1)
-        }}
-        rowKey={rowKey}
-        actions={(schema.rowActions ?? []).length > 0 ? renderActions : undefined}
-        page={page}
-        size={pageSize}
-        total={data?.total ?? 0}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPage(1)
-          setPageSize(size)
-        }}
-      />
+      {view === 'overview' && overview ? (
+        overview({
+          filters: appliedSearch,
+          applyFilters: (values) => {
+            setDraftSearch({ ...values })
+            setAppliedSearch({ ...values })
+            setPage(1)
+            onViewChange?.('list')
+          },
+          queryKey: overviewKey,
+        })
+      ) : (
+        <>
+          {schema.search && schema.search.length > 0 && (
+            <DynaSearch
+              fields={schema.search}
+              values={draftSearch}
+              onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
+              onSearch={() => {
+                setPage(1)
+                setAppliedSearch({ ...draftSearch })
+              }}
+              onReset={resetFilters}
+            />
+          )}
+
+          <DynaTable
+            columns={schema.columns}
+            rows={data?.list}
+            loading={isLoading}
+            error={feedbackError}
+            refreshing={isFetching}
+            onRetry={retryTable}
+            filtered={Object.values(appliedSearch).some((value) => value.trim().length > 0)}
+            onResetFilters={resetFilters}
+            rowKey={rowKey}
+            actions={(schema.rowActions ?? []).length > 0 ? renderActions : undefined}
+            page={page}
+            size={pageSize}
+            total={data?.total ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={changePageSize}
+            activeRowKey={activeRowKey}
+          />
+        </>
+      )}
 
       {schema.form && (
         <FormComponent

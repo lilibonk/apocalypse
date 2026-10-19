@@ -29,8 +29,9 @@ const COLUMN_COUNT = 6
 
 const TYPE_META: Record<MenuType, { label: string; variant: 'default' | 'secondary' | 'outline' }> =
   {
-    C: { label: '目录', variant: 'default' },
-    M: { label: '菜单', variant: 'secondary' },
+    // Neutral chips: the brand fill is reserved for primary actions, not row metadata.
+    C: { label: '目录', variant: 'secondary' },
+    M: { label: '菜单', variant: 'outline' },
     F: { label: '按钮', variant: 'outline' },
   }
 
@@ -164,18 +165,14 @@ export function MenuTreeTable({
                     <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
                       <MenuIcon name={node.icon} className="size-4" />
                     </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{node.menuName}</span>
-                        <Badge variant={typeMeta.variant} className="shrink-0">
-                          {node.menuType === 'F'
-                            ? t('system:authorization.legacyButton')
-                            : t(`dyna.${typeMeta.label}`, { defaultValue: typeMeta.label })}
-                        </Badge>
-                      </div>
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {node.icon ?? t('common.无图标', { defaultValue: '无图标' })}
-                      </span>
+                    {/* The icon identifier is edit-time detail (icon picker); the row shows the icon. */}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{node.menuName}</span>
+                      <Badge variant={typeMeta.variant} className="shrink-0">
+                        {node.menuType === 'F'
+                          ? t('system:authorization.legacyButton')
+                          : t(`dyna.${typeMeta.label}`, { defaultValue: typeMeta.label })}
+                      </Badge>
                     </div>
                   </div>
                 </TableCell>

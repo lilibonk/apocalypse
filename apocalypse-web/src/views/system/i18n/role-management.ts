@@ -69,7 +69,7 @@ export const roleManagementCopy = {
     noMenus: '此角色尚未分配导航，可通过“编辑导航分配”添加。',
     relationHint: '点击节点浏览来源路径，通过“编辑导航分配”调整连接。',
     title: '角色管理',
-    description: '选择角色节点，管理属性、业务权限、导航与成员关系。',
+    description: '管理角色属性、业务权限、导航分配与成员关系。',
     create: '新增角色',
     denied: '当前操作被拒绝，已清除角色编辑上下文。请重新加载角色。',
     createdUnavailable: '当前可读结果中未找到所选角色，请刷新或选择其他角色。',
@@ -180,7 +180,7 @@ export const roleManagementCopy = {
     relationHint:
       'Select nodes to explore their sources, or edit assignments to change connections.',
     title: 'Role management',
-    description: 'Select a role to manage its properties, business grants, navigation and members.',
+    description: 'Manage role properties, business grants, navigation and members.',
     create: 'New role',
     denied:
       'This role is no longer available. Its previous edit state has been cleared. Reload to continue.',

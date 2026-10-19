@@ -5,8 +5,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Check, Copy, Eye } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Check, Copy, Eye, RefreshCw } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
@@ -19,18 +19,18 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
-import { originOf, type OriginRect } from '@/components/layer/origin'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { DictTag } from '@/components/DictTag'
 import './oper-log.css'
 
 import { pageOperLogs, type OperLogRow } from './oper-log.api'
-import { formatPayload } from './oper-log.model'
+import { formatPayload, operTypeLabel } from './oper-log.model'
 
 const DEFAULT_PAGE_SIZE = 10
 
 const columns: DynaColumn[] = [
   { key: 'title', title: '操作模块' },
-  { key: 'businessType', title: '操作类型' },
+  { key: 'businessTypeLabel', title: '操作类型' },
   { key: 'operName', title: '操作人' },
   { key: 'operIp', title: '操作 IP' },
   { key: 'costTimeText', title: '耗时' },
@@ -79,12 +79,12 @@ function DetailBlock({ label, value }: { label: string; value: string | null }) 
 
 export default function OperLogPage() {
   const { t } = useTranslation()
+  const { t: systemT } = useTranslation('system')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
   const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<OperLogRow | null>(null)
-  const [origin, setOrigin] = useState<OriginRect | null>(null)
 
   const keyword = appliedSearch.keyword ?? ''
 
@@ -104,20 +104,55 @@ export default function OperLogPage() {
       data?.list.map((row) => ({
         ...row,
         costTimeText: row.costTime === null ? null : `${row.costTime} ms`,
+        businessTypeLabel: operTypeLabel(row.businessType, systemT),
       })),
-    [data],
+    [data, systemT],
+  )
+
+  // Stable callbacks: opening the detail Sheet re-renders only the highlighted row.
+  const retry = useCallback(() => void refetch(), [refetch])
+  const resetFilters = useCallback(() => {
+    setDraftSearch({})
+    setAppliedSearch({})
+    setPage(1)
+  }, [])
+  const changePageSize = useCallback((size: number) => {
+    setPage(1)
+    setPageSize(size)
+  }, [])
+  const renderActions = useCallback(
+    (row: Record<string, unknown>) => (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('common.详情', { defaultValue: '详情' })}
+        onClick={() => setDetail(row as OperLogRow)}
+      >
+        <Eye className="size-3.5" />
+      </Button>
+    ),
+    [t],
   )
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t('common.操作日志', { defaultValue: '操作日志' })}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('common.系统操作审计记录（只读）', { defaultValue: '系统操作审计记录（只读）' })}
-        </p>
-      </div>
+      <PageHeader
+        title={t('common.操作日志', { defaultValue: '操作日志' })}
+        description={t('common.系统操作审计记录（只读）', {
+          defaultValue: '系统操作审计记录（只读）',
+        })}
+        actions={
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t('dyna.queryRefresh')}
+            onClick={retry}
+            disabled={isFetching}
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+        }
+      />
 
       <DynaSearch
         fields={searchFields}
@@ -127,11 +162,7 @@ export default function OperLogPage() {
           setPage(1)
           setAppliedSearch({ ...draftSearch })
         }}
-        onReset={() => {
-          setDraftSearch({})
-          setAppliedSearch({})
-          setPage(1)
-        }}
+        onReset={resetFilters}
       />
 
       <DynaTable
@@ -140,40 +171,21 @@ export default function OperLogPage() {
         loading={isLoading}
         error={error}
         refreshing={isFetching}
-        onRetry={() => void refetch()}
+        onRetry={retry}
         filtered={keyword.trim().length > 0}
-        onResetFilters={() => {
-          setDraftSearch({})
-          setAppliedSearch({})
-          setPage(1)
-        }}
+        onResetFilters={resetFilters}
         rowKey="id"
-        actions={(row) => (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('common.详情', { defaultValue: '详情' })}
-            onClick={(event) => {
-              // The source row anchors a decorative ghost; the Sheet itself stays fully readable.
-              setOrigin(originOf(event.currentTarget.closest('tr')))
-              setDetail(row as OperLogRow)
-            }}
-          >
-            <Eye className="size-3.5" />
-          </Button>
-        )}
+        actions={renderActions}
         page={page}
         size={pageSize}
         total={data?.total ?? 0}
         onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPage(1)
-          setPageSize(size)
-        }}
+        onPageSizeChange={changePageSize}
+        activeRowKey={detail ? String(detail.id) : null}
       />
 
       <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-xl" origin={origin}>
+        <SheetContent className="sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</SheetTitle>
             <SheetDescription>
@@ -215,7 +227,14 @@ export default function OperLogPage() {
                   <dt className="text-xs text-muted-foreground">
                     {t('common.操作类型', { defaultValue: '操作类型' })}
                   </dt>
-                  <dd className="mt-1 break-all">{detail.businessType ?? '-'}</dd>
+                  <dd className="mt-1 break-all">
+                    {operTypeLabel(detail.businessType, systemT)}
+                    {detail.businessType && (
+                      <code className="ml-2 font-mono text-xs text-muted-foreground">
+                        {detail.businessType}
+                      </code>
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
