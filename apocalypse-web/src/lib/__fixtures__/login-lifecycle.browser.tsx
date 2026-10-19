@@ -20,6 +20,8 @@ const pair = {
   expiresIn: 3600,
 }
 let complete: ((success: boolean) => void) | undefined
+let loginRequests = 0
+let showRequests: (count: number) => void = () => {}
 let showPending: (pending: boolean) => void = () => {}
 function response(config: InternalAxiosRequestConfig, data: unknown, code = 0) {
   return {
@@ -33,7 +35,9 @@ function response(config: InternalAxiosRequestConfig, data: unknown, code = 0) {
 http.defaults.adapter = (config) => {
   if (config.url === '/auth/browser/csrf')
     return Promise.resolve(response(config, { token: 'fixture-only-csrf' }))
-  if (config.url === '/auth/browser/login')
+  if (config.url === '/auth/browser/login') {
+    loginRequests += 1
+    showRequests(loginRequests)
     return new Promise((resolve) => {
       complete = (success) => {
         showPending(false)
@@ -41,6 +45,7 @@ http.defaults.adapter = (config) => {
       }
       showPending(true)
     })
+  }
   if (config.url === '/system/users/me')
     return Promise.resolve(
       response(config, {
@@ -59,10 +64,13 @@ http.defaults.adapter = (config) => {
 
 export function Controls() {
   const [pending, setPending] = useState(false)
+  const [requests, setRequests] = useState(0)
   useEffect(() => {
     showPending = setPending
+    showRequests = setRequests
     return () => {
       showPending = () => {}
+      showRequests = () => {}
     }
   }, [])
   const location = useLocation()
@@ -85,7 +93,15 @@ export function Controls() {
         Reject login
       </button>
       <button onClick={switchAccount}>Switch account</button>
-      <output data-testid="identity" data-user={user?.id ?? ''} data-route={location.pathname}>
+      <button onClick={() => useSettingsStore.setState({ motionEnabled: false })}>
+        Motion off
+      </button>
+      <output
+        data-testid="identity"
+        data-user={user?.id ?? ''}
+        data-route={location.pathname}
+        data-login-requests={requests}
+      >
         Fixture identity
       </output>
       <Routes>

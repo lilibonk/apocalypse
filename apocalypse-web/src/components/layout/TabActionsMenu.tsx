@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DASHBOARD_TAB, isPinnedTab, useTabsStore } from '@/stores/tabs'
+import { useGuardedTabClose } from '@/components/draft/useGuardedTabClose'
 
 export function TabActionsMenu() {
   const navigate = useNavigate()
@@ -28,6 +29,9 @@ export function TabActionsMenu() {
   const hasClosableRight = tabs.some((tab, index) => index > activeIndex && !isPinnedTab(tab.key))
   const hasClosableOther = tabs.some((tab) => tab.key !== activeKey && !isPinnedTab(tab.key))
   const hasClosableTab = tabs.some((tab) => !isPinnedTab(tab.key))
+  const guard = useGuardedTabClose()
+  const closable = (keep: (index: number, key: string) => boolean) =>
+    tabs.filter((tab, index) => !isPinnedTab(tab.key) && keep(index, tab.key)).map((tab) => tab.key)
 
   return (
     <div className="flex shrink-0 items-center border-l border-border px-1.5">
@@ -45,34 +49,58 @@ export function TabActionsMenu() {
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem
             disabled={!hasClosableLeft}
-            onSelect={() => activeKey && closeLeft(activeKey)}
+            onSelect={() =>
+              activeKey &&
+              guard.request(
+                closable((index) => index < activeIndex),
+                () => closeLeft(activeKey),
+              )
+            }
           >
             {t('common.closeLeftTabs')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!hasClosableRight}
-            onSelect={() => activeKey && closeRight(activeKey)}
+            onSelect={() =>
+              activeKey &&
+              guard.request(
+                closable((index) => index > activeIndex),
+                () => closeRight(activeKey),
+              )
+            }
           >
             {t('common.closeRightTabs')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!hasClosableOther}
-            onSelect={() => activeKey && closeOthers(activeKey)}
+            onSelect={() =>
+              activeKey &&
+              guard.request(
+                closable((_, key) => key !== activeKey),
+                () => closeOthers(activeKey),
+              )
+            }
           >
             {t('common.closeOtherTabs')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={!hasClosableTab}
-            onSelect={() => {
-              closeAll()
-              navigate(DASHBOARD_TAB.key)
-            }}
+            onSelect={() =>
+              guard.request(
+                closable(() => true),
+                () => {
+                  closeAll()
+                  navigate(DASHBOARD_TAB.key)
+                },
+              )
+            }
           >
             {t('common.closeAllTabs')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {guard.dialog}
     </div>
   )
 }

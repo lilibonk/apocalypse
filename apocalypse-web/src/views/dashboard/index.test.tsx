@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/client'
 import { normalizeMenuNode, type MenuNode } from '@/lib/api/types'
+import { getLoginInsights, getOperInsights } from '@/views/system/log/log-insight.api'
 import { pageLoginLogs } from '@/views/system/log/login/login-log.api'
 import { pageOperLogs } from '@/views/system/log/oper/oper-log.api'
 import { listOnlineUsers } from '@/views/system/online/online.api'
@@ -32,6 +33,10 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 vi.mock('@/views/system/log/login/login-log.api', () => ({ pageLoginLogs: vi.fn() }))
+vi.mock('@/views/system/log/log-insight.api', () => ({
+  getLoginInsights: vi.fn(),
+  getOperInsights: vi.fn(),
+}))
 vi.mock('@/views/system/log/oper/oper-log.api', () => ({ pageOperLogs: vi.fn() }))
 vi.mock('@/views/system/online/online.api', () => ({ listOnlineUsers: vi.fn() }))
 vi.mock('@/hooks/useDesktopViewport', () => ({ useDesktopViewport: () => true }))
@@ -75,6 +80,47 @@ const cachedLogin = {
   ],
 }
 
+function windowOf(range: 'DAY' | 'WEEK' | 'MONTH', totals: number[]) {
+  return {
+    range,
+    bucketUnit: range === 'DAY' ? 'HOURS' : 'DAYS',
+    zone: 'Asia/Shanghai',
+    utcOffset: '+08:00',
+    from: '2026-10-17 22:00:00',
+    to: '2026-10-18 21:30:05',
+    retentionStart: '2026-04-21 21:30:05',
+    previousCovered: true,
+    previousTotal: 0,
+    buckets: totals.map((total, index) => ({
+      start: `2026-10-18 ${String(index).padStart(2, '0')}:00:00`,
+      total,
+      succeeded: total,
+      failed: 0,
+    })),
+  }
+}
+const loginInsights = (totals: number[] = [], extra: Record<string, unknown> = {}) => ({
+  ...windowOf('DAY', totals),
+  total: totals.reduce((sum, value) => sum + value, 0),
+  succeeded: totals.reduce((sum, value) => sum + value, 0),
+  failed: 0,
+  distinctUsers: 0,
+  distinctIps: 0,
+  peak: Math.max(0, ...totals),
+  average: 0,
+  ...extra,
+})
+const operInsights = (total = 0, extra: Record<string, unknown> = {}) => ({
+  ...windowOf('DAY', []),
+  total,
+  succeeded: total,
+  failed: 0,
+  unknown: 0,
+  successRate: total ? 100 : null,
+  byBusinessType: [],
+  ...extra,
+})
+
 async function render(language = 'en', mobile = false) {
   const instance = i18next.createInstance()
   await instance.init({
@@ -105,10 +151,18 @@ beforeEach(() => {
   vi.mocked(pageLoginLogs).mockReset().mockResolvedValue({ list: [], total: 0, page: 1, size: 200 })
   vi.mocked(pageOperLogs).mockReset().mockResolvedValue({ list: [], total: 0, page: 1, size: 200 })
   vi.mocked(listOnlineUsers).mockReset().mockResolvedValue([])
+  vi.mocked(getLoginInsights)
+    .mockReset()
+    .mockResolvedValue(loginInsights() as never)
+  vi.mocked(getOperInsights)
+    .mockReset()
+    .mockResolvedValue(operInsights() as never)
   sources = {
     'login-logs': ready({ list: [] }),
     'oper-logs': ready({ list: [] }),
     'online-users': ready([]),
+    'login-insights': ready(loginInsights()),
+    'oper-insights': ready(operInsights()),
   }
   query.mockReset()
   query.mockImplementation(({ queryKey }: { queryKey: string[] }) => sources[queryKey[1]])
@@ -118,14 +172,24 @@ describe('dashboard truthful source states', () => {
   it('shows initial failures without an empty activity or zero-session claim', async () => {
     sources['login-logs'] = failure('登录日志服务不可用')
     sources['oper-logs'] = failure('操作日志服务不可用')
+    sources['login-insights'] = failure('登录统计服务不可用')
+    sources['oper-insights'] = failure('操作统计服务不可用')
     sources['online-users'] = failure('会话服务不可用')
     const html = await render()
     expect(html).toContain('登录日志服务不可用')
+    expect(html).toContain('登录统计服务不可用')
     expect(html).toContain('Could not load Login records')
+    expect(html).not.toContain('No sign-ins in this range')
     expect(html).toContain('Retry')
     expect(html).not.toContain('No activity yet')
     expect(html).not.toContain('No active sessions')
     expect(html).not.toContain('data-slot="session-count"')
+  })
+
+  it('captions the login and operation totals with their own subjects', async () => {
+    const html = await render()
+    expect(html).toContain('Sign-ins in the last 24 hours, by hour')
+    expect(html).toContain('Operation records in the last 24 hours, by hour')
   })
 
   it('distinguishes a confirmed empty result from failure', async () => {
@@ -251,24 +315,34 @@ describe('dashboard truthful source states', () => {
     expect(html).not.toContain('Custom <operation>')
   })
 
-  it('states the bounded sample scope and does not draw a time-spanning line for one instant', async () => {
-    sources['login-logs'] = ready({ ...cachedLogin, total: 9876, page: 1, size: 200 })
+  it('states the server range, time zone and half-open window with full totals', async () => {
+    sources['login-insights'] = ready(
+      loginInsights([2, 0, 5], { total: 9876, previousTotal: 4938, distinctUsers: 12 }),
+    )
     const html = await render()
-    expect(html).toContain('Total sign-in records currently retained')
+    expect(html).toContain('Last 24 hours')
+    expect(html).toContain('Last 7 days')
+    expect(html).toContain('Last 30 days')
     expect(html).toContain('9,876')
-    expect(html).toContain('Latest 50')
-    expect(html).toContain('Latest 100')
-    expect(html).toContain('Latest 200')
-    expect(html).toContain('Sampled records: 1')
-    expect(html).toContain('not a complete reporting period')
-    expect(html).not.toContain('class="dashboard-trend-line"')
-    expect(html).not.toContain('24 hours')
-    expect(html).not.toContain('vs. previous')
+    expect(html).toContain('2× previous period')
+    expect(html).toContain('title="This period 9876, previous period 4938"')
+    expect(html).toContain('UTC+08:00')
+    expect(html).toContain('From 2026-10-17 22:00:00 up to 2026-10-18 21:30:05')
+    expect(html).toContain('class="dashboard-trend-line"')
+    expect(html).not.toMatch(/Latest 200|Sampled records/)
   })
 
-  it('does not present an empty operation source as a 100% success rate', async () => {
+  it('does not claim a comparison when the previous window is not retained', async () => {
+    sources['login-insights'] = ready(loginInsights([1], { previousCovered: false }))
     const html = await render()
-    expect(html).toContain('No rate available')
+    expect(html).toContain('Previous period not fully retained')
+    expect(html).not.toContain('vs previous period')
+  })
+
+  it('keeps an empty range distinct from failure and never shows a 100% rate for zero records', async () => {
+    const html = await render()
+    expect(html).toContain('No sign-ins in this range.')
+    expect(html).toContain('No operation records in this range.')
     expect(html.replace(/<[^>]*>/g, '')).not.toContain('100.0')
     expect(html).not.toContain('NaN')
   })
@@ -290,15 +364,23 @@ describe('dashboard bounded source lifecycle', () => {
   it('requests one bounded first page per log source and forwards the query signal', async () => {
     await render()
     const controller = new AbortController()
-    for (const name of ['login-logs', 'oper-logs', 'online-users']) {
+    for (const name of [
+      'login-logs',
+      'oper-logs',
+      'online-users',
+      'login-insights',
+      'oper-insights',
+    ]) {
       const options = sourceQuery(name)
       expect(options.queryKey).toContain(auth.sessionEpoch)
       expect(options.queryKey).toContain(auth.user.id)
       await options.queryFn({ signal: controller.signal })
     }
-    expect(pageLoginLogs).toHaveBeenCalledExactlyOnceWith(1, 200, undefined, controller.signal)
-    expect(pageOperLogs).toHaveBeenCalledExactlyOnceWith(1, 200, undefined, controller.signal)
+    expect(pageLoginLogs).toHaveBeenCalledExactlyOnceWith(1, 6, undefined, controller.signal)
+    expect(pageOperLogs).toHaveBeenCalledExactlyOnceWith(1, 6, undefined, controller.signal)
     expect(listOnlineUsers).toHaveBeenCalledExactlyOnceWith({ signal: controller.signal })
+    expect(getLoginInsights).toHaveBeenCalledExactlyOnceWith('DAY', controller.signal)
+    expect(getOperInsights).toHaveBeenCalledExactlyOnceWith('DAY', controller.signal)
   })
 
   it.each(['revoke', 'refresh', 'identity', 'abort'] as const)(
@@ -330,7 +412,7 @@ describe('unchanged mobile dashboard', () => {
     expect(html).toContain('Common tasks')
     expect(html).toContain('Recent activity')
     expect(html).toContain('Up to 4 recent records per available source')
-    expect(html).not.toContain('Recent record sample size')
+    expect(html).not.toContain('Reporting range')
     expect(html).not.toContain('Audit operation success')
     expect(html).not.toContain('Inspect activity:')
     expect(html.indexOf('/brand/hero-light.png')).toBeLessThan(

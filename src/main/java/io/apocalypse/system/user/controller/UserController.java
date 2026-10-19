@@ -60,8 +60,10 @@ public class UserController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String keyword) {
-    return userService.page(page, size, keyword);
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Long deptId,
+      @RequestParam(defaultValue = "false") boolean includeChildren) {
+    return userService.page(page, size, keyword, deptId, includeChildren);
   }
 
   @GetMapping("/department-options")

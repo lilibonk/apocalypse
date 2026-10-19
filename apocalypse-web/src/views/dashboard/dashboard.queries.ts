@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CanceledError } from 'axios'
 
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
+import {
+  getLoginInsights,
+  getOperInsights,
+  type LogInsightRange,
+} from '@/views/system/log/log-insight.api'
 import { pageLoginLogs } from '@/views/system/log/login/login-log.api'
 import { pageOperLogs } from '@/views/system/log/oper/oper-log.api'
 import { listOnlineUsers } from '@/views/system/online/online.api'
 
-import { DASHBOARD_SAMPLE_LIMIT } from './dashboard-insights.model'
+import { DASHBOARD_ACTIVITY_LIMIT } from './dashboard-insights.model'
 
 const noSelection = () => {}
 
@@ -17,15 +22,15 @@ function useDashboardSource<T>(
   source: string,
   permission: string,
   fetchSource: (signal: AbortSignal) => Promise<T>,
-  limit: 4 | typeof DASHBOARD_SAMPLE_LIMIT,
+  variant: string | number,
 ) {
   const client = useQueryClient()
   const epoch = useAuthStore((state) => state.sessionEpoch)
   const userId = useAuthStore((state) => state.user?.id)
   const allowed = useAuthStore((state) => state.meLoaded && state.perms.includes(permission))
   const queryKey = useMemo(
-    () => ['dashboard', source, epoch, userId, permission, allowed, limit] as const,
-    [source, epoch, userId, permission, allowed, limit],
+    () => ['dashboard', source, epoch, userId, permission, allowed, variant] as const,
+    [source, epoch, userId, permission, allowed, variant],
   )
   const lifecycle = useRef<{ active: boolean; key: typeof queryKey | null }>({
     active: false,
@@ -73,9 +78,7 @@ function useDashboardSource<T>(
 
 const fetchOnline = (signal: AbortSignal) => listOnlineUsers({ signal })
 
-export function useDashboardSources(
-  limit: 4 | typeof DASHBOARD_SAMPLE_LIMIT = DASHBOARD_SAMPLE_LIMIT,
-) {
+export function useDashboardSources(limit: 4 | typeof DASHBOARD_ACTIVITY_LIMIT) {
   const login = useDashboardSource(
     'login-logs',
     'system:log:login',
@@ -90,4 +93,35 @@ export function useDashboardSources(
   )
   const online = useDashboardSource('online-users', 'system:online:list', fetchOnline, limit)
   return { login, operation, online }
+}
+
+/** Server-side full aggregation for the selected range; one request per readable source. */
+export function useDashboardInsights(range: LogInsightRange) {
+  const login = useDashboardSource(
+    'login-insights',
+    'system:log:login',
+    (signal) => getLoginInsights(range, signal),
+    range,
+  )
+  const operation = useDashboardSource(
+    'oper-insights',
+    'system:log:oper',
+    (signal) => getOperInsights(range, signal),
+    range,
+  )
+  return { login, operation }
+}
+
+/**
+ * While a new range loads, keep showing the previous range's value so numbers roll from it instead
+ * of flashing a skeleton. Carried only within the same identity/permission context; any context
+ * change or source error drops it.
+ */
+export function useCarriedValue<T>(value: T | undefined, pending: boolean, context: string) {
+  const [carried, setCarried] = useState<{ context: string; value: T } | null>(null)
+  if (value !== undefined && (carried?.value !== value || carried.context !== context))
+    setCarried({ context, value })
+  if (carried && carried.context !== context) setCarried(null)
+  if (value !== undefined) return value
+  return pending && carried?.context === context ? carried.value : undefined
 }

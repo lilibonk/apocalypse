@@ -4,6 +4,7 @@ import io.apocalypse.framework.security.OnlineUserRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.cache.support.NullValue;
 import org.springframework.data.redis.serializer.RedisSerializer;
@@ -21,6 +22,19 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
 
   private static final String DICT_DATA_RESPONSE_CLASS =
       "io.apocalypse.system.dict.dto.response.DictDataResp";
+
+  private static final String LOGIN_INSIGHT_RESPONSE_CLASS =
+      "io.apocalypse.system.log.dto.response.LoginInsightResp";
+
+  private static final String LOGIN_HEATMAP_RESPONSE_CLASS =
+      "io.apocalypse.system.log.dto.response.LoginHeatmapResp";
+
+  private static final Set<String> REGISTERED_CLASSES =
+      Set.of(
+          USER_RESPONSE_CLASS,
+          DICT_DATA_RESPONSE_CLASS,
+          LOGIN_INSIGHT_RESPONSE_CLASS,
+          LOGIN_HEATMAP_RESPONSE_CLASS);
 
   private final ObjectMapper objectMapper;
 
@@ -62,6 +76,12 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
             objectMapper.treeToValue(required(value), OnlineUserRegistry.OnlineUser.class);
         case "user-response" ->
             objectMapper.treeToValue(required(value), registeredClass(USER_RESPONSE_CLASS));
+        case "login-insight" ->
+            objectMapper.treeToValue(
+                required(value), registeredClass(LOGIN_INSIGHT_RESPONSE_CLASS));
+        case "login-heatmap" ->
+            objectMapper.treeToValue(
+                required(value), registeredClass(LOGIN_HEATMAP_RESPONSE_CLASS));
         case "string-list" -> stringList(requiredArray(value));
         case "dict-data-list" -> objectList(requiredArray(value), DICT_DATA_RESPONSE_CLASS);
         case "empty-list" -> List.of();
@@ -86,6 +106,12 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
     }
     if (USER_RESPONSE_CLASS.equals(value.getClass().getName())) {
       return "user-response";
+    }
+    if (LOGIN_INSIGHT_RESPONSE_CLASS.equals(value.getClass().getName())) {
+      return "login-insight";
+    }
+    if (LOGIN_HEATMAP_RESPONSE_CLASS.equals(value.getClass().getName())) {
+      return "login-heatmap";
     }
     if (value instanceof List<?> list) {
       if (list.isEmpty()) {
@@ -134,7 +160,7 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
   }
 
   private static Class<?> registeredClass(String className) throws ClassNotFoundException {
-    if (!USER_RESPONSE_CLASS.equals(className) && !DICT_DATA_RESPONSE_CLASS.equals(className)) {
+    if (!REGISTERED_CLASSES.contains(className)) {
       throw new SerializationException("Redis value class is not registered: " + className);
     }
     return Class.forName(className);

@@ -79,6 +79,9 @@ public class TwoLevelCache implements Cache {
 
   private final CacheProperties properties;
 
+  /** 按缓存名配置的最大年龄（秒）；{@code null} 表示沿用全局 TTL。 */
+  private final Long maxAgeSeconds;
+
   private final com.github.benmanes.caffeine.cache.Cache<Object, Object> l1;
 
   private final RedisTemplate<String, Object> l2;
@@ -114,10 +117,18 @@ public class TwoLevelCache implements Cache {
     this.redissonClient = redissonClient;
     this.invalidationPublisher = invalidationPublisher;
     this.instanceId = instanceId;
+    this.maxAgeSeconds = properties.maxAgeSeconds(name);
+    Assert.isTrue(
+        maxAgeSeconds == null || maxAgeSeconds > 0,
+        () -> "Cache '" + name + "' max-age-seconds 必须为正数");
+    long l1ExpireSeconds =
+        maxAgeSeconds == null
+            ? properties.getL1().getExpireSeconds()
+            : Math.min(properties.getL1().getExpireSeconds(), maxAgeSeconds);
     this.l1 =
         Caffeine.newBuilder()
             .maximumSize(properties.getL1().getMaxSize())
-            .expireAfterWrite(Duration.ofSeconds(properties.getL1().getExpireSeconds()))
+            .expireAfterWrite(Duration.ofSeconds(l1ExpireSeconds))
             .build();
     this.localGeneration = readGeneration();
   }
@@ -156,7 +167,8 @@ public class TwoLevelCache implements Cache {
     if (value != null) {
       synchronized (l1Monitor) {
         // 失效先于 L2 响应到达时，不得把旧响应重新写入已经清理的 L1。
-        if (readEpoch == invalidationEpoch) {
+        // 有最大年龄的缓存不回填：L2 条目年龄未知，回填会让 L1 超出上限。
+        if (readEpoch == invalidationEpoch && maxAgeSeconds == null) {
           l1.put(key, value);
         }
       }
@@ -372,10 +384,14 @@ public class TwoLevelCache implements Cache {
     return new SimpleValueWrapper(storeValue instanceof NullValue ? null : storeValue);
   }
 
-  /** 基础 TTL × (1±jitter)，防雪崩。 */
+  /** 基础 TTL × (1±jitter)，防雪崩；配置了最大年龄时只向下抖动，TTL 不超过上限。 */
   private long jitteredTtlSeconds() {
-    long base = properties.getL2().getExpireSeconds();
     double ratio = properties.getTtlJitterRatio();
+    if (maxAgeSeconds != null) {
+      double jitter = ratio > 0 ? 1 - ThreadLocalRandom.current().nextDouble(0, ratio) : 1;
+      return Math.max(1, (long) Math.floor(maxAgeSeconds * jitter));
+    }
+    long base = properties.getL2().getExpireSeconds();
     double jitter = 1 + ThreadLocalRandom.current().nextDouble(-ratio, ratio);
     return Math.max(1, Math.round(base * jitter));
   }

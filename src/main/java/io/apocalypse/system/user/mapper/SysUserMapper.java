@@ -31,7 +31,34 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
 
   default PageResult<SysUserEntity> pageByKeyword(
       int page, int size, String keyword, DataScopeResp scope) {
+    return pageByKeyword(page, size, keyword, scope, null, false);
+  }
+
+  /**
+   * 数据范围先于部门条件生效：部门筛选只会进一步缩小可见集合，不会扩大范围。{@code includeChildren} 用 WITH RECURSIVE 取未删除的下级部门（不含
+   * ancestors 冗余列）。
+   */
+  default PageResult<SysUserEntity> pageByKeyword(
+      int page,
+      int size,
+      String keyword,
+      DataScopeResp scope,
+      Long deptId,
+      boolean includeChildren) {
     LambdaQueryWrapper<SysUserEntity> wrapper = new LambdaQueryWrapper<>();
+    if (deptId != null) {
+      if (includeChildren) {
+        wrapper.inSql(
+            SysUserEntity::getDeptId,
+            "WITH RECURSIVE dept_subtree AS (SELECT id FROM sys_dept WHERE id = "
+                + deptId.longValue()
+                + " AND deleted = 0 UNION SELECT d.id FROM sys_dept d"
+                + " JOIN dept_subtree t ON d.parent_id = t.id WHERE d.deleted = 0)"
+                + " SELECT id FROM dept_subtree");
+      } else {
+        wrapper.eq(SysUserEntity::getDeptId, deptId);
+      }
+    }
     if (!scope.all()) {
       if (scope.departmentIds().isEmpty()) {
         wrapper.apply("1 = 0");

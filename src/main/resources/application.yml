@@ -82,6 +82,10 @@ apocalypse:
       expire-seconds: 1800
     ttl-jitter-ratio: 0.2
     allow-null-values: true
+    caches:
+      # 登录 7d/30d 统计与热力图：全局统计，任一层最多返回 60 秒前的结果（A-PERF-5）。
+      log-insight:
+        max-age-seconds: 60
   events:
     completed-retention-days: 7
     cleanup-cron: "0 15 3 * * *"

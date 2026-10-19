@@ -3,11 +3,14 @@ package io.apocalypse.system.config.controller;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.log.OperLog;
 import io.apocalypse.system.config.dto.request.ConfigSaveReq;
+import io.apocalypse.system.config.dto.request.ConfigValuesReq;
 import io.apocalypse.system.config.dto.response.ConfigResp;
 import io.apocalypse.system.config.service.ConfigService;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+
+import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -66,6 +69,14 @@ public class ConfigController {
   @OperLog(title = "参数设置", businessType = "UPDATE")
   public void update(@PathVariable Long id, @Validated @RequestBody ConfigSaveReq req) {
     configService.update(id, req);
+  }
+
+  /** 原子批量保存参数值（全部成功或全部失败，版本过期返回 40900）。 */
+  @PutMapping("/values")
+  @PreAuthorize("hasAuthority('system:config:edit')")
+  @OperLog(title = "参数设置", businessType = "UPDATE")
+  public List<ConfigResp> saveValues(@Validated @RequestBody ConfigValuesReq req) {
+    return configService.saveValues(req);
   }
 
   /** 删除（逻辑删）。 */

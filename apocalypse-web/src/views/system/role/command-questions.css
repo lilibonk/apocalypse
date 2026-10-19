@@ -1,0 +1,29 @@
+/* Command palette authorization answers; colours from semantic tokens (light/dark paired). */
+.command-answer {
+  background: color-mix(in oklch, var(--muted) 60%, transparent);
+  border-inline-start: 2px solid var(--insight-blue);
+}
+
+.command-grant-state {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.command-grant-state[data-state='ACTIVE'] {
+  background: var(--success);
+  color: var(--success-foreground);
+}
+
+.command-grant-state[data-state='NOT_STARTED'],
+.command-grant-state[data-state='PAUSED'] {
+  background: var(--info);
+  color: var(--info-foreground);
+}
+
+.command-grant-state[data-state='EXPIRED'],
+.command-grant-state[data-state='ROLE_DISABLED'],
+.command-grant-state[data-state='DEFINITION_DISABLED'],
+.command-grant-state[data-state='MODULE_DISABLED'] {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}

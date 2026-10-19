@@ -41,12 +41,15 @@ function DialogContent({
   children,
   depth = 'root',
   showCloseButton = true,
+  backdrop = 'dim',
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   depth?: 'root' | 'nested'
   showCloseButton?: boolean
+  /** `blur` adds a progressive-enhancement backdrop blur; readability never depends on it. */
+  backdrop?: 'dim' | 'blur'
 }) {
   const { t } = useTranslation()
   const { handleCloseAutoFocus, handleOpenAutoFocus } = useLayerFocusReturn(
@@ -70,7 +73,11 @@ function DialogContent({
 
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay data-depth={depth} data-motion-preset="surface" />
+      <DialogOverlay
+        data-depth={depth}
+        data-motion-preset="surface"
+        data-backdrop={backdrop === 'blur' ? 'blur' : undefined}
+      />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-depth={depth}

@@ -7,7 +7,7 @@
 }
 
 .insight-eyebrow {
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--muted-foreground);
@@ -17,4 +17,54 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.055em;
   line-height: 1.1;
+}
+
+/* Odometer reels: CSS-only transitions; global reduced-motion / data-motion rules collapse them. */
+.odometer {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+
+.odometer-track {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.odometer-reel {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.odometer-sizer {
+  visibility: hidden;
+}
+
+.odometer-strip {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 1000%;
+  transform: translateY(calc(var(--odometer-digit) * -10%));
+  transition: transform var(--motion-duration-odometer) var(--motion-ease-enter);
+}
+
+.odometer-strip > span {
+  display: block;
+  height: 10%;
+  text-align: center;
+}
+
+@starting-style {
+  .odometer-strip {
+    transform: translateY(0);
+  }
+}
+
+.odometer[data-instant] .odometer-strip {
+  transition: none;
 }

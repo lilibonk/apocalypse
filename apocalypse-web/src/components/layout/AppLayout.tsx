@@ -16,6 +16,7 @@ import { Outlet, useLocation } from 'react-router'
 
 import { BrandSignature } from '@/components/BrandSignature'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { useRecentRoutes } from '@/stores/recent-routes'
 import { Header } from '@/components/layout/Header'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -62,6 +63,14 @@ export function AppLayout() {
           document.title)
     openTab({ key: location.pathname, title: rawTitle })
   }, [location.pathname, menus, tabsEnabled, openTab])
+
+  const userId = useAuthStore((state) => state.user?.id)
+  useEffect(() => {
+    // Command palette "recent": only authorized menu pages, never arbitrary URLs.
+    if (!userId || location.pathname === '/dashboard') return
+    if (flattenMenuRoutes(menus).some((route) => route.path === location.pathname))
+      useRecentRoutes.getState().record(userId, location.pathname)
+  }, [location.pathname, menus, userId])
 
   const topLevel = useMemo(
     () => [...menus].filter((node) => node.menuType !== 'F').sort((a, b) => a.sort - b.sort),

@@ -1,0 +1,53 @@
+.dict-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: calc(var(--spacing) * 4);
+  /* Collapsed cards in a row share one height; an expanded card spans its own row. */
+  align-items: stretch;
+}
+
+.dict-card {
+  min-width: 0;
+  padding: calc(var(--spacing) * 4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--insight-card-radius);
+  background: var(--card);
+  box-shadow: var(--insight-card-shadow);
+}
+
+.dict-card-expanded {
+  grid-column: 1 / -1;
+  border-color: color-mix(in oklch, var(--brand) 35%, var(--border-subtle));
+}
+
+.dict-card-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  border-radius: var(--radius-control);
+  outline: none;
+}
+
+.dict-card-header:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.dict-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1.5);
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 0.75rem;
+}
+
+.dict-value-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) minmax(5rem, 0.8fr) 5rem minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  font-size: 0.875rem;
+}

@@ -3,7 +3,16 @@ import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'reac
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
-import { Check, Plus, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import {
+  Check,
+  ChevronRight,
+  Network,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Users,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +25,9 @@ import { RoleGraphPagination, RolePermissionGraph } from './RolePermissionGraph'
 import { RolePermissionView } from './RolePermissionView'
 import { RoleMemberRelations } from './RoleMemberRelations'
 import { RoleBusinessPermissions } from './RoleBusinessPermissions'
+import { RolePanorama } from './RolePanorama'
+import { RoleAuthorizationChain } from './RoleAuthorizationChain'
+import { canAskAuthorizationQuestions } from './authorization-questions.model'
 import { RoleGraphCrudPanel, RoleGraphObjectActions } from './role-graph-crud'
 import { roleGraphCommandPerm, type RoleGraphCommand } from './role-graph-crud.model'
 import { ROLE_CHOICES_PAGE_SIZE, createRoleChoicesQuery } from './role-permission.queries'
@@ -55,13 +67,21 @@ export function RolePermissionWorkspace({
   const [command, setCommand] = useState<RoleGraphCommand | null>(null)
   const [editingMenus, setEditingMenus] = useState(false)
   const [editingMembers, setEditingMembers] = useState(false)
-  const [relation, setRelation] = useState<'permissions' | 'navigation' | 'members'>(() =>
-    searchParams.get('roleRelation') === 'members'
-      ? 'members'
-      : ['navigation', 'menus'].includes(searchParams.get('roleRelation') ?? '')
-        ? 'navigation'
-        : 'permissions',
+  const [relation, setRelation] = useState<'chain' | 'permissions' | 'navigation' | 'members'>(
+    () =>
+      searchParams.get('roleRelation') === 'members'
+        ? 'members'
+        : searchParams.get('roleRelation') === 'chain'
+          ? 'chain'
+          : ['navigation', 'menus'].includes(searchParams.get('roleRelation') ?? '')
+            ? 'navigation'
+            : 'permissions',
   )
+  // L0 permission overview: graph presentation without a requested role, for readers of both the
+  // role list and the permission catalog. Choosing a role leaves it; the breadcrumb returns.
+  const canOverview = presentation === 'graph' && canAskAuthorizationQuestions(auth)
+  const [overview, setOverview] = useState(() => !searchParams.get('roleId'))
+  const showOverview = overview && canOverview
   const [mutationDenied, setMutationDenied] = useState(false)
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set())
   const [created, setCreated] = useState<{
@@ -126,13 +146,30 @@ export function RolePermissionWorkspace({
       },
       { replace: true },
     )
+    if (showOverview) setRelation('chain')
+    setOverview(false)
     setSelection({ role, principalEpoch, openId: crypto.randomUUID() })
+  }
+  const returnToOverview = () => {
+    if (busy) return
+    setOverview(true)
+    setSelection(null)
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete('roleId')
+        next.delete('roleKey')
+        next.delete('roleRelation')
+        return next
+      },
+      { replace: true },
+    )
   }
   const roles = (result.data?.list ?? []).filter((role) => !deletedIds.has(role.id))
   const acceptedSelection = synchronizeRolePermissionSelection(selection, denied ? [] : roles)
   if (acceptedSelection !== selection) setSelection(acceptedSelection)
   const opening =
-    denied || mutationDenied || created !== null
+    denied || mutationDenied || created !== null || showOverview
       ? null
       : resolveRolePermissionOpening(selection, roles, principalEpoch, workspaceId)
 
@@ -488,8 +525,36 @@ export function RolePermissionWorkspace({
                   setSelection(null)
                 }}
               />
+            ) : showOverview ? (
+              <RolePanorama
+                roles={roles}
+                rolePage={page}
+                rolePages={pageCount}
+                onRolePage={(next) => {
+                  if (!busy) {
+                    setCreated(null)
+                    setPage(next)
+                  }
+                }}
+                onChooseRole={chooseRole}
+              />
             ) : opening ? (
               <>
+                {canOverview && (
+                  <nav
+                    aria-label={t('panorama.title')}
+                    className="flex flex-wrap items-center gap-1 text-sm"
+                  >
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={returnToOverview}>
+                      <Network aria-hidden="true" />
+                      {t('panorama.title')}
+                    </Button>
+                    <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span aria-current="page" className="font-medium">
+                      {opening.role.roleName}
+                    </span>
+                  </nav>
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="role-permission-role-icon flex size-10 shrink-0 items-center justify-center rounded-xl">
@@ -510,7 +575,14 @@ export function RolePermissionWorkspace({
                       disabled={busy}
                       onCommand={beginCommand}
                     />
-                    {(['permissions', 'navigation', 'members'] as const).map((target) => (
+                    {(
+                      [
+                        ...(presentation === 'graph' ? (['chain'] as const) : []),
+                        'permissions',
+                        'navigation',
+                        'members',
+                      ] as const
+                    ).map((target) => (
                       <Button
                         key={target}
                         size="sm"
@@ -530,12 +602,28 @@ export function RolePermissionWorkspace({
                         }}
                       >
                         {target === 'members' && <Users className="size-3.5" />}
-                        {t(`authorization.${target}`)}
+                        {target === 'chain' ? t('panorama.chain') : t(`authorization.${target}`)}
                       </Button>
                     ))}
                   </div>
                 </div>
-                {relation === 'members' ? (
+                {relation === 'chain' && presentation === 'graph' ? (
+                  <RoleAuthorizationChain
+                    key={opening.openId}
+                    opening={opening}
+                    onEdit={(target) => {
+                      setRelation(target)
+                      setSearchParams(
+                        (previous) => {
+                          const next = new URLSearchParams(previous)
+                          next.set('roleRelation', target)
+                          return next
+                        },
+                        { replace: true },
+                      )
+                    }}
+                  />
+                ) : relation === 'members' ? (
                   <RoleMemberRelations
                     key={opening.openId}
                     opening={opening}

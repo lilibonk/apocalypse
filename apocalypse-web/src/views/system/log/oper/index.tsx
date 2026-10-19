@@ -5,7 +5,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Eye } from 'lucide-react'
+import { Check, Copy, Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -19,8 +19,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
+import { originOf, type OriginRect } from '@/components/layer/origin'
+import { DictTag } from '@/components/DictTag'
+import './oper-log.css'
 
 import { pageOperLogs, type OperLogRow } from './oper-log.api'
+import { formatPayload } from './oper-log.model'
 
 const DEFAULT_PAGE_SIZE = 10
 
@@ -44,13 +48,30 @@ const searchFields: DynaSearchField[] = [
   { name: 'keyword', label: '模块 / 操作人', type: 'input', placeholder: '模块 / 操作人' },
 ]
 
-/** 详情字段块：长 JSON 用 pre 折行展示，空值显示 -。 */
+/** 详情字段块：长内容在块内滚动，空值显示 -，可复制原文。 */
 function DetailBlock({ label, value }: { label: string; value: string | null }) {
+  const { t } = useTranslation()
+  const formatted = formatPayload(value)
+  const [copied, setCopied] = useState(false)
   return (
     <div className="space-y-1">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">
-        {value?.trim() ? value : '-'}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-muted-foreground">{label}</div>
+        {formatted && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() =>
+              void navigator.clipboard?.writeText(value ?? '').then(() => setCopied(true))
+            }
+          >
+            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            {copied ? t('common.copied') : t('common.copy')}
+          </Button>
+        )}
+      </div>
+      <pre className="oper-log-payload max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap break-all">
+        {formatted ?? '-'}
       </pre>
     </div>
   )
@@ -63,6 +84,7 @@ export default function OperLogPage() {
   const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
   const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<OperLogRow | null>(null)
+  const [origin, setOrigin] = useState<OriginRect | null>(null)
 
   const keyword = appliedSearch.keyword ?? ''
 
@@ -131,7 +153,11 @@ export default function OperLogPage() {
             variant="ghost"
             size="icon"
             aria-label={t('common.详情', { defaultValue: '详情' })}
-            onClick={() => setDetail(row as OperLogRow)}
+            onClick={(event) => {
+              // The source row anchors a decorative ghost; the Sheet itself stays fully readable.
+              setOrigin(originOf(event.currentTarget.closest('tr')))
+              setDetail(row as OperLogRow)
+            }}
           >
             <Eye className="size-3.5" />
           </Button>
@@ -147,7 +173,7 @@ export default function OperLogPage() {
       />
 
       <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-xl">
+        <SheetContent className="sm:max-w-xl" origin={origin}>
           <SheetHeader>
             <SheetTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</SheetTitle>
             <SheetDescription>
@@ -155,7 +181,49 @@ export default function OperLogPage() {
             </SheetDescription>
           </SheetHeader>
           {detail && (
-            <div className="min-h-0 space-y-5 overflow-y-auto px-4 pb-6">
+            <div className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作人', { defaultValue: '操作人' })}
+                  </dt>
+                  <dd className="mt-1 break-words">{detail.operName ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作时间', { defaultValue: '操作时间' })}
+                  </dt>
+                  <dd className="mt-1 tabular-nums">{detail.operTime.replace('T', ' ')}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作状态', { defaultValue: '操作状态' })}
+                  </dt>
+                  <dd className="mt-1">
+                    <DictTag type="sys_common_status" value={String(detail.status)} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.耗时', { defaultValue: '耗时' })}
+                  </dt>
+                  <dd className="mt-1 tabular-nums">
+                    {detail.costTime === null ? '-' : `${detail.costTime} ms`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作类型', { defaultValue: '操作类型' })}
+                  </dt>
+                  <dd className="mt-1 break-all">{detail.businessType ?? '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作 IP', { defaultValue: '操作 IP' })}
+                  </dt>
+                  <dd className="mt-1 break-all">{detail.operIp ?? '-'}</dd>
+                </div>
+              </dl>
               <DetailBlock
                 label={t('common.请求方法', { defaultValue: '请求方法' })}
                 value={detail.method}

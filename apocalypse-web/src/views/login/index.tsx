@@ -15,7 +15,6 @@ import { useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
 import { BrandSignature } from '@/components/BrandSignature'
 import {
   Form,
@@ -27,12 +26,12 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PixelOrb, type OrbState } from '@/effects/PixelOrb'
-import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useSettings, useSettingsStore, type Language, type ThemeMode } from '@/stores/settings'
 
+import { LoginSubmitButton, type SubmitPhase } from './LoginSubmitButton'
 import { TaglineReveal } from './TaglineReveal'
 
 export default function LoginPage() {
@@ -50,6 +49,9 @@ export default function LoginPage() {
   /** 密码框聚焦 → 向导闭眼回避（peek-a-boo）；仅覆盖 idle 态，不盖 waiting/success/error。 */
   const [passwordFocused, setPasswordFocused] = useState(false)
   const displayState: OrbState = passwordFocused && orbState === 'idle' ? 'sleeping' : orbState
+  /** The check appears only for an accepted login (orb success), never from timers alone. */
+  const submitPhase: SubmitPhase =
+    orbState === 'success' ? 'success' : submitting ? 'waiting' : 'idle'
 
   // error 态短暂停留后自动回 idle；timer 收在 effect 里（渲染期访问 ref 会触发 react-hooks/refs）
   useEffect(() => {
@@ -77,6 +79,8 @@ export default function LoginPage() {
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // aria-disabled keeps focus on the button, so duplicate submits are refused here.
+    if (submitting) return
     setSubmitting(true)
     setOrbState('waiting')
     try {
@@ -91,11 +95,16 @@ export default function LoginPage() {
       if (motionEnabled && !reducedMotion) {
         await new Promise((resolve) => window.setTimeout(resolve, 600))
       }
-      if (useAuthStore.getState().sessionEpoch !== acceptedEpoch) return
+      if (useAuthStore.getState().sessionEpoch !== acceptedEpoch) {
+        // Identity changed during the success dwell: no navigation and no stale success state.
+        setOrbState('idle')
+        return
+      }
       navigate(from, { replace: true })
     } catch (error) {
       setOrbState('error')
       toast.error(error instanceof ApiError ? error.message : t('login.failed'))
+      form.setFocus('password')
     } finally {
       setSubmitting(false)
     }
@@ -191,10 +200,7 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="h-11 w-full" disabled={submitting}>
-                {submitting && <PixelScale variant="inline" tone="current" />}
-                {submitting ? t('login.submitting') : t('login.submit')}
-              </Button>
+              <LoginSubmitButton phase={submitPhase} morph={motionEnabled && !reducedMotion} />
             </form>
           </Form>
 

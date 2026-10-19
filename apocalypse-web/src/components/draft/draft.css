@@ -1,0 +1,69 @@
+/* Floating unsaved bar; tokens are light/dark paired in tokens.css. */
+.draft-bar-anchor {
+  position: sticky;
+  bottom: calc(var(--spacing) * 4);
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  padding-inline: calc(var(--spacing) * 4);
+  padding-bottom: env(safe-area-inset-bottom);
+  pointer-events: none;
+}
+
+.draft-bar {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--spacing) * 3);
+  width: min(100%, 44rem);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  color: var(--draft-bar-foreground);
+  background: var(--draft-bar);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-floating);
+  animation: draft-bar-enter var(--motion-duration-panel) var(--motion-ease-enter) both;
+}
+
+.draft-bar-dot {
+  width: calc(var(--spacing) * 2);
+  height: calc(var(--spacing) * 2);
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--draft-marker);
+}
+
+.draft-bar .draft-bar-ghost {
+  color: var(--draft-bar-foreground);
+}
+
+.draft-bar .draft-bar-ghost:hover {
+  background: color-mix(in oklch, var(--draft-bar-foreground) 12%, transparent);
+  color: var(--draft-bar-foreground);
+}
+
+@keyframes draft-bar-enter {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--spacing) * 4));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Per-field change marker: dot, struck original value and undo. */
+.draft-marker {
+  display: inline-block;
+  width: calc(var(--spacing) * 2);
+  height: calc(var(--spacing) * 2);
+  border-radius: 999px;
+  background: var(--draft-marker);
+}
+
+.draft-original {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+  word-break: break-all;
+}

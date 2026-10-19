@@ -1,0 +1,38 @@
+/** Configuration value workspace. Keys must match across locales. */
+export const configWorkspaceCopy = {
+  zh: {
+    values: '参数值',
+    definitions: '参数定义',
+    hint: '可同时修改多项参数，审阅差异后一次保存；任一项被他人修改时整批不生效。',
+    search: '搜索参数键或名称',
+    truncated: '仅显示前 {{shown}} 项（共 {{total}} 项），请使用搜索。',
+    readOnly: '你可以查看参数值，但没有修改权限。',
+    failed: '参数加载失败。',
+    retry: '重试',
+    empty: '暂无参数。',
+    noMatch: '没有匹配的参数。',
+    original: '原值',
+    changedElsewhere: '此项已被他人修改，最新值为“{{value}}”。保存将以你的值覆盖。',
+    reloadLatest: '载入最新值并保留我的修改',
+    saved: '已保存 {{count}} 项参数',
+    saveFailed: '保存失败，修改仍保留。',
+  },
+  en: {
+    values: 'Values',
+    definitions: 'Definitions',
+    hint: 'Change several parameters, review the differences and save them at once. If any item was changed elsewhere, nothing is saved.',
+    search: 'Search key or name',
+    truncated: 'Showing the first {{shown}} of {{total}}. Use search.',
+    readOnly: 'You can view values but cannot change them.',
+    failed: 'Parameters could not be loaded.',
+    retry: 'Retry',
+    empty: 'No parameters yet.',
+    noMatch: 'No matching parameters.',
+    original: 'Original',
+    changedElsewhere:
+      'Changed by someone else; the latest value is “{{value}}”. Saving will replace it with yours.',
+    reloadLatest: 'Load latest values and keep my changes',
+    saved: '{{count}} parameter(s) saved',
+    saveFailed: 'Could not save. Your changes are kept.',
+  },
+}

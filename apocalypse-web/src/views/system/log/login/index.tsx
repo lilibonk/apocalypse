@@ -20,7 +20,11 @@ import {
 } from '@/components/ui/dialog'
 import { summarizeUserAgent } from '@/lib/user-agent'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
+import { useAuthStore } from '@/stores/auth'
 
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+
+import { LoginActivitySection } from './LoginActivitySection'
 import { pageLoginLogs, type LoginLogRow } from './login-log.api'
 
 const DEFAULT_PAGE_SIZE = 10
@@ -51,6 +55,8 @@ export default function LoginLogPage() {
   const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
   const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<LoginLogRow | null>(null)
+  const desktop = useDesktopViewport()
+  const canViewStats = useAuthStore((state) => state.perms.includes('system:log:login'))
 
   const keyword = appliedSearch.keyword ?? ''
 
@@ -84,6 +90,8 @@ export default function LoginLogPage() {
           })}
         </p>
       </div>
+
+      {desktop && canViewStats && <LoginActivitySection />}
 
       <DynaSearch
         fields={searchFields}

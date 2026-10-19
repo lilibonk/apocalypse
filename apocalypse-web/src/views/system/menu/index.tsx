@@ -17,7 +17,8 @@ import {
   Search,
   TriangleAlert,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Perm } from '@/components/Perm'
@@ -124,6 +125,26 @@ function MenuPageContent() {
     })
 
   const collapseAll = () => setExpanded(new Set())
+
+  // Deep link from the authorization overview: ?menuId= expands its ancestors once and focuses it.
+  const [params] = useSearchParams()
+  const focusMenuId = params.get('menuId')
+  const [appliedFocus, setAppliedFocus] = useState<string | null>(null)
+  const focusTarget = focusMenuId ? allNodes.find((node) => node.id === focusMenuId) : undefined
+  if (focusTarget && appliedFocus !== focusTarget.id) {
+    const byId = new Map(allNodes.map((node) => [node.id, node]))
+    const next = new Set(expanded)
+    for (let parent = byId.get(focusTarget.parentId); parent; parent = byId.get(parent.parentId))
+      next.add(parent.id)
+    setAppliedFocus(focusTarget.id)
+    setExpanded(next)
+  }
+  useEffect(() => {
+    if (!appliedFocus) return
+    const row = document.getElementById(`menu-row-${appliedFocus}`)
+    row?.scrollIntoView({ block: 'center' })
+    row?.focus({ preventScroll: true })
+  }, [appliedFocus])
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
@@ -258,6 +279,7 @@ function MenuPageContent() {
             isLoading={isLoading}
             collapsed={effectiveCollapsed}
             onToggle={toggle}
+            highlightId={appliedFocus}
             onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
             onEdit={(node) => setFormPayload({ mode: 'edit', node })}
             onDelete={setDeleting}

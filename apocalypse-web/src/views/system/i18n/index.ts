@@ -2,6 +2,12 @@ import type { AppI18nModule } from '@/i18n/module-loader'
 import { roleManagementCopy } from './role-management'
 import { roleMemberEditorCopy } from './role-member-editor'
 import { authorizationCopy, permissionCatalogCopy } from './authorization'
+import { commandQuestionsCopy } from './command-questions'
+import { logInsightCopy } from './log-insight'
+import { dictBookCopy } from './dict-book'
+import { configWorkspaceCopy } from './config-workspace'
+import { deptChartCopy } from './dept-chart'
+import { panoramaCopy } from './panorama'
 
 const systemI18n = {
   namespace: 'system',
@@ -12,6 +18,12 @@ const systemI18n = {
   resources: {
     zh: {
       authorization: authorizationCopy.zh,
+      commandQa: commandQuestionsCopy.zh,
+      logInsight: logInsightCopy.zh,
+      dictBook: dictBookCopy.zh,
+      configWorkspace: configWorkspaceCopy.zh,
+      deptChart: deptChartCopy.zh,
+      panorama: panoramaCopy.zh,
       permissionCatalog: permissionCatalogCopy.zh,
       roleManage: roleManagementCopy.zh,
       roleMemberEdit: roleMemberEditorCopy.zh,
@@ -139,6 +151,12 @@ const systemI18n = {
     },
     en: {
       authorization: authorizationCopy.en,
+      commandQa: commandQuestionsCopy.en,
+      logInsight: logInsightCopy.en,
+      dictBook: dictBookCopy.en,
+      configWorkspace: configWorkspaceCopy.en,
+      deptChart: deptChartCopy.en,
+      panorama: panoramaCopy.en,
       permissionCatalog: permissionCatalogCopy.en,
       roleManage: roleManagementCopy.en,
       roleMemberEdit: roleMemberEditorCopy.en,

@@ -24,6 +24,8 @@ src/main/java/io/apocalypse/<key>/interfaces/*Controller.java
 src/main/resources/db/migration/V<n>__<key>_*.sql
 ```
 
+需要缓存的读结果使用 `@Cacheable(sync = true)` 与脚手架两级缓存，不直接读写 Redis。缓存值进入 Redis 前必须在 `SafeRedisValueSerializer` 的固定类型注册表登记，未登记类型写入即失败。默认 TTL 为全局 `apocalypse.cache.l1/l2`；可以容忍有界滞后的聚合结果用 `apocalypse.cache.caches.<name>.max-age-seconds` 设定上限，任一层都不会返回计算后超过该秒数的值。不得缓存含用户数据范围或有效期判定的最终允许结果。
+
 ## 授权与导航契约
 
 角色授权从 `GET /system/roles/{id}/permissions` 读取完整配置及角色 `revision`、目录 `catalogRevision`，通过同路径 PUT 提交 `expectedRevision`、`expectedCatalogRevision`、`upsert` 和 `remove` 增量。每条授权包含 `permissionId`、`enabled`、`scopeOverride`、`validFrom` 和 `validUntil`；未提交的已有授权保留。目录修改另用定义的 `expectedVersion`。遇到版本冲突先回读并让使用者处理差异，不覆盖并发修改，也不按过滤后的可见列表整体替换。

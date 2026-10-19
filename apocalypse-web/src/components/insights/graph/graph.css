@@ -1,0 +1,89 @@
+/* Shared graph presentation: static highlights plus one-shot pulse; no looping decoration. */
+.graph-path-line {
+  fill: none;
+  stroke: var(--insight-edge);
+  stroke-width: 1.5;
+  transition: stroke var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.graph-path[data-active='true'] .graph-path-line {
+  stroke: var(--insight-path);
+  stroke-width: 2.5;
+}
+
+.graph-path-pulse {
+  fill: none;
+  stroke: var(--insight-path);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 0.06 1;
+  stroke-dashoffset: 0.06;
+  filter: drop-shadow(0 0 4px var(--insight-path-glow));
+  animation: graph-path-pulse var(--motion-duration-path-pulse) var(--motion-ease-enter) both;
+}
+
+@keyframes graph-path-pulse {
+  from {
+    stroke-dashoffset: 0.06;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+/* Focus dimming: a container with data-focus dims members not marked data-related. */
+[data-focus-scope][data-focus='true'] [data-dim-member]:not([data-related='true']) {
+  opacity: 0.35;
+}
+
+[data-dim-member] {
+  transition: opacity var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.graph-canvas {
+  position: relative;
+  min-width: 0;
+}
+
+.graph-canvas-frame {
+  position: relative;
+  overflow: hidden;
+  min-height: 28rem;
+  height: 100%;
+  border-radius: var(--insight-card-radius);
+  background-color: var(--card);
+  background-image: radial-gradient(var(--insight-grid) 1px, transparent 1px);
+  background-size: calc(var(--spacing) * 5) calc(var(--spacing) * 5);
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+
+.graph-canvas-frame:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.graph-canvas-frame[data-dragging] {
+  cursor: grabbing;
+}
+
+.graph-canvas-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transition: transform var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.graph-canvas-frame[data-dragging] .graph-canvas-content {
+  transition: none;
+}
+
+.graph-canvas-controls {
+  position: absolute;
+  right: calc(var(--spacing) * 3);
+  bottom: calc(var(--spacing) * 3);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1.5);
+}

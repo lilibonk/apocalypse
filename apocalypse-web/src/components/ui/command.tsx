@@ -31,6 +31,7 @@ function CommandDialog({
   className,
   depth = 'root',
   showCloseButton = true,
+  commandProps,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
@@ -38,11 +39,14 @@ function CommandDialog({
   depth?: 'root' | 'nested'
   className?: string
   showCloseButton?: boolean
+  /** Forwarded to cmdk (e.g. shouldFilter for asynchronous result modes). */
+  commandProps?: Omit<React.ComponentProps<typeof CommandPrimitive>, 'children' | 'className'>
 }) {
   return (
     <Dialog {...props}>
       <DialogContent
         depth={depth}
+        backdrop="blur"
         className={cn('overflow-hidden p-0', className)}
         showCloseButton={showCloseButton}
       >
@@ -50,7 +54,10 @@ function CommandDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <Command className="**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+        <Command
+          {...commandProps}
+          className="**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
+        >
           {children}
         </Command>
       </DialogContent>

@@ -1,0 +1,64 @@
+.dept-chart .graph-canvas-frame {
+  min-height: 34rem;
+}
+
+.dept-node {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+  transition:
+    border-color var(--motion-duration-standard) var(--motion-ease-enter),
+    box-shadow var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.dept-node[data-path] {
+  border-color: var(--insight-path);
+}
+
+.dept-node[data-selected] {
+  border-color: var(--insight-path);
+  box-shadow:
+    0 0 0 3px var(--insight-path-glow),
+    var(--shadow-floating);
+}
+
+.dept-node[data-disabled] {
+  opacity: 0.7;
+}
+
+.dept-node-main {
+  min-width: 0;
+  flex: 1;
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+  text-align: left;
+  border-radius: var(--radius-panel);
+  outline: none;
+}
+
+.dept-node-main:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+.dept-node-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--spacing) * 9);
+  border-left: 1px solid var(--border-subtle);
+  color: var(--muted-foreground);
+  border-radius: 0 var(--radius-panel) var(--radius-panel) 0;
+}
+
+.dept-node-toggle:hover {
+  background: var(--accent);
+}
+
+.dept-panel {
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+  align-self: start;
+}

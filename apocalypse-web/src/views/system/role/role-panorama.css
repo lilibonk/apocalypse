@@ -1,0 +1,126 @@
+.role-panorama-canvas {
+  aspect-ratio: 820 / 520;
+  background-image: radial-gradient(
+    var(--insight-grid) calc(var(--spacing) / 5),
+    transparent calc(var(--spacing) / 5)
+  );
+  background-size: calc(var(--spacing) * 5) calc(var(--spacing) * 5);
+}
+
+.role-panorama-ring {
+  fill: none;
+  stroke: var(--insight-edge);
+  stroke-dasharray: 2 6;
+}
+
+.role-panorama-edge {
+  fill: none;
+  stroke: var(--insight-edge);
+  stroke-width: 1.5;
+}
+
+.role-panorama-edge[data-related] {
+  stroke: var(--insight-path);
+  stroke-width: 2.5;
+}
+
+.role-panorama-tick {
+  stroke: var(--border);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.role-panorama-tick[data-active] {
+  stroke: var(--brand);
+}
+
+.role-panorama-hub,
+.role-panorama-dial {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 999px;
+}
+
+.role-panorama-hub {
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--insight-surface-raised),
+    var(--insight-glow)
+  );
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--insight-card-shadow);
+}
+
+.role-panorama-dial {
+  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-surface);
+  outline: none;
+  transition:
+    box-shadow var(--motion-duration-standard) var(--motion-ease-enter),
+    border-color var(--motion-duration-standard) var(--motion-ease-enter),
+    opacity var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.role-panorama-dial:hover,
+.role-panorama-dial[data-open] {
+  border-color: var(--insight-path);
+  box-shadow: 0 0 0 4px var(--insight-path-glow);
+}
+
+.role-panorama-dial:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.role-panorama-item {
+  position: absolute;
+  translate: 0 -50%;
+  width: 34%;
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
+  outline: none;
+}
+
+.role-panorama-item:not(:disabled):hover {
+  border-color: var(--insight-path);
+}
+
+.role-panorama-item:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.role-panorama-empty {
+  position: absolute;
+  left: 55%;
+  top: 50%;
+  translate: 0 -50%;
+}
+
+.role-panorama-stats > div {
+  padding: calc(var(--spacing) * 3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--card);
+}
+
+.role-panorama-stats dt {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.role-panorama-stats dd {
+  margin-top: calc(var(--spacing) * 1);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

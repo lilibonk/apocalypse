@@ -162,6 +162,33 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void departmentFilterOnlyNarrowsTheOperationScopeAndIncludesActiveChildren() {
+    String admin = adminToken();
+    String base = "/system/users/page?size=200&keyword=" + PREFIX;
+    assertThat(ids(getForData(base + "&deptId=" + ROOT, admin).get("list")))
+        .containsExactlyInAnyOrder(OPERATOR, SAME_USER, PROTECTED_USER);
+    JsonNode withChildren = getForData(base + "&deptId=" + ROOT + "&includeChildren=true", admin);
+    assertThat(ids(withChildren.get("list")))
+        .containsExactlyInAnyOrder(OPERATOR, SAME_USER, PROTECTED_USER, CHILD_USER);
+    assertThat(withChildren.get("total").asLong()).isEqualTo(4);
+    jdbcTemplate.update("UPDATE sys_user SET dept_id = ? WHERE id = ?", ORPHAN_CHILD, NO_DEPT_USER);
+    assertThat(
+            ids(getForData(base + "&deptId=" + ROOT + "&includeChildren=true", admin).get("list")))
+        .as("deleted branches stop the recursive subtree")
+        .doesNotContain(NO_DEPT_USER);
+
+    String operator = operatorToken();
+    assertThat(getForData(base + "&deptId=" + CHILD, operator).get("total").asLong())
+        .as("a department outside DEPT scope stays invisible")
+        .isZero();
+    JsonNode scoped = getForData(base + "&deptId=" + ROOT + "&includeChildren=true", operator);
+    assertThat(ids(scoped.get("list")))
+        .containsExactlyInAnyOrder(OPERATOR, SAME_USER, PROTECTED_USER);
+    assertThat(scoped.get("total").asLong()).isEqualTo(3);
+    assertThat(getForData(base + "&deptId=" + SIBLING, operator).get("total").asLong()).isZero();
+  }
+
+  @Test
   void onlyRolesGrantingTheSpecificOperationContributeAndMultiRoleUnionIncludesChildren() {
     assign(OPERATOR, UNRELATED_ALL_ROLE);
     assertThat(

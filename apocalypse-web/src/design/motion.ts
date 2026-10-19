@@ -48,3 +48,31 @@ export const insightMotion = {
 
 /** The offline study retains the same approved motion vocabulary as its live counterparts. */
 export const studyMotion = insightMotion
+
+/**
+ * 2026-10-18 reference-video adaptation. Values are product choices, not parameters recovered
+ * from the video; each motion explains one business change and settles immediately when disabled.
+ */
+export const stateMotion = {
+  /** Submit button collapse/expand and the detail origin ghost. */
+  morph: { duration: 0.24, ease: motionEase.enter },
+  /** First-entry "bounce home" for insight cards; refreshes never replay it. */
+  entrance: { type: 'spring', stiffness: 300, damping: 22, mass: 0.85 },
+  entranceScale: 0.96,
+  /** One odometer column; neighbouring columns start `odometerStagger` seconds apart. */
+  odometer: { duration: 0.48, ease: motionEase.enter },
+  odometerStagger: 0.03,
+  /** Overview / organisation graph first growth. Total stays below `growthBudget`. */
+  growth: { duration: 0.36, ease: motionEase.enter },
+  growthStagger: 0.06,
+  growthBudget: 0.7,
+  /** Selected ancestor path: one travelling pulse, never a loop. */
+  pathPulse: { duration: 0.52, ease: motionEase.enter },
+  /** Heatmap reveal: column delay and single-cell fade. */
+  heatColumnDelay: 0.012,
+  heatCell: { duration: 0.18, ease: motionEase.enter },
+  /** Neighbours yielding to an expanded card reuse the approved layout spring. */
+  yieldLayout: insightMotion.layout,
+  /** Focus dimming of unrelated graph branches. */
+  dimOpacity: 0.35,
+} as const

@@ -1,0 +1,41 @@
+/* Login submit morph: width/radius follow the auth phase; motion switches collapse transitions. */
+.login-submit-track {
+  display: flex;
+  justify-content: center;
+}
+
+.login-submit {
+  inline-size: 100%;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    inline-size var(--motion-duration-morph) var(--motion-ease-enter),
+    border-radius var(--motion-duration-morph) var(--motion-ease-enter),
+    background-color var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.login-submit[data-collapsed] {
+  inline-size: 2.75rem;
+  padding-inline: 0;
+  border-radius: 999px;
+}
+
+.login-submit[aria-disabled='true'] {
+  pointer-events: none;
+}
+
+.login-submit-check {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 0;
+  animation: login-submit-check var(--motion-duration-morph) var(--motion-ease-enter) both;
+}
+
+@keyframes login-submit-check {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}

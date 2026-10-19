@@ -5,11 +5,17 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.system.config.dto.request.ConfigSaveReq;
+import io.apocalypse.system.config.dto.request.ConfigValueItemReq;
+import io.apocalypse.system.config.dto.request.ConfigValuesReq;
 import io.apocalypse.system.config.dto.response.ConfigResp;
 import io.apocalypse.system.config.entity.SysConfigEntity;
 import io.apocalypse.system.config.mapper.SysConfigMapper;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -98,8 +104,41 @@ public class ConfigService {
         && sysConfigMapper.existsByKey(req.configKey())) {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "参数键已存在");
     }
+    if (req.expectedVersion() != null && !req.expectedVersion().equals(entity.getVersion())) {
+      throw new BizException(ErrorCode.CONFLICT);
+    }
     applyReq(entity, req);
     ConcurrencyGuard.requireSingleRow(sysConfigMapper.updateById(entity));
+  }
+
+  /** 原子批量保存参数值。先校验全部行的读取版本，任一过期则整体 40900 且不写入；随后逐行按版本更新， 并发修改导致 0 行时同样回滚整个事务。缓存在方法结束后整体失效。 */
+  @Transactional
+  @CacheEvict(cacheNames = "config", allEntries = true)
+  public List<ConfigResp> saveValues(ConfigValuesReq req) {
+    Set<Long> seen = new HashSet<>();
+    List<SysConfigEntity> entities = new ArrayList<>(req.items().size());
+    List<String> stale = new ArrayList<>();
+    for (ConfigValueItemReq item : req.items()) {
+      if (!seen.add(item.id())) {
+        throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "同一参数不能重复提交");
+      }
+      SysConfigEntity entity = requireById(item.id());
+      if (!item.expectedVersion().equals(entity.getVersion())) {
+        stale.add(entity.getConfigKey());
+      }
+      entity.setConfigValue(item.configValue());
+      entities.add(entity);
+    }
+    if (!stale.isEmpty()) {
+      throw new BizException(
+          ErrorCode.CONFLICT.getCode(), "以下参数已被其他操作修改，请重新载入后再保存：" + String.join("、", stale));
+    }
+    List<ConfigResp> saved = new ArrayList<>(entities.size());
+    for (SysConfigEntity entity : entities) {
+      ConcurrencyGuard.requireSingleRow(sysConfigMapper.updateById(entity));
+      saved.add(configConvert.toResp(entity));
+    }
+    return saved;
   }
 
   /** 删除参数（逻辑删）；key 不在入参中，简单起见整体失效。 */

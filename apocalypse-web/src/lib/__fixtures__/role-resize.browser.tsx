@@ -13,6 +13,7 @@ import '@/index.css'
 
 if (!import.meta.env.DEV) throw new Error('Role resize fixture is dev-only')
 const focusEnabled = new URLSearchParams(window.location.search).has('focus')
+const overviewEntry = new URLSearchParams(window.location.search).has('overview')
 const principal = { id: 'fixture-principal', username: 'fixture-operator', nickname: null }
 let narrowerSnapshot = false
 const permissions = [
@@ -160,6 +161,34 @@ http.defaults.adapter = async (config) => {
       size: 4,
     }
   } else if (path === '/system/users/page') data = { list: [candidate], total: 1, page: 1, size: 4 }
+  else if (path === '/system/authorization/insights/overview')
+    data = {
+      evaluatedAt: '2026-10-18T12:00:00Z',
+      usersVisible: true,
+      userCount: 1,
+      roleCount: 1,
+      enabledRoleCount: 1,
+      permissionCount: 1,
+      navigationCount: 1,
+      idleRoleCount: 0,
+      idleRoles: [],
+      usersWithoutRolesCount: 0,
+      usersWithoutRoles: [],
+      unassignedNavigationCount: 1,
+      unassignedNavigation: [
+        {
+          menuId: 'navigation-1',
+          menuName: '用户导航',
+          menuType: 'M',
+          parentId: '0',
+          path: '/system/user',
+          moduleKey: null,
+          moduleEnabled: true,
+        },
+      ],
+      roleScopeDistribution: [{ key: 'DEPT', count: 1, enabled: true }],
+      permissionModules: [{ key: null, count: 1, enabled: true }],
+    }
   else if (path.startsWith('/system/dicts')) data = []
   else throw new Error(`Unexpected fixture request: ${path}`)
   return { status: 200, statusText: 'OK', headers: {}, config, data: { code: 0, data } }
@@ -222,7 +251,13 @@ function Fixture() {
 }
 createRoot(document.getElementById('root')!).render(
   <AppProviders>
-    <MemoryRouter initialEntries={['/system/role']}>
+    <MemoryRouter
+      initialEntries={[
+        overviewEntry
+          ? '/system/role'
+          : `/system/role?roleId=${role.id}&roleKey=${role.roleKey}&roleRelation=permissions`,
+      ]}
+    >
       <Fixture />
     </MemoryRouter>
   </AppProviders>,

@@ -2,6 +2,10 @@ package io.apocalypse.framework.redis;
 
 import io.apocalypse.framework.security.OnlineUserRegistry;
 import io.apocalypse.system.dict.dto.response.DictDataResp;
+import io.apocalypse.system.log.dto.response.LogBucketResp;
+import io.apocalypse.system.log.dto.response.LoginHeatmapCellResp;
+import io.apocalypse.system.log.dto.response.LoginHeatmapResp;
+import io.apocalypse.system.log.dto.response.LoginInsightResp;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -28,6 +32,48 @@ class RedisSerializationTest {
 
     assertThat(serializer.deserialize(serializer.serialize(onlineUser))).isEqualTo(onlineUser);
     assertThat(serializer.deserialize(serializer.serialize(responses))).isEqualTo(responses);
+  }
+
+  @Test
+  void loginInsightResponsesRoundTripWithTheirTimestamps() {
+    SafeRedisValueSerializer serializer = new SafeRedisValueSerializer(new ObjectMapper());
+    LocalDateTime from = LocalDateTime.of(2026, 10, 12, 0, 0);
+    LocalDateTime to = LocalDateTime.of(2026, 10, 19, 14, 30, 5);
+    LoginInsightResp insight =
+        new LoginInsightResp(
+            "WEEK",
+            "DAYS",
+            "Asia/Shanghai",
+            "+08:00",
+            from,
+            to,
+            from.minusDays(173),
+            12,
+            10,
+            2,
+            3,
+            4,
+            6,
+            1.7,
+            true,
+            9,
+            List.of(new LogBucketResp(from, 12, 10, 2)));
+    LoginHeatmapResp heatmap =
+        new LoginHeatmapResp(
+            "MONTH",
+            "Asia/Shanghai",
+            "+08:00",
+            from,
+            to,
+            from,
+            from.minusDays(150),
+            5,
+            1,
+            3,
+            List.of(new LoginHeatmapCellResp(1, 9, 3, 1, 4)));
+
+    assertThat(serializer.deserialize(serializer.serialize(insight))).isEqualTo(insight);
+    assertThat(serializer.deserialize(serializer.serialize(heatmap))).isEqualTo(heatmap);
   }
 
   @Test

@@ -1,0 +1,6 @@
+/* Request payloads: code-like surface, readable in both themes. */
+.oper-log-payload {
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}

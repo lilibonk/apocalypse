@@ -31,13 +31,13 @@ import { resolvePageComponent } from '@/routes/component-map'
 import { flattenMenuRoutes } from '@/routes/menu-routes'
 import { useAuthStore } from '@/stores/auth'
 
-import { DashboardInsights, SectionSkeleton, type DashboardSourceState } from './dashboard-insights'
 import {
-  operationTypeKey,
-  summarizeLoginSample,
-  summarizeOperationSample,
-  type DashboardSampleSize,
-} from './dashboard-insights.model'
+  DashboardInsights,
+  SectionSkeleton,
+  SourceFailure,
+  type DashboardSourceState,
+} from './dashboard-insights'
+import { DASHBOARD_ACTIVITY_LIMIT, operationTypeKey } from './dashboard-insights.model'
 import {
   commonTaskRoutes,
   readableQueryData,
@@ -45,7 +45,8 @@ import {
   routeComponent,
   type RecentActivity,
 } from './dashboard-model'
-import { useDashboardSources } from './dashboard.queries'
+import { useCarriedValue, useDashboardInsights, useDashboardSources } from './dashboard.queries'
+import type { LogInsightRange } from '@/views/system/log/log-insight.api'
 import { MobileDashboard } from './MobileDashboard'
 
 function visibleSource<T>(
@@ -89,19 +90,35 @@ function DesktopDashboard() {
   const menus = useAuthStore((state) => state.menus)
   const meLoaded = useAuthStore((state) => state.meLoaded)
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
-  const [sampleSize, setSampleSize] = useState<DashboardSampleSize>(100)
-  const queries = useDashboardSources()
+  const [range, setRange] = useState<LogInsightRange>('DAY')
+  const queries = useDashboardSources(DASHBOARD_ACTIVITY_LIMIT)
+  const insights = useDashboardInsights(range)
   const login = visibleSource(queries.login)
   const operation = visibleSource(queries.operation)
   const online = visibleSource(queries.online)
-  const loginSample = useMemo(
-    () => (login.data ? summarizeLoginSample(login.data.list, sampleSize) : null),
-    [login.data, sampleSize],
+  const insightContext = `${sessionEpoch}:${user?.id ?? ''}:${meLoaded}`
+  const loginInsightSource = visibleSource(insights.login)
+  const operationInsightSource = visibleSource(insights.operation)
+  const loginCarried = useCarriedValue(
+    loginInsightSource.data,
+    loginInsightSource.allowed && loginInsightSource.isPending,
+    `${insightContext}:${loginInsightSource.allowed}`,
   )
-  const operationSample = useMemo(
-    () => (operation.data ? summarizeOperationSample(operation.data.list, sampleSize) : null),
-    [operation.data, sampleSize],
+  const loginInsights = {
+    ...loginInsightSource,
+    data: loginCarried,
+    isPending: loginInsightSource.isPending && loginCarried === undefined,
+  }
+  const operationCarried = useCarriedValue(
+    operationInsightSource.data,
+    operationInsightSource.allowed && operationInsightSource.isPending,
+    `${insightContext}:${operationInsightSource.allowed}`,
   )
+  const operationInsights = {
+    ...operationInsightSource,
+    data: operationCarried,
+    isPending: operationInsightSource.isPending && operationCarried === undefined,
+  }
   const routes = useMemo(
     () =>
       flattenMenuRoutes(menus).filter((route) =>
@@ -115,7 +132,7 @@ function DesktopDashboard() {
   const onlineRoute = routes.find((route) => routeComponent(route) === 'system/online')
   const auditRoute =
     operation.allowed && operationRoute ? operationRoute : login.allowed ? loginRoute : undefined
-  const activity = recentActivity(loginSample?.rows, operationSample?.rows)
+  const activity = recentActivity(login.data?.list, operation.data?.list)
   const loadingActivity =
     (login.allowed && login.isPending) || (operation.allowed && operation.isPending)
   const activityFailed =
@@ -184,10 +201,22 @@ function DesktopDashboard() {
           <Button
             variant="outline"
             size="sm"
-            disabled={login.isFetching || operation.isFetching || online.isFetching}
+            disabled={
+              login.isFetching ||
+              operation.isFetching ||
+              online.isFetching ||
+              loginInsights.isFetching ||
+              operationInsights.isFetching
+            }
             onClick={() => {
-              if (login.allowed) login.retry()
-              if (operation.allowed) operation.retry()
+              if (login.allowed) {
+                login.retry()
+                loginInsights.retry()
+              }
+              if (operation.allowed) {
+                operation.retry()
+                operationInsights.retry()
+              }
               if (online.allowed) online.retry()
             }}
           >
@@ -198,13 +227,11 @@ function DesktopDashboard() {
       </header>
 
       <DashboardInsights
-        login={login}
-        operation={operation}
+        login={loginInsights}
+        operation={operationInsights}
         online={online}
-        loginSample={loginSample}
-        operationSample={operationSample}
-        sampleSize={sampleSize}
-        onSampleSize={setSampleSize}
+        range={range}
+        onRange={setRange}
         motionEnabled={motionEnabled}
         language={language}
         loginHref={login.allowed ? loginRoute?.path : undefined}
@@ -214,6 +241,7 @@ function DesktopDashboard() {
         <InsightCard
           className="flex h-full min-w-0 flex-col p-5 sm:p-6"
           motionEnabled={motionEnabled}
+          entranceKey="dashboard:activity"
           order={5}
           aria-labelledby="dashboard-activity-title"
         >
@@ -247,10 +275,25 @@ function DesktopDashboard() {
               <p className="text-xs text-muted-foreground">{t('noActivityHint')}</p>
             </div>
           )}
-          {activityFailed && activity.length === 0 && (
-            <p role="status" className="py-8 text-sm text-muted-foreground">
-              {t('unavailable')}
-            </p>
+          {(
+            [
+              [login, t('loginSource')],
+              [operation, t('operationSource')],
+            ] as const
+          ).map(
+            ([source, label]) =>
+              source.allowed &&
+              source.isError && (
+                <div key={label} className="mt-3">
+                  <SourceFailure
+                    source={label}
+                    error={source.error}
+                    hasData={source.data !== undefined}
+                    retrying={source.isFetching}
+                    onRetry={source.retry}
+                  />
+                </div>
+              ),
           )}
           <ul className="mt-3 flex-1 divide-y divide-border-subtle">
             {activity.map((item) => {

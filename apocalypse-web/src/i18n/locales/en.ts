@@ -8,6 +8,55 @@
  */
 export const en = {
   translation: {
+    command: {
+      placeholder: 'Search pages and actions, or type ? to ask…',
+      recent: 'Recent',
+      preferences: 'Appearance and preferences',
+      current: 'Current setting',
+      themeLight: 'Switch to light appearance',
+      themeDark: 'Switch to dark appearance',
+      themeSystem: 'Follow system appearance',
+      densityComfortable: 'Use comfortable density',
+      densityCompact: 'Use compact density',
+      motionOn: 'Turn interface motion on',
+      motionOff: 'Turn interface motion off',
+      askQuestion: 'Ask about authorization and organization',
+      hintSelect: 'Select',
+      hintOpen: 'Open',
+      hintClose: 'Close',
+      hintQuestion: 'Type ? to ask a question',
+      hintLeaveQuestion: 'Delete ? to return to search',
+      questionsUnavailable: 'No questions are available to this account.',
+      loadingQuestions: 'Loading questions…',
+    },
+    graph: {
+      canvas: 'pannable, zoomable canvas',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      fit: 'Fit to view',
+    },
+    draft: {
+      region: 'Unsaved changes',
+      count: 'Unsaved changes: {{count}}',
+      review: 'Review changes',
+      discard: 'Discard',
+      save: 'Save changes',
+      saving: 'Saving',
+      reviewTitle: 'Changes to save',
+      reviewHint: '{{count}} item(s). Check the original and new values before saving.',
+      before: 'Original',
+      after: 'New',
+      emptyValue: '(empty)',
+      closeReview: 'Back to editing',
+      undo: 'Undo',
+      changed: 'Changed',
+      restored: 'Restored the unsaved changes you left here.',
+      closeTitle: 'Closing will discard unsaved changes',
+      closeHint:
+        'These pages have {{count}} unsaved change(s). They cannot be recovered after closing.',
+      keepEditing: 'Keep editing',
+      discardAndClose: 'Discard and close',
+    },
     dateControl: {
       select: 'Select an option',
       date: 'Choose date',
@@ -73,6 +122,7 @@ export const en = {
       passwordRequired: 'Please enter password',
       submit: 'Sign in',
       submitting: 'Signing in…',
+      succeeded: 'Signed in',
       failed: 'Sign in failed, please try again',
     },
     // 菜单名 key = 后端 menuName 原文；新增菜单时按需补译，缺省自动回退原文
@@ -116,6 +166,8 @@ export const en = {
       capabilitySummary:
         'Capability showcase ({{count}} items). Downstream trims via stores/settings.ts.',
       accentAria: 'Accent {{accent}}',
+      copy: 'Copy',
+      copied: 'Copied',
       closeTab: 'Close {{title}}',
       tabActions: 'Tab actions',
       closeAllTabs: 'Close all tabs',
@@ -313,6 +365,10 @@ export const en = {
         'Check users to assign to role "{{name}}" (current assignments shown). Saving replaces all assignments.',
       // 原文键：部门管理页
       部门管理: 'Department Management',
+      // 原文键：字典卡片册与参数值工作区页头
+      字典管理: 'Dictionaries',
+      字典类型与取值: 'Dictionary types and values',
+      参数设置: 'Parameters',
       组织部门的树形维护: 'Manage the organization department tree',
       新增部门: 'Create Department',
       部门名称: 'Department Name',

@@ -15,6 +15,8 @@ import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { cn } from '@/lib/utils'
 import { isPinnedTab, useTabsStore } from '@/stores/tabs'
 
+import { useGuardedTabClose } from '@/components/draft/useGuardedTabClose'
+
 import { TabActionsMenu } from './TabActionsMenu'
 
 export function TabBar() {
@@ -26,6 +28,7 @@ export function TabBar() {
   const activate = useTabsStore((state) => state.activate)
   const close = useTabsStore((state) => state.close)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const guard = useGuardedTabClose()
 
   if (tabs.length === 0) return null
 
@@ -94,8 +97,10 @@ export function TabBar() {
                   )}
                   onClick={(event) => {
                     event.stopPropagation()
-                    const next = close(tab.key)
-                    if (next) navigate(next)
+                    guard.request([tab.key], () => {
+                      const next = close(tab.key)
+                      if (next) navigate(next)
+                    })
                   }}
                 >
                   <X className="size-3" />
@@ -106,6 +111,7 @@ export function TabBar() {
         })}
       </div>
       <TabActionsMenu />
+      {guard.dialog}
     </div>
   )
 }

@@ -81,3 +81,25 @@
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
   }
 }
+
+.dashboard-trend-vertex {
+  fill: var(--card);
+  stroke: var(--foreground);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.dashboard-compare {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.dashboard-compare[data-direction='up'] {
+  background: var(--success);
+  color: var(--success-foreground);
+}
+
+.dashboard-compare[data-direction='down'] {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}

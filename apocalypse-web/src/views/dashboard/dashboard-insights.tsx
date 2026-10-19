@@ -1,6 +1,14 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { ArrowUpRight, CircleAlert, CircleCheck, LogIn, MonitorDot, ScrollText } from 'lucide-react'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CircleAlert,
+  CircleCheck,
+  Minus,
+  MonitorDot,
+  ScrollText,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -11,22 +19,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { insightMotion } from '@/design/motion'
 import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
 import { ApiError } from '@/lib/api/client'
-import type { PageResult } from '@/lib/api/types'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
-import type { LoginLogRow } from '@/views/system/log/login/login-log.api'
-import type { OperLogRow } from '@/views/system/log/oper/oper-log.api'
+import type {
+  LoginInsights,
+  LogInsightRange,
+  OperInsights,
+} from '@/views/system/log/log-insight.api'
 import type { OnlineUserRow } from '@/views/system/online/online.api'
 
 import {
-  dashboardSampleSizes,
-  loginTrendPath,
+  bucketCounts,
+  bucketLabel,
+  dashboardRanges,
   operationTypeKey,
-  retainedTotal,
+  periodComparison,
   trendGeometry,
-  type DashboardSampleSize,
-  type LoginSample,
-  type OperationSample,
-  type SampleCoverage,
+  trendPath,
 } from './dashboard-insights.model'
 import './dashboard-insights.css'
 
@@ -120,82 +128,138 @@ function SourceFeedback<T>({
   )
 }
 
-function SampleSpan({ value, count }: { value: SampleCoverage; count: number }) {
+function RangeControl({
+  range,
+  onRange,
+}: {
+  range: LogInsightRange
+  onRange: (range: LogInsightRange) => void
+}) {
   const { t } = useTranslation('dashboard')
   return (
-    <div className="text-xs leading-relaxed text-muted-foreground">
-      <p>{t('sampleCount', { count })}</p>
-      {value.first && value.last && (
-        <p className="mt-1 break-words tabular-nums">
-          {t('sampleCoverage', { first: value.first, last: value.last })}
-        </p>
-      )}
-      <p className="mt-1">{t('sampleClock')}</p>
+    <div
+      className="dashboard-sample-control flex flex-wrap gap-1 rounded-full p-1"
+      role="group"
+      aria-label={t('rangeSelector')}
+    >
+      {dashboardRanges.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className="rounded-full px-3 py-2 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-pressed={option === range}
+          onClick={() => onRange(option)}
+        >
+          {t(`range${option}`)}
+        </button>
+      ))}
     </div>
   )
 }
 
-function LoginTrend({ sample, motionEnabled }: { sample: LoginSample; motionEnabled: boolean }) {
+function WindowNote({ insight }: { insight: LoginInsights | OperInsights }) {
+  const { t } = useTranslation('dashboard')
+  return (
+    <div className="text-xs leading-relaxed text-muted-foreground">
+      <p className="tabular-nums">{t('windowSpan', { from: insight.from, to: insight.to })}</p>
+      <p className="mt-1">{t('windowZone', { zone: insight.zone, offset: insight.utcOffset })}</p>
+    </div>
+  )
+}
+
+function Comparison({ insight }: { insight: LoginInsights | OperInsights }) {
+  const { t } = useTranslation('dashboard')
+  const result = periodComparison(insight.total, insight.previousTotal, insight.previousCovered)
+  if (result.direction === null)
+    return <span className="text-xs text-muted-foreground">{t('compareUnavailable')}</span>
+  const Icon =
+    result.direction === 'up' ? ArrowUpRight : result.direction === 'down' ? ArrowDownRight : Minus
+  return (
+    <span
+      className="dashboard-compare inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"
+      data-direction={result.direction}
+      title={
+        insight.previousCovered
+          ? t('compareExact', { total: insight.total, previous: insight.previousTotal })
+          : undefined
+      }
+    >
+      <Icon className="size-3.5" aria-hidden="true" />
+      {result.multiple !== null
+        ? t('compareMultiple', { multiple: result.multiple })
+        : result.percent === null
+          ? t(result.direction === 'same' ? 'compareSame' : 'compareNew')
+          : t(`compare_${result.direction}`, { percent: result.percent })}
+    </span>
+  )
+}
+
+function PeriodTrend({
+  insight,
+  motionEnabled,
+}: {
+  insight: LoginInsights
+  motionEnabled: boolean
+}) {
   const { t } = useTranslation('dashboard')
   const id = useId()
-  const [hovered, setHovered] = useState<number | null>(null)
-  const shape = loginTrendPath(sample.buckets)
-  const selected = Math.min(hovered ?? sample.buckets.length - 1, sample.buckets.length - 1)
-  const bucket = sample.buckets[selected]
-  const { left, right, top, bottom, width, height } = trendGeometry
-  const x =
-    sample.buckets.length === 1
-      ? width / 2
-      : left + ((right - left) * selected) / (sample.buckets.length - 1)
-  const y = bottom - ((bucket?.count ?? 0) / (shape?.maximum ?? 1)) * (bottom - top)
-  const lineControls = useSurfaceAnimation(
-    { d: shape?.path ?? '' },
+  const [selected, setSelected] = useState<number | null>(null)
+  const counts = bucketCounts(insight.buckets)
+  const shape = trendPath(counts)
+  const index = Math.min(selected ?? counts.length - 1, counts.length - 1)
+  const point = shape?.points[index]
+  const bucket = insight.buckets[index]
+  const pointControls = useSurfaceAnimation(
+    { cx: point?.x ?? 0, cy: point?.y ?? 0 },
     motionEnabled,
     insightMotion.chart,
   )
-  const fillControls = useSurfaceAnimation(
-    { d: shape?.fill ?? '' },
-    motionEnabled,
-    insightMotion.chart,
-  )
-  const pointControls = useSurfaceAnimation({ cx: x, cy: y }, motionEnabled, insightMotion.chart)
-  if (!shape || !bucket)
+  if (!shape || !bucket || !point)
     return (
       <p
         role="status"
         className="flex min-h-44 items-center justify-center text-sm text-muted-foreground"
       >
-        {t(sample.count ? 'invalidTimeOnly' : 'noLoginSamples')}
+        {t('noLoginRecords')}
       </p>
     )
+  const { left, right, top, bottom, width, height } = trendGeometry
+  const move = (event: KeyboardEvent<SVGSVGElement>) => {
+    const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    if (!delta) return
+    event.preventDefault()
+    setSelected(Math.max(0, Math.min(counts.length - 1, index + delta)))
+  }
+  const labels = [0, Math.floor((counts.length - 1) / 2), counts.length - 1]
+  // A new range redraws its curve once; same-range refreshes keep the drawn path.
+  const drawKey = `${insight.range}-${counts.length}`
   return (
-    <div className="min-w-0 self-end">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="tabular-nums">{bucket.start.slice(5)}</span>
+    <div className="min-w-0">
+      <div
+        className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+        aria-live="polite"
+      >
+        <span className="tabular-nums">{bucket.start.slice(5, 16)}</span>
         <span className="rounded-full bg-card/70 px-2 py-1 font-medium text-foreground">
-          {t('bucketRecords', { count: bucket.count })}
+          {t('bucketReadout', { total: bucket.total, failed: bucket.failed })}
         </span>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full overflow-visible"
+        className="w-full overflow-visible rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring"
         role="img"
-        aria-label={`${t('loginTrend')}: ${t('sampleCount', { count: sample.count - sample.coverage.invalidTimes })}`}
+        tabIndex={0}
+        aria-label={t('trendLabel', { total: insight.total })}
+        onKeyDown={move}
         onPointerMove={(event) => {
           const bounds = event.currentTarget.getBoundingClientRect()
           const fraction =
             (((event.clientX - bounds.left) / bounds.width) * width - left) / (right - left)
-          setHovered(
-            Math.max(
-              0,
-              Math.min(
-                sample.buckets.length - 1,
-                Math.round(fraction * (sample.buckets.length - 1)),
-              ),
-            ),
+          setSelected(
+            Math.max(0, Math.min(counts.length - 1, Math.round(fraction * (counts.length - 1)))),
           )
         }}
-        onPointerLeave={() => setHovered(null)}
+        onPointerLeave={() => setSelected(null)}
       >
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
@@ -213,26 +277,39 @@ function LoginTrend({ sample, motionEnabled }: { sample: LoginSample; motionEnab
             className="dashboard-trend-grid"
           />
         ))}
-        {sample.buckets.length > 1 && (
+        {counts.length > 1 && (
           <>
             <motion.path
-              key={`fill-${sample.buckets.length}`}
-              initial={{ d: shape.fill }}
-              animate={fillControls}
+              key={`fill-${drawKey}`}
+              d={shape.fill}
               fill={`url(#${id})`}
+              initial={motionEnabled ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={insightMotion.chart}
             />
             <motion.path
-              key={`line-${sample.buckets.length}`}
-              initial={{ d: shape.path }}
-              animate={lineControls}
+              key={`line-${drawKey}`}
+              d={shape.path}
               className="dashboard-trend-line"
+              initial={motionEnabled ? { pathLength: 0 } : false}
+              animate={{ pathLength: 1 }}
+              transition={insightMotion.chart}
             />
+            {shape.points.map((vertex, vertexIndex) => (
+              <circle
+                key={`${drawKey}-${vertexIndex}`}
+                cx={vertex.x}
+                cy={vertex.y}
+                r={counts.length > 12 ? 1.6 : 2.6}
+                className="dashboard-trend-vertex"
+              />
+            ))}
           </>
         )}
         <motion.circle
-          initial={{ cx: x, cy: y }}
+          initial={{ cx: point.x, cy: point.y }}
           animate={pointControls}
-          r="4"
+          r="4.5"
           className="dashboard-trend-point"
         />
       </svg>
@@ -240,17 +317,12 @@ function LoginTrend({ sample, motionEnabled }: { sample: LoginSample; motionEnab
         className="flex justify-between gap-4 text-xs text-muted-foreground tabular-nums"
         aria-hidden="true"
       >
-        <span>{sample.coverage.first?.slice(5, 16)}</span>
-        <span>{sample.coverage.last?.slice(5, 16)}</span>
+        {labels.map((labelIndex, position) => (
+          <span key={`${labelIndex}-${position}`}>
+            {bucketLabel(insight.buckets[labelIndex].start, insight.bucketUnit)}
+          </span>
+        ))}
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-        {t(sample.buckets.length === 1 ? 'singleObservation' : 'chartHint')}
-      </p>
-      {sample.coverage.invalidTimes > 0 && (
-        <p className="mt-2 text-xs text-warning-foreground">
-          {t('invalidTimes', { count: sample.coverage.invalidTimes })}
-        </p>
-      )}
     </div>
   )
 }
@@ -295,6 +367,7 @@ function SuccessGauge({
                 language={language}
                 motionEnabled={motionEnabled}
                 decimals={1}
+                variant="odometer"
               />
               <span className="ml-0.5 text-xl text-muted-foreground">%</span>
             </>
@@ -331,14 +404,45 @@ function DistributionBar({
   )
 }
 
+function Stat({
+  label,
+  value,
+  language,
+  motionEnabled,
+  decimals = 0,
+  tone,
+}: {
+  label: string
+  value: number
+  language: 'zh' | 'en'
+  motionEnabled: boolean
+  decimals?: number
+  tone?: 'brand'
+}) {
+  return (
+    <div>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd
+        className={`mt-1.5 text-lg font-medium tabular-nums ${tone === 'brand' ? 'text-brand-text' : ''}`}
+      >
+        <AnimatedNumber
+          value={value}
+          language={language}
+          motionEnabled={motionEnabled}
+          decimals={decimals}
+          variant="odometer"
+        />
+      </dd>
+    </div>
+  )
+}
+
 export function DashboardInsights({
   login,
   operation,
   online,
-  loginSample,
-  operationSample,
-  sampleSize,
-  onSampleSize,
+  range,
+  onRange,
   motionEnabled,
   language,
   loginHref,
@@ -346,13 +450,11 @@ export function DashboardInsights({
   onlineHref,
   children,
 }: {
-  login: DashboardSourceState<PageResult<LoginLogRow>>
-  operation: DashboardSourceState<PageResult<OperLogRow>>
+  login: DashboardSourceState<LoginInsights>
+  operation: DashboardSourceState<OperInsights>
   online: DashboardSourceState<OnlineUserRow[]>
-  loginSample: LoginSample | null
-  operationSample: OperationSample | null
-  sampleSize: DashboardSampleSize
-  onSampleSize: (size: DashboardSampleSize) => void
+  range: LogInsightRange
+  onRange: (range: LogInsightRange) => void
   motionEnabled: boolean
   language: 'zh' | 'en'
   loginHref?: string
@@ -361,10 +463,10 @@ export function DashboardInsights({
   children: ReactNode
 }) {
   const { t } = useTranslation('dashboard')
-  const loginTotal = retainedTotal(login.data?.total)
-  const operationTotal = retainedTotal(operation.data?.total)
-  const categories = operationSample?.distribution.slice(0, 4) ?? []
-  const remainder = operationSample?.distribution.slice(4) ?? []
+  const insight = login.data
+  const operations = operation.data
+  const categories = operations?.byBusinessType.slice(0, 4) ?? []
+  const remainder = operations?.byBusinessType.slice(4) ?? []
   const distributionRows = [
     ...categories.map((item) => ({ ...item, kind: 'type' as const })),
     ...(remainder.length
@@ -382,15 +484,16 @@ export function DashboardInsights({
     ? t('noOperationAccess')
     : operation.isPending
       ? t('loading')
-      : operation.isError && !operation.data
+      : operation.isError && !operations
         ? t('unavailable')
-        : t('noOperationSamples')
+        : t('noOperationRecords')
   return (
     <div className="space-y-4">
       <div className="dashboard-insight-top grid gap-4">
         <InsightCard
           className="dashboard-insight-hero flex flex-col p-5 sm:p-7"
           motionEnabled={motionEnabled}
+          entranceKey="dashboard:login"
           order={0}
           aria-labelledby="dashboard-logins-title"
         >
@@ -399,81 +502,79 @@ export function DashboardInsights({
               <h2 id="dashboard-logins-title" className="font-semibold">
                 {t('loginOverview')}
               </h2>
-              <p className="mt-1 text-xs text-muted-foreground">{t('retainedLoginHint')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('loginOverviewHint')}</p>
             </div>
-            <div
-              className="dashboard-sample-control flex flex-wrap gap-1 rounded-full p-1"
-              role="group"
-              aria-label={t('sampleSelector')}
-            >
-              {dashboardSampleSizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className="rounded-full px-3 py-2 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-pressed={size === sampleSize}
-                  onClick={() => onSampleSize(size)}
-                >
-                  {t('sampleOption', { count: size })}
-                </button>
-              ))}
-            </div>
+            <RangeControl range={range} onRange={onRange} />
           </div>
           <div className="mt-5">
             <SourceFeedback state={login} source={t('loginSource')} denied={t('noLoginAccess')} />
           </div>
-          {login.data !== undefined && loginSample && (
+          {insight && (
             <>
-              <div className="grid flex-1 items-end gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-                <div className="space-y-6">
+              <div className="grid items-start gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                <div>
                   <div>
                     <div className="flex flex-wrap items-baseline gap-2">
-                      {loginTotal === null ? (
-                        <p className="text-sm text-muted-foreground">{t('totalUnavailable')}</p>
-                      ) : (
-                        <>
-                          <span className="insight-metric text-5xl font-medium sm:text-6xl">
-                            <AnimatedNumber
-                              value={loginTotal}
-                              language={language}
-                              motionEnabled={motionEnabled}
-                            />
-                          </span>
-                          <span className="text-xs text-muted-foreground">{t('records')}</span>
-                        </>
-                      )}
+                      <span className="insight-metric text-5xl font-medium sm:text-6xl">
+                        <AnimatedNumber
+                          value={insight.total}
+                          language={language}
+                          motionEnabled={motionEnabled}
+                          variant="odometer"
+                        />
+                      </span>
+                      <span className="text-xs text-muted-foreground">{t('times')}</span>
+                      <Comparison insight={insight} />
                     </div>
                     <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                      {t('retainedHint')}
+                      {t(`rangeTotal${insight.range}`)}
                     </p>
                   </div>
-                  <dl className="flex flex-wrap gap-6 text-xs">
-                    <div>
-                      <dt className="text-muted-foreground">{t('sampleSucceeded')}</dt>
-                      <dd className="mt-1.5 text-lg font-medium text-brand-text tabular-nums">
-                        <AnimatedNumber
-                          value={loginSample.succeeded}
-                          language={language}
-                          motionEnabled={motionEnabled}
-                        />
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">{t('sampleFailed')}</dt>
-                      <dd className="mt-1.5 text-lg font-medium tabular-nums">
-                        <AnimatedNumber
-                          value={loginSample.failed}
-                          language={language}
-                          motionEnabled={motionEnabled}
-                        />
-                      </dd>
-                    </div>
-                  </dl>
                 </div>
-                <LoginTrend sample={loginSample} motionEnabled={motionEnabled} />
+                <PeriodTrend insight={insight} motionEnabled={motionEnabled} />
               </div>
-              <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-                <SampleSpan value={loginSample.coverage} count={loginSample.count} />
+              <dl className="mt-6 grid grid-cols-3 gap-x-6 gap-y-4 border-t border-border-subtle pt-5 text-xs sm:grid-cols-6">
+                <Stat
+                  label={t('succeeded')}
+                  value={insight.succeeded}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                  tone="brand"
+                />
+                <Stat
+                  label={t('failed')}
+                  value={insight.failed}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
+                <Stat
+                  label={t('distinctUsers')}
+                  value={insight.distinctUsers}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
+                <Stat
+                  label={t('distinctIps')}
+                  value={insight.distinctIps}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
+                <Stat
+                  label={t(insight.bucketUnit === 'HOURS' ? 'peakHour' : 'peakDay')}
+                  value={insight.peak}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
+                <Stat
+                  label={t(insight.bucketUnit === 'HOURS' ? 'averageHour' : 'averageDay')}
+                  value={insight.average}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                  decimals={1}
+                />
+              </dl>
+              <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
+                <WindowNote insight={insight} />
                 {loginHref && (
                   <Button className="dashboard-insight-action rounded-full" asChild>
                     <Link to={loginHref}>
@@ -490,6 +591,7 @@ export function DashboardInsights({
           <InsightCard
             className="flex flex-col justify-between gap-4 p-5 sm:p-6"
             motionEnabled={motionEnabled}
+            entranceKey="dashboard:online"
             order={1}
             aria-labelledby="dashboard-sessions-title"
           >
@@ -510,6 +612,7 @@ export function DashboardInsights({
                     value={online.data.length}
                     language={language}
                     motionEnabled={motionEnabled}
+                    variant="odometer"
                   />
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -532,10 +635,14 @@ export function DashboardInsights({
           <InsightCard
             className="flex flex-col justify-between gap-4 p-5 sm:p-6"
             motionEnabled={motionEnabled}
+            entranceKey="dashboard:operations"
             order={2}
+            aria-labelledby="dashboard-operations-title"
           >
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium">{t('retainedOperations')}</h2>
+              <h2 id="dashboard-operations-title" className="text-sm font-medium">
+                {t('operationsInRange')}
+              </h2>
               <ScrollText className="size-4 text-muted-foreground" aria-hidden="true" />
             </div>
             <SourceFeedback
@@ -543,20 +650,22 @@ export function DashboardInsights({
               source={t('operationSource')}
               denied={t('noOperationAccess')}
             />
-            {operation.data !== undefined && (
+            {operations && (
               <>
-                <div className="insight-metric text-4xl font-medium sm:text-5xl">
-                  {operationTotal === null ? (
-                    <span className="text-sm text-muted-foreground">{t('totalUnavailable')}</span>
-                  ) : (
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="insight-metric text-4xl font-medium sm:text-5xl">
                     <AnimatedNumber
-                      value={operationTotal}
+                      value={operations.total}
                       language={language}
                       motionEnabled={motionEnabled}
+                      variant="odometer"
                     />
-                  )}
+                  </span>
+                  <Comparison insight={operations} />
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">{t('retainedHint')}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t(`operationsTotal${operations.range}`)}
+                </p>
               </>
             )}
             {operationHref && operation.allowed && (
@@ -571,44 +680,38 @@ export function DashboardInsights({
         </div>
       </div>
       <div className="dashboard-insight-bottom grid gap-4 md:grid-cols-2">
-        <InsightCard className="p-5 sm:p-6" motionEnabled={motionEnabled} order={3}>
+        <InsightCard
+          className="p-5 sm:p-6"
+          motionEnabled={motionEnabled}
+          entranceKey="dashboard:success"
+          order={3}
+        >
           <h2 className="font-semibold">{t('operationSuccess')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('operationSuccessHint')}</p>
-          {operationSample ? (
+          {operations && operations.total > 0 ? (
             <>
               <SuccessGauge
-                value={operationSample.successRate}
+                value={operations.successRate}
                 language={language}
                 motionEnabled={motionEnabled}
               />
               <dl className="grid grid-cols-2 gap-4 border-t border-border-subtle pt-4 text-xs">
-                <div>
-                  <dt className="text-muted-foreground">{t('succeeded')}</dt>
-                  <dd className="mt-1 text-lg font-medium tabular-nums">
-                    <AnimatedNumber
-                      value={operationSample.succeeded}
-                      language={language}
-                      motionEnabled={motionEnabled}
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t('failed')}</dt>
-                  <dd className="mt-1 text-lg font-medium tabular-nums">
-                    <AnimatedNumber
-                      value={operationSample.failed}
-                      language={language}
-                      motionEnabled={motionEnabled}
-                    />
-                  </dd>
-                </div>
+                <Stat
+                  label={t('succeeded')}
+                  value={operations.succeeded}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
+                <Stat
+                  label={t('failed')}
+                  value={operations.failed}
+                  language={language}
+                  motionEnabled={motionEnabled}
+                />
               </dl>
-              <p className="mt-3 text-xs text-muted-foreground">
-                {t('sampleCount', { count: operationSample.count })}
-              </p>
-              {operationSample.unknown > 0 && (
+              {operations.unknown > 0 && (
                 <p className="mt-2 text-xs text-warning-foreground">
-                  {t('unknownResults', { count: operationSample.unknown })}
+                  {t('unknownResults', { count: operations.unknown })}
                 </p>
               )}
             </>
@@ -618,59 +721,61 @@ export function DashboardInsights({
             </p>
           )}
         </InsightCard>
-        <InsightCard className="flex flex-col p-5 sm:p-6" motionEnabled={motionEnabled} order={4}>
+        <InsightCard
+          className="flex flex-col p-5 sm:p-6"
+          motionEnabled={motionEnabled}
+          entranceKey="dashboard:distribution"
+          order={4}
+        >
           <h2 className="font-semibold">{t('distribution')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('distributionHint')}</p>
-          {operationSample?.count ? (
-            <>
-              <div className="my-6 flex flex-1 flex-col justify-center gap-5">
-                {distributionRows.map((item, index) => {
-                  const knownKey = operationTypeKey(item.type)
-                  const label =
-                    item.kind === 'remaining'
-                      ? t('typeOther')
-                      : knownKey
-                        ? t(knownKey)
-                        : (item.type ?? t('typeUnknown'))
-                  return (
-                    <div key={item.kind === 'remaining' ? 'remaining' : `type-${item.type}`}>
-                      <div className="mb-2 flex items-start justify-between gap-3 text-xs">
-                        <span
-                          className="min-w-0 break-all"
-                          title={
-                            item.kind === 'remaining'
-                              ? remainder.map((entry) => entry.type ?? t('typeUnknown')).join(', ')
-                              : (item.type ?? undefined)
-                          }
-                        >
-                          {label}
-                        </span>
-                        <span className="shrink-0 text-muted-foreground tabular-nums">
-                          {formatNumber.format(item.count)} ·{' '}
-                          {Math.round((item.count / operationSample.count) * 100)}%
-                        </span>
-                      </div>
-                      <div
-                        className="h-1.5 overflow-hidden rounded-full bg-secondary"
-                        role="meter"
-                        aria-label={label}
-                        aria-valuemin={0}
-                        aria-valuemax={operationSample.count}
-                        aria-valuenow={item.count}
+          {operations && operations.total > 0 ? (
+            <div className="my-6 flex flex-1 flex-col justify-center gap-5">
+              {distributionRows.map((item, index) => {
+                const knownKey = operationTypeKey(item.type)
+                const label =
+                  item.kind === 'remaining'
+                    ? t('typeOther')
+                    : knownKey
+                      ? t(knownKey)
+                      : (item.type ?? t('typeUnknown'))
+                return (
+                  <div key={item.kind === 'remaining' ? 'remaining' : `type-${item.type}`}>
+                    <div className="mb-2 flex items-start justify-between gap-3 text-xs">
+                      <span
+                        className="min-w-0 break-all"
+                        title={
+                          item.kind === 'remaining'
+                            ? remainder.map((entry) => entry.type ?? t('typeUnknown')).join(', ')
+                            : (item.type ?? undefined)
+                        }
                       >
-                        <DistributionBar
-                          value={item.count}
-                          total={operationSample.count}
-                          index={index}
-                          motionEnabled={motionEnabled}
-                        />
-                      </div>
+                        {label}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground tabular-nums">
+                        {formatNumber.format(item.count)} ·{' '}
+                        {Math.round((item.count / operations.total) * 100)}%
+                      </span>
                     </div>
-                  )
-                })}
-              </div>
-              <SampleSpan value={operationSample.coverage} count={operationSample.count} />
-            </>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-secondary"
+                      role="meter"
+                      aria-label={label}
+                      aria-valuemin={0}
+                      aria-valuemax={operations.total}
+                      aria-valuenow={item.count}
+                    >
+                      <DistributionBar
+                        value={item.count}
+                        total={operations.total}
+                        index={index}
+                        motionEnabled={motionEnabled}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           ) : (
             <p role="status" className="py-10 text-sm text-muted-foreground">
               {noOperation}
@@ -679,10 +784,7 @@ export function DashboardInsights({
         </InsightCard>
         <div className="min-w-0 md:col-span-2 xl:col-span-1">{children}</div>
       </div>
-      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-        <LogIn className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        {t('sampleExplanation')}
-      </p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{t('rangeExplanation')}</p>
     </div>
   )
 }

@@ -86,6 +86,11 @@
   --motion-duration-panel: 280ms;
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* 2026-10-18 video adaptation; same values as stateMotion in motion.ts. */
+  --motion-duration-morph: 240ms;
+  --motion-duration-odometer: 480ms;
+  --motion-duration-path-pulse: 520ms;
+  --motion-duration-heat-cell: 180ms;
 
   /* 2026-10-18: approved dashboard / role-insight surfaces; base product tokens stay independent. */
   --insight-card-radius: 1.5rem;
@@ -99,6 +104,28 @@
   --insight-blue: oklch(0.54 0.19 258);
   --insight-blue-foreground: oklch(0.99 0 0);
   --insight-surface-raised: oklch(1 0 0);
+  /* Selected ancestor / authorization path; readable as a 3:1 graphic on card and background. */
+  --insight-path: oklch(0.62 0.14 70);
+  --insight-path-glow: color-mix(in oklch, var(--insight-path) 28%, transparent);
+  /* Heatmap ramp: level 0 is a recorded zero, never "no data". */
+  --heat-0: oklch(0.955 0.004 260);
+  --heat-1: oklch(0.88 0.055 175);
+  --heat-2: oklch(0.8 0.1 178);
+  --heat-3: oklch(0.69 0.13 180);
+  --heat-4: oklch(0.55 0.12 182);
+  --heat-uncovered: oklch(0.92 0.003 260);
+  --heat-uncovered-stripe: oklch(0.84 0.004 260);
+  --heat-failure-stripe: oklch(0.54 0.215 27.325 / 0.75);
+  /* Draft markers and the floating unsaved bar. */
+  --draft-marker: var(--insight-blue);
+  --draft-bar: oklch(0.22 0.008 260);
+  --draft-bar-foreground: oklch(0.98 0 0);
+  --draft-bar-muted: oklch(0.78 0.006 260);
+  /* Origin ghost for source-anchored details. */
+  --origin-ghost: color-mix(in oklch, var(--brand) 14%, var(--card));
+  --origin-ghost-border: color-mix(in oklch, var(--brand) 40%, transparent);
+  /* Command palette backdrop blur, progressive enhancement only. */
+  --overlay-backdrop-blur: 6px;
 
   /* Compatibility for the standalone design study. */
   --study-card-radius: var(--insight-card-radius);
@@ -125,6 +152,19 @@
   --insight-blue: oklch(0.72 0.14 258);
   --insight-blue-foreground: oklch(0.17 0.015 258);
   --insight-surface-raised: oklch(0.27 0.006 260);
+  --insight-path: oklch(0.8 0.13 78);
+  --heat-0: oklch(0.255 0.006 260);
+  --heat-1: oklch(0.36 0.06 178);
+  --heat-2: oklch(0.48 0.09 179);
+  --heat-3: oklch(0.62 0.12 180);
+  --heat-4: oklch(0.78 0.13 181);
+  --heat-uncovered: oklch(0.23 0.004 260);
+  --heat-uncovered-stripe: oklch(0.32 0.006 260);
+  --heat-failure-stripe: oklch(0.704 0.191 22.216 / 0.8);
+  --draft-bar: oklch(0.93 0.004 260);
+  --draft-bar-foreground: oklch(0.2 0.008 260);
+  --draft-bar-muted: oklch(0.42 0.008 260);
+  --origin-ghost: color-mix(in oklch, var(--brand) 18%, var(--card));
   --slime-stage: #101314;
   --slime-body: #a1c6b3;
   --slime-cream: #e1e7cc;
@@ -718,4 +758,83 @@ html[data-motion='off'] [data-slot='sheet-content'][data-state='open'] {
 
 html[data-motion='off'] [data-appearance='scale'] [data-slot='pixel-scale-bar'] {
   animation: none !important;
+}
+
+/* 2026-10-18 source-anchored detail ghost: decorative only; the real layer is readable at once. */
+.origin-ghost-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.origin-ghost {
+  position: fixed;
+  pointer-events: none;
+  background: var(--origin-ghost);
+  border: 1px solid var(--origin-ghost-border);
+  border-radius: var(--radius-panel);
+  transform-origin: top left;
+  animation: origin-ghost-travel var(--motion-duration-morph) var(--motion-ease-enter) both;
+}
+
+@keyframes origin-ghost-travel {
+  from {
+    transform: var(--origin-ghost-from);
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.85;
+  }
+  to {
+    transform: none;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .origin-ghost {
+    display: none;
+  }
+}
+
+html[data-motion='off'] .origin-ghost {
+  display: none;
+}
+
+/* Command palette backdrop: dim first, blur only where supported and transparency is welcome. */
+@supports (backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)) {
+  [data-slot='dialog-overlay'][data-backdrop='blur'] {
+    -webkit-backdrop-filter: blur(var(--overlay-backdrop-blur));
+    backdrop-filter: blur(var(--overlay-backdrop-blur));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-slot='dialog-overlay'][data-backdrop='blur'] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Command palette list follows its content height (cmdk measures it); instant when motion is off. */
+[data-slot='command-list'][data-adaptive] {
+  height: min(var(--cmdk-list-height), 26rem);
+  max-height: 26rem;
+  transition: height var(--motion-duration-enter) var(--motion-ease-enter);
+}
+
+/* Page-level view switch (graph/list, cards/list); shared so pages need no module CSS. */
+.view-switch {
+  background: var(--muted);
+}
+
+.view-switch button {
+  color: var(--muted-foreground);
+}
+
+.view-switch button[aria-pressed='true'] {
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-surface);
 }

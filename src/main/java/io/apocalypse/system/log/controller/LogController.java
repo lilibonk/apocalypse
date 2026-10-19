@@ -1,8 +1,13 @@
 package io.apocalypse.system.log.controller;
 
 import io.apocalypse.common.response.PageResult;
+import io.apocalypse.system.log.dto.response.LoginHeatmapResp;
+import io.apocalypse.system.log.dto.response.LoginInsightResp;
 import io.apocalypse.system.log.dto.response.LoginLogResp;
+import io.apocalypse.system.log.dto.response.OperInsightResp;
 import io.apocalypse.system.log.dto.response.OperLogResp;
+import io.apocalypse.system.log.service.LogInsightRange;
+import io.apocalypse.system.log.service.LogInsightService;
 import io.apocalypse.system.log.service.LogQueryService;
 
 import jakarta.validation.constraints.Max;
@@ -26,6 +31,8 @@ public class LogController {
 
   private final LogQueryService logQueryService;
 
+  private final LogInsightService logInsightService;
+
   /** 登录日志分页。 */
   @GetMapping("/login")
   @PreAuthorize("hasAuthority('system:log:login')")
@@ -37,6 +44,27 @@ public class LogController {
           int size,
       @RequestParam(required = false) String keyword) {
     return logQueryService.pageLoginLog(page, size, keyword);
+  }
+
+  /** 登录日志周期统计（服务端全量聚合）。 */
+  @GetMapping("/login/insights")
+  @PreAuthorize("hasAuthority('system:log:login')")
+  public LoginInsightResp loginInsights(@RequestParam(defaultValue = "DAY") LogInsightRange range) {
+    return logInsightService.loginInsights(range);
+  }
+
+  /** 登录日志星期×小时热力图（仅 WEEK / MONTH）。 */
+  @GetMapping("/login/heatmap")
+  @PreAuthorize("hasAuthority('system:log:login')")
+  public LoginHeatmapResp loginHeatmap(@RequestParam(defaultValue = "WEEK") LogInsightRange range) {
+    return logInsightService.loginHeatmap(range);
+  }
+
+  /** 操作日志周期统计（服务端全量聚合）。 */
+  @GetMapping("/oper/insights")
+  @PreAuthorize("hasAuthority('system:log:oper')")
+  public OperInsightResp operInsights(@RequestParam(defaultValue = "DAY") LogInsightRange range) {
+    return logInsightService.operInsights(range);
   }
 
   /** 操作日志分页。 */

@@ -1,0 +1,108 @@
+.login-activity {
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+}
+
+.login-activity-range {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.login-activity-range button[aria-pressed='true'] {
+  background: var(--insight-surface-raised);
+  color: var(--foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.login-heatmap {
+  display: grid;
+  gap: calc(var(--spacing) * 1);
+  overflow-x: auto;
+}
+
+.login-heatmap-row {
+  display: grid;
+  grid-template-columns: calc(var(--spacing) * 10) repeat(24, minmax(calc(var(--spacing) * 4), 1fr));
+  gap: calc(var(--spacing) * 1);
+  align-items: center;
+}
+
+.login-heatmap-day,
+.login-heatmap-hour {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.login-heatmap-cell {
+  aspect-ratio: 1.6;
+  min-height: calc(var(--spacing) * 4);
+  border-radius: calc(var(--radius-control) * 0.5);
+  background-color: var(--heat-0);
+  outline: none;
+  transition: background-color var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.login-heatmap-cell:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.login-heatmap [data-level='1'],
+.login-heatmap-swatch[data-level='1'] {
+  background-color: var(--heat-1);
+}
+
+.login-heatmap [data-level='2'],
+.login-heatmap-swatch[data-level='2'] {
+  background-color: var(--heat-2);
+}
+
+.login-heatmap [data-level='3'],
+.login-heatmap-swatch[data-level='3'] {
+  background-color: var(--heat-3);
+}
+
+.login-heatmap [data-level='4'],
+.login-heatmap-swatch[data-level='4'] {
+  background-color: var(--heat-4);
+}
+
+.login-heatmap-swatch {
+  display: inline-block;
+  width: calc(var(--spacing) * 3.5);
+  height: calc(var(--spacing) * 3.5);
+  border-radius: 3px;
+  background-color: var(--heat-0);
+}
+
+.login-heatmap-cell[data-uncovered],
+.login-heatmap-swatch[data-uncovered] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--heat-uncovered) 0 3px,
+    var(--heat-uncovered-stripe) 3px 5px
+  );
+}
+
+.login-heatmap-cell[data-failure],
+.login-heatmap-swatch[data-failure] {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    var(--heat-failure-stripe) 3px 5px
+  );
+}
+
+.login-heatmap[data-wave] .login-heatmap-cell {
+  animation: heat-cell-in var(--motion-duration-heat-cell) var(--motion-ease-enter) both;
+}
+
+@keyframes heat-cell-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

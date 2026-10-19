@@ -147,8 +147,20 @@ public class UserService implements UserApi, LoginUserQuery {
   /** 分页查询。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PageResult<UserResp> page(int page, int size, String keyword) {
+    return page(page, size, keyword, null, false);
+  }
+
+  /** 分页查询，可按部门（及其下级）筛选；部门条件与当前动作数据范围取交集。 */
+  public PageResult<UserResp> page(
+      int page, int size, String keyword, Long deptId, boolean includeChildren) {
     return sysUserMapper
-        .pageByKeyword(page, size, keyword, dataScopeService.resolve("system:user:list"))
+        .pageByKeyword(
+            page,
+            size,
+            keyword,
+            dataScopeService.resolve("system:user:list"),
+            deptId,
+            includeChildren)
         .map(userConvert::toResp)
         .map(this::withDeptName);
   }

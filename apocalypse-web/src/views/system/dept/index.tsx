@@ -46,7 +46,12 @@ import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
+import { useSearchParams } from 'react-router'
+import { Network, Rows3 } from 'lucide-react'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+
 import { createDept, deleteDept, getDeptTree, updateDept } from './api'
+import { DeptOrgChart } from './DeptOrgChart'
 import { DeptFormDialog, type DeptFormValues } from './DeptFormDialog'
 import { flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } from './types'
@@ -58,6 +63,10 @@ export default function DeptPage() {
 
 function DeptWorkspace() {
   const { t } = useTranslation()
+  const { t: systemT } = useTranslation('system')
+  const desktop = useDesktopViewport()
+  const [params, setParams] = useSearchParams()
+  const view = desktop && params.get('deptView') !== 'table' ? 'chart' : 'table'
   const queryClient = useQueryClient()
   /** 展开的部门 id 集（默认空 = 只显示根节点）。 */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
@@ -200,12 +209,47 @@ function DeptWorkspace() {
             {t('common.组织部门的树形维护', { defaultValue: '组织部门的树形维护' })}
           </p>
         </div>
-        <Perm perm="system:dept:add" requiresAllScope>
-          <Button size="sm" onClick={() => openCreate(ROOT_DEPT_ID)}>
-            <Plus className="size-4" />
-            {t('common.新增部门', { defaultValue: '新增部门' })}
-          </Button>
-        </Perm>
+        <div className="flex flex-wrap items-center gap-2">
+          {desktop && (
+            <div
+              className="view-switch flex rounded-xl p-1"
+              role="group"
+              aria-label={systemT('deptChart.view')}
+            >
+              {(['chart', 'table'] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium"
+                  aria-pressed={view === kind}
+                  onClick={() =>
+                    setParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.set('deptView', kind)
+                        return next
+                      },
+                      { replace: true },
+                    )
+                  }
+                >
+                  {kind === 'chart' ? (
+                    <Network aria-hidden className="size-4" />
+                  ) : (
+                    <Rows3 aria-hidden className="size-4" />
+                  )}
+                  {systemT(`deptChart.${kind}`)}
+                </button>
+              ))}
+            </div>
+          )}
+          <Perm perm="system:dept:add" requiresAllScope>
+            <Button size="sm" onClick={() => openCreate(ROOT_DEPT_ID)}>
+              <Plus className="size-4" />
+              {t('common.新增部门', { defaultValue: '新增部门' })}
+            </Button>
+          </Perm>
+        </div>
       </div>
 
       <DynaQueryFeedback
@@ -214,7 +258,16 @@ function DeptWorkspace() {
         refreshing={isFetching}
         onRetry={() => void refetch()}
       />
-      {(!error || tree !== undefined) && (
+      {view === 'chart' && isLoading && <Skeleton className="h-[34rem] w-full" />}
+      {view === 'chart' && tree && (
+        <DeptOrgChart
+          tree={tree}
+          onCreateChild={openCreate}
+          onEdit={openEdit}
+          onDelete={setDeleting}
+        />
+      )}
+      {view === 'table' && (!error || tree !== undefined) && (
         <div
           className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
           aria-busy={isFetching}

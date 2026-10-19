@@ -811,7 +811,7 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
           </tbody>
         </table>
       </div>
-      <div className="break-all font-mono text-[0.68rem] text-muted-foreground">
+      <div className="break-all font-mono text-xs text-muted-foreground">
         {t('technicalDetails')}: {value.targetContentHash}
       </div>
     </>

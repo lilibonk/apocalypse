@@ -156,7 +156,7 @@ export function SettingsDrawer({
                 >
                   <span className="flex-1">
                     {ct('外观实验室')}
-                    <span className="ml-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <span className="ml-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">
                       Dev only
                     </span>
                   </span>
@@ -176,7 +176,7 @@ export function SettingsDrawer({
                     <section className="space-y-4 rounded-md border border-border bg-background/70 p-3">
                       <div>
                         <h3 className="text-xs font-medium">{ct('反馈与品牌')}</h3>
-                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        <p className="mt-1 text-xs leading-4 text-muted-foreground">
                           {ct('验证品牌反馈，不进入业务正文。')}
                         </p>
                       </div>
@@ -217,7 +217,7 @@ export function SettingsDrawer({
                     <section className="space-y-4 rounded-md border border-border bg-background/70 p-3">
                       <div>
                         <h3 className="text-xs font-medium">{ct('布局实验')}</h3>
-                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        <p className="mt-1 text-xs leading-4 text-muted-foreground">
                           {ct('验证脚手架能力，正式产品默认收起。')}
                         </p>
                       </div>

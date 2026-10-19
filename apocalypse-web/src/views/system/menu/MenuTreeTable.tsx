@@ -56,8 +56,10 @@ export function MenuTreeTable({
   onDelete,
   filtering,
   onResetFilters,
+  highlightId = null,
 }: {
   tree: MenuNode[]
+  highlightId?: string | null
   isLoading: boolean
   collapsed: Set<string>
   onToggle: (id: string) => void
@@ -125,7 +127,13 @@ export function MenuTreeTable({
             const hasChildren = node.children.length > 0
             const typeMeta = TYPE_META[node.menuType]
             return (
-              <TableRow key={node.id} className="group">
+              <TableRow
+                key={node.id}
+                id={`menu-row-${node.id}`}
+                tabIndex={highlightId === node.id ? -1 : undefined}
+                data-highlight={highlightId === node.id || undefined}
+                className="group data-[highlight]:bg-accent data-[highlight]:outline-2 data-[highlight]:outline-ring"
+              >
                 <TableCell>
                   <div
                     className="flex items-center gap-2"
