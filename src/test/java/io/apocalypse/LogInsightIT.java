@@ -105,6 +105,8 @@ class LogInsightIT extends AbstractIntegrationTest {
     String user = "boundary_" + UUID.randomUUID().toString().substring(0, 8);
     insertLogin(user, "10.9.1.1", 1, from.minusSeconds(1));
     insertLogin(user, "10.9.1.1", 1, from);
+    LocalDateTime currentDay = parse(before.get("to").asText()).truncatedTo(ChronoUnit.DAYS);
+    insertLogin(user + "_current", "10.9.1.2", 1, currentDay);
 
     clearInsightCache();
     JsonNode after = getForData("/system/logs/login/insights?range=WEEK", token);
@@ -112,8 +114,15 @@ class LogInsightIT extends AbstractIntegrationTest {
     assertThat(parse(after.get("from").asText())).isEqualTo(from);
     assertThat(after.get("buckets")).hasSize(7);
     assertThat(after.get("bucketUnit").asText()).isEqualTo("DAYS");
-    assertThat(delta(byStart(after), byStart(before), FORMAT.format(from), "total")).isEqualTo(1);
-    assertThat(after.get("total").asLong() - before.get("total").asLong()).isEqualTo(1);
+    Map<String, JsonNode> beforeBuckets = byStart(before);
+    Map<String, JsonNode> afterBuckets = byStart(after);
+    assertThat(delta(afterBuckets, beforeBuckets, FORMAT.format(from), "total")).isEqualTo(1);
+    // to 随服务端时刻推进，近期登录即使已经落库，也可能在两次查询间才进入当前日桶。
+    // 上面显式插入当前日记录，确保断言不依赖该桶静止；其余窗口仍必须精确增加边界这一条。
+    long currentDayDelta = delta(afterBuckets, beforeBuckets, FORMAT.format(currentDay), "total");
+    assertThat(currentDayDelta).isGreaterThanOrEqualTo(1);
+    assertThat(after.get("total").asLong() - before.get("total").asLong() - currentDayDelta)
+        .isEqualTo(1);
   }
 
   @Test
