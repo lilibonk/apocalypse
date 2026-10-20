@@ -524,11 +524,13 @@ export function listPrivateEvents(
   calendarId: SnowflakeId,
   from: string,
   to: string,
+  page = 1,
+  size = 200,
   transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<CalendarEvent>> {
   return request<PageResult<CalendarEvent>>('/calendar/events/page', {
     ...{
-      query: { calendarId, from, to, page: 1, size: 200 },
+      query: { calendarId, from, to, page, size },
     },
     ...transport,
   })
@@ -570,12 +572,14 @@ export function deletePrivateEvent(
 }
 export function listManagedEvents(
   calendarId: SnowflakeId,
+  page = 1,
+  size = 200,
   transport: Pick<RequestOptions, 'signal' | 'context'> = {},
 ): Promise<PageResult<CalendarEvent>> {
   return request<PageResult<CalendarEvent>>(
     `/calendar/calendars/${calendarId}/managed-events/page`,
     {
-      ...{ query: { page: 1, size: 200 } },
+      ...{ query: { page, size } },
       ...transport,
     },
   )

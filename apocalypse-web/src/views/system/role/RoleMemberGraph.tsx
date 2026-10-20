@@ -1,4 +1,5 @@
 import { motion } from 'motion/react'
+import type { ComponentProps } from 'react'
 import { Link2, Plus, ShieldCheck, Unlink, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -25,6 +26,19 @@ function MemberEdge({ y, state }: { y: number; state: RoleMemberLinkState }) {
       animate={controls}
       className="role-member-edit-edge"
       data-state={state}
+    />
+  )
+}
+
+function MemberNode({ y, ...props }: ComponentProps<typeof motion.button> & { y: number }) {
+  const enabled = useMotionPreference()
+  const target = { top: `${(y / 460) * 100}%`, opacity: 1 }
+  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
+  return (
+    <motion.button
+      {...props}
+      initial={enabled ? { ...target, opacity: 0 } : target}
+      animate={controls}
     />
   )
 }
@@ -78,7 +92,8 @@ export function RoleMemberGraph({
         const name = node.member?.nickname || node.member?.username || node.id
         const StateIcon = linked ? Link2 : state === 'removed' ? Unlink : Plus
         return (
-          <button
+          <MemberNode
+            y={nodeY(index)}
             type="button"
             key={node.id}
             className="role-members-node absolute flex items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -86,7 +101,6 @@ export function RoleMemberGraph({
             data-selected={selectedId === node.id}
             aria-pressed={onToggle ? linked : selectedId === node.id}
             disabled={disabled}
-            style={{ top: `${(nodeY(index) / 460) * 100}%` }}
             onClick={() => {
               onSelect(node.id)
               onToggle?.(node.id)
@@ -117,7 +131,7 @@ export function RoleMemberGraph({
               )}
             </span>
             {onToggle && <StateIcon className="size-4 shrink-0" aria-hidden="true" />}
-          </button>
+          </MemberNode>
         )
       })}
     </div>

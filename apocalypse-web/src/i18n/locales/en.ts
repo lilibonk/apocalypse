@@ -151,7 +151,10 @@ export const en = {
       已打开页面: 'Open pages',
       工作台: 'Dashboard',
       注销失败: 'Unable to sign out. Please try again.',
-      调整阅读体验与界面语言: 'Adjust your reading experience and interface language.',
+      调整阅读体验与界面语言: 'Adjust your reading experience, interface motion and language.',
+      interfaceMotion: 'Interface motion',
+      interfaceMotionDescription:
+        'Show changes immediately when off. Your system’s reduced-motion preference always applies.',
       外观实验室: 'Appearance lab',
       '仅用于验证脚手架主题能力，不属于最终用户设置。':
         'For validating scaffold themes only; these are developer settings.',
@@ -408,6 +411,7 @@ export const en = {
       pageView: 'Page view',
       viewList: 'List',
       viewOverview: 'Overview',
+      viewWorkspace: 'Workspace',
       queryUnselected: 'Not selected',
       queryRetrying: 'Retrying…',
       queryNoMatches: 'No matching results',

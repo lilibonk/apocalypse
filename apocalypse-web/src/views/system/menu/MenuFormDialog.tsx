@@ -125,12 +125,14 @@ export function MenuFormDialog({
   tree,
   onOpenChange,
   onSaved,
+  onRefresh,
 }: {
   open: boolean
   payload: MenuFormPayload
   tree: MenuNode[]
   onOpenChange: (open: boolean) => void
-  onSaved: () => void
+  onSaved: (id: string, name: string) => void
+  onRefresh: () => void
 }) {
   const { t } = useTranslation()
   const isEdit = payload.mode === 'edit' && !!payload.node
@@ -158,7 +160,7 @@ export function MenuFormDialog({
     clear: { queryKey: ['system', 'menus'] },
     reset: () => {
       onOpenChange(false)
-      onSaved()
+      onRefresh()
     },
   })
   const saveMutation = useModuleMutation(undefined, {
@@ -186,19 +188,22 @@ export function MenuFormDialog({
         requiredPerms: [permission],
         requiredAllScopePerms: [permission],
         execute: async (transport) => {
-          if (isEdit && payload.node) await updateMenu(payload.node.id, body, transport)
-          else await createMenu(body, transport)
+          if (isEdit && payload.node) {
+            await updateMenu(payload.node.id, body, transport)
+            return payload.node.id
+          }
+          return createMenu(body, transport)
         },
       })
     },
-    onSuccess: () => {
+    onSuccess: (id, values) => {
       toast.success(
         isEdit
           ? t('common.菜单已更新', { defaultValue: '菜单已更新' })
           : t('common.菜单已创建', { defaultValue: '菜单已创建' }),
       )
       onOpenChange(false)
-      onSaved()
+      onSaved(id, values.menuName)
     },
     onError: (error) => {
       toast.error(
@@ -225,9 +230,9 @@ export function MenuFormDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? t('common.修改「{{name}}」的配置，保存后立即影响全站路由与权限', {
+              ? t('system:menuWorkspace.editHint', {
                   name: payload.node?.menuName ?? '',
-                  defaultValue: '修改「{{name}}」的配置，保存后立即影响全站路由与权限',
+                  defaultValue: '修改「{{name}}」的导航配置，不改变业务权限授权。',
                 })
               : parentName
                 ? t('common.在「{{name}}」下新增菜单', {

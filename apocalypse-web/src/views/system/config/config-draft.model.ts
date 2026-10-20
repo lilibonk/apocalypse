@@ -5,6 +5,9 @@ export interface ConfigDraftItem {
   value: string
   baseValue: string | null
   baseVersion: number
+  /** Display context belongs to this draft, so review survives pagination and route restoration. */
+  configKey?: string
+  configName?: string
 }
 
 export type ConfigDraft = Readonly<Record<string, ConfigDraftItem>>
@@ -23,7 +26,16 @@ export function editDraft(draft: ConfigDraft, row: ConfigRow, value: string): Co
     delete next[row.id]
     return next
   }
-  return { ...draft, [row.id]: { value, baseValue, baseVersion } }
+  return {
+    ...draft,
+    [row.id]: {
+      value,
+      baseValue,
+      baseVersion,
+      configKey: row.configKey,
+      configName: row.configName,
+    },
+  }
 }
 
 export function undoDraft(draft: ConfigDraft, id: string): ConfigDraft {
@@ -69,7 +81,14 @@ export function rebaseDraft(draft: ConfigDraft, rows: readonly ConfigRow[]): Con
       continue
     }
     if (item.value === normalizeValue(row.configValue)) continue
-    next[id] = { value: item.value, baseValue: row.configValue, baseVersion: row.version }
+    next[id] = {
+      ...item,
+      value: item.value,
+      baseValue: row.configValue,
+      baseVersion: row.version,
+      configKey: row.configKey,
+      configName: row.configName,
+    }
   }
   return next
 }

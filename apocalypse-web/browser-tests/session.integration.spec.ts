@@ -118,6 +118,18 @@ async function navigate(page: Page, path: string): Promise<void> {
       .click()
   await link.click()
   await expect(page).toHaveURL(new RegExp(`${path}(?:\\?.*)?$`))
+  // This authentication rehearsal uses the supported field-list workflow. Object workspaces
+  // have their own selection/edit/paging regressions and are now the initial desktop view.
+  if (path === '/system/user' || path === '/system/online')
+    await page
+      .getByRole('group', { name: '页面视图' })
+      .getByRole('button', { name: '列表', exact: true })
+      .click()
+  if (path === '/system/dept')
+    await page
+      .getByRole('group', { name: '部门展示方式' })
+      .getByRole('button', { name: '树表', exact: true })
+      .click()
 }
 
 async function search(page: Page, label: string, keyword: string): Promise<Locator> {
@@ -673,7 +685,7 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
     expect(currentUser.perms).not.toContain('system:user:list')
     await forbiddenUsers
     page.off('response', observePermission)
-    await expect(page).toHaveURL(/\/system\/user$/)
+    await expect(page).toHaveURL(/\/system\/user(?:\?.*)?$/)
     await expect(page.getByRole('link', { name: '用户管理', exact: true })).toBeVisible()
     await expect(page.getByRole('alert')).toBeVisible()
     await expect(page.getByRole('cell', { name: username, exact: true })).toHaveCount(0)
@@ -802,7 +814,7 @@ test('an actually expired access token refreshes from cookie and a new query gen
   expect(renewed.accessToken === access).toBe(false)
   await responseData(await accepted)
   await responseData(await newQuery)
-  await expect(page).toHaveURL(/\/system\/user$/)
+  await expect(page).toHaveURL(/\/system\/user(?:\?.*)?$/)
   await expect(page.getByRole('textbox', { name: '用户名 / 昵称', exact: true })).toHaveValue('')
   await expect(page.getByRole('cell', { name: credentials.username, exact: true })).toBeVisible()
   // The old filtered request is cancelled after refresh, never replayed under a new generation.

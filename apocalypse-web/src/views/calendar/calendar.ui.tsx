@@ -1,11 +1,28 @@
 import { FieldSelect, FieldOption } from '@/components/ui/field-select'
-import { AlertCircle, CalendarDays } from 'lucide-react'
+import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 
+import { Perm } from '@/components/Perm'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
+import { motionTransition } from '@/design/motion'
+import { useMenuRoute } from '@/hooks/useMenuRoute'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 
 import type { CalendarRecord } from './calendar.api'
@@ -22,19 +39,19 @@ export function CalendarPageFrame({
   children: ReactNode
 }) {
   return (
-    <div data-slot="calendar-page" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div data-slot="calendar-page" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader title={title} description={description} />
       {actions && (
         <div
           data-slot="calendar-toolbar"
-          className="flex flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-card p-4"
+          className="flex min-w-0 flex-wrap items-end gap-3 border-b border-border pb-4"
         >
           {actions}
         </div>
       )}
       <div
         data-slot="calendar-workspace"
-        className="min-w-0 space-y-5 [&_[data-slot=card]]:min-w-0 [&_[data-slot=card]]:shadow-none [&_[data-slot=card-header]]:border-b [&_[data-slot=card-header]]:border-border [&_[data-slot=card-header]]:pb-4 [&_[data-slot=card-title]]:text-base"
+        className="min-w-0 space-y-4 [&_[data-slot=card]]:min-w-0 [&_[data-slot=card]]:shadow-none [&_[data-slot=card-header]]:border-b [&_[data-slot=card-header]]:border-border [&_[data-slot=card-header]]:pb-3 [&_[data-slot=card-title]]:text-base"
       >
         {children}
       </div>
@@ -61,7 +78,7 @@ export function CalendarPicker({
     ? calendars.filter((calendar) => roles.includes(calendar.currentUserRole))
     : calendars
   return (
-    <div className="grid w-full min-w-0 gap-1.5 sm:w-72">
+    <div className="grid w-full min-w-0 gap-1.5 sm:w-64">
       <Label htmlFor={id}>{label ?? t('businessCalendar')}</Label>
       <FieldSelect
         id={id}
@@ -84,26 +101,152 @@ export function CalendarPicker({
 
 export function StateBadge({ value }: { value: string }) {
   const { t } = useTranslation('calendar')
-  const destructive = ['ERROR', 'FAILED', 'REJECTED'].includes(value)
+  const animate = useMotionPreference()
+  const destructive = ['ERROR', 'FAILED', 'INVALID', 'REJECTED'].includes(value)
   const warning = ['OPEN', 'NEEDS_REVIEW'].includes(value)
-  const success = ['ACTIVE', 'PUBLISHED', 'APPROVED', 'VALIDATED'].includes(value)
-  const secondary = ['DRAFT', 'WITHDRAWN', 'INACTIVE', 'UNPUBLISHED'].includes(value)
+  const success = ['ACTIVE', 'PUBLISHED', 'APPROVED', 'VALIDATED', 'REVIEWED'].includes(value)
+  const secondary = [
+    'DRAFT',
+    'WITHDRAWN',
+    'INACTIVE',
+    'UNPUBLISHED',
+    'CANCELLED',
+    'SUPERSEDED',
+  ].includes(value)
   return (
-    <Badge
-      variant={
-        destructive
-          ? 'destructive'
-          : warning
-            ? 'warning'
-            : success
-              ? 'success'
-              : secondary
-                ? 'secondary'
-                : 'outline'
-      }
-    >
-      {t(`states.${value}`, { defaultValue: t('unknownState') })}
-    </Badge>
+    <AnimatePresence initial={false}>
+      <motion.span
+        key={value}
+        className="inline-flex"
+        initial={animate ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={animate ? motionTransition.feedback : { duration: 0 }}
+      >
+        <Badge
+          variant={
+            destructive
+              ? 'destructive'
+              : warning
+                ? 'warning'
+                : success
+                  ? 'success'
+                  : secondary
+                    ? 'secondary'
+                    : 'outline'
+          }
+        >
+          {t(`states.${value}`, { defaultValue: t('unknownState') })}
+        </Badge>
+      </motion.span>
+    </AnimatePresence>
+  )
+}
+
+/** Module-local navigation; both the menu destination and read permission must be present. */
+export function ManageCalendarsLink() {
+  const { t } = useTranslation('calendar')
+  const route = useMenuRoute('calendar/calendars')
+  return route ? (
+    <Perm perm="calendar:calendar:list">
+      <Button asChild variant="outline" size="sm">
+        <Link to={route}>{t('managedEvents.manageCalendars')}</Link>
+      </Button>
+    </Perm>
+  ) : null
+}
+
+export function CalendarQueryStatus({
+  loading,
+  fetching,
+}: {
+  loading: boolean
+  fetching: boolean
+}) {
+  const { t } = useTranslation('calendar')
+  return loading || fetching ? (
+    <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+      <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+      {t(loading ? 'workspace.loading' : 'workspace.updating')}
+    </p>
+  ) : null
+}
+
+export function CalendarContextChange({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const { t } = useTranslation('calendar')
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('workspace.changeContext')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('workspace.changeContextWarning')}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t('workspace.keepEditing')}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            {t('workspace.discardAndChange')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+export function CalendarPagination({
+  page,
+  size,
+  total,
+  fetching,
+  onPage,
+}: {
+  page: number
+  size: number
+  total: number
+  fetching: boolean
+  onPage: (page: number) => void
+}) {
+  const { t } = useTranslation('calendar')
+  const pages = Math.max(1, Math.ceil(total / size))
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {t('workspace.pageRange', {
+          from: total === 0 ? 0 : Math.min((page - 1) * size + 1, total),
+          to: Math.min(page * size, total),
+          total,
+        })}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={t('workspace.previousPage')}
+          disabled={page <= 1 || fetching}
+          onClick={() => onPage(page - 1)}
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="text-xs tabular-nums">
+          {page} / {pages}
+        </span>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={t('workspace.nextPage')}
+          disabled={page >= pages || fetching}
+          onClick={() => onPage(page + 1)}
+        >
+          <ChevronRight />
+        </Button>
+      </div>
+    </div>
   )
 }
 

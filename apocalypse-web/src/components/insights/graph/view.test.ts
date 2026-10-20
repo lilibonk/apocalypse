@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { clampZoom, fitView, panIntoView, zoomLimits } from './view'
+import { clampZoom, fitOverview, fitView, panIntoView, zoomLimits } from './view'
 
 describe('graph view', () => {
+  it('shows the complete large tree only when an overview is explicitly requested', () => {
+    const view = fitOverview(800, 600, 6000, 2200)
+    expect(view.scale).toBeLessThan(zoomLimits.min)
+    expect(view.x).toBeGreaterThanOrEqual(24)
+    expect(view.y).toBeGreaterThanOrEqual(24)
+    expect(view.x + 6000 * view.scale).toBeLessThanOrEqual(776)
+    expect(view.y + 2200 * view.scale).toBeLessThanOrEqual(576)
+    expect(fitView(800, 600, 6000, 2200, 24, 0.8).scale).toBe(0.8)
+  })
   it('fits large content within padding and centres it', () => {
     const view = fitView(800, 400, 1600, 400)
     expect(view.scale).toBeCloseTo((800 - 48) / 1600)

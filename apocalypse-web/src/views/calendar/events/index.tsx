@@ -21,6 +21,8 @@ import type { CalendarEvent, EventContentCommand } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
+  CalendarPagination,
+  CalendarQueryStatus,
   DataEmpty,
   InlineError,
   StateBadge,
@@ -43,14 +45,17 @@ function PrivateEventsPage() {
   const [from, setFrom] = useState(initialRange.from)
   const [to, setTo] = useState(initialRange.to)
   const [editor, setEditor] = useState<CalendarEvent | 'new' | null>(null)
+  const [paging, setPaging] = useState({ context: '', page: 1 })
 
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const calendarId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
+  const pageContext = JSON.stringify([calendarId, from, to])
+  const page = paging.context === pageContext ? paging.page : 1
   const eventsQuery = useQuery(
     calendarQueries.privateEvents(
-      { calendarId: calendarId, from: from, to: to },
+      { calendarId: calendarId, from: from, to: to, page, size: 20 },
       calendarId !== '' && from !== '' && to >= from,
     ),
   )
@@ -59,6 +64,7 @@ function PrivateEventsPage() {
   const onDenied = useCalendarDenial(calendarId, [calendarsQuery.error, eventsQuery.error], () => {
     setCalendarSelection('')
     setEditor(null)
+    setPaging({ context: '', page: 1 })
   })
 
   const mutation = useModuleMutation(calendarScope, {
@@ -97,12 +103,30 @@ function PrivateEventsPage() {
       title={t('privateEvents.title')}
       description={t('privateEvents.description')}
       actions={
-        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-end">
+        <div className="flex w-full flex-wrap items-end gap-3">
           <CalendarPicker
             calendars={calendarsQuery.data ?? []}
             value={calendarId}
             onChange={(value) => {
               setCalendarSelection(value)
+              setEditor(null)
+            }}
+          />
+          <DateInput
+            id="private-event-from"
+            label={t('privateEvents.startDate')}
+            value={from}
+            onChange={(value) => {
+              setFrom(value)
+              setEditor(null)
+            }}
+          />
+          <DateInput
+            id="private-event-to"
+            label={t('privateEvents.endDate')}
+            value={to}
+            onChange={(value) => {
+              setTo(value)
               setEditor(null)
             }}
           />
@@ -115,27 +139,16 @@ function PrivateEventsPage() {
         </div>
       }
     >
+      {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
       {eventsQuery.error && <InlineError message={toErrorMessage(eventsQuery.error)} />}
-      <Card className="gap-4 py-4">
-        <CardHeader className="px-4 sm:px-6">
-          <CardTitle>{t('privateEvents.range')}</CardTitle>
-          <CardDescription>{t('privateEvents.rangeDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 px-4 sm:grid-cols-2 sm:px-6 lg:max-w-2xl">
-          <DateInput
-            id="private-event-from"
-            label={t('privateEvents.startDate')}
-            value={from}
-            onChange={setFrom}
-          />
-          <DateInput
-            id="private-event-to"
-            label={t('privateEvents.endDate')}
-            value={to}
-            onChange={setTo}
-          />
-        </CardContent>
-      </Card>
+      {to < from && <InlineError message={t('workspace.invalidRange')} />}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">{t('privateEvents.rangeDescription')}</p>
+        <CalendarQueryStatus
+          loading={calendarsQuery.isLoading || eventsQuery.isLoading}
+          fetching={eventsQuery.isFetching}
+        />
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {(eventsQuery.data?.list ?? []).map((event) => (
@@ -202,8 +215,23 @@ function PrivateEventsPage() {
           </Card>
         ))}
       </div>
-      {!eventsQuery.isLoading && (eventsQuery.data?.list ?? []).length === 0 && (
-        <DataEmpty>{t('privateEvents.empty')}</DataEmpty>
+      {calendarsQuery.isSuccess && eventsQuery.isSuccess && eventsQuery.data.list.length === 0 && (
+        <DataEmpty>
+          {t(eventsQuery.data.total > 0 ? 'workspace.emptyPage' : 'privateEvents.empty')}
+        </DataEmpty>
+      )}
+      {calendarsQuery.isSuccess && !calendarId && <DataEmpty>{t('noCalendar')}</DataEmpty>}
+      {eventsQuery.data && (
+        <CalendarPagination
+          page={page}
+          size={20}
+          total={eventsQuery.data.total}
+          fetching={eventsQuery.isFetching}
+          onPage={(next) => {
+            setPaging({ context: pageContext, page: next })
+            setEditor(null)
+          }}
+        />
       )}
 
       <EventEditor
@@ -232,7 +260,7 @@ function DateInput({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 flex-1 gap-1.5 sm:max-w-48">
       <Label htmlFor={id}>{label}</Label>
       <DatePicker id={id} mode="date" value={value} allowClear={false} onValueChange={onChange} />
     </div>

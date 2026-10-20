@@ -1,3 +1,5 @@
+import { objectWorkspaceCopy } from './object-workspace'
+import { menuWorkspaceCopy } from './menu-workspace'
 import type { AppI18nModule } from '@/i18n/module-loader'
 import { roleManagementCopy } from './role-management'
 import { roleMemberEditorCopy } from './role-member-editor'
@@ -19,6 +21,8 @@ const systemI18n = {
   },
   resources: {
     zh: {
+      objectWorkspace: objectWorkspaceCopy.zh,
+      menuWorkspace: menuWorkspaceCopy.zh,
       authorization: authorizationCopy.zh,
       commandQa: commandQuestionsCopy.zh,
       logInsight: logInsightCopy.zh,
@@ -155,6 +159,8 @@ const systemI18n = {
       },
     },
     en: {
+      objectWorkspace: objectWorkspaceCopy.en,
+      menuWorkspace: menuWorkspaceCopy.en,
       authorization: authorizationCopy.en,
       commandQa: commandQuestionsCopy.en,
       logInsight: logInsightCopy.en,

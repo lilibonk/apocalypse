@@ -6,7 +6,6 @@ import {
   AlertCircle,
   ArrowRight,
   ChevronRight,
-  Fingerprint,
   Info,
   KeyRound,
   List,
@@ -19,7 +18,6 @@ import {
   X,
 } from 'lucide-react'
 
-import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -31,6 +29,7 @@ import { useAuthStore } from '@/stores/auth'
 
 import { RoleGraphPagination, RolePermissionGraph } from './RolePermissionGraph'
 import { RolePermissionEditor } from './RolePermissionEditor'
+import { RoleWorkspacePanels } from './RoleWorkspacePanels'
 import { permissionNodeIcons } from './role-permission.icons'
 import { createRolePermissionQuery } from './role-permission.queries'
 import {
@@ -38,7 +37,6 @@ import {
   canReadRolePermissionGraph,
   rolePermissionPage,
   searchRolePermissionNodes,
-  type RolePermissionModel,
   type RolePermissionNode,
   type RolePermissionOpening,
   type RolePermissionTarget,
@@ -48,11 +46,15 @@ import './role-permission.css'
 export function RolePermissionView({
   opening,
   presentation = 'graph',
+  initialSelectedId = null,
   onEditingChange,
+  onCountChange,
 }: {
   opening: RolePermissionOpening
   presentation?: 'graph' | 'list'
+  initialSelectedId?: string | null
   onEditingChange: (editing: boolean) => void
+  onCountChange?: (count: number) => void
 }) {
   const auth = useAuthStore()
   if (!canReadRolePermissionGraph(auth) || opening.principalEpoch !== auth.sessionEpoch) return null
@@ -61,7 +63,9 @@ export function RolePermissionView({
       key={opening.openId}
       opening={opening}
       presentation={presentation}
+      initialSelectedId={initialSelectedId}
       onEditingChange={onEditingChange}
+      onCountChange={onCountChange}
     />
   )
 }
@@ -69,14 +73,17 @@ export function RolePermissionView({
 function RolePermissionContent({
   opening,
   presentation = 'graph',
+  initialSelectedId = null,
   onEditingChange,
+  onCountChange,
 }: {
   opening: RolePermissionOpening
   presentation?: 'graph' | 'list'
+  initialSelectedId?: string | null
   onEditingChange: (editing: boolean) => void
+  onCountChange?: (count: number) => void
 }) {
-  const { t, i18n } = useTranslation('system')
-  const language = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'zh'
+  const { t } = useTranslation('system')
   const queryClient = useQueryClient()
   const roleId = opening.role.id
   const openId = opening.openId
@@ -92,7 +99,8 @@ function RolePermissionContent({
     [roleId, openId, principalEpoch, readGeneration],
   )
   const result = useQuery(resource.options)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
+  const [inspectorOpen, setInspectorOpen] = useState(initialSelectedId !== null)
   const [keyword, setKeyword] = useState('')
   const [view, setView] = useState<'graph' | 'list'>('graph')
   const [branchPage, setBranchPage] = useState(0)
@@ -100,6 +108,9 @@ function RolePermissionContent({
   const [editor, setEditor] = useState<{ id: string; nodeId: string | null } | null>(null)
   const auth = useAuthStore()
   const denied = isResourceDenied(result.error)
+  useLayoutEffect(() => {
+    if (result.data && !denied) onCountChange?.(result.data.assignedCount)
+  }, [result.data, denied, onCountChange])
   useLayoutEffect(() => {
     onEditingChange(editor !== null && !denied)
     return () => onEditingChange(false)
@@ -178,13 +189,25 @@ function RolePermissionContent({
   const showGraph = presentation === 'graph' && view === 'graph' && !keyword.trim()
   const onSelect = (id: string | null) => {
     setSelectedId(id)
+    setInspectorOpen(id !== null)
     setBranchPage(0)
   }
   const reset = () => {
     setSelectedId(null)
+    setInspectorOpen(false)
     setKeyword('')
     setBranchPage(0)
     setListPage(0)
+  }
+  const beginEditing = () => {
+    const current = useAuthStore.getState()
+    if (
+      current.sessionEpoch !== principalEpoch ||
+      !canReadRolePermissionGraph(current) ||
+      !current.allScopePerms.includes('system:role:edit')
+    )
+      return
+    setEditor({ id: crypto.randomUUID(), nodeId: selected?.id ?? null })
   }
 
   if (editor && auth.allScopePerms.includes('system:role:edit'))
@@ -205,7 +228,11 @@ function RolePermissionContent({
           setReadGeneration((generation) => generation + 1)
         }}
         onClose={() => setEditor(null)}
-        onSaved={() => {
+        onSaved={(savedNodeId) => {
+          if (savedNodeId !== undefined) {
+            setSelectedId(savedNodeId)
+            setInspectorOpen(savedNodeId !== null)
+          }
           setEditor(null)
           void result.refetch()
         }}
@@ -218,20 +245,7 @@ function RolePermissionContent({
         <p className="text-xs text-muted-foreground">{t('roleGraph.configured')}</p>
         <div className="flex flex-wrap items-center gap-2">
           {auth.allScopePerms.includes('system:role:edit') && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                const current = useAuthStore.getState()
-                if (
-                  current.sessionEpoch !== principalEpoch ||
-                  !canReadRolePermissionGraph(current) ||
-                  !current.allScopePerms.includes('system:role:edit')
-                )
-                  return
-                setEditor({ id: crypto.randomUUID(), nodeId: selected?.id ?? null })
-              }}
-            >
+            <Button type="button" variant="outline" onClick={beginEditing}>
               <Pencil className="size-4" />
               {t('roleManage.editMenus', { defaultValue: '编辑授权关系' })}
             </Button>
@@ -262,7 +276,23 @@ function RolePermissionContent({
           </div>
         </div>
       )}
-      <div className="role-permission-workspace grid min-w-0 gap-5">
+      <RoleWorkspacePanels
+        title={selected?.name ?? t('roleGraph.summary')}
+        context={t('roleManage.inspectorContext', {
+          role: opening.role.roleName,
+          object: t('authorization.navigation'),
+        })}
+        hasSelection={selected !== null}
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        inspector={
+          <RolePermissionSummary
+            role={opening.role}
+            selected={selected}
+            onEdit={auth.allScopePerms.includes('system:role:edit') ? beginEditing : undefined}
+          />
+        }
+      >
         <InsightCard className="min-w-0 overflow-hidden">
           <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle p-4">
             <div className="relative min-w-0 flex-1 basis-56">
@@ -434,13 +464,7 @@ function RolePermissionContent({
                 })}
           </div>
         </InsightCard>
-        <RolePermissionSummary
-          model={model}
-          role={opening.role}
-          selected={selected}
-          language={language}
-        />
-      </div>
+      </RoleWorkspacePanels>
       <p className="role-permission-explanation flex items-start gap-2 rounded-xl border px-4 py-3 text-xs leading-relaxed text-muted-foreground">
         <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         <span>{t('roleGraph.explanation')}</span>
@@ -472,15 +496,13 @@ function RolePermissionContent({
 }
 
 function RolePermissionSummary({
-  model,
   role,
   selected,
-  language,
+  onEdit,
 }: {
-  model: RolePermissionModel
   role: RolePermissionTarget
   selected: RolePermissionNode | null
-  language: 'zh' | 'en'
+  onEdit?: () => void
 }) {
   const { t } = useTranslation('system')
   const Icon = selected ? permissionNodeIcons[selected.type] : ShieldCheck
@@ -513,34 +535,6 @@ function RolePermissionSummary({
 
   return (
     <InsightCard className="role-permission-summary min-w-0 self-start overflow-hidden" order={1}>
-      <div className="role-permission-summary-header p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xs font-medium text-muted-foreground">{t('roleGraph.summary')}</h2>
-          <Fingerprint aria-hidden="true" className="size-5" strokeWidth={1.5} />
-        </div>
-        <div className="mt-5 text-5xl font-medium tracking-tighter tabular-nums">
-          <AnimatedNumber value={model.assignedCount} language={language} />
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">{t('roleGraph.assignments')}</p>
-        <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border-subtle pt-4">
-          <div>
-            <dt className="text-xs leading-relaxed text-muted-foreground">
-              {t('roleGraph.identifiers')}
-            </dt>
-            <dd className="mt-1 text-xl font-medium tabular-nums">
-              {model.nodes.filter((node) => node.assigned && node.type === 'M').length}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs leading-relaxed text-muted-foreground">
-              {t('roleGraph.sources')}
-            </dt>
-            <dd className="mt-1 text-xl font-medium tabular-nums">
-              {model.nodes.filter((node) => node.assigned && node.type === 'C').length}
-            </dd>
-          </div>
-        </dl>
-      </div>
       <div className="space-y-5 p-5" aria-live="polite">
         <div>
           <span className="role-permission-list-icon mb-3 flex size-10 items-center justify-center rounded-xl">
@@ -602,6 +596,12 @@ function RolePermissionSummary({
             </div>
           ))}
         </dl>
+        {selected && onEdit && (
+          <Button variant="outline" onClick={onEdit}>
+            <Pencil className="size-4" />
+            {t('roleManage.editMenus')}
+          </Button>
+        )}
         {selected && (
           <div className="border-t border-border-subtle pt-4">
             <p className="text-xs leading-relaxed text-muted-foreground">

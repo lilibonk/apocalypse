@@ -5,17 +5,21 @@
  */
 
 import { DynaPage } from '@/components/dyna'
+import { useLocation } from 'react-router'
+import { readWorkspaceContext } from '../shared/workspace-context'
 
 import schema from './user.schema'
 import { UserForm } from './UserForm'
-import { UserInsights } from './UserInsights'
+import { UserWorkspace } from './UserWorkspace'
 
 export default function UserPage() {
+  const location = useLocation()
   return (
     <DynaPage
       schema={schema}
       formComponent={UserForm}
-      overview={({ queryKey }) => <UserInsights queryKey={queryKey} />}
+      entryContext={readWorkspaceContext(location.state, 'user')}
+      workspace={(controls) => <UserWorkspace {...controls} />}
     />
   )
 }

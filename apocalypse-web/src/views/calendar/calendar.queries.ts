@@ -59,12 +59,14 @@ export const calendarQueries = {
   privateEvents: calendarScope.query(
     'private-events',
     ['calendar:event:list'],
-    (p: Range, request) => api.listPrivateEvents(p.calendarId, p.from, p.to, request),
+    (p: Range & Partial<Paging>, request) =>
+      api.listPrivateEvents(p.calendarId, p.from, p.to, p.page, p.size, request),
   ),
   managedEvents: calendarScope.query(
     'managed-events',
     ['calendar:managed-event:list'],
-    (p: CalendarId, request) => api.listManagedEvents(p.calendarId, request),
+    (p: CalendarId & Partial<Paging>, request) =>
+      api.listManagedEvents(p.calendarId, p.page, p.size, request),
   ),
   projectionGrants: calendarScope.query(
     'projection-grants',

@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import type { NavigateOptions } from 'react-router'
 
 import type { FlatRoute } from '@/routes/menu-routes'
 import type { useAuthStore } from '@/stores/auth'
@@ -13,7 +14,8 @@ export interface CommandQuestionPanelProps {
   query: string
   setQuery: (query: string) => void
   routes: readonly FlatRoute[]
-  navigate: (path: string) => void
+  /** Optional route state carries display context only; destinations reload authorized data. */
+  navigate: (path: string, options?: NavigateOptions) => void
   /** Highlight an item by its cmdk value, e.g. the first result of an asynchronous lookup. */
   highlight: (value: string) => void
 }

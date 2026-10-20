@@ -20,6 +20,9 @@ import {
   CalendarPageFrame,
   CalendarTrace,
   CalendarPicker,
+  CalendarPagination,
+  CalendarQueryStatus,
+  ManageCalendarsLink,
   DataEmpty,
   InlineError,
   StateBadge,
@@ -33,6 +36,7 @@ function ManagedEventsPage() {
   const queryClient = useQueryClient()
   const [calendarSelection, setCalendarSelection] = useState('')
   const [editor, setEditor] = useState<CalendarEvent | 'new' | null>(null)
+  const [paging, setPaging] = useState({ calendarId: '', page: 1 })
 
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const managedCalendars = useMemo(
@@ -47,12 +51,14 @@ function ManagedEventsPage() {
   const calendarId = managedCalendars.some((calendar) => calendar.id === calendarSelection)
     ? calendarSelection
     : (managedCalendars[0]?.id ?? '')
+  const page = paging.calendarId === calendarId ? paging.page : 1
   const eventsQuery = useQuery(
-    calendarQueries.managedEvents({ calendarId: calendarId }, calendarId !== ''),
+    calendarQueries.managedEvents({ calendarId: calendarId, page, size: 20 }, calendarId !== ''),
   )
   const onDenied = useCalendarDenial(calendarId, [calendarsQuery.error, eventsQuery.error], () => {
     setCalendarSelection('')
     setEditor(null)
+    setPaging({ calendarId: '', page: 1 })
   })
 
   const selectedCalendar = managedCalendars.find((calendar) => calendar.id === calendarId)
@@ -136,7 +142,7 @@ function ManagedEventsPage() {
       title={t('managedEvents.title')}
       description={t('managedEvents.description')}
       actions={
-        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-end">
+        <div className="flex w-full flex-wrap items-end gap-3">
           <CalendarPicker
             calendars={managedCalendars}
             value={calendarId}
@@ -146,6 +152,11 @@ function ManagedEventsPage() {
             }}
             roles={['EDITOR', 'PUBLISHER']}
           />
+          {selectedCalendar?.currentUserRole && (
+            <Badge variant="outline" className="mb-2">
+              {t(`roles.${selectedCalendar.currentUserRole}`)}
+            </Badge>
+          )}
           <Perm perm="calendar:managed-event:edit">
             <Button disabled={!calendarId} onClick={() => setEditor('new')}>
               <Plus />
@@ -155,7 +166,12 @@ function ManagedEventsPage() {
         </div>
       }
     >
+      {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
       {eventsQuery.error && <InlineError message={toErrorMessage(eventsQuery.error)} />}
+      <CalendarQueryStatus
+        loading={calendarsQuery.isLoading || eventsQuery.isLoading}
+        fetching={eventsQuery.isFetching}
+      />
       <div className="space-y-3">
         {(eventsQuery.data?.list ?? []).map((event) => (
           <Card key={event.id} className="gap-4 py-4">
@@ -174,18 +190,18 @@ function ManagedEventsPage() {
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <StateBadge value={event.state} />
                   <StateBadge value={event.revisionState} />
-                  <Badge variant="outline">{t(`sourceKinds.${event.sourceKind}`)}</Badge>
-                  <Badge variant="outline">
+                  <span className="text-sm font-medium">
                     {t('managedEvents.revision', { number: event.revisionNo })}
-                  </Badge>
+                  </span>
+                  <StateBadge value={event.state} />
+                  <Badge variant="outline">{t(`sourceKinds.${event.sourceKind}`)}</Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 px-4 sm:px-6">
-              <div className="grid gap-2 text-sm sm:grid-cols-3">
-                <div className="rounded-md border border-border p-3">
+              <div className="grid gap-3 text-sm sm:grid-cols-3">
+                <div>
                   <div className="text-xs text-muted-foreground">{t('managedEvents.location')}</div>
                   <div className="mt-1">{event.content.location || '—'}</div>
                 </div>
@@ -195,6 +211,10 @@ function ManagedEventsPage() {
                       {t('managedEvents.contentHash')}
                     </div>
                     <div className="mt-1 truncate font-mono text-xs">{event.contentHash}</div>
+                    <p>
+                      {t('workspace.version', { version: event.version })} ·{' '}
+                      {t('managedEvents.revisionVersion', { version: event.revisionVersion })}
+                    </p>
                   </CalendarTrace>
                 </div>
               </div>
@@ -278,8 +298,33 @@ function ManagedEventsPage() {
           </Card>
         ))}
       </div>
-      {!eventsQuery.isLoading && (eventsQuery.data?.list ?? []).length === 0 && (
-        <DataEmpty>{t('managedEvents.empty')}</DataEmpty>
+      {calendarsQuery.isSuccess && managedCalendars.length === 0 && (
+        <div className="space-y-3">
+          <DataEmpty>{t('managedEvents.noEditableCalendar')}</DataEmpty>
+          <div className="flex justify-center">
+            <ManageCalendarsLink />
+          </div>
+        </div>
+      )}
+      {calendarsQuery.isSuccess &&
+        calendarId !== '' &&
+        eventsQuery.isSuccess &&
+        eventsQuery.data.list.length === 0 && (
+          <DataEmpty>
+            {t(eventsQuery.data.total > 0 ? 'workspace.emptyPage' : 'managedEvents.empty')}
+          </DataEmpty>
+        )}
+      {eventsQuery.data && (
+        <CalendarPagination
+          page={page}
+          size={20}
+          total={eventsQuery.data.total}
+          fetching={eventsQuery.isFetching}
+          onPage={(next) => {
+            setPaging({ calendarId, page: next })
+            setEditor(null)
+          }}
+        />
       )}
 
       <EventEditor
@@ -346,7 +391,8 @@ function EventActionConfirm({
         )}
       </p>
       <p>
-        {t('managedEvents.revision', { number: event.revisionNo })} · {event.revisionState}
+        {t('managedEvents.revision', { number: event.revisionNo })} ·{' '}
+        {t(`states.${event.revisionState}`)}
       </p>
     </CalendarConfirm>
   )

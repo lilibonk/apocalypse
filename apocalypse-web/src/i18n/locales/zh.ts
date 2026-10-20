@@ -125,7 +125,9 @@ export const zh = {
       已打开页面: '已打开页面',
       工作台: '工作台',
       注销失败: '注销失败，请重试',
-      调整阅读体验与界面语言: '调整阅读体验与界面语言。',
+      调整阅读体验与界面语言: '调整阅读体验、界面动画与语言。',
+      interfaceMotion: '界面动画',
+      interfaceMotionDescription: '关闭后直接呈现变化结果；始终遵循系统的减少动态效果设置。',
       外观实验室: '外观实验室',
       '仅用于验证脚手架主题能力，不属于最终用户设置。':
         '仅用于验证脚手架主题能力，不属于最终用户设置。',
@@ -165,6 +167,7 @@ export const zh = {
       pageView: '页面视图',
       viewList: '列表',
       viewOverview: '概览',
+      viewWorkspace: '工作区',
       queryUnselected: '未选择',
       queryRetrying: '重试中…',
       queryNoMatches: '没有匹配的结果',

@@ -14,7 +14,7 @@ export type OperLogRow = {
   title: string | null
   /** 操作类型（@OperLog businessType，如 FORCE / GRANT）。 */
   businessType: string | null
-  /** 请求方法（Java 方法签名）。 */
+  /** 调用方法（Java 方法签名，不是 HTTP method）。 */
   method: string | null
   operName: string | null
   operIp: string | null

@@ -4,11 +4,15 @@ import { calendarScope, calendarQueries } from './calendar.queries'
 /** Month navigation and field-level date details are a two-dimensional, non-CRUD workspace. */
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { motionTransition } from '@/design/motion'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { DatePicker } from '@/components/ui/date-picker'
 import { dateCells, localToday } from '@/components/ui/date-picker-model'
 import {
@@ -25,6 +29,7 @@ import type { EffectiveDay } from './calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
+  CalendarQueryStatus,
   DataEmpty,
   FieldPair,
   InlineError,
@@ -41,10 +46,12 @@ import { monthRange, shiftMonth } from './month-grid'
 
 function CalendarOverviewPage() {
   const { t, i18n } = useTranslation('calendar')
+  const animate = useMotionPreference()
   const [calendarSelection, setCalendarSelection] = useState('')
   const [month, setMonth] = useState(() => localToday().slice(0, 7))
   const [selectedDate, setSelectedDate] = useState('')
   const trigger = useRef<HTMLButtonElement | null>(null)
+  const todayButton = useRef<HTMLButtonElement | null>(null)
   const range = monthRange(month)
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const calendarId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
@@ -85,67 +92,85 @@ function CalendarOverviewPage() {
       title={t('viewTitle')}
       description={t('viewDescription')}
       actions={
-        <CalendarPicker
-          calendars={calendarsQuery.data ?? []}
-          value={calendarId}
-          onChange={(next) => {
-            setCalendarSelection(next)
-            setSelectedDate('')
-          }}
-        />
+        <>
+          <CalendarPicker
+            calendars={calendarsQuery.data ?? []}
+            value={calendarId}
+            onChange={(next) => {
+              setCalendarSelection(next)
+              setSelectedDate('')
+            }}
+          />
+          <div className="grid gap-1.5">
+            <Label htmlFor="calendar-month">{t('selectMonth')}</Label>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={t('previousMonth')}
+                disabled={month <= '1901-01'}
+                onClick={() => changeMonth(shiftMonth(month, -1))}
+              >
+                <ChevronLeft />
+              </Button>
+              <DatePicker
+                id="calendar-month"
+                mode="month"
+                value={month}
+                onValueChange={changeMonth}
+                allowClear={false}
+                min="1901-01-01"
+                max="2100-12-31"
+                aria-label={t('selectMonth')}
+                className="w-36"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={t('nextMonth')}
+                disabled={month >= '2100-12'}
+                onClick={() => changeMonth(shiftMonth(month, 1))}
+              >
+                <ChevronRight />
+              </Button>
+              <Button
+                ref={todayButton}
+                variant="ghost"
+                onClick={() => changeMonth(localToday().slice(0, 7))}
+              >
+                {t('workspace.today')}
+              </Button>
+            </div>
+          </div>
+        </>
       }
     >
       {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
-      <Card className="gap-4 py-4">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3 px-4 sm:flex-row">
-          <div>
-            <CardTitle>{monthLabel}</CardTitle>
-            <CardDescription className="mt-1">{t('selectDateHint')}</CardDescription>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label={t('previousMonth')}
-              disabled={month <= '1901-01'}
-              onClick={() => changeMonth(shiftMonth(month, -1))}
-            >
-              <ChevronLeft />
-            </Button>
-            <DatePicker
-              mode="month"
-              value={month}
-              onValueChange={changeMonth}
-              allowClear={false}
-              min="1901-01-01"
-              max="2100-12-31"
-              aria-label={t('selectMonth')}
-              className="w-36"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label={t('nextMonth')}
-              disabled={month >= '2100-12'}
-              onClick={() => changeMonth(shiftMonth(month, 1))}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        </CardHeader>
+      {daysQuery.error && <InlineError message={toErrorMessage(daysQuery.error)} />}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">{monthLabel}</p>
+        <p className="text-xs text-muted-foreground">{t('selectDateHint')}</p>
+        <CalendarQueryStatus
+          loading={calendarsQuery.isLoading || daysQuery.isLoading}
+          fetching={daysQuery.isFetching}
+        />
+      </div>
+      <Card className="gap-0 py-3">
         <CardContent className="px-2 sm:px-4">
-          {daysQuery.error ? (
-            <InlineError message={toErrorMessage(daysQuery.error)} />
-          ) : daysQuery.isLoading ? (
+          {daysQuery.isLoading || calendarsQuery.isLoading ? (
             <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: 35 }, (_, index) => (
+              {Array.from({ length: dateCells(month).flat().length }, (_, index) => (
                 <Skeleton key={index} className="h-24" />
               ))}
             </div>
-          ) : !calendarId ? (
+          ) : !calendarId && calendarsQuery.isSuccess ? (
             <DataEmpty>{t('noCalendar')}</DataEmpty>
-          ) : (
-            <table
+          ) : daysQuery.data ? (
+            <motion.table
+              key={`${calendarId}:${month}`}
+              initial={animate ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={animate ? motionTransition.feedback : { duration: 0 }}
               className="w-full table-fixed border-separate border-spacing-1"
               aria-label={t('calendarGrid', { month: monthLabel })}
             >
@@ -166,11 +191,17 @@ function CalendarOverviewPage() {
                   <tr key={row}>
                     {week.map((date, column) => {
                       const day = date ? days.get(date) : undefined
+                      const restDay = ['WEEKEND_REST', 'OFFICIAL_REST', 'CUSTOM_REST'].includes(
+                        day?.effective.dayPolicy?.classification ?? '',
+                      )
                       const secondary = compactLunarText(day?.effective.lunarDate, locale)
                       const label =
                         calendarValueText(day?.effective.displayLabel) ||
                         calendarValueText(day?.effective.dayPolicy?.name) ||
                         calendarValueText(day?.effective.solarTerm) ||
+                        (restDay
+                          ? calendarValueText(day?.effective.dayPolicy?.classification)
+                          : '') ||
                         ''
                       return (
                         <td key={date ?? column} className="p-0 align-top">
@@ -179,12 +210,15 @@ function CalendarOverviewPage() {
                               type="button"
                               aria-label={[date, secondary, label].filter(Boolean).join(' · ')}
                               aria-current={date === localToday() ? 'date' : undefined}
+                              aria-pressed={date === selectedDate}
+                              data-origin-active={date === selectedDate || undefined}
                               onClick={(event) => {
                                 trigger.current = event.currentTarget
                                 setSelectedDate(date)
                               }}
                               className={cn(
                                 'flex min-h-24 w-full min-w-0 flex-col rounded-md border border-border bg-background p-1.5 text-left transition-colors hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-28 sm:p-3',
+                                restDay && 'bg-muted/40',
                                 date === localToday() && 'border-primary/50 bg-primary/5',
                                 date === selectedDate && 'border-primary bg-primary/10',
                               )}
@@ -214,8 +248,8 @@ function CalendarOverviewPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          )}
+            </motion.table>
+          ) : null}
         </CardContent>
       </Card>
       <Sheet
@@ -228,7 +262,8 @@ function CalendarOverviewPage() {
           className="w-full overflow-y-auto sm:max-w-lg"
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            trigger.current?.focus()
+            if (trigger.current?.isConnected) trigger.current.focus()
+            else todayButton.current?.focus()
           }}
         >
           <SheetHeader className="border-b border-border p-6 pr-12">

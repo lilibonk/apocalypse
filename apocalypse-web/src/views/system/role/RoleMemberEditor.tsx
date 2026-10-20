@@ -24,6 +24,7 @@ import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-de
 import { isAuthorizationCurrent, useAuthStore } from '@/stores/auth'
 
 import { RoleGraphPagination } from './RolePermissionGraph'
+import { RoleWorkspacePanels } from './RoleWorkspacePanels'
 import { RoleMemberGraph, type RoleMemberGraphNode } from './RoleMemberGraph'
 import {
   canReadRoleWorkspace,
@@ -57,7 +58,9 @@ interface Props {
   opening: RolePermissionOpening
   presentation?: 'graph' | 'list'
   onClose: () => void
-  onSaved: () => void
+  onSaved: (selectedId?: string | null) => void
+  initialSelectedId?: string | null
+  initialCandidateKeyword?: string
   onResourceDenied: () => void
 }
 
@@ -135,6 +138,8 @@ export function RoleMemberEditor(props: Props) {
 function RoleMemberEditorContent({
   opening,
   presentation = 'graph',
+  initialSelectedId = null,
+  initialCandidateKeyword = '',
   onClose,
   onSaved,
   onResourceDenied,
@@ -150,13 +155,16 @@ function RoleMemberEditorContent({
     members?: PageResult<RoleGraphMember>
     candidates?: PageResult<RoleGraphMember>
   }>({})
-  const [mode, setMode] = useState<'members' | 'candidates' | 'unread'>('members')
+  const [mode, setMode] = useState<'members' | 'candidates' | 'unread'>(() =>
+    canBrowseUsers && initialCandidateKeyword ? 'candidates' : 'members',
+  )
   const [memberPage, setMemberPage] = useState(1)
   const [candidatePage, setCandidatePage] = useState(1)
   const [otherPage, setOtherPage] = useState(0)
-  const [searchDraft, setSearchDraft] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [searchDraft, setSearchDraft] = useState(initialCandidateKeyword)
+  const [keyword, setKeyword] = useState(initialCandidateKeyword)
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
+  const [inspectorOpen, setInspectorOpen] = useState(initialSelectedId !== null)
   const [reviewing, setReviewing] = useState(false)
   const [leaving, setLeaving] = useState<'close' | 'reload' | null>(null)
   const [accessDenied, setAccessDenied] = useState(false)
@@ -249,7 +257,7 @@ function RoleMemberEditorContent({
       saveRoleMembers(transport, { roleId, ...variables }),
     onSuccess: () => {
       toast.success(t('roleMemberEdit.saved'))
-      onSaved()
+      onSaved(selectedId && draft?.selected.has(selectedId) ? selectedId : null)
       void invalidateRoleGraphQueries(client, roleId)
     },
     onError: (error) => setSaveError(error),
@@ -286,6 +294,7 @@ function RoleMemberEditorContent({
   const toggle = (id: string) => {
     if (disabled) return
     setSelectedId(id)
+    setInspectorOpen(true)
     setDraft((current) => (current ? toggleRoleMember(current, id) : current))
     setSaveError(null)
   }
@@ -371,6 +380,173 @@ function RoleMemberEditorContent({
       })}
     </ul>
   )
+  const inspector = (
+    <InsightCard className="space-y-4 p-5">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <Link2 className="size-4" />
+        {t('roleMemberEdit.details')}
+      </h3>
+      {selectedId ? (
+        <>
+          <p className="break-words text-sm font-medium">
+            {selected?.nickname || selected?.username || t('roleMemberEdit.unreadProfile')}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t(`roleMemberEdit.state.${roleMemberLinkState(draft, selectedId)}`)}
+          </p>
+          <dl className="space-y-3 text-xs">
+            <div>
+              <dt className="text-muted-foreground">{t('roleMemberEdit.id')}</dt>
+              <dd className="mt-1 break-all font-mono">{selectedId}</dd>
+            </div>
+            {selected && (
+              <>
+                <div>
+                  <dt className="text-muted-foreground">{t('roleMembers.username')}</dt>
+                  <dd className="mt-1 break-words">{selected.username}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{t('roleMembers.status')}</dt>
+                  <dd className="mt-1">
+                    {t(
+                      selected.status === 1
+                        ? 'roleGraph.enabled'
+                        : selected.status === 0
+                          ? 'roleGraph.disabled'
+                          : 'roleGraph.unknown',
+                    )}
+                  </dd>
+                </div>
+              </>
+            )}
+          </dl>
+        </>
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t('roleMemberEdit.choose')}
+        </p>
+      )}
+      <div className="border-t pt-4">
+        <p className="text-xs font-medium">
+          {t('roleMemberEdit.changesCount', {
+            added: changes.added.length,
+            removed: changes.removed.length,
+          })}
+        </p>
+        <Button
+          className="mt-3"
+          size="sm"
+          variant="ghost"
+          disabled={!dirty || mutation.isPending || reviewing || conflict}
+          onClick={() => {
+            setDraft(resetRoleMemberDraft(draft))
+            setSaveError(null)
+          }}
+        >
+          <RotateCcw className="size-3.5" />
+          {t('roleMemberEdit.reset')}
+        </Button>
+      </div>
+    </InsightCard>
+  )
+  const review = (
+    <InsightCard className="space-y-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">
+          {t(reviewing ? 'roleMemberEdit.reviewTitle' : 'roleMemberEdit.changes')}
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {t('roleMemberEdit.changesCount', {
+            added: changes.added.length,
+            removed: changes.removed.length,
+          })}
+        </span>
+      </div>
+      {reviewing && (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t('roleMemberEdit.reviewHint')}
+        </p>
+      )}
+      {dirty ? (
+        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          {changes.added.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs text-brand-text">{t('roleMemberEdit.added')}</h4>
+              {changeList(changes.added, 'added')}
+            </div>
+          )}
+          {changes.removed.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs text-destructive">{t('roleMemberEdit.removed')}</h4>
+              {changeList(changes.removed, 'removed')}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t('roleMemberEdit.noChanges')}</p>
+      )}
+      {dirty && draft.selected.size === 0 && (
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          {t('roleMemberEdit.emptyWarning')}
+        </p>
+      )}
+    </InsightCard>
+  )
+  const savebar = (
+    <div className="role-menu-editor-savebar">
+      <p className="text-xs text-muted-foreground">
+        {t('roleMemberEdit.changesCount', {
+          added: changes.added.length,
+          removed: changes.removed.length,
+        })}
+      </p>
+      <div className="flex flex-wrap justify-end gap-2">
+        {reviewing ? (
+          <>
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => setReviewing(false)}
+            >
+              {t('roleMemberEdit.continueEditing')}
+            </Button>
+            <Button
+              disabled={
+                !dirty ||
+                mutation.isPending ||
+                conflict ||
+                baselineResult.isFetching ||
+                baselineResult.isError
+              }
+              onClick={() =>
+                mutation.mutate({
+                  baselineUserIds: [...draft.baseline],
+                  userIds: [...draft.selected],
+                })
+              }
+            >
+              <Save className="size-4" />
+              {t(mutation.isPending ? 'roleMemberEdit.saving' : 'roleMemberEdit.save')}
+            </Button>
+          </>
+        ) : (
+          <Button
+            disabled={!dirty || disabled}
+            onClick={() => {
+              setReviewing(true)
+              setInspectorOpen(true)
+            }}
+          >
+            <Eye className="size-4" />
+            {t('roleMemberEdit.review')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
   return (
     <section
       className="role-member-workspace min-w-0 space-y-4"
@@ -378,9 +554,7 @@ function RoleMemberEditorContent({
     >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">
-            {t('roleMemberEdit.title', { name: opening.role.roleName })}
-          </h2>
+          <h2 className="text-base font-semibold">{t('roleMemberEdit.edit')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('roleMemberEdit.rules')}</p>
         </div>
         <Button variant="outline" disabled={mutation.isPending} onClick={close}>
@@ -408,321 +582,175 @@ function RoleMemberEditorContent({
         <span>{t('roleMemberEdit.completeCount', { count: draft.baseline.size })}</span>
         <span>{t('roleMemberEdit.selectedCount', { count: draft.selected.size })}</span>
       </div>
-      {!reviewing && (
-        <div className="role-member-layout">
-          <InsightCard className="min-w-0 overflow-hidden p-4">
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label={t('roleMemberEdit.edit')}
-            >
-              {(['members', 'candidates', 'unread'] as const).map((tab) => (
-                <Button
-                  key={tab}
-                  size="sm"
-                  variant={mode === tab ? 'default' : 'outline'}
-                  aria-pressed={mode === tab}
-                  disabled={
-                    reviewing || mutation.isPending || (tab === 'candidates' && !canBrowseUsers)
-                  }
-                  onClick={() => {
-                    setMode(tab)
-                    setSelectedId(null)
-                  }}
-                >
-                  {t(
-                    tab === 'members'
-                      ? 'roleMemberEdit.visible'
-                      : tab === 'candidates'
-                        ? 'roleMemberEdit.candidates'
-                        : 'roleMemberEdit.otherIds',
-                  )}
-                  {tab === 'unread' && ` (${unread.length})`}
-                </Button>
-              ))}
-            </div>
-            {!canBrowseUsers && (
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                {t('roleMemberEdit.candidatePermission')}
-              </p>
-            )}
-            {mode === 'candidates' && (
-              <form
-                className="mt-4 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (disabled) return
-                  setKeyword(searchDraft.trim())
-                  setCandidatePage(1)
+      <RoleWorkspacePanels
+        inspector={reviewing ? review : inspector}
+        title={t(reviewing ? 'roleMemberEdit.reviewTitle' : 'roleMemberEdit.details')}
+        context={t('roleManage.inspectorContext', {
+          role: opening.role.roleName,
+          object: t('roleMembers.title'),
+        })}
+        hasSelection={selectedId !== null || reviewing}
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        editing
+        footer={savebar}
+      >
+        <InsightCard className="min-w-0 overflow-hidden p-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t('roleMemberEdit.edit')}>
+            {(['members', 'candidates', 'unread'] as const).map((tab) => (
+              <Button
+                key={tab}
+                size="sm"
+                variant={mode === tab ? 'default' : 'outline'}
+                aria-pressed={mode === tab}
+                disabled={
+                  reviewing || mutation.isPending || (tab === 'candidates' && !canBrowseUsers)
+                }
+                onClick={() => {
+                  setMode(tab)
                   setSelectedId(null)
                 }}
               >
-                <Input
-                  value={searchDraft}
-                  disabled={reviewing || mutation.isPending}
-                  onChange={(event) => setSearchDraft(event.target.value)}
-                  aria-label={t('roleMemberEdit.search')}
-                  placeholder={t('roleMemberEdit.searchPlaceholder')}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  variant="outline"
-                  disabled={reviewing || mutation.isPending}
-                  aria-label={t('roleMemberEdit.searchAction')}
-                >
-                  <Search className="size-4" />
-                </Button>
-              </form>
-            )}
-            {mode === 'unread' && (
-              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                {t('roleMemberEdit.unknownHint')}
-              </p>
-            )}
-            {activeResult?.isPending ? (
-              <Skeleton className="mt-4 h-80 rounded-panel" />
-            ) : (
-              <>
-                {presentation === 'list' ? (
-                  <ul className="my-4 divide-y divide-border">
-                    {rows.map((row) => (
-                      <li key={row.id} className="flex items-center gap-3 py-3">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          onClick={() => setSelectedId(row.id)}
-                          aria-pressed={selectedId === row.id}
-                        >
-                          <span className="block text-sm font-medium">
-                            {row.member?.nickname || row.member?.username || row.id}
-                          </span>
-                          <span className="block text-xs text-muted-foreground">
-                            {row.member?.username ?? t('roleMemberEdit.unknownHint')}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {t(
-                              row.state === 'added'
-                                ? 'roleManage.pendingAdd'
-                                : row.state === 'removed'
-                                  ? 'roleManage.pendingRemove'
-                                  : row.state === 'linked'
-                                    ? 'roleManage.linked'
-                                    : 'roleManage.unlinked',
-                            )}
-                          </span>
-                        </button>
-                        <Button
-                          size="sm"
-                          variant={draft.selected.has(row.id) ? 'ghost' : 'outline'}
-                          disabled={disabled}
-                          onClick={() => toggle(row.id)}
-                        >
-                          {t(
-                            draft.selected.has(row.id)
-                              ? 'authorization.remove'
-                              : 'authorization.add',
-                          )}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <RoleMemberGraph
-                    roleName={opening.role.roleName}
-                    nodes={rows}
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
-                    onToggle={toggle}
-                    disabled={disabled}
-                  />
+                {t(
+                  tab === 'members'
+                    ? 'roleMemberEdit.visible'
+                    : tab === 'candidates'
+                      ? 'roleMemberEdit.candidates'
+                      : 'roleMemberEdit.otherIds',
                 )}
-                {rows.length === 0 && (
-                  <p role="status" className="pb-6 text-center text-sm text-muted-foreground">
-                    {t(
-                      mode === 'candidates'
-                        ? 'roleMemberEdit.noCandidates'
-                        : mode === 'unread'
-                          ? 'roleMemberEdit.noOtherIds'
-                          : 'roleMemberEdit.noRows',
-                    )}
-                  </p>
-                )}
-                <fieldset disabled={reviewing || mutation.isPending}>
-                  <RoleGraphPagination
-                    page={page}
-                    pages={pageCount}
-                    onPage={(next) => {
-                      if (reviewing || mutation.isPending) return
-                      setSelectedId(null)
-                      if (mode === 'members') setMemberPage(next + 1)
-                      else if (mode === 'candidates') setCandidatePage(next + 1)
-                      else setOtherPage(next)
-                    }}
-                  />
-                </fieldset>
-              </>
-            )}
-          </InsightCard>
-          <InsightCard className="space-y-4 p-5">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Link2 className="size-4" />
-              {t('roleMemberEdit.details')}
-            </h3>
-            {selectedId ? (
-              <>
-                <p className="break-words text-sm font-medium">
-                  {selected?.nickname || selected?.username || t('roleMemberEdit.unreadProfile')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t(`roleMemberEdit.state.${roleMemberLinkState(draft, selectedId)}`)}
-                </p>
-                <dl className="space-y-3 text-xs">
-                  <div>
-                    <dt className="text-muted-foreground">{t('roleMemberEdit.id')}</dt>
-                    <dd className="mt-1 break-all font-mono">{selectedId}</dd>
-                  </div>
-                  {selected && (
-                    <>
-                      <div>
-                        <dt className="text-muted-foreground">{t('roleMembers.username')}</dt>
-                        <dd className="mt-1 break-words">{selected.username}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted-foreground">{t('roleMembers.status')}</dt>
-                        <dd className="mt-1">
-                          {t(
-                            selected.status === 1
-                              ? 'roleGraph.enabled'
-                              : selected.status === 0
-                                ? 'roleGraph.disabled'
-                                : 'roleGraph.unknown',
-                          )}
-                        </dd>
-                      </div>
-                    </>
-                  )}
-                </dl>
-              </>
-            ) : (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {t('roleMemberEdit.choose')}
-              </p>
-            )}
-            <div className="border-t pt-4">
-              <p className="text-xs font-medium">
-                {t('roleMemberEdit.changesCount', {
-                  added: changes.added.length,
-                  removed: changes.removed.length,
-                })}
-              </p>
-              <Button
-                className="mt-3"
-                size="sm"
-                variant="ghost"
-                disabled={!dirty || mutation.isPending || reviewing || conflict}
-                onClick={() => {
-                  setDraft(resetRoleMemberDraft(draft))
-                  setSaveError(null)
-                }}
-              >
-                <RotateCcw className="size-3.5" />
-                {t('roleMemberEdit.reset')}
+                {tab === 'unread' && ` (${unread.length})`}
               </Button>
-            </div>
-          </InsightCard>
-        </div>
-      )}
-      {reviewing && (
-        <InsightCard className="space-y-4 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">
-              {t(reviewing ? 'roleMemberEdit.reviewTitle' : 'roleMemberEdit.changes')}
-            </h3>
-            <span className="text-xs text-muted-foreground">
-              {t('roleMemberEdit.changesCount', {
-                added: changes.added.length,
-                removed: changes.removed.length,
-              })}
-            </span>
+            ))}
           </div>
-          {reviewing && (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {t('roleMemberEdit.reviewHint')}
+          {!canBrowseUsers && (
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              {t('roleMemberEdit.candidatePermission')}
             </p>
           )}
-          {dirty ? (
-            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              {changes.added.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs text-brand-text">{t('roleMemberEdit.added')}</h4>
-                  {changeList(changes.added, 'added')}
-                </div>
-              )}
-              {changes.removed.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs text-destructive">{t('roleMemberEdit.removed')}</h4>
-                  {changeList(changes.removed, 'removed')}
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">{t('roleMemberEdit.noChanges')}</p>
-          )}
-          {dirty && draft.selected.size === 0 && (
-            <p
-              role="alert"
-              className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          {mode === 'candidates' && (
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (disabled) return
+                setKeyword(searchDraft.trim())
+                setCandidatePage(1)
+                setSelectedId(null)
+              }}
             >
-              {t('roleMemberEdit.emptyWarning')}
+              <Input
+                value={searchDraft}
+                disabled={reviewing || mutation.isPending}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                aria-label={t('roleMemberEdit.search')}
+                placeholder={t('roleMemberEdit.searchPlaceholder')}
+              />
+              <Button
+                type="submit"
+                size="icon"
+                variant="outline"
+                disabled={reviewing || mutation.isPending}
+                aria-label={t('roleMemberEdit.searchAction')}
+              >
+                <Search className="size-4" />
+              </Button>
+            </form>
+          )}
+          {mode === 'unread' && (
+            <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+              {t('roleMemberEdit.unknownHint')}
             </p>
+          )}
+          {activeResult?.isPending ? (
+            <Skeleton className="mt-4 h-80 rounded-panel" />
+          ) : (
+            <>
+              {presentation === 'list' ? (
+                <ul className="my-4 divide-y divide-border">
+                  {rows.map((row) => (
+                    <li key={row.id} className="flex items-center gap-3 py-3">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => {
+                          setSelectedId(row.id)
+                          setInspectorOpen(true)
+                        }}
+                        aria-pressed={selectedId === row.id}
+                      >
+                        <span className="block text-sm font-medium">
+                          {row.member?.nickname || row.member?.username || row.id}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {row.member?.username ?? t('roleMemberEdit.unknownHint')}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t(
+                            row.state === 'added'
+                              ? 'roleManage.pendingAdd'
+                              : row.state === 'removed'
+                                ? 'roleManage.pendingRemove'
+                                : row.state === 'linked'
+                                  ? 'roleManage.linked'
+                                  : 'roleManage.unlinked',
+                          )}
+                        </span>
+                      </button>
+                      <Button
+                        size="sm"
+                        variant={draft.selected.has(row.id) ? 'ghost' : 'outline'}
+                        disabled={disabled}
+                        onClick={() => toggle(row.id)}
+                      >
+                        {t(
+                          draft.selected.has(row.id) ? 'authorization.remove' : 'authorization.add',
+                        )}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <RoleMemberGraph
+                  roleName={opening.role.roleName}
+                  nodes={rows}
+                  selectedId={selectedId}
+                  onSelect={(id) => {
+                    setSelectedId(id)
+                    setInspectorOpen(true)
+                  }}
+                  onToggle={toggle}
+                  disabled={disabled}
+                />
+              )}
+              {rows.length === 0 && (
+                <p role="status" className="pb-6 text-center text-sm text-muted-foreground">
+                  {t(
+                    mode === 'candidates'
+                      ? 'roleMemberEdit.noCandidates'
+                      : mode === 'unread'
+                        ? 'roleMemberEdit.noOtherIds'
+                        : 'roleMemberEdit.noRows',
+                  )}
+                </p>
+              )}
+              <fieldset disabled={reviewing || mutation.isPending}>
+                <RoleGraphPagination
+                  page={page}
+                  pages={pageCount}
+                  onPage={(next) => {
+                    if (reviewing || mutation.isPending) return
+                    setSelectedId(null)
+                    if (mode === 'members') setMemberPage(next + 1)
+                    else if (mode === 'candidates') setCandidatePage(next + 1)
+                    else setOtherPage(next)
+                  }}
+                />
+              </fieldset>
+            </>
           )}
         </InsightCard>
-      )}
-      <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-surface">
-        <p className="text-xs text-muted-foreground">
-          {t('roleMemberEdit.changesCount', {
-            added: changes.added.length,
-            removed: changes.removed.length,
-          })}
-        </p>
-        <div className="flex flex-wrap justify-end gap-2">
-          {reviewing ? (
-            <>
-              <Button
-                variant="outline"
-                disabled={mutation.isPending}
-                onClick={() => setReviewing(false)}
-              >
-                {t('roleMemberEdit.continueEditing')}
-              </Button>
-              <Button
-                disabled={
-                  !dirty ||
-                  mutation.isPending ||
-                  conflict ||
-                  baselineResult.isFetching ||
-                  baselineResult.isError
-                }
-                onClick={() =>
-                  mutation.mutate({
-                    baselineUserIds: [...draft.baseline],
-                    userIds: [...draft.selected],
-                  })
-                }
-              >
-                <Save className="size-4" />
-                {t(mutation.isPending ? 'roleMemberEdit.saving' : 'roleMemberEdit.save')}
-              </Button>
-            </>
-          ) : (
-            <Button disabled={!dirty || disabled} onClick={() => setReviewing(true)}>
-              <Eye className="size-4" />
-              {t('roleMemberEdit.review')}
-            </Button>
-          )}
-        </div>
-      </div>
+      </RoleWorkspacePanels>
+      {savebar}
       <AlertDialog
         open={leaving !== null}
         onOpenChange={(open) => {

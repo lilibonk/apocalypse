@@ -3,7 +3,7 @@
 import { List, Network } from 'lucide-react'
 import { useCallback, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { DynaPage } from '@/components/dyna'
@@ -20,6 +20,7 @@ import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import schema from './role.schema'
 import { localizeRoleSchema, RoleForm } from './RoleForm'
 import { RolePermissionWorkspace } from './RolePermissionWorkspace'
+import { readRoleMemberContext } from './role-member-context'
 import { RolePermissionEditor } from './RolePermissionEditor'
 import { RoleMemberEditor } from './RoleMemberEditor'
 import { RoleBusinessPermissions } from './RoleBusinessPermissions'
@@ -113,6 +114,8 @@ function RolePageContent() {
     [t],
   )
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const memberContext = readRoleMemberContext(location.state)
   const view = searchParams.get('roleView') === 'list' ? 'list' : 'graph'
   const setView = useCallback(
     (nextView: 'graph' | 'list') =>
@@ -122,11 +125,14 @@ function RolePageContent() {
           next.set('roleView', nextView)
           return next
         },
-        { replace: true },
+        { replace: true, state: location.state },
       ),
-    [setSearchParams],
+    [setSearchParams, location.state],
   )
   const [graphBusy, setGraphBusy] = useState(false)
+  const [workspaceOpened, setWorkspaceOpened] = useState(desktop && view === 'graph')
+  if (view === 'graph' && desktop && !workspaceOpened) setWorkspaceOpened(true)
+  else if (view !== 'graph' && workspaceOpened) setWorkspaceOpened(false)
   const [relation, setRelation] = useState<{
     kind: 'permissions' | 'navigation' | 'members'
     opening: RolePermissionOpening
@@ -176,9 +182,12 @@ function RolePageContent() {
   ) : null
   return (
     <>
-      {canReadRoleWorkspace(auth) && view === 'graph' && (desktop || graphBusy) ? (
+      {canReadRoleWorkspace(auth) &&
+      view === 'graph' &&
+      (desktop || workspaceOpened || graphBusy || memberContext) ? (
         <RolePermissionWorkspace
           principalEpoch={auth.sessionEpoch}
+          memberContext={memberContext}
           presentation={desktop ? 'graph' : 'list'}
           viewControl={viewControl}
           onBusyChange={setGraphBusy}

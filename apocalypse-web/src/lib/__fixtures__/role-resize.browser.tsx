@@ -14,6 +14,8 @@ import '@/index.css'
 if (!import.meta.env.DEV) throw new Error('Role resize fixture is dev-only')
 const focusEnabled = new URLSearchParams(window.location.search).has('focus')
 const overviewEntry = new URLSearchParams(window.location.search).has('overview')
+const memberEntry = new URLSearchParams(window.location.search).has('memberContext')
+const linkedEntry = new URLSearchParams(window.location.search).has('linked')
 const principal = { id: 'fixture-principal', username: 'fixture-operator', nickname: null }
 let narrowerSnapshot = false
 const permissions = [
@@ -78,7 +80,28 @@ const baseline: RoleGrantsBaseline = {
 const candidate = { id: 'user-1', username: 'resize-user', nickname: 'Resize member', status: 1 }
 let navigationIds: string[] = []
 let userIds: string[] = []
-let writes = { permissions: 0, navigation: 0, members: 0, body: '', meReads: 0 }
+if (linkedEntry) {
+  baseline.grants = [
+    {
+      permissionId: definition.id,
+      enabled: true,
+      scopeOverride: 'INHERIT_ROLE',
+      validFrom: null,
+      validUntil: null,
+      definition,
+    },
+  ]
+  navigationIds = ['navigation-1']
+  userIds = [candidate.id]
+}
+let writes = {
+  permissions: 0,
+  navigation: 0,
+  members: 0,
+  body: '',
+  meReads: 0,
+  candidateKeyword: '',
+}
 const listeners = new Set<() => void>()
 function record(kind: 'permissions' | 'navigation' | 'members', body: unknown) {
   writes = { ...writes, [kind]: writes[kind] + 1, body: JSON.stringify(body) }
@@ -160,8 +183,11 @@ http.defaults.adapter = async (config) => {
       page: 1,
       size: 4,
     }
-  } else if (path === '/system/users/page') data = { list: [candidate], total: 1, page: 1, size: 4 }
-  else if (path === '/system/authorization/insights/overview')
+  } else if (path === '/system/users/page') {
+    writes = { ...writes, candidateKeyword: String(config.params.keyword ?? '') }
+    listeners.forEach((listener) => listener())
+    data = { list: [candidate], total: 1, page: 1, size: 4 }
+  } else if (path === '/system/authorization/insights/overview')
     data = {
       evaluatedAt: '2026-10-18T12:00:00Z',
       usersVisible: true,
@@ -220,6 +246,7 @@ function Fixture() {
         data-snapshot={snapshotId}
         data-loaded={loaded}
         data-can-write={canWrite}
+        data-candidate-keyword={saved.candidateKeyword}
       />
       <button
         type="button"
@@ -253,9 +280,20 @@ createRoot(document.getElementById('root')!).render(
   <AppProviders>
     <MemoryRouter
       initialEntries={[
-        overviewEntry
-          ? '/system/role'
-          : `/system/role?roleId=${role.id}&roleKey=${role.roleKey}&roleRelation=permissions`,
+        memberEntry
+          ? {
+              pathname: '/system/role',
+              state: {
+                workspaceContext: {
+                  kind: 'member',
+                  userId: candidate.id,
+                  keyword: candidate.username,
+                },
+              },
+            }
+          : overviewEntry
+            ? '/system/role'
+            : `/system/role?roleId=${role.id}&roleKey=${role.roleKey}&roleRelation=${linkedEntry ? 'chain' : 'permissions'}`,
       ]}
     >
       <Fixture />

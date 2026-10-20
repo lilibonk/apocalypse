@@ -327,15 +327,7 @@ function PeriodTrend({
   )
 }
 
-function SuccessGauge({
-  value,
-  motionEnabled,
-  language,
-}: {
-  value: number | null
-  motionEnabled: boolean
-  language: 'zh' | 'en'
-}) {
+function SuccessGauge({ value, language }: { value: number | null; language: 'zh' | 'en' }) {
   const { t } = useTranslation('dashboard')
   return (
     <div className="relative mx-auto my-4 aspect-square w-44 max-w-full">
@@ -365,7 +357,7 @@ function SuccessGauge({
               <AnimatedNumber
                 value={value}
                 language={language}
-                motionEnabled={motionEnabled}
+                motionEnabled={false}
                 decimals={1}
                 variant="odometer"
               />
@@ -408,14 +400,12 @@ function Stat({
   label,
   value,
   language,
-  motionEnabled,
   decimals = 0,
   tone,
 }: {
   label: string
   value: number
   language: 'zh' | 'en'
-  motionEnabled: boolean
   decimals?: number
   tone?: 'brand'
 }) {
@@ -428,7 +418,7 @@ function Stat({
         <AnimatedNumber
           value={value}
           language={language}
-          motionEnabled={motionEnabled}
+          motionEnabled={false}
           decimals={decimals}
           variant="odometer"
         />
@@ -491,7 +481,7 @@ export function DashboardInsights({
     <div className="space-y-4">
       <div className="dashboard-insight-top grid gap-4">
         <InsightCard
-          className="dashboard-insight-hero flex flex-col p-5 sm:p-7"
+          className="dashboard-insight-hero flex flex-col p-5"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:login"
           order={0}
@@ -533,47 +523,33 @@ export function DashboardInsights({
                 </div>
                 <PeriodTrend insight={insight} motionEnabled={motionEnabled} />
               </div>
-              <dl className="mt-6 grid grid-cols-3 gap-x-6 gap-y-4 border-t border-border-subtle pt-5 text-xs sm:grid-cols-6">
+              <dl className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3 border-t border-border-subtle pt-4 text-xs sm:grid-cols-6">
                 <Stat
                   label={t('succeeded')}
                   value={insight.succeeded}
                   language={language}
-                  motionEnabled={motionEnabled}
                   tone="brand"
                 />
-                <Stat
-                  label={t('failed')}
-                  value={insight.failed}
-                  language={language}
-                  motionEnabled={motionEnabled}
-                />
+                <Stat label={t('failed')} value={insight.failed} language={language} />
                 <Stat
                   label={t('distinctUsers')}
                   value={insight.distinctUsers}
                   language={language}
-                  motionEnabled={motionEnabled}
                 />
-                <Stat
-                  label={t('distinctIps')}
-                  value={insight.distinctIps}
-                  language={language}
-                  motionEnabled={motionEnabled}
-                />
+                <Stat label={t('distinctIps')} value={insight.distinctIps} language={language} />
                 <Stat
                   label={t(insight.bucketUnit === 'HOURS' ? 'peakHour' : 'peakDay')}
                   value={insight.peak}
                   language={language}
-                  motionEnabled={motionEnabled}
                 />
                 <Stat
                   label={t(insight.bucketUnit === 'HOURS' ? 'averageHour' : 'averageDay')}
                   value={insight.average}
                   language={language}
-                  motionEnabled={motionEnabled}
                   decimals={1}
                 />
               </dl>
-              <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
                 <WindowNote insight={insight} />
                 {loginHref && (
                   <Button variant="outline" asChild>
@@ -589,7 +565,7 @@ export function DashboardInsights({
         </InsightCard>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
           <InsightCard
-            className="flex flex-col justify-between gap-4 p-5 sm:p-6"
+            className="flex flex-col justify-between gap-3 p-4 sm:p-5"
             motionEnabled={motionEnabled}
             entranceKey="dashboard:online"
             order={1}
@@ -633,7 +609,7 @@ export function DashboardInsights({
             )}
           </InsightCard>
           <InsightCard
-            className="flex flex-col justify-between gap-4 p-5 sm:p-6"
+            className="flex flex-col justify-between gap-3 p-4 sm:p-5"
             motionEnabled={motionEnabled}
             entranceKey="dashboard:operations"
             order={2}
@@ -657,7 +633,7 @@ export function DashboardInsights({
                     <AnimatedNumber
                       value={operations.total}
                       language={language}
-                      motionEnabled={motionEnabled}
+                      motionEnabled={false}
                       variant="odometer"
                     />
                   </span>
@@ -679,7 +655,7 @@ export function DashboardInsights({
           </InsightCard>
         </div>
       </div>
-      <div className="dashboard-insight-bottom grid gap-4 md:grid-cols-2">
+      <div className="dashboard-insight-bottom grid items-start gap-4 md:grid-cols-2">
         <InsightCard
           className="p-5 sm:p-6"
           motionEnabled={motionEnabled}
@@ -690,24 +666,10 @@ export function DashboardInsights({
           <p className="mt-1 text-xs text-muted-foreground">{t('operationSuccessHint')}</p>
           {operations && operations.total > 0 ? (
             <>
-              <SuccessGauge
-                value={operations.successRate}
-                language={language}
-                motionEnabled={motionEnabled}
-              />
+              <SuccessGauge value={operations.successRate} language={language} />
               <dl className="grid grid-cols-2 gap-4 border-t border-border-subtle pt-4 text-xs">
-                <Stat
-                  label={t('succeeded')}
-                  value={operations.succeeded}
-                  language={language}
-                  motionEnabled={motionEnabled}
-                />
-                <Stat
-                  label={t('failed')}
-                  value={operations.failed}
-                  language={language}
-                  motionEnabled={motionEnabled}
-                />
+                <Stat label={t('succeeded')} value={operations.succeeded} language={language} />
+                <Stat label={t('failed')} value={operations.failed} language={language} />
               </dl>
               {operations.unknown > 0 && (
                 <p className="mt-2 text-xs text-warning-foreground">
@@ -730,7 +692,7 @@ export function DashboardInsights({
           <h2 className="font-semibold">{t('distribution')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('distributionHint')}</p>
           {operations && operations.total > 0 ? (
-            <div className="my-6 flex flex-1 flex-col justify-center gap-5">
+            <div className="mt-5 flex flex-col gap-5">
               {distributionRows.map((item, index) => {
                 const knownKey = operationTypeKey(item.type)
                 const label =

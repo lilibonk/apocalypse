@@ -5,6 +5,7 @@
 
 import { ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { useId, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,7 @@ const COLLAPSED_COUNT = 3
 
 export interface DynaSearchProps {
   fields: DynaSearchField[]
+  presentation?: 'panel' | 'toolbar'
   /** 草稿值（输入态，未生效）；生效查询条件由父组件持有。 */
   values: Record<string, string>
   onChange: (name: string, value: string) => void
@@ -70,7 +72,14 @@ function SearchControl({
   )
 }
 
-export function DynaSearch({ fields, values, onChange, onSearch, onReset }: DynaSearchProps) {
+export function DynaSearch({
+  fields,
+  values,
+  onChange,
+  onSearch,
+  onReset,
+  presentation = 'panel',
+}: DynaSearchProps) {
   const t = useDynaText()
   const [expanded, setExpanded] = useState(false)
   const searchId = useId()
@@ -82,7 +91,10 @@ export function DynaSearch({ fields, values, onChange, onSearch, onReset }: Dyna
 
   return (
     <form
-      className="grid grid-cols-2 gap-3 rounded-panel bg-muted/40 p-4 sm:flex sm:flex-wrap sm:items-end"
+      className={cn(
+        'grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end',
+        presentation === 'panel' ? 'rounded-panel bg-muted/40 p-4' : 'object-workspace-search',
+      )}
       aria-label={t('queryFilters')}
       onSubmit={(event) => {
         event.preventDefault()
@@ -90,7 +102,15 @@ export function DynaSearch({ fields, values, onChange, onSearch, onReset }: Dyna
       }}
     >
       {visible.map((field) => (
-        <div key={field.name} className="col-span-2 space-y-2 sm:col-auto">
+        <div
+          key={field.name}
+          className={cn(
+            'col-span-2 sm:col-auto',
+            presentation === 'toolbar' && fields.length === 1
+              ? 'flex items-center gap-3'
+              : 'space-y-2',
+          )}
+        >
           <Label htmlFor={`${searchId}-${field.name}`}>
             {t(field.label ?? field.placeholder ?? 'querySearch')}
           </Label>

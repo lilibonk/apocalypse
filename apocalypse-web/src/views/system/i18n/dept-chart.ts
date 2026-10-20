@@ -1,6 +1,14 @@
 /** Department organisation chart. Keys must match across locales. */
 export const deptChartCopy = {
   zh: {
+    empty: '暂无部门，可从页首新增根部门。',
+    locate: '定位选中',
+    overview: '全树概览',
+    readableScale: '回到可读比例',
+    details: '部门资料与成员',
+    created: '已创建「{{name}}」，组织图将定位新部门。',
+    updated: '已更新「{{name}}」，资料与所属路径已刷新。',
+    deleted: '已删除「{{name}}」，组织图返回上级或相邻部门。',
     view: '部门展示方式',
     chart: '组织图',
     table: '树表',
@@ -32,6 +40,14 @@ export const deptChartCopy = {
     next: '下一页',
   },
   en: {
+    empty: 'No departments yet. Add a root department from the page header.',
+    locate: 'Locate selection',
+    overview: 'Whole tree',
+    readableScale: 'Reset to readable scale',
+    details: 'Department profile and members',
+    created: 'Created {{name}}. The chart will locate the new department.',
+    updated: 'Updated {{name}}. Its profile and parent path have been refreshed.',
+    deleted: 'Deleted {{name}}. The chart returns to its parent or a nearby department.',
     view: 'Department view',
     chart: 'Org chart',
     table: 'Tree table',

@@ -63,7 +63,7 @@ import { createDynaQueries } from './dyna-queries'
 import { DynaDetail } from './DynaDetail'
 import { DynaForm, type DynaFormProps } from './DynaForm'
 import { DynaSearch } from './DynaSearch'
-import { DynaTable } from './DynaTable'
+import { DynaTable, type DynaTableProps } from './DynaTable'
 import {
   validatePageSchema,
   type DynaActionIcon,
@@ -114,6 +114,10 @@ export interface DynaPageProps {
    * resource denial reach them too.
    */
   overview?: (controls: DynaOverviewControls) => ReactNode
+  /** Complete page-owned object view, sharing this controller's query, actions and forms. */
+  workspace?: (controls: DynaWorkspaceControls) => ReactNode
+  /** Navigation context is only a search hint; all data still comes through the guarded query. */
+  entryContext?: { key: string; filters: Record<string, string>; selectedRowKey?: string }
   /** A page-owned view switch shown in the header slot (e.g. role graph | list). */
   headerView?: ReactNode
   /**
@@ -131,8 +135,9 @@ const ACTION_ICONS: Record<DynaActionIcon, LucideIcon> = {
   members: Users,
 }
 
-type DynaView = 'list' | 'overview'
+type DynaView = 'list' | 'overview' | 'workspace'
 const DYNA_VIEWS = ['list', 'overview'] as const
+const WORKSPACE_VIEWS = ['workspace', 'list'] as const
 
 export interface DynaOverviewControls {
   /** Applied search values (what the table currently shows). */
@@ -145,6 +150,14 @@ export interface DynaOverviewControls {
    * module-scoped pages, whose filters are not key-based.
    */
   queryKey: readonly unknown[] | undefined
+}
+
+/** Presentation only: writes stay in DynaPage and retain the original guarded callbacks. */
+export interface DynaWorkspaceControls extends DynaOverviewControls {
+  collection: DynaTableProps
+  search: ReactNode
+  selectedRowKey: string | null
+  selectRow: (key: string | null) => void
 }
 
 export interface ScopedDynaAction {
@@ -165,6 +178,7 @@ export function DynaPage(props: DynaPageProps) {
     props.queryScope?.moduleKey,
     props.schema.endpoint,
     props.schema.key,
+    props.entryContext?.key,
   ])
   // The view is not part of the key: switching views keeps paging, filters and open layers.
   const render = (view: DynaView, onViewChange?: (view: DynaView) => void) => (
@@ -176,7 +190,12 @@ export function DynaPage(props: DynaPageProps) {
       onViewChange={onViewChange}
     />
   )
-  const content = props.overview ? <DynaPageViews>{render}</DynaPageViews> : render('list')
+  const content =
+    props.workspace || props.overview ? (
+      <DynaPageViews workspace={Boolean(props.workspace)}>{render}</DynaPageViews>
+    ) : (
+      render('list')
+    )
   return props.queryScope ? (
     <ModuleAccess scope={props.queryScope}>{content}</ModuleAccess>
   ) : (
@@ -187,11 +206,13 @@ export function DynaPage(props: DynaPageProps) {
 /** Overview is a desktop workspace; narrow screens keep the list only. */
 function DynaPageViews({
   children,
+  workspace,
 }: {
+  workspace: boolean
   children: (view: DynaView, onViewChange?: (view: DynaView) => void) => ReactNode
 }) {
   const desktop = useDesktopViewport()
-  const [view, setView] = usePageView(DYNA_VIEWS)
+  const [view, setView] = usePageView<DynaView>(workspace ? WORKSPACE_VIEWS : DYNA_VIEWS)
   return children(desktop ? view : 'list', desktop ? setView : undefined)
 }
 
@@ -201,8 +222,10 @@ function DynaPageContent({
   queryScope,
   queries,
   overview,
+  workspace,
   headerView,
   embedded = false,
+  entryContext,
   view,
   onViewChange,
   formComponent: FormComponent = DynaForm,
@@ -223,13 +246,20 @@ function DynaPageContent({
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
-  const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>({})
+  const [draftSearch, setDraftSearch] = useState<Record<string, string>>(
+    entryContext?.filters ?? {},
+  )
+  const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>(
+    entryContext?.filters ?? {},
+  )
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [viewing, setViewing] = useState<Row | null>(null)
   const [deleting, setDeleting] = useState<Row | null>(null)
   const [toggling, setToggling] = useState<ToggleState | null>(null)
   const [mutationDenial, setMutationDenial] = useState<ApiError | null>(null)
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(
+    entryContext?.selectedRowKey ?? null,
+  )
 
   const { data, isLoading, isFetching, error, refetch } = useQuery<PageResult<Row>>(
     queries.list(
@@ -253,6 +283,7 @@ function DynaPageContent({
       setViewing(null)
       setDeleting(null)
       setToggling(null)
+      setSelectedRowKey(null)
     },
   })
   const onDenied = {
@@ -270,7 +301,8 @@ function DynaPageContent({
       : undefined
   const retryList = async () => {
     const denied = mutationDenial
-    if (overview && overviewKey) void queryClient.invalidateQueries({ queryKey: overviewKey })
+    if ((overview || workspace) && overviewKey)
+      void queryClient.invalidateQueries({ queryKey: overviewKey })
     const result = await refetch()
     // Cache clearing is not a successful empty result; keep the denial until recovery.
     // A newer denial must not be cleared by an older in-flight retry.
@@ -574,10 +606,17 @@ function DynaPageContent({
       label={t('pageView')}
       value={view}
       onChange={onViewChange}
-      options={[
-        { value: 'list', label: t('viewList'), icon: List },
-        { value: 'overview', label: t('viewOverview'), icon: LayoutDashboard },
-      ]}
+      options={
+        workspace
+          ? [
+              { value: 'workspace', label: t('viewWorkspace'), icon: LayoutDashboard },
+              { value: 'list', label: t('viewList'), icon: List },
+            ]
+          : [
+              { value: 'list', label: t('viewList'), icon: List },
+              { value: 'overview', label: t('viewOverview'), icon: LayoutDashboard },
+            ]
+      }
     />
   ) : (
     headerView
@@ -605,6 +644,39 @@ function DynaPageContent({
     </>
   )
 
+  const searchControl =
+    schema.search && schema.search.length > 0 ? (
+      <DynaSearch
+        presentation={view === 'workspace' ? 'toolbar' : 'panel'}
+        fields={schema.search}
+        values={draftSearch}
+        onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
+        onSearch={() => {
+          setPage(1)
+          setAppliedSearch({ ...draftSearch })
+        }}
+        onReset={resetFilters}
+      />
+    ) : null
+  const collection: DynaTableProps = {
+    columns: schema.columns,
+    rows: data?.list,
+    loading: isLoading,
+    error: feedbackError,
+    refreshing: isFetching,
+    onRetry: retryTable,
+    filtered: Object.values(appliedSearch).some((value) => value.trim().length > 0),
+    onResetFilters: resetFilters,
+    rowKey,
+    actions: (schema.rowActions ?? []).length > 0 ? renderActions : undefined,
+    page,
+    size: pageSize,
+    total: data?.total ?? 0,
+    onPageChange: setPage,
+    onPageSizeChange: changePageSize,
+    activeRowKey: activeRowKey ?? selectedRowKey,
+  }
+
   return (
     <div className={cn('w-full min-w-0 space-y-6', !embedded && 'p-4 sm:p-6')}>
       {embedded ? (
@@ -625,7 +697,21 @@ function DynaPageContent({
         />
       )}
 
-      {view === 'overview' && overview ? (
+      {view === 'workspace' && workspace ? (
+        workspace({
+          filters: appliedSearch,
+          applyFilters: (values) => {
+            setDraftSearch({ ...values })
+            setAppliedSearch({ ...values })
+            setPage(1)
+          },
+          queryKey: overviewKey,
+          collection,
+          search: searchControl,
+          selectedRowKey,
+          selectRow: setSelectedRowKey,
+        })
+      ) : view === 'overview' && overview ? (
         overview({
           filters: appliedSearch,
           applyFilters: (values) => {
@@ -638,37 +724,8 @@ function DynaPageContent({
         })
       ) : (
         <>
-          {schema.search && schema.search.length > 0 && (
-            <DynaSearch
-              fields={schema.search}
-              values={draftSearch}
-              onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
-              onSearch={() => {
-                setPage(1)
-                setAppliedSearch({ ...draftSearch })
-              }}
-              onReset={resetFilters}
-            />
-          )}
-
-          <DynaTable
-            columns={schema.columns}
-            rows={data?.list}
-            loading={isLoading}
-            error={feedbackError}
-            refreshing={isFetching}
-            onRetry={retryTable}
-            filtered={Object.values(appliedSearch).some((value) => value.trim().length > 0)}
-            onResetFilters={resetFilters}
-            rowKey={rowKey}
-            actions={(schema.rowActions ?? []).length > 0 ? renderActions : undefined}
-            page={page}
-            size={pageSize}
-            total={data?.total ?? 0}
-            onPageChange={setPage}
-            onPageSizeChange={changePageSize}
-            activeRowKey={activeRowKey}
-          />
+          {searchControl}
+          <DynaTable {...collection} />
         </>
       )}
 

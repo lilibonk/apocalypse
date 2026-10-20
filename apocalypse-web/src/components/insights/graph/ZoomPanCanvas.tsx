@@ -1,19 +1,30 @@
 import { Maximize2, Minus, Plus } from 'lucide-react'
 import {
   useCallback,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  type Ref,
   type WheelEvent,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
-import { clampZoom, fitView, panIntoView, type View } from './view'
+import { clampZoom, fitOverview, fitView, panIntoView, type View } from './view'
+
+export interface ZoomPanCanvasHandle {
+  fit: () => void
+  overview: () => void
+  centerOn: (
+    box: { x: number; y: number; width: number; height: number },
+    minimumScale?: number,
+  ) => void
+}
 
 /**
  * Pan/zoom viewport for graph content of a known natural size. Mouse: drag background to pan,
@@ -28,6 +39,8 @@ export function ZoomPanCanvas({
   fitKey,
   minFitScale,
   reveal,
+  ref,
+  fitLabel,
 }: {
   width: number
   height: number
@@ -39,6 +52,8 @@ export function ZoomPanCanvas({
   minFitScale?: number
   /** Content-space box to keep visible (focused or selected item); panned into view when needed. */
   reveal?: { x: number; y: number; width: number; height: number } | null
+  ref?: Ref<ZoomPanCanvasHandle>
+  fitLabel?: string
 }) {
   const { t } = useTranslation()
   const frame = useRef<HTMLDivElement>(null)
@@ -51,6 +66,30 @@ export function ZoomPanCanvas({
     if (!box) return
     setView(fitView(box.clientWidth, box.clientHeight, width, height, 24, minFitScale))
   }, [width, height, minFitScale])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      fit,
+      overview: () => {
+        const box = frame.current
+        if (box) setView(fitOverview(box.clientWidth, box.clientHeight, width, height))
+      },
+      centerOn: (target, minimumScale) => {
+        const box = frame.current
+        if (!box) return
+        setView((current) => {
+          const scale = Math.max(current.scale, minimumScale ?? current.scale)
+          return {
+            scale,
+            x: box.clientWidth / 2 - (target.x + target.width / 2) * scale,
+            y: box.clientHeight / 2 - (target.y + target.height / 2) * scale,
+          }
+        })
+      },
+    }),
+    [fit, width, height],
+  )
 
   useLayoutEffect(() => {
     fit()
@@ -169,7 +208,13 @@ export function ZoomPanCanvas({
         >
           <Minus aria-hidden="true" />
         </Button>
-        <Button variant="outline" size="icon" aria-label={t('graph.fit')} onClick={fit}>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={fitLabel ?? t('graph.fit')}
+          title={fitLabel ?? t('graph.fit')}
+          onClick={fit}
+        >
           <Maximize2 aria-hidden="true" />
         </Button>
       </div>

@@ -4,7 +4,7 @@
  * 状态列走字典 sys_common_status（成功 1 / 失败 0）。
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, LayoutDashboard, List, RefreshCw } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -51,10 +51,17 @@ const searchFields: DynaSearchField[] = [
   { name: 'keyword', label: '用户名 / IP', type: 'input', placeholder: '用户名 / IP' },
 ]
 
-const LOGIN_LOG_VIEWS = ['list', 'overview'] as const
+const LOGIN_LOG_VIEWS = ['overview', 'list'] as const
 
 export default function LoginLogPage() {
+  const epoch = useAuthStore((state) => state.authorizationEpoch)
+  return <LoginLogWorkspace key={epoch} />
+}
+
+function LoginLogWorkspace() {
   const { t } = useTranslation()
+  const { t: systemT } = useTranslation('system')
+  const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
@@ -68,9 +75,9 @@ export default function LoginLogPage() {
 
   const keyword = appliedSearch.keyword ?? ''
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['system', 'logs', 'login', page, pageSize, keyword],
-    queryFn: () => pageLoginLogs(page, pageSize, keyword),
+    queryFn: ({ signal }) => pageLoginLogs(page, pageSize, keyword, signal),
   })
   useResourceDenial({
     errors: [error],
@@ -87,7 +94,10 @@ export default function LoginLogPage() {
   )
 
   // Stable callbacks: opening the detail re-renders only the highlighted row.
-  const retry = useCallback(() => void refetch(), [refetch])
+  const retry = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: ['system', 'logs', 'login'] }),
+    [queryClient],
+  )
   const resetFilters = useCallback(() => {
     setDraftSearch({})
     setAppliedSearch({})
@@ -125,8 +135,12 @@ export default function LoginLogPage() {
               value={view}
               onChange={setView}
               options={[
+                {
+                  value: 'overview',
+                  label: systemT('logInsight.workspace'),
+                  icon: LayoutDashboard,
+                },
                 { value: 'list', label: t('dyna.viewList'), icon: List },
-                { value: 'overview', label: t('dyna.viewOverview'), icon: LayoutDashboard },
               ]}
             />
           ) : undefined
@@ -144,41 +158,52 @@ export default function LoginLogPage() {
         }
       />
 
-      {view === 'overview' ? (
-        <LoginActivitySection />
-      ) : (
-        <>
-          <DynaSearch
-            fields={searchFields}
-            values={draftSearch}
-            onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
-            onSearch={() => {
-              setPage(1)
-              setAppliedSearch({ ...draftSearch })
-            }}
-            onReset={resetFilters}
-          />
-
-          <DynaTable
-            columns={columns}
-            rows={rows}
-            loading={isLoading}
-            error={error}
-            refreshing={isFetching}
-            onRetry={retry}
-            filtered={keyword.trim().length > 0}
-            onResetFilters={resetFilters}
-            rowKey="id"
-            actions={renderActions}
-            page={page}
-            size={pageSize}
-            total={data?.total ?? 0}
-            onPageChange={setPage}
-            onPageSizeChange={changePageSize}
-            activeRowKey={detail ? String(detail.id) : null}
-          />
-        </>
+      {hasOverview && (
+        <div hidden={view !== 'overview'}>
+          <LoginActivitySection />
+        </div>
       )}
+      <section className="space-y-4" aria-label={systemT('logInsight.records')}>
+        {view === 'overview' && (
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold">{systemT('logInsight.records')}</h2>
+            <p className="text-xs text-muted-foreground">
+              {systemT('logInsight.recordScope', {
+                keyword: keyword || systemT('logInsight.allRecords'),
+              })}
+            </p>
+          </div>
+        )}
+        <DynaSearch
+          fields={searchFields}
+          values={draftSearch}
+          onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
+          onSearch={() => {
+            setPage(1)
+            setAppliedSearch({ ...draftSearch })
+          }}
+          onReset={resetFilters}
+        />
+
+        <DynaTable
+          columns={columns}
+          rows={rows}
+          loading={isLoading}
+          error={error}
+          refreshing={isFetching}
+          onRetry={retry}
+          filtered={keyword.trim().length > 0}
+          onResetFilters={resetFilters}
+          rowKey="id"
+          actions={renderActions}
+          page={page}
+          size={pageSize}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+          activeRowKey={detail ? String(detail.id) : null}
+        />
+      </section>
 
       <Dialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent>

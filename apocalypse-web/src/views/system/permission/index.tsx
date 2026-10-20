@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router'
+import { readWorkspaceContext } from '../shared/workspace-context'
 import { DynaPage } from '@/components/dyna'
 import { DynaForm, type DynaFormProps } from '@/components/dyna/DynaForm'
 import { useAuthStore } from '@/stores/auth'
 import schema from './permission.schema'
 import { DynaDetail } from '@/components/dyna/DynaDetail'
 import { permissionMetadataBody } from './permission.model'
-import { PermissionInsights } from './PermissionInsights'
+import { PermissionWorkspace } from './PermissionWorkspace'
 
 function PermissionForm(props: DynaFormProps) {
   const { t } = useTranslation('system')
@@ -62,6 +64,7 @@ export default function PermissionPage() {
   return <PermissionPageContent key={epoch} />
 }
 function PermissionPageContent() {
+  const location = useLocation()
   const { t } = useTranslation('system')
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null)
   const localized = useMemo(() => {
@@ -156,9 +159,10 @@ function PermissionPageContent() {
     <>
       <DynaPage
         schema={localized}
+        entryContext={readWorkspaceContext(location.state, 'permission')}
         formComponent={PermissionForm}
         customActions={customActions}
-        overview={(controls) => <PermissionInsights {...controls} />}
+        workspace={(controls) => <PermissionWorkspace {...controls} />}
       />
       <DynaDetail
         title={localized.detail.title}

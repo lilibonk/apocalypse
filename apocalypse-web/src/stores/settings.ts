@@ -4,8 +4,8 @@
  *
  * 核心设计 ——「产品设置 + 开发态能力实验室」：
  * CAPABILITY_META 登记全部能力项及其默认 exposed；exposed=false 的能力
- * 不在设置面板渲染、也不生效（getter 回退默认值）。非开发构建只允许主题、密度、
- * 语言读取用户值；其它能力固定使用产品默认值。
+ * 不在设置面板渲染、也不生效（getter 回退默认值）。非开发构建允许主题、密度、
+ * 动画、语言读取用户值；其它能力固定使用产品默认值。
  * 下游项目裁剪方式：把对应 CAPABILITY_META 项的 exposed 改为 false（或删除该项），
  * 面板与逻辑自动收敛，无需改任何组件代码。
  *
@@ -188,10 +188,9 @@ export function useSettings() {
         : DEFAULT_SETTINGS.fixedHeader,
     grayMode:
       labEnabled && isCapabilityExposed('grayMode') ? state.grayMode : DEFAULT_SETTINGS.grayMode,
-    motionEnabled:
-      labEnabled && isCapabilityExposed('motion')
-        ? state.motionEnabled
-        : DEFAULT_SETTINGS.motionEnabled,
+    motionEnabled: isCapabilityExposed('motion')
+      ? state.motionEnabled
+      : DEFAULT_SETTINGS.motionEnabled,
     pixelWaveEnabled:
       labEnabled && isCapabilityExposed('pixelWave') && state.pixelWaveEnabled === true,
     language: isCapabilityExposed('language') ? state.language : DEFAULT_SETTINGS.language,

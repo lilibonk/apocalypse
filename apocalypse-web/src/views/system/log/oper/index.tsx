@@ -6,7 +6,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Check, Copy, Eye, RefreshCw } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
@@ -21,6 +21,7 @@ import {
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DictTag } from '@/components/DictTag'
+import { useAuthStore } from '@/stores/auth'
 import './oper-log.css'
 
 import { pageOperLogs, type OperLogRow } from './oper-log.api'
@@ -29,8 +30,7 @@ import { formatPayload, operTypeLabel } from './oper-log.model'
 const DEFAULT_PAGE_SIZE = 10
 
 const columns: DynaColumn[] = [
-  { key: 'title', title: '操作模块' },
-  { key: 'businessTypeLabel', title: '操作类型' },
+  { key: 'eventSummary', title: '事件' },
   { key: 'operName', title: '操作人' },
   { key: 'operIp', title: '操作 IP' },
   { key: 'costTimeText', title: '耗时' },
@@ -51,25 +51,41 @@ const searchFields: DynaSearchField[] = [
 /** 详情字段块：长内容在块内滚动，空值显示 -，可复制原文。 */
 function DetailBlock({ label, value }: { label: string; value: string | null }) {
   const { t } = useTranslation()
+  const { t: systemT } = useTranslation('system')
   const formatted = formatPayload(value)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1800)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  const copy = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(value ?? '')
+      setCopied(true)
+      setCopyFailed(false)
+    } catch {
+      setCopyFailed(true)
+    }
+  }
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-muted-foreground">{label}</div>
         {formatted && (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() =>
-              void navigator.clipboard?.writeText(value ?? '').then(() => setCopied(true))
-            }
-          >
+          <Button variant="ghost" size="xs" onClick={() => void copy()}>
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             {copied ? t('common.copied') : t('common.copy')}
           </Button>
         )}
       </div>
+      {copyFailed && (
+        <p role="alert" className="text-xs text-destructive">
+          {systemT('operLog.copyFailed')}
+        </p>
+      )}
       <pre className="oper-log-payload max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap break-all">
         {formatted ?? '-'}
       </pre>
@@ -78,6 +94,11 @@ function DetailBlock({ label, value }: { label: string; value: string | null }) 
 }
 
 export default function OperLogPage() {
+  const epoch = useAuthStore((state) => state.authorizationEpoch)
+  return <OperLogWorkspace key={epoch} />
+}
+
+function OperLogWorkspace() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const [page, setPage] = useState(1)
@@ -87,10 +108,17 @@ export default function OperLogPage() {
   const [detail, setDetail] = useState<OperLogRow | null>(null)
 
   const keyword = appliedSearch.keyword ?? ''
+  const displayColumns = useMemo(
+    () =>
+      columns.map((column) =>
+        column.key === 'eventSummary' ? { ...column, title: systemT('operLog.event') } : column,
+      ),
+    [systemT],
+  )
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'logs', 'oper', page, pageSize, keyword],
-    queryFn: () => pageOperLogs(page, pageSize, keyword),
+    queryFn: ({ signal }) => pageOperLogs(page, pageSize, keyword, signal),
   })
   useResourceDenial({
     errors: [error],
@@ -104,7 +132,7 @@ export default function OperLogPage() {
       data?.list.map((row) => ({
         ...row,
         costTimeText: row.costTime === null ? null : `${row.costTime} ms`,
-        businessTypeLabel: operTypeLabel(row.businessType, systemT),
+        eventSummary: `${row.title ?? systemT('operLog.unrecorded')} · ${operTypeLabel(row.businessType, systemT)}`,
       })),
     [data, systemT],
   )
@@ -165,8 +193,11 @@ export default function OperLogPage() {
         onReset={resetFilters}
       />
 
+      <p className="text-xs text-muted-foreground">
+        {systemT('operLog.filterContext', { keyword: keyword || systemT('operLog.allRecords') })}
+      </p>
       <DynaTable
-        columns={columns}
+        columns={displayColumns}
         rows={rows}
         loading={isLoading}
         error={error}
@@ -193,7 +224,7 @@ export default function OperLogPage() {
             </SheetDescription>
           </SheetHeader>
           {detail && (
-            <div className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+            <div key={detail.id} className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">
@@ -243,10 +274,15 @@ export default function OperLogPage() {
                   <dd className="mt-1 break-all">{detail.operIp ?? '-'}</dd>
                 </div>
               </dl>
-              <DetailBlock
-                label={t('common.请求方法', { defaultValue: '请求方法' })}
-                value={detail.method}
-              />
+              {detail.errorMsg && (
+                <div className="rounded-control border border-destructive/30 p-3">
+                  <DetailBlock
+                    label={t('common.异常信息', { defaultValue: '异常信息' })}
+                    value={detail.errorMsg}
+                  />
+                </div>
+              )}
+              <DetailBlock label={systemT('operLog.invokedMethod')} value={detail.method} />
               <DetailBlock
                 label={t('common.请求参数', { defaultValue: '请求参数' })}
                 value={detail.operParam}
@@ -254,10 +290,6 @@ export default function OperLogPage() {
               <DetailBlock
                 label={t('common.返回结果', { defaultValue: '返回结果' })}
                 value={detail.operResult}
-              />
-              <DetailBlock
-                label={t('common.异常信息', { defaultValue: '异常信息' })}
-                value={detail.errorMsg}
               />
             </div>
           )}

@@ -22,6 +22,8 @@ import type { ConflictResolution, OverrideConflict } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
+  CalendarContextChange,
+  CalendarQueryStatus,
   DataEmpty,
   FieldPair,
   InlineError,
@@ -51,6 +53,10 @@ function PersonalOverridePage() {
   const [calendarSelection, setCalendarSelection] = useState('')
   const [date, setDate] = useState(today)
   const [input, setInput] = useState(emptyOverrideInput)
+  const [acceptedInput, setAcceptedInput] = useState(() => JSON.stringify(emptyOverrideInput()))
+  const [pendingContext, setPendingContext] = useState<{ calendarId: string; date: string } | null>(
+    null,
+  )
   const operation = buildDayOverride(input)
   const year = date.slice(0, 4)
 
@@ -80,6 +86,8 @@ function PersonalOverridePage() {
     () => {
       setCalendarSelection('')
       setInput(emptyOverrideInput())
+      setAcceptedInput(JSON.stringify(emptyOverrideInput()))
+      setPendingContext(null)
     },
   )
 
@@ -116,6 +124,7 @@ function PersonalOverridePage() {
     },
     onSuccess: () => {
       toast.success(t('personalOverrides.saved'))
+      setAcceptedInput(JSON.stringify(input))
       invalidate()
     },
     onError: (error) => {
@@ -124,43 +133,61 @@ function PersonalOverridePage() {
     },
   })
 
+  const applyContext = (next: { calendarId: string; date: string }) => {
+    setCalendarSelection(next.calendarId)
+    setDate(next.date)
+    setInput(emptyOverrideInput())
+    setAcceptedInput(JSON.stringify(emptyOverrideInput()))
+    setPendingContext(null)
+  }
+  const changeContext = (next: { calendarId: string; date: string }) => {
+    if (next.calendarId === calendarId && next.date === date) return
+    if (JSON.stringify(input) !== acceptedInput) setPendingContext(next)
+    else applyContext(next)
+  }
+
   return (
     <CalendarPageFrame
       title={t('personalOverrides.title')}
       description={t('personalOverrides.description')}
       actions={
-        <CalendarPicker
-          calendars={calendarsQuery.data ?? []}
-          value={calendarId}
-          onChange={(value) => {
-            setCalendarSelection(value)
-            setInput(emptyOverrideInput())
-          }}
-        />
+        <>
+          <CalendarPicker
+            calendars={calendarsQuery.data ?? []}
+            value={calendarId}
+            onChange={(value) => changeContext({ calendarId: value, date })}
+          />
+          <div className="grid gap-1.5">
+            <Label htmlFor="personal-override-date">{t('personalOverrides.date')}</Label>
+            <DatePicker
+              id="personal-override-date"
+              mode="date"
+              allowClear={false}
+              value={date}
+              onValueChange={(selection) => changeContext({ calendarId, date: selection })}
+            />
+          </div>
+        </>
       }
     >
-      {(overrideQuery.error || dayQuery.error || conflictsQuery.error) && (
+      {(calendarsQuery.error || overrideQuery.error || dayQuery.error || conflictsQuery.error) && (
         <InlineError
-          message={toErrorMessage(overrideQuery.error ?? dayQuery.error ?? conflictsQuery.error)}
+          message={toErrorMessage(
+            calendarsQuery.error ?? overrideQuery.error ?? dayQuery.error ?? conflictsQuery.error,
+          )}
         />
       )}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
+      <CalendarQueryStatus
+        loading={calendarsQuery.isLoading || dayQuery.isLoading}
+        fetching={dayQuery.isFetching}
+      />
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
         <Card className="gap-4 py-4">
           <CardHeader className="px-4 sm:px-6">
             <CardTitle>{t('personalOverrides.editLabel')}</CardTitle>
             <CardDescription>{t('personalOverrides.editDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 px-4 sm:px-6">
-            <div className="grid gap-1.5">
-              <Label htmlFor="personal-override-date">{t('personalOverrides.date')}</Label>
-              <DatePicker
-                id="personal-override-date"
-                mode="date"
-                allowClear={false}
-                value={date}
-                onValueChange={(selection) => setDate(selection)}
-              />
-            </div>
             <DayOverrideEditor value={input} onChange={setInput} />
             <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
               <div className="text-xs text-muted-foreground">
@@ -243,39 +270,55 @@ function PersonalOverridePage() {
                 <CardDescription>{t('personalOverrides.baselineDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 px-4 sm:px-6">
-                {!dayQuery.data ? (
-                  <DataEmpty>{t('personalOverrides.chooseDate')}</DataEmpty>
-                ) : (
+                {dayQuery.data ? (
                   <>
-                    {Object.entries(dayFieldLabels).map(([field, label]) => (
-                      <FieldPair
-                        key={field}
-                        label={t(label)}
-                        baseline={dayValueText(
-                          snapshotField(
-                            dayQuery.data!.baseline,
-                            field as keyof typeof dayFieldLabels,
-                          ),
-                        )}
-                        effective={dayValueText(
-                          snapshotField(
-                            dayQuery.data!.effective,
-                            field as keyof typeof dayFieldLabels,
-                            dayQuery.data!.resolutions.find((item) => item.field === field)?.state,
-                          ),
-                        )}
-                      />
-                    ))}
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {dayQuery.data.resolutions.map((resolution) => (
-                        <Badge key={resolution.field} variant="outline">
-                          {t(dayFieldLabels[resolution.field])} ·{' '}
-                          {t(`layers.${resolution.source.layer}`)}
-                        </Badge>
-                      ))}
-                    </div>
+                    <OverrideChangePreview
+                      day={dayQuery.data}
+                      operation={operation}
+                      field={input.field}
+                      underlay={underlayField(dayQuery.data, input.field, 'PERSONAL')}
+                      scope={t('overrideEditor.personalScope') + ' · ' + dayQuery.data.calendarKey}
+                      preview={JSON.stringify(input) !== acceptedInput}
+                    />
+                    <details className="rounded-md border border-border p-3">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t('workspace.allFields')}
+                      </summary>
+                      <div className="mt-3">
+                        {Object.entries(dayFieldLabels).map(([field, label]) => (
+                          <FieldPair
+                            key={field}
+                            label={t(label)}
+                            baseline={dayValueText(
+                              snapshotField(
+                                dayQuery.data!.baseline,
+                                field as keyof typeof dayFieldLabels,
+                              ),
+                            )}
+                            effective={dayValueText(
+                              snapshotField(
+                                dayQuery.data!.effective,
+                                field as keyof typeof dayFieldLabels,
+                                dayQuery.data!.resolutions.find((item) => item.field === field)
+                                  ?.state,
+                              ),
+                            )}
+                          />
+                        ))}
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {dayQuery.data.resolutions.map((resolution) => (
+                            <Badge key={resolution.field} variant="outline">
+                              {t(dayFieldLabels[resolution.field])} ·{' '}
+                              {t(`layers.${resolution.source.layer}`)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </details>
                   </>
-                )}
+                ) : dayQuery.isSuccess ? (
+                  <DataEmpty>{t('personalOverrides.chooseDate')}</DataEmpty>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -320,14 +363,28 @@ function PersonalOverridePage() {
                     )}
                   </div>
                 ))}
-                {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
+                {conflictsQuery.isSuccess && conflictsQuery.data.list.length === 0 && (
                   <DataEmpty>{t('personalOverrides.noConflicts')}</DataEmpty>
                 )}
+                {conflictsQuery.data &&
+                  conflictsQuery.data.total > conflictsQuery.data.list.length && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('workspace.loadedRange', {
+                        count: conflictsQuery.data.list.length,
+                        total: conflictsQuery.data.total,
+                      })}
+                    </p>
+                  )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+      <CalendarContextChange
+        open={pendingContext !== null}
+        onCancel={() => setPendingContext(null)}
+        onConfirm={() => pendingContext && applyContext(pendingContext)}
+      />
     </CalendarPageFrame>
   )
 }

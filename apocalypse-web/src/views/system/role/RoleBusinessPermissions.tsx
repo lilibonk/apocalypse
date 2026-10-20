@@ -37,6 +37,8 @@ import { canConfigurePermission, type PermissionDefinition } from '../permission
 import { RoleGraphPagination } from './RolePermissionGraph'
 import { RoleGrantGraph, type GrantNode } from './RoleGrantGraph'
 import { RoleGrantFields } from './RoleGrantFields'
+import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import type { GrantTimeZone } from './grant-time'
 import {
   canManageRoleRelations,
   canReadRoleWorkspace,
@@ -69,10 +71,12 @@ import { saveRoleGrants } from './role-grant.operations'
 import { useRoleGraphMutation } from './use-role-graph-mutation'
 
 interface Props {
+  initialSelectedId?: string | null
   opening: RolePermissionOpening
   presentation?: 'graph' | 'list'
   onEditingChange: (editing: boolean) => void
   onClose?: () => void
+  onCountChange?: (count: number) => void
 }
 interface GrantSession {
   source: RoleGrantsBaseline
@@ -119,10 +123,12 @@ function GrantDescription({ grant }: { grant: RoleGrant }) {
 }
 
 function RoleBusinessPermissionContent({
+  initialSelectedId = null,
   opening,
   presentation = 'graph',
   onEditingChange,
   onClose,
+  onCountChange,
 }: Props) {
   const { t } = useTranslation('system')
   const client = useQueryClient()
@@ -134,7 +140,15 @@ function RoleBusinessPermissionContent({
   const [lastCandidateData, setLastCandidateData] = useState<unknown>(null)
   const [loadId, setLoadId] = useState(() => opening.openId)
   const [session, setSession] = useState<GrantSession | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId)
+  const [inspectorOpen, setInspectorOpen] = useState(initialSelectedId !== null)
+  const [timeZone, setTimeZone] = useState<GrantTimeZone>('local')
+  const [savedReadback, setSavedReadback] = useState<{
+    previous: RoleGrantsBaseline | undefined
+    selectedId: string | null
+    definitions: ReadonlyMap<string, PermissionDefinition | null>
+    draft: RoleGrantDraft
+  } | null>(null)
   const [mode, setMode] = useState<'assigned' | 'candidates'>('assigned')
   const [searchDraft, setSearchDraft] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -165,6 +179,11 @@ function RoleBusinessPermissionContent({
     ...candidateResource.options,
     enabled: session !== null && mode === 'candidates' && canReadCatalog && !accessDenied,
   })
+  useLayoutEffect(() => {
+    if (result.data && !accessDenied && !isResourceDenied(result.error)) {
+      onCountChange?.(result.data.grants.length)
+    }
+  }, [result.data, result.error, accessDenied, onCountChange])
   useLayoutEffect(() => {
     resource.activate()
     return () => {
@@ -197,6 +216,8 @@ function RoleBusinessPermissionContent({
     clear: { queryKey: ['system', 'roles', roleId] },
     reset: () => {
       setAccessDenied(true)
+      setSavedReadback(null)
+      setInspectorOpen(false)
       setSession(null)
       setSelectedId(null)
       setReviewing(false)
@@ -212,6 +233,8 @@ function RoleBusinessPermissionContent({
           (editing && !canManageRoleRelations(current))
         ) {
           setAccessDenied(true)
+          setSavedReadback(null)
+          setInspectorOpen(false)
           setSession(null)
           setSelectedId(null)
           setReviewing(false)
@@ -244,16 +267,46 @@ function RoleBusinessPermissionContent({
       saveRoleGrants(transport, roleId, submission),
     onSuccess: () => {
       toast.success(t('authorization.saved'))
+      const retainedId = selectedId && session?.draft.current.has(selectedId) ? selectedId : null
+      setSavedReadback({
+        previous: result.data,
+        selectedId: retainedId,
+        definitions:
+          session?.definitions ??
+          new Map(
+            (result.data?.grants ?? []).map((grant) => [grant.permissionId, grant.definition]),
+          ),
+        draft: session?.draft ?? createRoleGrantDraft(result.data?.grants ?? []),
+      })
       setSession(null)
-      setSelectedId(null)
+      setSelectedId(retainedId)
+      if (!retainedId) setInspectorOpen(false)
       setMode('assigned')
-      setPage(0)
       setReviewing(false)
-      setLoadId(crypto.randomUUID())
+      setSaveError(null)
+      setTimeErrors({})
       void invalidateRoleGraphQueries(client, roleId)
     },
     onError: setSaveError,
   })
+  if (
+    savedReadback &&
+    result.data &&
+    !result.isFetching &&
+    !result.isError &&
+    result.data !== savedReadback.previous
+  ) {
+    if (selectedId === savedReadback.selectedId && selectedId) {
+      const index = result.data.grants.findIndex((grant) => grant.permissionId === selectedId)
+      if (index >= 0) setPage(Math.floor(index / GRANT_PAGE_SIZE))
+      else {
+        setSelectedId(null)
+        setInspectorOpen(false)
+      }
+    }
+    setSavedReadback(null)
+  }
+
   const current = () => {
     try {
       assertAuthorizationCurrent(epoch)
@@ -280,6 +333,7 @@ function RoleBusinessPermissionContent({
     setSaveError(null)
     setTimeErrors({})
     setLeaving(null)
+    setSavedReadback(null)
     setLoadId(crypto.randomUUID())
   }
   const exit = () => {
@@ -301,7 +355,8 @@ function RoleBusinessPermissionContent({
       !canManageRoleRelations(useAuthStore.getState()) ||
       !result.data ||
       result.isFetching ||
-      result.isError
+      result.isError ||
+      savedReadback !== null
     )
       return
     setLastCandidateData(null)
@@ -314,8 +369,6 @@ function RoleBusinessPermissionContent({
     })
     setSaveError(null)
     setTimeErrors({})
-    setSelectedId(null)
-    setPage(0)
   }
 
   if (denied || (!result.data && result.isError))
@@ -351,13 +404,15 @@ function RoleBusinessPermissionContent({
     )
 
   const source = session?.source ?? result.data
-  const draft = session?.draft ?? createRoleGrantDraft(source.grants)
+  const draft = session?.draft ?? savedReadback?.draft ?? createRoleGrantDraft(source.grants)
   const definitionFor = (id: string) =>
     session?.definitions.get(id) ??
     candidates.data?.list.find((definition) => definition.id === id) ??
     source.grants.find((grant) => grant.permissionId === id)?.definition ??
+    savedReadback?.definitions.get(id) ??
     null
   const stateFor = (id: string): GrantNode['state'] => {
+    if (!session && savedReadback) return draft.current.has(id) ? 'linked' : 'unlinked'
     const before = draft.baseline.get(id),
       after = draft.current.get(id)
     return before
@@ -370,17 +425,17 @@ function RoleBusinessPermissionContent({
         ? 'added'
         : 'unlinked'
   }
-  const assignedIds = [...new Set([...draft.baseline.keys(), ...draft.current.keys()])].filter(
-    (id) => {
-      const definition = definitionFor(id)
-      return (
-        !keyword ||
-        [id, definition?.name ?? '', definition?.code ?? '', definition?.resource ?? ''].some(
-          (value) => value.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()),
-        )
+  const assignedIds = [
+    ...new Set([...(session ? draft.baseline.keys() : []), ...draft.current.keys()]),
+  ].filter((id) => {
+    const definition = definitionFor(id)
+    return (
+      !keyword ||
+      [id, definition?.name ?? '', definition?.code ?? '', definition?.resource ?? ''].some(
+        (value) => value.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()),
       )
-    },
-  )
+    )
+  })
   const assignedPage = rolePermissionPage(assignedIds, page, GRANT_PAGE_SIZE)
   const candidateRows = canReadCatalog ? (candidates.data?.list ?? []) : []
   const ids =
@@ -413,6 +468,7 @@ function RoleBusinessPermissionContent({
   }
   const toggle = (id: string) => {
     setSelectedId(id)
+    setInspectorOpen(true)
     change((previous) =>
       previous.current.has(id)
         ? removeRoleGrant(previous, id)
@@ -484,14 +540,203 @@ function RoleBusinessPermissionContent({
       )}
     </li>
   )
+  const inspector = (
+    <InsightCard className="min-w-0 space-y-4 p-5">
+      <h3 className="text-sm font-semibold">{t('authorization.definition')}</h3>
+      {selectedId ? (
+        <>
+          <p className="break-words text-sm font-medium">
+            {selectedDefinition?.name ?? t('authorization.definitionMissing')}
+          </p>
+          <code className="block break-all text-xs text-muted-foreground">
+            {selectedDefinition?.code ?? selectedId}
+          </code>
+          {selectedDefinition && (
+            <details open={!session} className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                {t('roleManage.definitionMetadata')}
+              </summary>
+              <dl className="mt-3 space-y-2 text-xs">
+                {[
+                  ['moduleKey', selectedDefinition.moduleKey ?? 'system'],
+                  ['resource', selectedDefinition.resource],
+                  ['action', selectedDefinition.action],
+                  ['lifecycle', t(`authorization.${selectedDefinition.lifecycle}`)],
+                  [
+                    'status',
+                    t(
+                      selectedDefinition.status === 1
+                        ? 'authorization.active'
+                        : 'authorization.inactive',
+                    ),
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">{t(`authorization.${label}`)}</dt>
+                    <dd className="break-all text-right">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+          {!canConfigurePermission(selectedDefinition) && session && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t('authorization.legacyHint')}
+            </p>
+          )}
+          {selectedGrant && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {t(`authorization.${grantWindowState(selectedGrant, describedAt)}`)}
+              </p>
+              {session ? (
+                <RoleGrantFields
+                  grant={selectedGrant}
+                  definition={selectedDefinition}
+                  zone={timeZone}
+                  onZoneChange={setTimeZone}
+                  disabled={disabled || !canConfigurePermission(selectedDefinition)}
+                  errors={timeErrors[selectedId]}
+                  onChange={(values) =>
+                    change((previous) => updateRoleGrant(previous, selectedId, values))
+                  }
+                  onTimeError={(field, error) =>
+                    setTimeErrors((previous) => ({
+                      ...previous,
+                      [selectedId]: { ...previous[selectedId], [field]: error ?? undefined },
+                    }))
+                  }
+                />
+              ) : (
+                <GrantDescription grant={selectedGrant} />
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t('authorization.selectedHint')}
+        </p>
+      )}
+      {!session && selectedId && canManageRoleRelations(auth) && (
+        <Button
+          className="w-full"
+          variant="outline"
+          disabled={result.isFetching || result.isError || savedReadback !== null}
+          onClick={begin}
+        >
+          <Pencil className="size-4" />
+          {t('roleManage.editSelectedGrant')}
+        </Button>
+      )}
+      <div className="border-t pt-4 text-xs text-muted-foreground">
+        <p>
+          {t('authorization.roleScope')} ·{' '}
+          {opening.role.dataScope ? t(`authorization.${opening.role.dataScope}`) : '—'}
+        </p>
+        <p className="mt-3 leading-relaxed">{t('authorization.clockHint')}</p>
+      </div>
+    </InsightCard>
+  )
+  const review = session && (
+    <InsightCard className="space-y-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">
+            {t(reviewing ? 'authorization.reviewTitle' : 'authorization.savedConfig')}
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">{changeCount()}</p>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!dirty || reviewing || mutation.isPending || conflict}
+          onClick={() => {
+            change(resetRoleGrantDraft)
+            setTimeErrors({})
+          }}
+        >
+          <RotateCcw className="size-4" />
+          {t('authorization.reset')}
+        </Button>
+      </div>
+      {reviewing && (
+        <p className="text-xs text-muted-foreground">{t('authorization.reviewHint')}</p>
+      )}
+      {dirty ? (
+        <ul className="space-y-3">
+          {changes.added.map((grant) => changeRow(grant.permissionId, 'added', undefined, grant))}
+          {changes.removed.map((grant) =>
+            changeRow(grant.permissionId, 'removed', grant, undefined),
+          )}
+          {changes.updated.map(({ before, after }) =>
+            changeRow(after.permissionId, 'updated', before, after),
+          )}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t('authorization.noChanges')}</p>
+      )}
+    </InsightCard>
+  )
+  const savebar = session && (
+    <div className="role-menu-editor-savebar">
+      <p className="text-xs text-muted-foreground">{changeCount()}</p>
+      <div className="flex flex-wrap justify-end gap-2">
+        {reviewing ? (
+          <>
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => setReviewing(false)}
+            >
+              {t('authorization.continueEditing')}
+            </Button>
+            <Button
+              disabled={
+                !dirty ||
+                invalid ||
+                mutation.isPending ||
+                conflict ||
+                result.isError ||
+                result.isFetching
+              }
+              onClick={() => {
+                if (current() && canManageRoleRelations(useAuthStore.getState()))
+                  mutation.mutate(roleGrantSubmission(session.source, session.draft))
+              }}
+            >
+              <Save className="size-4" />
+              {t(mutation.isPending ? 'authorization.saving' : 'authorization.save')}
+            </Button>
+          </>
+        ) : (
+          <Button
+            disabled={!dirty || invalid || disabled}
+            onClick={() => {
+              if (current()) {
+                setReviewing(true)
+                setInspectorOpen(true)
+              }
+            }}
+          >
+            <Eye className="size-4" />
+            {t('authorization.review')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
   return (
     <section className="min-w-0 space-y-4" aria-label={t('authorization.title')}>
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{t('authorization.title')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {opening.role.roleName} · {t('authorization.description')}
-          </p>
+          <h2 className="text-sm font-semibold">
+            {t('authorization.title')}
+            <span className="ml-2 font-normal tabular-nums text-muted-foreground">
+              {draft.current.size}
+            </span>
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('authorization.savedConfig')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {session || onClose ? (
@@ -503,7 +748,7 @@ function RoleBusinessPermissionContent({
           {!session && canManageRoleRelations(auth) && (
             <Button
               variant="outline"
-              disabled={result.isFetching || result.isError}
+              disabled={result.isFetching || result.isError || savedReadback !== null}
               onClick={begin}
             >
               <Pencil className="size-4" />
@@ -543,10 +788,28 @@ function RoleBusinessPermissionContent({
           </Button>
         </div>
       )}
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {t('authorization.savedConfig')}
-      </p>
-      <div className="grid min-w-0 items-start gap-4 2xl:grid-cols-[minmax(0,1fr)_20rem]">
+      {savedReadback && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {t('roleManage.savedRefreshing')}
+        </p>
+      )}
+      <RoleWorkspacePanels
+        inspector={reviewing ? review : inspector}
+        title={
+          reviewing
+            ? t('authorization.reviewTitle')
+            : (selectedDefinition?.name ?? t('authorization.definition'))
+        }
+        context={t('roleManage.inspectorContext', {
+          role: opening.role.roleName,
+          object: t('authorization.permissions'),
+        })}
+        hasSelection={selectedId !== null || reviewing}
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        editing={session !== null}
+        footer={savebar}
+      >
         <InsightCard className="min-w-0 overflow-hidden">
           <div className="space-y-4 border-b border-border-subtle p-4">
             {session && (
@@ -617,7 +880,10 @@ function RoleBusinessPermissionContent({
                 selectedId={selectedId}
                 editing={session !== null}
                 disabled={disabled}
-                onSelect={setSelectedId}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  setInspectorOpen(true)
+                }}
                 onToggle={toggle}
               />
             ) : (
@@ -632,7 +898,10 @@ function RoleBusinessPermissionContent({
                           type="button"
                           className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           aria-pressed={selectedId === node.id}
-                          onClick={() => setSelectedId(node.id)}
+                          onClick={() => {
+                            setSelectedId(node.id)
+                            setInspectorOpen(true)
+                          }}
                         >
                           <span className="block break-words text-sm font-medium">
                             {node.definition?.name ?? t('authorization.definitionMissing')}
@@ -696,167 +965,9 @@ function RoleBusinessPermissionContent({
             )}
           </div>
         </InsightCard>
-        <InsightCard className="min-w-0 space-y-4 p-5">
-          <h3 className="text-sm font-semibold">{t('authorization.definition')}</h3>
-          {selectedId ? (
-            <>
-              <p className="break-words text-sm font-medium">
-                {selectedDefinition?.name ?? t('authorization.definitionMissing')}
-              </p>
-              <code className="block break-all text-xs text-muted-foreground">
-                {selectedDefinition?.code ?? selectedId}
-              </code>
-              {selectedDefinition && (
-                <dl className="space-y-2 text-xs">
-                  {[
-                    ['moduleKey', selectedDefinition.moduleKey ?? 'system'],
-                    ['resource', selectedDefinition.resource],
-                    ['action', selectedDefinition.action],
-                    ['lifecycle', t(`authorization.${selectedDefinition.lifecycle}`)],
-                    [
-                      'status',
-                      t(
-                        selectedDefinition.status === 1
-                          ? 'authorization.active'
-                          : 'authorization.inactive',
-                      ),
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">{t(`authorization.${label}`)}</dt>
-                      <dd className="break-all text-right">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              {!canConfigurePermission(selectedDefinition) && session && (
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {t('authorization.legacyHint')}
-                </p>
-              )}
-              {selectedGrant && (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    {t(`authorization.${grantWindowState(selectedGrant, describedAt)}`)}
-                  </p>
-                  {session ? (
-                    <RoleGrantFields
-                      grant={selectedGrant}
-                      definition={selectedDefinition}
-                      disabled={disabled || !canConfigurePermission(selectedDefinition)}
-                      errors={timeErrors[selectedId]}
-                      onChange={(values) =>
-                        change((previous) => updateRoleGrant(previous, selectedId, values))
-                      }
-                      onTimeError={(field, error) =>
-                        setTimeErrors((previous) => ({
-                          ...previous,
-                          [selectedId]: { ...previous[selectedId], [field]: error ?? undefined },
-                        }))
-                      }
-                    />
-                  ) : (
-                    <GrantDescription grant={selectedGrant} />
-                  )}
-                </>
-              )}
-            </>
-          ) : (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {t('authorization.selectedHint')}
-            </p>
-          )}
-          <div className="border-t pt-4 text-xs text-muted-foreground">
-            <p>
-              {t('authorization.roleScope')} ·{' '}
-              {opening.role.dataScope ? t(`authorization.${opening.role.dataScope}`) : '—'}
-            </p>
-            <p className="mt-3 leading-relaxed">{t('authorization.clockHint')}</p>
-          </div>
-        </InsightCard>
-      </div>
-      {session && (
-        <InsightCard className="space-y-4 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold">
-                {t(reviewing ? 'authorization.reviewTitle' : 'authorization.savedConfig')}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">{changeCount()}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!dirty || reviewing || mutation.isPending || conflict}
-              onClick={() => {
-                change(resetRoleGrantDraft)
-                setTimeErrors({})
-              }}
-            >
-              <RotateCcw className="size-4" />
-              {t('authorization.reset')}
-            </Button>
-          </div>
-          {reviewing && (
-            <p className="text-xs text-muted-foreground">{t('authorization.reviewHint')}</p>
-          )}
-          {dirty ? (
-            <ul className="grid gap-3 xl:grid-cols-2">
-              {changes.added.map((grant) =>
-                changeRow(grant.permissionId, 'added', undefined, grant),
-              )}
-              {changes.removed.map((grant) =>
-                changeRow(grant.permissionId, 'removed', grant, undefined),
-              )}
-              {changes.updated.map(({ before, after }) =>
-                changeRow(after.permissionId, 'updated', before, after),
-              )}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">{t('authorization.noChanges')}</p>
-          )}
-          <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-            {reviewing ? (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={mutation.isPending}
-                  onClick={() => setReviewing(false)}
-                >
-                  {t('authorization.continueEditing')}
-                </Button>
-                <Button
-                  disabled={
-                    !dirty ||
-                    invalid ||
-                    mutation.isPending ||
-                    conflict ||
-                    result.isError ||
-                    result.isFetching
-                  }
-                  onClick={() => {
-                    if (current() && canManageRoleRelations(useAuthStore.getState()))
-                      mutation.mutate(roleGrantSubmission(session.source, session.draft))
-                  }}
-                >
-                  <Save className="size-4" />
-                  {t(mutation.isPending ? 'authorization.saving' : 'authorization.save')}
-                </Button>
-              </>
-            ) : (
-              <Button
-                disabled={!dirty || invalid || disabled}
-                onClick={() => {
-                  if (current()) setReviewing(true)
-                }}
-              >
-                <Eye className="size-4" />
-                {t('authorization.review')}
-              </Button>
-            )}
-          </div>
-        </InsightCard>
-      )}
+      </RoleWorkspacePanels>
+      {savebar}
+
       <AlertDialog
         open={leaving !== null}
         onOpenChange={(open) => {

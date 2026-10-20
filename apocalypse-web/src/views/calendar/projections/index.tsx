@@ -22,6 +22,8 @@ import type { ProjectionGrant } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarPicker,
+  CalendarQueryStatus,
+  ManageCalendarsLink,
   DataEmpty,
   InlineError,
   StateBadge,
@@ -115,11 +117,21 @@ function ProjectionGrantPage() {
         />
       }
     >
+      {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
       {grantsQuery.error && <InlineError message={toErrorMessage(grantsQuery.error)} />}
-      {publisherCalendars.length === 0 && !calendarsQuery.isLoading ? (
-        <DataEmpty>{t('projections.noRole')}</DataEmpty>
-      ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
+      <CalendarQueryStatus
+        loading={calendarsQuery.isLoading || grantsQuery.isLoading}
+        fetching={grantsQuery.isFetching}
+      />
+      {publisherCalendars.length === 0 && calendarsQuery.isSuccess ? (
+        <div className="space-y-3">
+          <DataEmpty>{t('projections.noRole')}</DataEmpty>
+          <div className="flex justify-center">
+            <ManageCalendarsLink />
+          </div>
+        </div>
+      ) : calendarId ? (
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
           <Card className="gap-4 py-4">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle>{t('projections.addSource')}</CardTitle>
@@ -152,7 +164,23 @@ function ProjectionGrantPage() {
                     {t('publishModes.DIRECT_PUBLISH')}
                   </FieldOption>
                 </FieldSelect>
+                <p
+                  className="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                  aria-live="polite"
+                >
+                  {t(
+                    publishMode === 'DIRECT_PUBLISH'
+                      ? 'projections.directConsequence'
+                      : 'projections.draftConsequence',
+                  )}
+                </p>
               </div>
+              <p className="text-sm text-muted-foreground">
+                {t('projections.destination')}:{' '}
+                <span className="font-medium text-foreground">
+                  {publisherCalendars.find((calendar) => calendar.id === calendarId)?.name}
+                </span>
+              </p>
               <Perm perm="calendar:projection-grant:edit">
                 <Button
                   className="w-full"
@@ -191,10 +219,16 @@ function ProjectionGrantPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-medium">{grant.sourceSystem}</span>
                       <StateBadge value={grant.state} />
-                      <Badge variant="outline">v{grant.version}</Badge>
+                      <Badge variant="outline">
+                        {t('workspace.version', { version: grant.version })}
+                      </Badge>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {t(`publishModes.${grant.publishMode}`)}
+                    <div className="mt-2 space-y-1 text-sm">
+                      <p className="text-muted-foreground">
+                        {t('projections.destination')}:{' '}
+                        {publisherCalendars.find((calendar) => calendar.id === calendarId)?.name}
+                      </p>
+                      <p>{t(`publishModes.${grant.publishMode}`)}</p>
                     </div>
                   </div>
                   <Perm perm="calendar:projection-grant:edit">
@@ -219,9 +253,17 @@ function ProjectionGrantPage() {
                         }
                       >
                         <p>
-                          {grant.sourceSystem} · {t(`publishModes.${grant.publishMode}`)} →{' '}
+                          {publisherCalendars.find((calendar) => calendar.id === calendarId)?.name}{' '}
+                          · {grant.sourceSystem} · {t(`publishModes.${grant.publishMode}`)} →{' '}
                           {t(
                             `publishModes.${grant.publishMode === 'DRAFT_ONLY' ? 'DIRECT_PUBLISH' : 'DRAFT_ONLY'}`,
+                          )}
+                        </p>
+                        <p>
+                          {t(
+                            grant.publishMode === 'DRAFT_ONLY'
+                              ? 'projections.directConsequence'
+                              : 'projections.draftConsequence',
                           )}
                         </p>
                       </CalendarConfirm>
@@ -246,13 +288,13 @@ function ProjectionGrantPage() {
                   </Perm>
                 </div>
               ))}
-              {!grantsQuery.isLoading && (grantsQuery.data ?? []).length === 0 && (
+              {grantsQuery.isSuccess && grantsQuery.data.length === 0 && (
                 <DataEmpty>{t('projections.empty')}</DataEmpty>
               )}
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
     </CalendarPageFrame>
   )
 }

@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { stateMotion } from '@/design/motion'
 import { BrandSignature } from '@/components/BrandSignature'
 import {
   Form,
@@ -93,7 +94,9 @@ export default function LoginPage() {
       setOrbState('success')
       // 动效可用时短暂停留展示 success 态，否则立即跳转
       if (motionEnabled && !reducedMotion) {
-        await new Promise((resolve) => window.setTimeout(resolve, 600))
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, stateMotion.morph.duration * 1000),
+        )
       }
       if (useAuthStore.getState().sessionEpoch !== acceptedEpoch) {
         // Identity changed during the success dwell: no navigation and no stale success state.
@@ -135,10 +138,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-
-        <footer className="relative z-10 pt-4 text-xs text-muted-foreground">
-          {pageT('workspace')}
-        </footer>
       </section>
 
       <section className="relative flex min-w-0 items-center justify-center px-2 py-6 sm:px-8 lg:px-12">

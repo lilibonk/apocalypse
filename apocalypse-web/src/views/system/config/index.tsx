@@ -3,6 +3,8 @@
  * 参数定义页面结构事实来源：./config.schema.ts。
  */
 
+import { useState } from 'react'
+import { useAuthStore } from '@/stores/auth'
 import { useTranslation } from 'react-i18next'
 
 import { DynaPage } from '@/components/dyna'
@@ -17,9 +19,16 @@ import schema from './config.schema'
 const CONFIG_VIEWS = ['values', 'definitions'] as const
 
 export default function ConfigPage() {
+  const epoch = useAuthStore((state) => state.authorizationEpoch)
+  return <ConfigPageContent key={epoch} />
+}
+
+function ConfigPageContent() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const [view, setView] = usePageView(CONFIG_VIEWS, 'configView')
+  const [definitionsVisited, setDefinitionsVisited] = useState(view === 'definitions')
+  if (view === 'definitions' && !definitionsVisited) setDefinitionsVisited(true)
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
@@ -37,13 +46,13 @@ export default function ConfigPage() {
           />
         }
       />
-      {view === 'values' ? (
-        // Bottom room for the floating draft bar.
-        <div className="pb-24">
-          <ConfigWorkspace />
+      <div className="pb-24" hidden={view !== 'values'}>
+        <ConfigWorkspace active={view === 'values'} />
+      </div>
+      {definitionsVisited && (
+        <div hidden={view !== 'definitions'}>
+          <DynaPage schema={schema} formComponent={ConfigForm} embedded />
         </div>
-      ) : (
-        <DynaPage schema={schema} formComponent={ConfigForm} embedded />
       )}
     </div>
   )

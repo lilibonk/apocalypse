@@ -58,6 +58,7 @@ import {
   saveRoleMenus,
 } from './role-graph.operations'
 import { useRoleGraphMutation } from './use-role-graph-mutation'
+import { RoleWorkspacePanels } from './RoleWorkspacePanels'
 import {
   buildRolePermissionCatalog,
   createRolePermissionDraft,
@@ -82,7 +83,7 @@ interface RolePermissionEditorProps {
   presentation?: 'graph' | 'list'
   initialNodeId?: string | null
   onClose: () => void
-  onSaved: () => void
+  onSaved: (selectedId?: string | null) => void
   /** Re-check the parent's readable projection after an object/write denial. */
   onResourceDenied?: () => void
 }
@@ -360,6 +361,7 @@ function RolePermissionEditorContent({
   const [loadId, setLoadId] = useState(() => crypto.randomUUID())
   const [session, setSession] = useState<DraftSession | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [inspectorOpen, setInspectorOpen] = useState(Boolean(initialNodeId))
   const [parentId, setParentId] = useState<string | null>(null)
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(0)
@@ -438,7 +440,7 @@ function RolePermissionEditorContent({
     ) => saveRoleMenus(transport, { roleId: role.id, ...variables }),
     onSuccess: () => {
       void invalidateRoleGraphQueries(queryClient, role.id)
-      onSaved()
+      onSaved(selectedId && session?.draft.selected.has(selectedId) ? selectedId : null)
     },
     onError: (error) => setSaveError(error),
   })
@@ -473,6 +475,7 @@ function RolePermissionEditorContent({
   }
   const toggle = (node: RolePermissionNode) => {
     setSelectedId(node.id)
+    setInspectorOpen(true)
     updateDraft((current) =>
       current.draft.selected.has(node.id)
         ? unlinkRolePermission(current.draft, node.id)
@@ -549,6 +552,293 @@ function RolePermissionEditorContent({
     return t('roleManage.unlinked', { defaultValue: '未关联' })
   }
 
+  const inspector = (
+    <div className="min-w-0 space-y-4">
+      <InsightCard className="space-y-4 p-5" motionEnabled={enabled}>
+        {reviewing ? (
+          <>
+            <h3 className="font-semibold">
+              {t('roleManage.reviewChanges', { defaultValue: '审阅关联变更' })}
+            </h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t('roleManage.reviewChangesHint', {
+                defaultValue: '只提交这些直接关联的增减；原目录定义与其他未修改关联保持。',
+              })}
+            </p>
+            <div className="max-h-96 space-y-4 overflow-y-auto">
+              {changes.added.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-brand-text">
+                    {t('roleManage.addedCount', {
+                      defaultValue: '新增 {{count}} 项',
+                      count: changes.added.length,
+                    })}
+                  </h4>
+                  <ChangeList
+                    ids={changes.added}
+                    state="added"
+                    catalog={catalog}
+                    disabled={mutation.isPending}
+                    onUndo={undo}
+                  />
+                </div>
+              )}
+              {changes.removed.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-destructive">
+                    {t('roleManage.removedCount', {
+                      defaultValue: '移除 {{count}} 项',
+                      count: changes.removed.length,
+                    })}
+                  </h4>
+                  <ChangeList
+                    ids={changes.removed}
+                    state="removed"
+                    catalog={catalog}
+                    disabled={mutation.isPending}
+                    onUndo={undo}
+                  />
+                </div>
+              )}
+              {!dirty && (
+                <p className="text-sm text-muted-foreground">
+                  {t('roleManage.noLinkChanges', {
+                    defaultValue: '当前没有待保存的关联变更。',
+                  })}
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="insight-eyebrow">
+              {t('roleManage.nodeInspector', { defaultValue: '节点检查器' })}
+            </p>
+            <h3 className="break-words font-semibold">
+              {selected?.name ??
+                t('roleManage.selectCandidate', { defaultValue: '选择一个候选节点' })}
+            </h3>
+            {selected && selectedState ? (
+              <>
+                <span
+                  className="role-menu-editor-state inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
+                  data-state={selectedState}
+                >
+                  {selectedState === 'added' ? (
+                    <Plus className="size-3" />
+                  ) : selectedState === 'removed' ? (
+                    <Unlink className="size-3" />
+                  ) : (
+                    <Check className="size-3" />
+                  )}
+                  {stateLabel(selectedState)}
+                </span>
+                <p className="break-words text-xs leading-relaxed text-muted-foreground">
+                  {selected.pathNames.join(' / ')}
+                </p>
+                <code className="block break-all rounded-control bg-muted p-3 text-xs">
+                  {selected.path ||
+                    t('roleManage.noPermissionCode', { defaultValue: '此节点没有权限标识' })}
+                </code>
+                <Button
+                  className="w-full"
+                  variant={draft.selected.has(selected.id) ? 'outline' : 'default'}
+                  disabled={disabled}
+                  onClick={() => toggle(selected)}
+                >
+                  {draft.selected.has(selected.id) ? (
+                    <>
+                      <Unlink aria-hidden="true" />
+                      {t('roleManage.removeLink', { defaultValue: '移除关联' })}
+                    </>
+                  ) : (
+                    <>
+                      <Plus aria-hidden="true" />
+                      {t('roleManage.addLinksCount', {
+                        defaultValue: '关联 +{{count}}',
+                        count: rolePermissionAdditions(catalog, draft, selected.id).length,
+                      })}
+                    </>
+                  )}
+                </Button>
+                {draft.selected.has(selected.id) && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('roleManage.removeLinkHint', {
+                      defaultValue: '移除当前关联，其他节点保持。',
+                    })}
+                  </p>
+                )}
+                {!draft.selected.has(selected.id) &&
+                  rolePermissionAdditions(catalog, draft, selected.id).length > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('roleManage.addAncestorsHint', {
+                        defaultValue: '将一并补齐 {{count}} 项上级关联，不会添加其他下级节点。',
+                        count: rolePermissionAdditions(catalog, draft, selected.id).length - 1,
+                      })}
+                    </p>
+                  )}
+                <p className="break-all font-mono text-xs text-muted-foreground">{selected.id}</p>
+              </>
+            ) : (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t('roleManage.selectCandidateHint', {
+                  defaultValue: '点击圆形节点查看来源；用关联按钮添加或移除，用箭头探索下级。',
+                })}
+              </p>
+            )}
+          </>
+        )}
+      </InsightCard>
+      {unresolved.length > 0 && (
+        <InsightCard className="space-y-3 p-5" motionEnabled={enabled}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <AlertCircle className="size-4 text-warning-foreground" aria-hidden="true" />
+            {t('roleManage.unresolvedCount', {
+              defaultValue: '未解析关联 {{count}} 项',
+              count: unresolved.length,
+            })}
+          </h3>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t('roleManage.unresolvedPreserved', {
+              defaultValue:
+                '原关联仍完整保留。只有明确移除才会从提交中删除；不会因定义不可见而自动过滤。',
+            })}
+          </p>
+          {unresolvedKept.length > 0 && (
+            <p className="text-xs leading-relaxed text-warning-foreground" role="status">
+              {t('roleManage.unresolvedSaveBlocked', {
+                defaultValue: '仍有 {{count}} 项关联无法验证。请明确移除这些关联后再审阅保存。',
+                count: unresolvedKept.length,
+              })}
+            </p>
+          )}
+          <ul className="max-h-64 space-y-2 overflow-y-auto">
+            {unresolved.map((id) => (
+              <li key={id} className="flex items-start gap-2 rounded-control bg-muted p-2">
+                <span className="min-w-0 flex-1">
+                  <code className="block break-all text-xs">{id}</code>
+                  <span
+                    className="role-menu-editor-state mt-1 block text-xs"
+                    data-state={rolePermissionDraftState(draft, id)}
+                  >
+                    {stateLabel(rolePermissionDraftState(draft, id))}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={disabled}
+                  onClick={() =>
+                    updateDraft((current) =>
+                      current.draft.selected.has(id)
+                        ? unlinkRolePermission(current.draft, id)
+                        : undoRolePermissionChange(current.draft, id),
+                    )
+                  }
+                  aria-label={
+                    draft.selected.has(id)
+                      ? t('roleManage.removeUnknownLink', {
+                          defaultValue: '移除未解析关联 {{id}}',
+                          id,
+                        })
+                      : t('roleManage.keepUnknownLink', {
+                          defaultValue: '保留原关联 {{id}}',
+                          id,
+                        })
+                  }
+                >
+                  {draft.selected.has(id) ? (
+                    <Unlink aria-hidden="true" />
+                  ) : (
+                    <RotateCcw aria-hidden="true" />
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </InsightCard>
+      )}
+    </div>
+  )
+  const savebar = (
+    <div className="role-menu-editor-savebar flex flex-wrap items-center justify-between gap-4 p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium" aria-live="polite">
+          {dirty
+            ? t('roleManage.draftChangesCount', {
+                defaultValue: '未保存：新增 {{added}} 项，移除 {{removed}} 项',
+                added: changes.added.length,
+                removed: changes.removed.length,
+              })
+            : t('roleManage.noLinkChanges', { defaultValue: '当前没有待保存的关联变更。' })}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('roleManage.originalAndDraftCount', {
+            defaultValue: '原始 {{before}} 项 → 草稿 {{after}} 项',
+            before: draft.baseline.size,
+            after: draft.selected.size,
+          })}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          disabled={!dirty || mutation.isPending}
+          onClick={() => {
+            setSession((current) =>
+              current ? { ...current, draft: resetRolePermissionDraft(current.draft) } : current,
+            )
+            setReviewing(false)
+            if (!conflict) setSaveError(null)
+          }}
+        >
+          <RotateCcw aria-hidden="true" />
+          {t('roleManage.undoAllLinks', { defaultValue: '撤销全部变更' })}
+        </Button>
+        {reviewing ? (
+          <>
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => setReviewing(false)}
+            >
+              <ArrowLeft aria-hidden="true" />
+              {t('roleManage.returnToEditing', { defaultValue: '返回修改' })}
+            </Button>
+            <Button
+              disabled={
+                !dirty || conflict || mutation.isPending || result.isError || result.isFetching
+              }
+              onClick={() =>
+                mutation.mutate({
+                  expectedRevision: session.revision,
+                  baselineMenuIds: [...draft.baseline],
+                  menuIds: [...draft.selected],
+                })
+              }
+            >
+              <Save aria-hidden="true" />
+              {mutation.isPending
+                ? t('roleManage.savingLinks', { defaultValue: '正在保存关联…' })
+                : t('roleManage.confirmSaveLinks', { defaultValue: '确认并保存关联' })}
+            </Button>
+          </>
+        ) : (
+          <Button
+            disabled={!dirty || mutation.isPending || result.isError || result.isFetching}
+            onClick={() => {
+              setReviewing(true)
+              setInspectorOpen(true)
+            }}
+          >
+            <Eye aria-hidden="true" />
+            {t('roleManage.reviewChanges', { defaultValue: '审阅关联变更' })}
+            <ArrowRight aria-hidden="true" />
+          </Button>
+        )}
+      </div>
+    </div>
+  )
   return (
     <section
       className="role-menu-editor space-y-4"
@@ -613,7 +903,23 @@ function RolePermissionEditorContent({
           </div>
         </div>
       )}
-      <div className="role-menu-editor-layout">
+      <RoleWorkspacePanels
+        inspector={inspector}
+        title={
+          reviewing
+            ? t('roleManage.reviewChanges')
+            : (selected?.name ?? t('roleManage.nodeInspector'))
+        }
+        context={t('roleManage.inspectorContext', {
+          role: role.roleName,
+          object: t('authorization.navigation'),
+        })}
+        hasSelection={selected !== undefined || unresolved.length > 0 || reviewing}
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        editing
+        footer={savebar}
+      >
         <InsightCard className="min-w-0 overflow-hidden" motionEnabled={enabled}>
           <div className="space-y-3 border-b border-border-subtle p-4">
             <div className="flex items-center gap-2">
@@ -707,7 +1013,10 @@ function RolePermissionEditorContent({
                       <button
                         type="button"
                         className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() => setSelectedId(node.id)}
+                        onClick={() => {
+                          setSelectedId(node.id)
+                          setInspectorOpen(true)
+                        }}
                         aria-pressed={selectedId === node.id}
                       >
                         <span className="block text-sm font-medium">{node.name}</span>
@@ -805,7 +1114,10 @@ function RolePermissionEditorContent({
                     additions={rolePermissionAdditions(catalog, draft, node.id).length}
                     disabled={disabled}
                     enabled={enabled}
-                    onSelect={() => setSelectedId(node.id)}
+                    onSelect={() => {
+                      setSelectedId(node.id)
+                      setInspectorOpen(true)
+                    }}
                     onExplore={(keyboard) => navigate(node.id, keyboard)}
                     onToggle={() => toggle(node)}
                   />
@@ -887,289 +1199,8 @@ function RolePermissionEditorContent({
             </p>
           </div>
         </InsightCard>
-        <div className="min-w-0 space-y-4">
-          <InsightCard className="space-y-4 p-5" motionEnabled={enabled}>
-            {reviewing ? (
-              <>
-                <h3 className="font-semibold">
-                  {t('roleManage.reviewChanges', { defaultValue: '审阅关联变更' })}
-                </h3>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {t('roleManage.reviewChangesHint', {
-                    defaultValue: '只提交这些直接关联的增减；原目录定义与其他未修改关联保持。',
-                  })}
-                </p>
-                <div className="max-h-96 space-y-4 overflow-y-auto">
-                  {changes.added.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-brand-text">
-                        {t('roleManage.addedCount', {
-                          defaultValue: '新增 {{count}} 项',
-                          count: changes.added.length,
-                        })}
-                      </h4>
-                      <ChangeList
-                        ids={changes.added}
-                        state="added"
-                        catalog={catalog}
-                        disabled={mutation.isPending}
-                        onUndo={undo}
-                      />
-                    </div>
-                  )}
-                  {changes.removed.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-destructive">
-                        {t('roleManage.removedCount', {
-                          defaultValue: '移除 {{count}} 项',
-                          count: changes.removed.length,
-                        })}
-                      </h4>
-                      <ChangeList
-                        ids={changes.removed}
-                        state="removed"
-                        catalog={catalog}
-                        disabled={mutation.isPending}
-                        onUndo={undo}
-                      />
-                    </div>
-                  )}
-                  {!dirty && (
-                    <p className="text-sm text-muted-foreground">
-                      {t('roleManage.noLinkChanges', {
-                        defaultValue: '当前没有待保存的关联变更。',
-                      })}
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="insight-eyebrow">
-                  {t('roleManage.nodeInspector', { defaultValue: '节点检查器' })}
-                </p>
-                <h3 className="break-words font-semibold">
-                  {selected?.name ??
-                    t('roleManage.selectCandidate', { defaultValue: '选择一个候选节点' })}
-                </h3>
-                {selected && selectedState ? (
-                  <>
-                    <span
-                      className="role-menu-editor-state inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
-                      data-state={selectedState}
-                    >
-                      {selectedState === 'added' ? (
-                        <Plus className="size-3" />
-                      ) : selectedState === 'removed' ? (
-                        <Unlink className="size-3" />
-                      ) : (
-                        <Check className="size-3" />
-                      )}
-                      {stateLabel(selectedState)}
-                    </span>
-                    <p className="break-words text-xs leading-relaxed text-muted-foreground">
-                      {selected.pathNames.join(' / ')}
-                    </p>
-                    <code className="block break-all rounded-control bg-muted p-3 text-xs">
-                      {selected.path ||
-                        t('roleManage.noPermissionCode', { defaultValue: '此节点没有权限标识' })}
-                    </code>
-                    <Button
-                      className="w-full"
-                      variant={draft.selected.has(selected.id) ? 'outline' : 'default'}
-                      disabled={disabled}
-                      onClick={() => toggle(selected)}
-                    >
-                      {draft.selected.has(selected.id) ? (
-                        <>
-                          <Unlink aria-hidden="true" />
-                          {t('roleManage.removeLink', { defaultValue: '移除关联' })}
-                        </>
-                      ) : (
-                        <>
-                          <Plus aria-hidden="true" />
-                          {t('roleManage.addLinksCount', {
-                            defaultValue: '关联 +{{count}}',
-                            count: rolePermissionAdditions(catalog, draft, selected.id).length,
-                          })}
-                        </>
-                      )}
-                    </Button>
-                    {draft.selected.has(selected.id) && (
-                      <p className="text-xs text-muted-foreground">
-                        {t('roleManage.removeLinkHint', {
-                          defaultValue: '移除当前关联，其他节点保持。',
-                        })}
-                      </p>
-                    )}
-                    {!draft.selected.has(selected.id) &&
-                      rolePermissionAdditions(catalog, draft, selected.id).length > 1 && (
-                        <p className="text-xs text-muted-foreground">
-                          {t('roleManage.addAncestorsHint', {
-                            defaultValue: '将一并补齐 {{count}} 项上级关联，不会添加其他下级节点。',
-                            count: rolePermissionAdditions(catalog, draft, selected.id).length - 1,
-                          })}
-                        </p>
-                      )}
-                    <p className="break-all font-mono text-xs text-muted-foreground">
-                      {selected.id}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {t('roleManage.selectCandidateHint', {
-                      defaultValue: '点击圆形节点查看来源；用关联按钮添加或移除，用箭头探索下级。',
-                    })}
-                  </p>
-                )}
-              </>
-            )}
-          </InsightCard>
-          {unresolved.length > 0 && (
-            <InsightCard className="space-y-3 p-5" motionEnabled={enabled}>
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <AlertCircle className="size-4 text-warning-foreground" aria-hidden="true" />
-                {t('roleManage.unresolvedCount', {
-                  defaultValue: '未解析关联 {{count}} 项',
-                  count: unresolved.length,
-                })}
-              </h3>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {t('roleManage.unresolvedPreserved', {
-                  defaultValue:
-                    '原关联仍完整保留。只有明确移除才会从提交中删除；不会因定义不可见而自动过滤。',
-                })}
-              </p>
-              {unresolvedKept.length > 0 && (
-                <p className="text-xs leading-relaxed text-warning-foreground" role="status">
-                  {t('roleManage.unresolvedSaveBlocked', {
-                    defaultValue: '仍有 {{count}} 项关联无法验证。请明确移除这些关联后再审阅保存。',
-                    count: unresolvedKept.length,
-                  })}
-                </p>
-              )}
-              <ul className="max-h-64 space-y-2 overflow-y-auto">
-                {unresolved.map((id) => (
-                  <li key={id} className="flex items-start gap-2 rounded-control bg-muted p-2">
-                    <span className="min-w-0 flex-1">
-                      <code className="block break-all text-xs">{id}</code>
-                      <span
-                        className="role-menu-editor-state mt-1 block text-xs"
-                        data-state={rolePermissionDraftState(draft, id)}
-                      >
-                        {stateLabel(rolePermissionDraftState(draft, id))}
-                      </span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      disabled={disabled}
-                      onClick={() =>
-                        updateDraft((current) =>
-                          current.draft.selected.has(id)
-                            ? unlinkRolePermission(current.draft, id)
-                            : undoRolePermissionChange(current.draft, id),
-                        )
-                      }
-                      aria-label={
-                        draft.selected.has(id)
-                          ? t('roleManage.removeUnknownLink', {
-                              defaultValue: '移除未解析关联 {{id}}',
-                              id,
-                            })
-                          : t('roleManage.keepUnknownLink', {
-                              defaultValue: '保留原关联 {{id}}',
-                              id,
-                            })
-                      }
-                    >
-                      {draft.selected.has(id) ? (
-                        <Unlink aria-hidden="true" />
-                      ) : (
-                        <RotateCcw aria-hidden="true" />
-                      )}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </InsightCard>
-          )}
-        </div>
-      </div>
-      <div className="role-menu-editor-savebar flex flex-wrap items-center justify-between gap-4 p-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium" aria-live="polite">
-            {dirty
-              ? t('roleManage.draftChangesCount', {
-                  defaultValue: '未保存：新增 {{added}} 项，移除 {{removed}} 项',
-                  added: changes.added.length,
-                  removed: changes.removed.length,
-                })
-              : t('roleManage.noLinkChanges', { defaultValue: '当前没有待保存的关联变更。' })}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t('roleManage.originalAndDraftCount', {
-              defaultValue: '原始 {{before}} 项 → 草稿 {{after}} 项',
-              before: draft.baseline.size,
-              after: draft.selected.size,
-            })}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            disabled={!dirty || mutation.isPending}
-            onClick={() => {
-              setSession((current) =>
-                current ? { ...current, draft: resetRolePermissionDraft(current.draft) } : current,
-              )
-              setReviewing(false)
-              if (!conflict) setSaveError(null)
-            }}
-          >
-            <RotateCcw aria-hidden="true" />
-            {t('roleManage.undoAllLinks', { defaultValue: '撤销全部变更' })}
-          </Button>
-          {reviewing ? (
-            <>
-              <Button
-                variant="outline"
-                disabled={mutation.isPending}
-                onClick={() => setReviewing(false)}
-              >
-                <ArrowLeft aria-hidden="true" />
-                {t('roleManage.returnToEditing', { defaultValue: '返回修改' })}
-              </Button>
-              <Button
-                disabled={
-                  !dirty || conflict || mutation.isPending || result.isError || result.isFetching
-                }
-                onClick={() =>
-                  mutation.mutate({
-                    expectedRevision: session.revision,
-                    baselineMenuIds: [...draft.baseline],
-                    menuIds: [...draft.selected],
-                  })
-                }
-              >
-                <Save aria-hidden="true" />
-                {mutation.isPending
-                  ? t('roleManage.savingLinks', { defaultValue: '正在保存关联…' })
-                  : t('roleManage.confirmSaveLinks', { defaultValue: '确认并保存关联' })}
-              </Button>
-            </>
-          ) : (
-            <Button
-              disabled={!dirty || mutation.isPending || result.isError || result.isFetching}
-              onClick={() => setReviewing(true)}
-            >
-              <Eye aria-hidden="true" />
-              {t('roleManage.reviewChanges', { defaultValue: '审阅关联变更' })}
-              <ArrowRight aria-hidden="true" />
-            </Button>
-          )}
-        </div>
-      </div>
+      </RoleWorkspacePanels>
+      {savebar}
       <AlertDialog
         open={leaving !== null}
         onOpenChange={(open) => {

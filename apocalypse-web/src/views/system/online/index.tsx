@@ -31,7 +31,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { InsightStrip } from '@/components/insights/InsightStrip'
+import { DynaQueryFeedback } from '@/components/dyna/DynaQueryFeedback'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
@@ -44,6 +45,7 @@ import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { useAuthStore } from '@/stores/auth'
 
 import { kickOnlineUser, listOnlineUsers, type OnlineUserRow } from './online.api'
+import { OnlineAccounts } from './OnlineAccounts'
 
 const QUERY_KEY = ['system', 'online-users'] as const
 
@@ -54,7 +56,7 @@ const columns: DynaColumn[] = [
   { key: 'loginTime', title: '登录时间', type: 'datetime', sticky: 'right' },
 ]
 
-const ONLINE_VIEWS = ['list', 'overview'] as const
+const ONLINE_VIEWS = ['overview', 'list'] as const
 const noPageChange = () => {}
 
 export default function OnlineUserPage() {
@@ -68,6 +70,8 @@ function OnlineUserWorkspace() {
   const queryClient = useQueryClient()
   const [kicking, setKicking] = useState<OnlineUserRow | null>(null)
   const [detail, setDetail] = useState<OnlineUserRow | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const currentUsername = useAuthStore((state) => state.user?.username)
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(ONLINE_VIEWS)
   const view = desktop ? requestedView : 'list'
@@ -76,16 +80,18 @@ function OnlineUserWorkspace() {
     queryKey: QUERY_KEY,
     queryFn: listOnlineUsers,
   })
-  useResourceDenial({
+  const onDenied = useResourceDenial({
     errors: [error],
     clear: { queryKey: QUERY_KEY },
     reset: () => {
       setKicking(null)
       setDetail(null)
+      setExpanded(null)
     },
   })
 
   const kickMutation = useModuleMutation(undefined, {
+    onDenied,
     localKey: kicking?.jti ?? '',
     mutationFn: (run, jti: string) =>
       run({
@@ -116,18 +122,8 @@ function OnlineUserWorkspace() {
       })),
     [data],
   )
-  // Counted from the list already on screen: no extra request, always consistent with the table.
-  const summary = useMemo(() => {
-    if (!data) return null
-    const perAccount = new Map<string, number>()
-    for (const row of data) perAccount.set(row.username, (perAccount.get(row.username) ?? 0) + 1)
-    return {
-      sessions: data.length,
-      accounts: perAccount.size,
-      ips: new Set(data.map((row) => row.ip).filter(Boolean)).size,
-      multiSession: [...perAccount.values()].filter((count) => count > 1).length,
-    }
-  }, [data])
+  const inspected = data?.find((row) => row.jti === detail?.jti)
+  const kickTarget = data?.find((row) => row.jti === kicking?.jti)
   const retry = useCallback(() => void refetch(), [refetch])
   // Stable so opening the detail Sheet re-renders only the highlighted row.
   const renderActions = useCallback(
@@ -175,8 +171,12 @@ function OnlineUserWorkspace() {
               value={view}
               onChange={setView}
               options={[
+                {
+                  value: 'overview',
+                  label: systemT('listInsights.online.workspace'),
+                  icon: LayoutDashboard,
+                },
                 { value: 'list', label: t('dyna.viewList'), icon: List },
-                { value: 'overview', label: t('dyna.viewOverview'), icon: LayoutDashboard },
               ]}
             />
           ) : undefined
@@ -195,33 +195,25 @@ function OnlineUserWorkspace() {
       />
 
       {view === 'overview' ? (
-        summary && (
-          <InsightStrip
-            id="online-insights"
-            title={systemT('listInsights.online.title')}
-            hint={systemT('listInsights.online.hint')}
-            entranceKey="system:online:insights"
-            stats={[
-              {
-                key: 'sessions',
-                label: systemT('listInsights.online.sessions'),
-                value: summary.sessions,
-              },
-              {
-                key: 'accounts',
-                label: systemT('listInsights.online.accounts'),
-                value: summary.accounts,
-              },
-              { key: 'ips', label: systemT('listInsights.online.ips'), value: summary.ips },
-              {
-                key: 'multiSession',
-                label: systemT('listInsights.online.multiSession'),
-                hint: systemT('listInsights.online.multiSessionHint'),
-                value: summary.multiSession,
-              },
-            ]}
+        <>
+          <DynaQueryFeedback
+            error={error}
+            hasData={data !== undefined}
+            refreshing={isFetching}
+            onRetry={retry}
           />
-        )
+          {isLoading && <Skeleton className="h-40" />}
+          {data && (
+            <OnlineAccounts
+              rows={data}
+              expanded={expanded}
+              onExpanded={setExpanded}
+              onDetail={setDetail}
+              onKick={setKicking}
+              currentUsername={currentUsername}
+            />
+          )}
+        </>
       ) : (
         <DynaTable
           columns={columns}
@@ -250,41 +242,46 @@ function OnlineUserWorkspace() {
               {detail ? `${detail.username} · ${detail.ip ?? t('common.unknownIp')}` : ''}
             </SheetDescription>
           </SheetHeader>
-          {detail && (
+          {detail && !inspected && (
+            <p role="status" className="px-6 pb-6 text-sm text-muted-foreground">
+              {systemT('listInsights.online.sessionGone')}
+            </p>
+          )}
+          {inspected && (
             <div className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     {t('dyna.登录时间', { defaultValue: '登录时间' })}
                   </dt>
-                  <dd className="mt-1 tabular-nums">{detail.loginTime.replace('T', ' ')}</dd>
+                  <dd className="mt-1 tabular-nums">{inspected.loginTime.replace('T', ' ')}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">{t('common.deviceSummary')}</dt>
-                  <dd className="mt-1">{summarizeUserAgent(detail.userAgent)}</dd>
+                  <dd className="mt-1">{summarizeUserAgent(inspected.userAgent)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     {systemT('listInsights.online.accountSessions')}
                   </dt>
-                  <dd className="mt-1 tabular-nums">{sessionsOf(detail.username)}</dd>
+                  <dd className="mt-1 tabular-nums">{sessionsOf(inspected.username)}</dd>
                 </div>
               </dl>
               <div className="space-y-1">
                 <div className="text-sm text-muted-foreground">{t('common.rawUserAgent')}</div>
                 <pre className="max-h-40 overflow-auto rounded-control bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap">
-                  {detail.userAgent ?? '-'}
+                  {inspected.userAgent ?? '-'}
                 </pre>
               </div>
             </div>
           )}
-          {detail && (
+          {inspected && (
             <Perm perm="system:online:kick">
               <SheetFooter>
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    setKicking(detail)
+                    setKicking(inspected)
                     setDetail(null)
                   }}
                 >
@@ -316,16 +313,26 @@ function OnlineUserWorkspace() {
                 : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {kicking?.username === currentUsername && (
+            <p role="alert" className="text-sm text-destructive">
+              {systemT('listInsights.online.selfWarning')}
+            </p>
+          )}
+          {kicking && !kickTarget && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {systemT('listInsights.online.sessionGone')}
+            </p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={kickMutation.isPending}>
               {t('common.取消', { defaultValue: '取消' })}
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={kickMutation.isPending}
+              disabled={kickMutation.isPending || !kickTarget}
               onClick={(event) => {
                 event.preventDefault()
-                if (kicking) kickMutation.mutate(kicking.jti)
+                if (kickTarget) kickMutation.mutate(kickTarget.jti)
               }}
             >
               {kickMutation.isPending && <PixelScale variant="inline" tone="current" />}

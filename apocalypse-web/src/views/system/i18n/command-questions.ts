@@ -14,6 +14,9 @@ export const commandQuestionsCopy = {
     noPermissionMatch: '没有匹配的权限定义。',
     answer: '查询结果',
     ruleBased: '规则查询 · 非 AI',
+    scopeSummary: '授权配置结果，不代表用户最终有效权限；仅展示可见范围内的对象。',
+    explanation: '查看完整说明',
+    openPermission: '查看这项权限定义',
     evaluatedAt: '服务器计算时刻 {{time}}',
     disclaimer:
       '以上是授权配置在计算时刻的状态，不代表某个用户经多个角色合并后的最终有效权限；成员仅列出你可查看范围内的用户。',
@@ -65,6 +68,10 @@ export const commandQuestionsCopy = {
     noPermissionMatch: 'No matching permission definitions.',
     answer: 'Answer',
     ruleBased: 'Rule-based query · not AI',
+    scopeSummary:
+      'Configuration results, not final effective user access. Only objects in your viewing scope are shown.',
+    explanation: 'Read the full explanation',
+    openPermission: 'View this permission definition',
     evaluatedAt: 'Server evaluated at {{time}}',
     disclaimer:
       'This is the authorization configuration at the evaluation time, not any user’s final effective access across roles. Members include only users you are allowed to view.',

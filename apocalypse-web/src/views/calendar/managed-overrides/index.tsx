@@ -29,6 +29,9 @@ import {
   CalendarPageFrame,
   CalendarTrace,
   CalendarPicker,
+  CalendarContextChange,
+  CalendarQueryStatus,
+  ManageCalendarsLink,
   DataEmpty,
   InlineError,
   StateBadge,
@@ -55,6 +58,10 @@ function ManagedOverridePage() {
   const [calendarSelection, setCalendarSelection] = useState('')
   const [date, setDate] = useState(today)
   const [input, setInput] = useState(emptyOverrideInput)
+  const [acceptedInput, setAcceptedInput] = useState(() => JSON.stringify(emptyOverrideInput()))
+  const [pendingContext, setPendingContext] = useState<{ calendarId: string; date: string } | null>(
+    null,
+  )
   const operation = buildDayOverride(input)
   const [decisions, setDecisions] = useState<Record<string, ConflictResolution | ''>>({})
 
@@ -100,6 +107,8 @@ function ManagedOverridePage() {
     () => {
       setCalendarSelection('')
       setInput(emptyOverrideInput())
+      setAcceptedInput(JSON.stringify(emptyOverrideInput()))
+      setPendingContext(null)
       setDecisions({})
     },
   )
@@ -112,6 +121,13 @@ function ManagedOverridePage() {
     (conflict) => conflict.state === 'OPEN',
   )
   const decisionsComplete = openConflicts.every((conflict) => decisions[conflict.id])
+  // Keep the existing publication baseline separate from presentation. A partial conflict page
+  // cannot establish that every required decision has been reviewed.
+  const reviewDataComplete =
+    conflictsQuery.data != null &&
+    conflictsQuery.data.total <= conflictsQuery.data.list.length &&
+    revisionsQuery.data != null &&
+    (revisionsQuery.data.total <= revisionsQuery.data.list.length || published != null)
 
   const invalidate = () => {
     void queryClient.invalidateQueries(calendarQueries.contexts.filter({}))
@@ -137,6 +153,7 @@ function ManagedOverridePage() {
     },
     onSuccess: () => {
       toast.success(t('managedOverrides.saved'))
+      setAcceptedInput(JSON.stringify(input))
       invalidate()
     },
     onError: (error) => {
@@ -144,12 +161,33 @@ function ManagedOverridePage() {
       invalidate()
     },
   })
+
+  const applyContext = (next: { calendarId: string; date: string }) => {
+    if (next.calendarId !== calendarId) setDecisions({})
+    setCalendarSelection(next.calendarId)
+    setDate(next.date)
+    setInput(emptyOverrideInput())
+    setAcceptedInput(JSON.stringify(emptyOverrideInput()))
+    setPendingContext(null)
+  }
+  const changeContext = (next: { calendarId: string; date: string }) => {
+    if (next.calendarId === calendarId && next.date === date) return
+    if (
+      JSON.stringify(input) !== acceptedInput ||
+      (next.calendarId !== calendarId && Object.values(decisions).some(Boolean))
+    )
+      setPendingContext(next)
+    else applyContext(next)
+  }
   const discardMutation = useModuleMutation(calendarScope, {
     onDenied,
     localKey: JSON.stringify([calendarId, date, input, decisions]),
     mutationFn: (run) => run(calendarOperations.discardManagedDraft, calendarId),
     onSuccess: () => {
       toast.success(t('managedOverrides.discarded'))
+      setInput(emptyOverrideInput())
+      setAcceptedInput(JSON.stringify(emptyOverrideInput()))
+      setDecisions({})
       invalidate()
     },
     onError: (error) => {
@@ -175,6 +213,7 @@ function ManagedOverridePage() {
     },
     onSuccess: () => {
       toast.success(t('managedOverrides.published'))
+      setDecisions({})
       invalidate()
     },
     onError: (error) => {
@@ -202,27 +241,64 @@ function ManagedOverridePage() {
       title={t('managedOverrides.title')}
       description={t('managedOverrides.description')}
       actions={
-        <CalendarPicker
-          calendars={managedCalendars}
-          value={calendarId}
-          onChange={(value) => {
-            setCalendarSelection(value)
-            setDecisions({})
-            setInput(emptyOverrideInput())
-          }}
-          roles={['EDITOR', 'PUBLISHER']}
-        />
+        <>
+          <CalendarPicker
+            calendars={managedCalendars}
+            value={calendarId}
+            onChange={(value) => changeContext({ calendarId: value, date })}
+            roles={['EDITOR', 'PUBLISHER']}
+          />
+          {calendarId && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="managed-override-date">{t('managedOverrides.date')}</Label>
+              <DatePicker
+                id="managed-override-date"
+                mode="date"
+                allowClear={false}
+                value={date}
+                onValueChange={(selection) => changeContext({ calendarId, date: selection })}
+              />
+            </div>
+          )}
+          {draftQuery.data && (
+            <div className="flex items-center gap-2 pb-2">
+              <StateBadge value={draftQuery.data.state} />
+              <span className="text-sm">
+                {t('managedOverrides.revision', { number: draftQuery.data.revisionNo })}
+              </span>
+            </div>
+          )}
+        </>
       }
     >
-      {(draftQuery.error || revisionsQuery.error || conflictsQuery.error) && (
+      {(calendarsQuery.error ||
+        draftQuery.error ||
+        revisionsQuery.error ||
+        conflictsQuery.error ||
+        dayQuery.error) && (
         <InlineError
-          message={toErrorMessage(draftQuery.error ?? revisionsQuery.error ?? conflictsQuery.error)}
+          message={toErrorMessage(
+            calendarsQuery.error ??
+              draftQuery.error ??
+              revisionsQuery.error ??
+              conflictsQuery.error ??
+              dayQuery.error,
+          )}
         />
       )}
-      {managedCalendars.length === 0 && !calendarsQuery.isLoading ? (
-        <DataEmpty>{t('managedOverrides.noRole')}</DataEmpty>
-      ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
+      <CalendarQueryStatus
+        loading={calendarsQuery.isLoading || draftQuery.isLoading}
+        fetching={draftQuery.isFetching}
+      />
+      {managedCalendars.length === 0 && calendarsQuery.isSuccess ? (
+        <div className="space-y-3">
+          <DataEmpty>{t('managedOverrides.noRole')}</DataEmpty>
+          <div className="flex justify-center">
+            <ManageCalendarsLink />
+          </div>
+        </div>
+      ) : calendarId ? (
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
           <div className="space-y-5">
             <Card className="gap-4 py-4">
               <CardHeader className="px-4 sm:px-6">
@@ -230,17 +306,17 @@ function ManagedOverridePage() {
                 <CardDescription>{t('managedOverrides.draftDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 px-4 sm:px-6">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="managed-override-date">{t('managedOverrides.date')}</Label>
-                  <DatePicker
-                    id="managed-override-date"
-                    mode="date"
-                    allowClear={false}
-                    value={date}
-                    onValueChange={(selection) => setDate(selection)}
-                  />
-                </div>
                 <DayOverrideEditor value={input} onChange={setInput} />
+                {dayQuery.isSuccess && (
+                  <OverrideChangePreview
+                    day={dayQuery.data}
+                    operation={operation}
+                    field={input.field}
+                    underlay={underlayField(dayQuery.data, input.field, 'MANAGED')}
+                    scope={t('overrideEditor.managedScope') + ' · ' + dayQuery.data.calendarKey}
+                    preview={JSON.stringify(input) !== acceptedInput}
+                  />
+                )}
                 <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span>{t('managedOverrides.targetRevision')}</span>
@@ -351,12 +427,28 @@ function ManagedOverridePage() {
                       title={t('managedOverrides.publishRevision')}
                       description={t('overrideEditor.publishWarning')}
                       onConfirm={() => publishMutation.mutate()}
-                      disabled={!draftQuery.data || !decisionsComplete || publishMutation.isPending}
+                      disabled={
+                        !draftQuery.data ||
+                        !decisionsComplete ||
+                        !reviewDataComplete ||
+                        !!conflictsQuery.error ||
+                        !!revisionsQuery.error ||
+                        conflictsQuery.isFetching ||
+                        revisionsQuery.isFetching ||
+                        publishMutation.isPending
+                      }
                       trigger={
                         <Button
                           className="w-full"
                           disabled={
-                            !draftQuery.data || !decisionsComplete || publishMutation.isPending
+                            !draftQuery.data ||
+                            !decisionsComplete ||
+                            !reviewDataComplete ||
+                            !!conflictsQuery.error ||
+                            !!revisionsQuery.error ||
+                            conflictsQuery.isFetching ||
+                            revisionsQuery.isFetching ||
+                            publishMutation.isPending
                           }
                         >
                           <Send />
@@ -393,6 +485,19 @@ function ManagedOverridePage() {
                     {t('managedOverrides.decisionsRequired')}
                   </p>
                 )}
+                {draftQuery.data &&
+                  !reviewDataComplete &&
+                  !conflictsQuery.isLoading &&
+                  !revisionsQuery.isLoading && (
+                    <div className="space-y-2">
+                      <p role="status" className="text-sm text-muted-foreground">
+                        {t('managedOverrides.partialReview')}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={invalidate}>
+                        {t('workspace.refresh')}
+                      </Button>
+                    </div>
+                  )}
               </CardContent>
             </Card>
           </div>
@@ -462,9 +567,18 @@ function ManagedOverridePage() {
                       )}
                     </div>
                   ))}
-                  {!conflictsQuery.isLoading && (conflictsQuery.data?.list ?? []).length === 0 && (
+                  {conflictsQuery.isSuccess && conflictsQuery.data.list.length === 0 && (
                     <DataEmpty>{t('managedOverrides.noConflicts')}</DataEmpty>
                   )}
+                  {conflictsQuery.data &&
+                    conflictsQuery.data.total > conflictsQuery.data.list.length && (
+                      <p className="text-xs text-muted-foreground">
+                        {t('workspace.loadedRange', {
+                          count: conflictsQuery.data.list.length,
+                          total: conflictsQuery.data.total,
+                        })}
+                      </p>
+                    )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -490,8 +604,10 @@ function ManagedOverridePage() {
                             {t('managedOverrides.itemCount', { count: revision.items.length })}
                           </Badge>
                         </div>
-                        <div className="mt-1 max-w-xl truncate font-mono text-xs text-muted-foreground">
-                          {revision.contentHash}
+                        <div className="mt-2">
+                          <CalendarTrace>
+                            <p className="font-mono">{revision.contentHash}</p>
+                          </CalendarTrace>
                         </div>
                       </div>
                       {revision.state === 'PUBLISHED' && canPublish && (
@@ -525,15 +641,29 @@ function ManagedOverridePage() {
                       )}
                     </div>
                   ))}
-                  {!revisionsQuery.isLoading && (revisionsQuery.data?.list ?? []).length === 0 && (
+                  {revisionsQuery.isSuccess && revisionsQuery.data.list.length === 0 && (
                     <DataEmpty>{t('managedOverrides.noRevisions')}</DataEmpty>
                   )}
+                  {revisionsQuery.data &&
+                    revisionsQuery.data.total > revisionsQuery.data.list.length && (
+                      <p className="text-xs text-muted-foreground">
+                        {t('workspace.loadedRange', {
+                          count: revisionsQuery.data.list.length,
+                          total: revisionsQuery.data.total,
+                        })}
+                      </p>
+                    )}
                 </CardContent>
               </Card>
             </TabsContent>
           </Tabs>
         </div>
-      )}
+      ) : null}
+      <CalendarContextChange
+        open={pendingContext !== null}
+        onCancel={() => setPendingContext(null)}
+        onConfirm={() => pendingContext && applyContext(pendingContext)}
+      />
     </CalendarPageFrame>
   )
 }

@@ -1,6 +1,15 @@
 /** Configuration value workspace. Keys must match across locales. */
 export const configWorkspaceCopy = {
   zh: {
+    loadingPage: '正在载入所选范围，当前仍显示上一份数据。',
+    loadingLatest: '正在载入最新值…',
+    rowSaved: '已保存',
+    pagination: '参数分页',
+    previous: '上一页',
+    next: '下一页',
+    range: '第 {{from}}–{{to}} 项，共 {{total}} 项',
+    limit: '一次最多修改 {{count}} 项，请先保存或撤销后继续。',
+    findBaseline: '有参数的键名已改变，请搜索并确认该参数后重新编辑。',
     values: '参数值',
     definitions: '参数定义',
     hint: '可同时修改多项参数，审阅差异后一次保存；任一项被他人修改时整批不生效。',
@@ -18,6 +27,15 @@ export const configWorkspaceCopy = {
     saveFailed: '保存失败，修改仍保留。',
   },
   en: {
+    loadingPage: 'Loading the selected range. The previous result is still shown.',
+    loadingLatest: 'Loading latest values…',
+    rowSaved: 'Saved',
+    pagination: 'Parameter pages',
+    previous: 'Previous',
+    next: 'Next',
+    range: '{{from}}–{{to}} of {{total}}',
+    limit: 'You can change up to {{count}} items at once. Save or undo before continuing.',
+    findBaseline: 'A parameter key changed. Find and confirm that parameter before editing again.',
     values: 'Values',
     definitions: 'Definitions',
     hint: 'Change several parameters, review the differences and save them at once. If any item was changed elsewhere, nothing is saved.',

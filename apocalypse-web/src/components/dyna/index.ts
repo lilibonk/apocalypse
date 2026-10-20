@@ -19,5 +19,7 @@ export { DynaSearch } from './DynaSearch'
 export { DynaTable } from './DynaTable'
 export { DynaForm } from './DynaForm'
 export { DynaDetail } from './DynaDetail'
-export { DynaPage, type DynaOverviewControls } from './DynaPage'
+export { DynaPage, type DynaOverviewControls, type DynaWorkspaceControls } from './DynaPage'
 export { DynaQueryFeedback } from './DynaQueryFeedback'
+
+export { DynaPagination, type DynaPaginationProps } from './DynaPagination'

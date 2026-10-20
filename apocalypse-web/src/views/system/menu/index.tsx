@@ -10,10 +10,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronsDownUp,
   ChevronsUpDown,
-  FolderTree,
-  MousePointerClick,
-  PanelTop,
   Plus,
+  Network,
+  Rows3,
   Search,
   TriangleAlert,
 } from 'lucide-react'
@@ -26,6 +25,9 @@ import { DynaQueryFeedback } from '@/components/dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { usePageView } from '@/hooks/usePageView'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { Label } from '@/components/ui/label'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
@@ -36,6 +38,10 @@ import { ROOT_PARENT_ID, normalizeMenuTreeNode, type MenuNode, type MenuType } f
 import { MenuDeleteDialog } from './MenuDeleteDialog'
 import { MenuFormDialog, type MenuFormPayload } from './MenuFormDialog'
 import { MenuTreeTable } from './MenuTreeTable'
+import { MenuTreeWorkspace } from './MenuTreeWorkspace'
+import { menuAncestorPath } from './menu-workspace.model'
+
+const MENU_VIEWS = ['workspace', 'table'] as const
 
 type MenuFilter = 'ALL' | MenuType
 
@@ -65,6 +71,12 @@ export default function MenuPage() {
 function MenuPageContent() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const desktop = useDesktopViewport()
+  const [requestedView, setView] = usePageView(MENU_VIEWS, 'menuView')
+  const view = desktop ? requestedView : 'workspace'
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [focusAfterSave, setFocusAfterSave] = useState<{ id: string; sequence: number }>()
+  const [lastResult, setLastResult] = useState('')
 
   // 展开集合（默认空 = 只显示根节点）；formPayload 非空即打开新增/编辑对话框
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -103,14 +115,6 @@ function MenuPageContent() {
   const filteredNodes = useMemo(() => flattenTree(filteredTree), [filteredTree])
   const filtering = query.trim().length > 0 || typeFilter !== 'ALL'
   const effectiveCollapsed = filtering ? new Set<string>() : collapsed
-  const typeCounts = useMemo(
-    () => ({
-      C: allNodes.filter((node) => node.menuType === 'C').length,
-      M: allNodes.filter((node) => node.menuType === 'M').length,
-      F: allNodes.filter((node) => node.menuType === 'F').length,
-    }),
-    [allNodes],
-  )
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'menus'] })
 
@@ -129,10 +133,23 @@ function MenuPageContent() {
 
   // Deep link from the authorization overview: ?menuId= expands its ancestors once and focuses it.
   const [params] = useSearchParams()
-  const focusMenuId = params.get('menuId')
+  const urlFocusMenuId = params.get('menuId')
+  const [seenUrlFocus, setSeenUrlFocus] = useState(urlFocusMenuId)
+  if (seenUrlFocus !== urlFocusMenuId) {
+    setSeenUrlFocus(urlFocusMenuId)
+    setFocusAfterSave(undefined)
+  }
+  const focusMenuId =
+    seenUrlFocus === urlFocusMenuId ? (focusAfterSave?.id ?? urlFocusMenuId) : urlFocusMenuId
   const [appliedFocus, setAppliedFocus] = useState<string | null>(null)
+  const [appliedSequence, setAppliedSequence] = useState<number | undefined>()
   const focusTarget = focusMenuId ? allNodes.find((node) => node.id === focusMenuId) : undefined
-  if (focusTarget && appliedFocus !== focusTarget.id) {
+  if (
+    focusTarget &&
+    (appliedFocus !== focusTarget.id || appliedSequence !== focusAfterSave?.sequence)
+  ) {
+    setSelectedId(focusTarget.id)
+    setAppliedSequence(focusAfterSave?.sequence)
     const byId = new Map(allNodes.map((node) => [node.id, node]))
     const next = new Set(expanded)
     for (let parent = byId.get(focusTarget.parentId); parent; parent = byId.get(parent.parentId))
@@ -142,16 +159,42 @@ function MenuPageContent() {
   }
   useEffect(() => {
     if (!appliedFocus) return
-    const row = document.getElementById(`menu-row-${appliedFocus}`)
+    const row = document.getElementById(
+      `${view === 'workspace' ? 'menu-object' : 'menu-row'}-${appliedFocus}`,
+    )
     row?.scrollIntoView({ block: 'center' })
     row?.focus({ preventScroll: true })
-  }, [appliedFocus])
+  }, [appliedFocus, appliedSequence, view])
+
+  const selectNode = (id: string) => {
+    setSelectedId(id)
+    setExpanded(
+      (current) => new Set([...current, ...menuAncestorPath(tree, id).map((node) => node.id)]),
+    )
+  }
+  const effectiveSelectedId =
+    selectedId && allNodes.some((node) => node.id === selectedId)
+      ? selectedId
+      : (tree[0]?.id ?? null)
 
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
         title={t('common.菜单管理', { defaultValue: '菜单管理' })}
         description={t('system:authorization.menuDescription')}
+        view={
+          desktop ? (
+            <SegmentedControl
+              label={t('system:menuWorkspace.view')}
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'workspace', label: t('system:menuWorkspace.workspace'), icon: Network },
+                { value: 'table', label: t('system:menuWorkspace.table'), icon: Rows3 },
+              ]}
+            />
+          ) : undefined
+        }
         actions={
           <Perm perm="system:menu:add" requiresAllScope>
             <Button onClick={() => setFormPayload({ mode: 'create', parentId: ROOT_PARENT_ID })}>
@@ -167,6 +210,15 @@ function MenuPageContent() {
         {t('system:authorization.menuHint')}
       </p>
 
+      {lastResult && (
+        <p
+          role="status"
+          className="menu-result rounded-control border border-border-subtle bg-card px-3 py-2 text-sm"
+          key={lastResult}
+        >
+          {lastResult}
+        </p>
+      )}
       <DynaQueryFeedback
         error={error}
         hasData={canShowTree}
@@ -240,49 +292,41 @@ function MenuPageContent() {
             </div>
           </div>
 
-          {canShowTree && (
-            <div className="grid grid-cols-3 border-b border-border bg-muted/20">
-              {[
-                { type: 'C', label: '目录', icon: FolderTree, count: typeCounts.C },
-                { type: 'M', label: '菜单', icon: PanelTop, count: typeCounts.M },
-                { type: 'F', label: '按钮', icon: MousePointerClick, count: typeCounts.F },
-              ].map((item, index) => (
-                <div
-                  key={item.type}
-                  className={cn(
-                    'flex items-center gap-3 px-4 py-3',
-                    index > 0 && 'border-l border-border',
-                  )}
-                >
-                  <item.icon className="size-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
-                    {item.type === 'F'
-                      ? t('system:authorization.legacyButton')
-                      : t(`dyna.${item.label}`, { defaultValue: item.label })}
-                  </span>
-                  <strong className="ml-auto text-sm font-semibold tabular-nums">
-                    {item.count}
-                  </strong>
-                </div>
-              ))}
-            </div>
+          {view === 'workspace' ? (
+            <MenuTreeWorkspace
+              tree={filteredTree}
+              allTree={tree}
+              collapsed={effectiveCollapsed}
+              selectedId={effectiveSelectedId}
+              loading={isLoading}
+              filtering={filtering}
+              onSelect={selectNode}
+              onToggle={toggle}
+              onResetFilters={() => {
+                setQuery('')
+                setTypeFilter('ALL')
+              }}
+              onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+              onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+              onDelete={setDeleting}
+            />
+          ) : (
+            <MenuTreeTable
+              tree={filteredTree}
+              isLoading={isLoading}
+              collapsed={effectiveCollapsed}
+              onToggle={toggle}
+              highlightId={effectiveSelectedId}
+              onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+              onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+              onDelete={setDeleting}
+              filtering={filtering}
+              onResetFilters={() => {
+                setQuery('')
+                setTypeFilter('ALL')
+              }}
+            />
           )}
-
-          <MenuTreeTable
-            tree={filteredTree}
-            isLoading={isLoading}
-            collapsed={effectiveCollapsed}
-            onToggle={toggle}
-            highlightId={appliedFocus}
-            onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-            onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-            onDelete={setDeleting}
-            filtering={filtering}
-            onResetFilters={() => {
-              setQuery('')
-              setTypeFilter('ALL')
-            }}
-          />
 
           {canShowTree && (
             <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
@@ -308,13 +352,30 @@ function MenuPageContent() {
         payload={formPayload ?? { mode: 'create', parentId: ROOT_PARENT_ID }}
         tree={tree}
         onOpenChange={(open) => !open && setFormPayload(null)}
-        onSaved={() => void invalidate()}
+        onRefresh={() => void invalidate()}
+        onSaved={(id, name) => {
+          setQuery('')
+          setTypeFilter('ALL')
+          setFocusAfterSave((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+          setLastResult(t('system:menuWorkspace.saved', { name }))
+          void invalidate()
+        }}
       />
 
       <MenuDeleteDialog
         node={deleting}
         onClose={() => setDeleting(null)}
-        onDeleted={() => void invalidate()}
+        onRefresh={() => void invalidate()}
+        onDeleted={(node) => {
+          const id =
+            node.parentId !== ROOT_PARENT_ID
+              ? node.parentId
+              : (tree.find((item) => item.id !== node.id)?.id ?? '')
+          setSelectedId(id || null)
+          setFocusAfterSave((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+          setLastResult(t('system:menuWorkspace.deleted', { name: node.menuName }))
+          void invalidate()
+        }}
       />
     </div>
   )

@@ -11,13 +11,7 @@ import { Inbox, SearchX } from 'lucide-react'
 import { DictTag } from '@/components/DictTag'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -31,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
 
 import { DynaQueryFeedback } from './DynaQueryFeedback'
+import { DynaPagination } from './DynaPagination'
 import type { DynaColumn } from './schema'
 import { useDynaText } from './use-dyna'
 
@@ -264,12 +259,8 @@ export const DynaTable = memo(function DynaTable({
   activeRowKey = null,
 }: DynaTableProps) {
   const t = useDynaText()
-  const totalPages = Math.max(1, Math.ceil(total / size))
   const canShowData = rows !== undefined && !isResourceDenied(error)
   const hasRows = canShowData && Boolean(rows?.length)
-  const rangeStart = total === 0 ? 0 : (page - 1) * size + 1
-  const rangeEnd = Math.min(page * size, total)
-  const availablePageSizes = Array.from(new Set([...pageSizeOptions, size])).sort((a, b) => a - b)
   const hasActions = Boolean(actions)
   // The leftmost frozen column carries the edge: the first sticky data column, else the actions.
   const frozenEdgeKey = columns.find((column) => column.sticky === 'right')?.key ?? null
@@ -392,60 +383,15 @@ export const DynaTable = memo(function DynaTable({
       )}
 
       {!loading && canShowData && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm tabular-nums text-muted-foreground">
-          <span>
-            {paginated
-              ? t('range', { start: rangeStart, end: rangeEnd, total })
-              : t('allRows', { total })}
-          </span>
-          {paginated && (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <label className="flex items-center gap-2">
-                <span>{t('每页')}</span>
-                {onPageSizeChange ? (
-                  <Select
-                    value={String(size)}
-                    onValueChange={(value) => onPageSizeChange(Number(value))}
-                  >
-                    <SelectTrigger size="sm" className="w-20" aria-label={t('每页条数')}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availablePageSizes.map((option) => (
-                        <SelectItem key={option} value={String(option)}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <span className="font-medium text-foreground">{size}</span>
-                )}
-                <span>{t('条')}</span>
-              </label>
-              <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => onPageChange(page - 1)}
-              >
-                {t('上一页')}
-              </Button>
-              <span className="min-w-12 text-center">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => onPageChange(page + 1)}
-              >
-                {t('下一页')}
-              </Button>
-            </div>
-          )}
-        </div>
+        <DynaPagination
+          page={page}
+          size={size}
+          total={total}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          pageSizeOptions={pageSizeOptions}
+          paginated={paginated}
+        />
       )}
     </>
   )

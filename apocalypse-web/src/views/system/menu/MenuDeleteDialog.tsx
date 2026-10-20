@@ -28,10 +28,12 @@ export function MenuDeleteDialog({
   node,
   onClose,
   onDeleted,
+  onRefresh,
 }: {
   node: MenuNode | null
   onClose: () => void
-  onDeleted: () => void
+  onDeleted: (node: MenuNode) => void
+  onRefresh: () => void
 }) {
   const { t } = useTranslation()
 
@@ -40,7 +42,7 @@ export function MenuDeleteDialog({
     clear: { queryKey: ['system', 'menus'] },
     reset: () => {
       onClose()
-      onDeleted()
+      onRefresh()
     },
   })
   const deleteMutation = useModuleMutation(undefined, {
@@ -56,7 +58,7 @@ export function MenuDeleteDialog({
     onSuccess: () => {
       toast.success(t('common.菜单已删除', { defaultValue: '菜单已删除' }))
       onClose()
-      onDeleted()
+      if (node) onDeleted(node)
     },
     onError: (error) => {
       toast.error(

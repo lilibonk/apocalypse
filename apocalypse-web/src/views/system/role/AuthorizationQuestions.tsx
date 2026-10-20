@@ -4,7 +4,7 @@
  * Registered through command-questions.tsx; data stays in this module.
  */
 import type { UseQueryResult } from '@tanstack/react-query'
-import { CircleHelp, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
+import { CircleHelp, KeyRound, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -93,16 +93,18 @@ function AnswerFrame({
     >
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 font-medium text-foreground">
-          <Sparkles className="size-3" aria-hidden="true" />
+          <CircleHelp className="size-3" aria-hidden="true" />
           {t('commandQa.ruleBased')}
         </span>
         {time && <span>{t('commandQa.evaluatedAt', { time })}</span>}
       </div>
+      <p className="mb-2 text-xs text-muted-foreground">{t('commandQa.scopeSummary')}</p>
       <p className="mb-2 font-medium">{question}</p>
       {children}
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-        {t('commandQa.disclaimer')}
-      </p>
+      <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        <summary className="cursor-pointer">{t('commandQa.explanation')}</summary>
+        <p className="mt-2">{t('commandQa.disclaimer')}</p>
+      </details>
     </section>
   )
 }
@@ -139,7 +141,7 @@ function HoldersAnswer({
   permission: PermissionOption
   question: string
   routes: readonly FlatRoute[]
-  navigate: (path: string) => void
+  navigate: CommandQuestionPanelProps['navigate']
 }) {
   const queryKey = ['system', 'authorization', 'insights', 'holders', permission.id] as const
   return (
@@ -165,19 +167,43 @@ function HoldersResult({
   query: UseQueryResult<PermissionHolders>
   question: string
   routes: readonly FlatRoute[]
-  navigate: (path: string) => void
+  navigate: CommandQuestionPanelProps['navigate']
 }) {
   const { t } = useTranslation('system')
   const rolePath = routeFor(routes, 'system/role')
   if (query.isPending) return <Loading active />
   if (query.isError) return <Failure error={query.error} onRetry={() => void query.refetch()} />
   const data = query.data
+  const userPath = data.membersVisible ? routeFor(routes, 'system/user') : undefined
+  const permissionPath = routeFor(routes, 'system/permission')
   return (
     <AnswerFrame question={question} evaluatedAt={data.evaluatedAt}>
       <p className="mb-2 text-muted-foreground">
         <code className="font-mono text-xs text-foreground">{data.code}</code> · {data.name}
         {!data.moduleEnabled && ` · ${t('commandQa.moduleDisabled')}`}
       </p>
+      {permissionPath && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mb-3"
+          onClick={() =>
+            navigate(permissionPath, {
+              state: {
+                workspaceContext: {
+                  kind: 'permission',
+                  permissionId: data.permissionId,
+                  keyword: data.code,
+                  moduleKey: data.moduleKey ?? undefined,
+                  resource: data.code.split(':')[1],
+                },
+              },
+            })
+          }
+        >
+          {t('commandQa.openPermission')}
+        </Button>
+      )}
       {data.roles.length === 0 ? (
         <p role="status">{t('commandQa.noHolders')}</p>
       ) : (
@@ -230,11 +256,32 @@ function HoldersResult({
                   </p>
                 )}
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {role.members.map((member) => (
-                    <span key={member.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                      {member.nickname || member.username}
-                    </span>
-                  ))}
+                  {role.members.map((member) =>
+                    userPath ? (
+                      <button
+                        key={member.id}
+                        type="button"
+                        className="rounded-full bg-muted px-2 py-0.5 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() =>
+                          navigate(userPath, {
+                            state: {
+                              workspaceContext: {
+                                kind: 'user',
+                                userId: member.id,
+                                keyword: member.username,
+                              },
+                            },
+                          })
+                        }
+                      >
+                        {member.nickname || member.username}
+                      </button>
+                    ) : (
+                      <span key={member.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                        {member.nickname || member.username}
+                      </span>
+                    ),
+                  )}
                   {role.visibleMemberCount > role.members.length && (
                     <span className="text-xs text-muted-foreground">
                       {t('commandQa.moreMembers', {
@@ -271,7 +318,7 @@ function OverviewAnswer({
   template: Exclude<Template, 'holders'>
   question: string
   routes: readonly FlatRoute[]
-  navigate: (path: string) => void
+  navigate: CommandQuestionPanelProps['navigate']
 }) {
   const queryKey = ['system', 'authorization', 'insights', 'overview'] as const
   return (
@@ -305,7 +352,7 @@ function OverviewResult({
   template: Exclude<Template, 'holders'>
   question: string
   routes: readonly FlatRoute[]
-  navigate: (path: string) => void
+  navigate: CommandQuestionPanelProps['navigate']
 }) {
   const { t } = useTranslation('system')
   if (query.isPending) return <Loading active />
@@ -358,11 +405,32 @@ function OverviewResult({
               {t('commandQa.usersWithoutRolesSummary', { count: data.usersWithoutRolesCount })}
             </p>
             <div className="flex flex-wrap gap-1">
-              {data.usersWithoutRoles.map((user) => (
-                <span key={user.id} className="rounded-full bg-card px-2 py-0.5 text-xs">
-                  {user.nickname || user.username}
-                </span>
-              ))}
+              {data.usersWithoutRoles.map((user) =>
+                userPath ? (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className="rounded-full bg-card px-2 py-0.5 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() =>
+                      navigate(userPath, {
+                        state: {
+                          workspaceContext: {
+                            kind: 'user',
+                            userId: user.id,
+                            keyword: user.username,
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {user.nickname || user.username}
+                  </button>
+                ) : (
+                  <span key={user.id} className="rounded-full bg-card px-2 py-0.5 text-xs">
+                    {user.nickname || user.username}
+                  </span>
+                ),
+              )}
             </div>
             {userPath && data.usersWithoutRolesCount > 0 && (
               <Button

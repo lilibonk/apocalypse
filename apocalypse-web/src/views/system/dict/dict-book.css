@@ -1,13 +1,17 @@
 .dict-book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  isolation: isolate;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
   gap: calc(var(--spacing) * 4);
   /* Collapsed cards in a row share one height; an expanded card spans its own row. */
   align-items: stretch;
 }
 
 .dict-card {
+  position: relative;
   min-width: 0;
+  overflow: clip;
+  container-type: inline-size;
   padding: calc(var(--spacing) * 4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--insight-card-radius);
@@ -17,11 +21,21 @@
 
 .dict-card-expanded {
   grid-column: 1 / -1;
+  /* Later siblings must yield behind the selected card, never cover its value editor. */
+  z-index: 1;
   border-color: color-mix(in oklch, var(--brand) 35%, var(--border-subtle));
+}
+
+/* A live preference change must not leave an in-flight layout projection on screen. */
+.dict-book-grid[data-dict-motion='off']
+  :is(.dict-card, .dict-card-heading, .dict-card-header, .dict-card-body, .dict-value-row) {
+  transform: none !important;
 }
 
 .dict-card-header {
   display: flex;
+  flex: 1;
+  min-width: 0;
   width: 100%;
   align-items: center;
   gap: calc(var(--spacing) * 2);
@@ -50,4 +64,19 @@
   gap: calc(var(--spacing) * 3);
   padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
   font-size: 0.875rem;
+  transition: background-color var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.dict-value-row[data-value-result] {
+  background: var(--accent);
+}
+
+@container (max-width: 36rem) {
+  .dict-value-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dict-value-row > :last-child {
+    grid-column: 1 / -1;
+  }
 }

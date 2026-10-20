@@ -69,6 +69,7 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 vi.mock('react-router', () => ({
   useSearchParams: () => [harness.params, vi.fn()],
+  useLocation: () => ({ state: null }),
 }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

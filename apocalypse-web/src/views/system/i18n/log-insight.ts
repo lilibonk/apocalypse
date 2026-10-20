@@ -1,6 +1,11 @@
 /** Login log overview (statistics + weekday × hour heatmap). Keys must match across locales. */
 export const logInsightCopy = {
   zh: {
+    workspace: '登录观察',
+    records: '登录记录',
+    allRecords: '全部用户名 / IP',
+    recordScope:
+      '当前记录条件：{{keyword}}。记录未按上方统计范围或所选时段筛选；热力格用于观察读数。',
     title: '登录概况',
     hint: '服务端按所选范围全量统计，按服务器记录时区分时段。',
     range: '统计范围',
@@ -32,6 +37,11 @@ export const logInsightCopy = {
     window: '覆盖 {{from}} 起至 {{to}} 前 · {{zone}}（UTC{{offset}}）',
   },
   en: {
+    workspace: 'Sign-in activity',
+    records: 'Sign-in records',
+    allRecords: 'All usernames / IPs',
+    recordScope:
+      'Record filter: {{keyword}}. Records are not filtered by the reporting range or selected hour above; heatmap cells provide a readout only.',
     title: 'Sign-in overview',
     hint: 'Counted in full on the server for the selected range, by server recording time zone.',
     range: 'Reporting range',

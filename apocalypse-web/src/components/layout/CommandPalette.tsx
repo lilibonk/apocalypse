@@ -230,7 +230,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
                   query={search.slice(1)}
                   setQuery={(query) => setQueryAndFocus(`?${query}`)}
                   routes={routes}
-                  navigate={(path) => run(() => navigate(path))}
+                  navigate={(path, options) => run(() => navigate(path, options))}
                   highlight={setSelected}
                 />
               </Suspense>

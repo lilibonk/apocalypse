@@ -1,6 +1,6 @@
 /**
  * 在线用户端点（页面局部）。
- * GET /system/online-users → List（非分页）；DELETE /system/online-users/{jti} 强退会话。
+ * GET /system/online-users → List（非分页）；DELETE /system/online-users/{jti} 按该会话定位账号并强退其全部设备。
  * jti 是 string 主键，原样拼路径。
  */
 
@@ -20,7 +20,7 @@ export function listOnlineUsers(options?: { signal?: AbortSignal }): Promise<Onl
   return request<OnlineUserRow[]>('/system/online-users', { signal: options?.signal })
 }
 
-/** 强退指定会话（删在线条目 + jti 入黑名单）。 */
+/** 按会话定位账号；该账号全部现有登录与刷新令牌失效。 */
 export function kickOnlineUser(
   jti: string,
   transport: Pick<RequestOptions, 'signal' | 'context'> = {},

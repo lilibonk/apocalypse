@@ -74,12 +74,12 @@ export function EventEditor({
 
   return (
     <Dialog open={open} onOpenChange={(value) => !pending && onOpenChange(value)}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="shrink-0 border-b border-border p-6 pb-4 pr-12">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{t('eventEditor.description')}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
+        <div className="grid min-h-0 gap-4 overflow-y-auto px-6 py-1">
           <FormInput
             id="event-title"
             label={t('eventEditor.title')}
@@ -191,7 +191,7 @@ export function EventEditor({
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t border-border p-4 sm:px-6">
           <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
             {t('eventEditor.cancel')}
           </Button>

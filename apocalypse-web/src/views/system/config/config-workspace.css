@@ -1,0 +1,22 @@
+.config-row[data-saved] {
+  border-left: calc(var(--spacing)) solid var(--success-foreground);
+}
+.config-save-result {
+  animation: config-save-enter var(--motion-duration-standard) var(--motion-ease-enter);
+}
+@keyframes config-save-enter {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+html[data-motion='off'] .config-save-result {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .config-save-result {
+    animation: none;
+  }
+}

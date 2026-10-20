@@ -5,6 +5,11 @@
  */
 export const operLogCopy = {
   zh: {
+    event: '事件',
+    invokedMethod: '调用方法',
+    copyFailed: '复制失败，请重试。',
+    allRecords: '全部模块 / 操作人',
+    filterContext: '当前查询：{{keyword}}。按记录时间浏览，详情保留完整调用信息与结果。',
     other: '其他（{{code}}）',
     unrecorded: '未记录',
     type: {
@@ -31,6 +36,12 @@ export const operLogCopy = {
     },
   },
   en: {
+    event: 'Event',
+    invokedMethod: 'Invoked method',
+    copyFailed: 'Copy failed. Please try again.',
+    allRecords: 'All modules / operators',
+    filterContext:
+      'Current query: {{keyword}}. Browse by recorded time; details retain the full invocation and result.',
     other: 'Other ({{code}})',
     unrecorded: 'Not recorded',
     type: {

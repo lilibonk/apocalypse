@@ -5,12 +5,13 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import { KeyRound, LayoutList, ShieldCheck, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { insightMotion, stateMotion } from '@/design/motion'
+import { insightMotion } from '@/design/motion'
+import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { ApiError, request } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
@@ -52,12 +53,28 @@ function flatten(nodes: readonly RawRoleMenu[]): RawRoleMenu[] {
   return nodes.flatMap((node) => [node, ...flatten(node.children ?? [])])
 }
 
+function ChainEdge({ d, related }: { d: string; related: boolean }) {
+  const enabled = useMotionPreference()
+  const target = { d, pathLength: 1 }
+  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
+  return (
+    <motion.path
+      className="role-panorama-edge"
+      data-related={related || undefined}
+      initial={enabled ? { ...target, pathLength: 0 } : target}
+      animate={controls}
+    />
+  )
+}
+
 export function RoleAuthorizationChain({
   opening,
   onEdit,
+  onCountsChange,
 }: {
   opening: RolePermissionOpening
-  onEdit: (relation: Relation) => void
+  onEdit: (relation: Relation, id: string, index: number) => void
+  onCountsChange?: (counts: Record<Relation, number>) => void
 }) {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   const perms = useAuthStore((state) => state.perms)
@@ -92,7 +109,14 @@ export function RoleAuthorizationChain({
         }
       }}
     >
-      {(query) => <ChainBody query={query} opening={opening} onEdit={onEdit} />}
+      {(query) => (
+        <ChainBody
+          query={query}
+          opening={opening}
+          onEdit={onEdit}
+          onCountsChange={onCountsChange}
+        />
+      )}
     </PrivateData>
   )
 }
@@ -101,14 +125,23 @@ function ChainBody({
   query,
   opening,
   onEdit,
+  onCountsChange,
 }: {
   query: UseQueryResult<ChainData>
   opening: RolePermissionOpening
-  onEdit: (relation: Relation) => void
+  onEdit: (relation: Relation, id: string, index: number) => void
+  onCountsChange?: (counts: Record<Relation, number>) => void
 }) {
   const { t } = useTranslation('system')
-  const motionEnabled = useMotionPreference()
   const [hovered, setHovered] = useState<string | null>(null)
+  useLayoutEffect(() => {
+    if (query.data && !query.isError)
+      onCountsChange?.({
+        permissions: query.data.grants.length,
+        navigation: query.data.navigation.length,
+        members: query.data.members.total,
+      })
+  }, [query.data, query.isError, onCountsChange])
   if (query.isPending)
     return (
       <div role="status" aria-label={t('panorama.chainLoading')}>
@@ -127,16 +160,22 @@ function ChainBody({
   const data = query.data
   const left = data.members.list.slice(0, LIMIT).map((member) => ({
     key: `member-${member.id}`,
+    id: member.id,
+    relation: 'members' as const,
     label: member.nickname || member.username,
     detail: member.username,
   }))
   const permissionItems = data.grants.slice(0, LIMIT / 2).map((grant) => ({
     key: `permission-${grant.permissionId}`,
+    id: grant.permissionId,
+    relation: 'permissions' as const,
     label: grant.definition?.name ?? t('panorama.chainPermissions'),
     detail: `${grant.definition?.code ?? grant.permissionId}${grant.enabled ? '' : ` · ${t('panorama.grantPaused')}`}`,
   }))
   const navigationItems = data.navigation.slice(0, LIMIT / 2).map((item) => ({
     key: `navigation-${item.id}`,
+    id: item.id,
+    relation: 'navigation' as const,
     label: item.name ?? `#${item.id}`,
     detail: t('panorama.chainNavigation'),
   }))
@@ -147,27 +186,8 @@ function ChainBody({
     const middle = (from.x + to.x) / 2
     return `M ${from.x} ${from.y} C ${middle} ${from.y}, ${middle} ${to.y}, ${to.x} ${to.y}`
   }
-  // Status is already the badge in the role header; these open the matching relation.
-  const stats: [string, number, Relation][] = [
-    ['statPermissions', data.grants.length, 'permissions'],
-    ['statNavigation', data.navigation.length, 'navigation'],
-    ['statMembers', data.members.total, 'members'],
-  ]
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        {stats.map(([key, value, relation]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onEdit(relation)}
-            className="rounded-control border border-border-subtle bg-card p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring enabled:hover:border-[var(--insight-path)]"
-          >
-            <span className="block text-xs text-muted-foreground">{t(`panorama.${key}`)}</span>
-            <span className="insight-metric mt-1 block text-xl font-semibold">{value}</span>
-          </button>
-        ))}
-      </div>
       <div
         className="role-panorama-canvas relative overflow-hidden rounded-panel border border-border-subtle bg-card"
         style={{ aspectRatio: `${VIEW.width} / ${VIEW.height}` }}
@@ -180,31 +200,17 @@ function ChainBody({
           aria-hidden="true"
         >
           {left.map((item, index) => (
-            <motion.path
+            <ChainEdge
               key={item.key}
-              className="role-panorama-edge"
-              data-related={hovered === item.key || undefined}
+              related={hovered === item.key}
               d={curve({ x: LEFT_X, y: y(index, left.length) }, CENTER)}
-              initial={motionEnabled ? { pathLength: 0 } : false}
-              animate={{ pathLength: 1 }}
-              transition={{
-                ...insightMotion.chart,
-                delay: motionEnabled ? index * stateMotion.growthStagger * 0.5 : 0,
-              }}
             />
           ))}
           {right.map((item, index) => (
-            <motion.path
+            <ChainEdge
               key={item.key}
-              className="role-panorama-edge"
-              data-related={hovered === item.key || undefined}
+              related={hovered === item.key}
               d={curve(CENTER, { x: RIGHT_X, y: y(index, right.length) })}
-              initial={motionEnabled ? { pathLength: 0 } : false}
-              animate={{ pathLength: 1 }}
-              transition={{
-                ...insightMotion.chart,
-                delay: motionEnabled ? index * stateMotion.growthStagger * 0.5 : 0,
-              }}
             />
           ))}
         </svg>
@@ -235,16 +241,21 @@ function ChainBody({
           },
         ].map((column) =>
           column.items.map((item, index) => (
-            <span
+            <button
               key={item.key}
-              className="role-panorama-item"
+              type="button"
+              className="role-panorama-item text-left"
               style={{
                 // Left pills end at the edge origin; right pills start at the edge end.
                 left: `${(column.x / VIEW.width) * 100 - (column.x < CENTER.x ? 26 : 0)}%`,
                 top: `${(y(index, column.items.length) / VIEW.height) * 100}%`,
                 width: '26%',
               }}
-              tabIndex={0}
+              aria-label={t('roleManage.openRelationObject', {
+                relation: t(`authorization.${item.relation}`),
+                name: item.label,
+              })}
+              onClick={() => onEdit(item.relation, item.id, index)}
               onMouseEnter={() => setHovered(item.key)}
               onMouseLeave={() => setHovered(null)}
               onFocus={() => setHovered(item.key)}
@@ -252,7 +263,7 @@ function ChainBody({
             >
               <span className="block truncate text-sm font-medium">{item.label}</span>
               <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
-            </span>
+            </button>
           )),
         )}
       </div>

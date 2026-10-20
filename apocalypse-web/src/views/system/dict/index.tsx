@@ -3,15 +3,19 @@
  * 移动端保留双页签列表。列表视图的页面结构事实来源仍为各自 schema。
  */
 
-import { BookOpen, List } from 'lucide-react'
+import { BookOpen, List, Plus } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaPage } from '@/components/dyna'
+import { Perm } from '@/components/Perm'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { usePageView } from '@/hooks/usePageView'
+import { useAuthStore } from '@/stores/auth'
 
 import { DictBook } from './DictBook'
 import dataSchema from './dict-data.schema'
@@ -38,12 +42,23 @@ function DictTabs() {
 const DICT_VIEWS = ['cards', 'list'] as const
 
 export default function DictPage() {
+  const epoch = useAuthStore((state) => state.authorizationEpoch)
+  const session = useAuthStore((state) => state.sessionEpoch)
+  return <DictWorkspace key={`${session}:${epoch}`} />
+}
+
+function DictWorkspace() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(DICT_VIEWS, 'dictView')
+  const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [visitedList, setVisitedList] = useState(!desktop || requestedView === 'list')
   // Narrow screens keep the established list; the card book is a desktop workspace.
-  const view = desktop ? requestedView : 'list'
+  // A live card dialog remains mounted across a resize until its operation is resolved.
+  const view = busy || createOpen ? 'cards' : desktop ? requestedView : 'list'
+  if (view === 'list' && !visitedList) setVisitedList(true)
   return (
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
@@ -55,6 +70,7 @@ export default function DictPage() {
               label={systemT('dictBook.view')}
               value={view}
               onChange={setView}
+              disabled={busy || createOpen}
               options={[
                 { value: 'cards', label: systemT('dictBook.cards'), icon: BookOpen },
                 { value: 'list', label: systemT('dictBook.list'), icon: List },
@@ -62,8 +78,30 @@ export default function DictPage() {
             />
           ) : undefined
         }
+        actions={
+          view === 'cards' ? (
+            <Perm perm={typeSchema.createPerm!}>
+              <Button disabled={busy} onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden="true" />
+                {systemT('dictBook.addType')}
+              </Button>
+            </Perm>
+          ) : undefined
+        }
       />
-      {view === 'cards' ? <DictBook /> : <DictTabs />}
+      <div hidden={view !== 'cards'}>
+        <DictBook
+          active={view === 'cards'}
+          createOpen={createOpen}
+          onCreateOpenChange={setCreateOpen}
+          onBusyChange={setBusy}
+        />
+      </div>
+      {visitedList && (
+        <div hidden={view !== 'list'}>
+          <DictTabs />
+        </div>
+      )}
     </div>
   )
 }

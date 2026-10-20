@@ -9,7 +9,8 @@
 import { request, type RequestOptions } from '@/lib/api/client'
 import type { PageResult, SnowflakeId } from '@/lib/api/types'
 
-export const DICT_BOOK_PAGE_SIZE = 200
+export const DICT_BOOK_PAGE_SIZE = 12
+export const DICT_VALUE_PAGE_SIZE = 20
 
 export interface DictTypeRow {
   id: SnowflakeId
@@ -31,9 +32,9 @@ export interface DictValueRow {
 
 type Transport = Pick<RequestOptions, 'signal' | 'context'>
 
-export function pageDictTypes(keyword: string, signal?: AbortSignal) {
+export function pageDictTypes(keyword: string, page: number, signal?: AbortSignal) {
   return request<PageResult<DictTypeRow>>('/system/dict/types/page', {
-    query: { page: 1, size: DICT_BOOK_PAGE_SIZE, keyword: keyword || undefined },
+    query: { page, size: DICT_BOOK_PAGE_SIZE, keyword: keyword || undefined },
     signal,
   })
 }
@@ -42,11 +43,27 @@ export function enabledDictValues(type: string, signal?: AbortSignal) {
   return request<DictValueRow[]>(`/system/dict/data/type/${encodeURIComponent(type)}`, { signal })
 }
 
-export function pageDictValues(type: string, signal?: AbortSignal) {
+export function pageDictValues(type: string, page: number, signal?: AbortSignal) {
   return request<PageResult<DictValueRow>>('/system/dict/data/page', {
-    query: { page: 1, size: DICT_BOOK_PAGE_SIZE, dictType: type },
+    query: { page, size: DICT_VALUE_PAGE_SIZE, dictType: type },
     signal,
   })
+}
+
+export function createDictType(body: Record<string, unknown>, transport: Transport = {}) {
+  return request<SnowflakeId>('/system/dict/types', { method: 'POST', body, ...transport })
+}
+
+export function updateDictType(
+  id: SnowflakeId,
+  body: Record<string, unknown>,
+  transport: Transport = {},
+) {
+  return request<void>(`/system/dict/types/${id}`, { method: 'PUT', body, ...transport })
+}
+
+export function deleteDictType(id: SnowflakeId, transport: Transport = {}) {
+  return request<void>(`/system/dict/types/${id}`, { method: 'DELETE', ...transport })
 }
 
 export function createDictValue(body: Record<string, unknown>, transport: Transport = {}) {

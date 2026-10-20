@@ -12,6 +12,8 @@ import { grantWindowError, type RoleGrant } from './role-grant.model'
 export function RoleGrantFields({
   grant,
   definition,
+  zone: controlledZone,
+  onZoneChange,
   disabled,
   errors,
   onChange,
@@ -19,6 +21,8 @@ export function RoleGrantFields({
 }: {
   grant: RoleGrant
   definition: PermissionDefinition | null
+  zone?: GrantTimeZone
+  onZoneChange?: (zone: GrantTimeZone) => void
   disabled: boolean
   errors?: Partial<Record<'validFrom' | 'validUntil', string>>
   onChange: (values: Partial<Omit<RoleGrant, 'permissionId'>>) => void
@@ -26,7 +30,9 @@ export function RoleGrantFields({
 }) {
   const { t } = useTranslation('system')
   const id = useId()
-  const [zone, setZone] = useState<GrantTimeZone>('local')
+  const [localZone, setLocalZone] = useState<GrantTimeZone>('local')
+  const zone = controlledZone ?? localZone
+  const setZone = onZoneChange ?? setLocalZone
   const zoneName = Intl.DateTimeFormat().resolvedOptions().timeZone
   const scopes = definition?.supportedScopeOverrides ?? []
   const windowError = grantWindowError(grant)

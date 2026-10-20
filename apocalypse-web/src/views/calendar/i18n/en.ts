@@ -40,6 +40,25 @@ export const calendarEn = {
     REMOVED: 'Removed',
   },
   workspace: {
+    today: 'Today',
+    refresh: 'Refresh',
+    loading: 'Loading…',
+    updating: 'Updating current content…',
+    version: 'Version {{version}}',
+    pageRange: '{{from}}–{{to}} of {{total}}',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    emptyPage: 'This page has no records. Return to the previous page.',
+    invalidRange: 'The end date cannot be earlier than the start date.',
+    loadedRange: 'Showing {{count}} of {{total}} records. Remaining records are not loaded.',
+    allFields: 'Show all fields and sources',
+    unsavedPreview: 'Unsaved preview',
+    previewInputRequired: 'Enter valid content to preview the result',
+    changeContext: 'Change the editing context?',
+    changeContextWarning:
+      'Current inputs or review choices have not been submitted. Changing context will discard them. Saved revisions are unaffected.',
+    keepEditing: 'Keep editing',
+    discardAndChange: 'Discard and change',
     edit: 'Edit settings',
     preview: 'Effective information',
     review: 'Updates to review',
@@ -178,6 +197,8 @@ export const calendarEn = {
     allDayRange: '{{start}} → {{end}} (exclusive)',
   },
   calendars: {
+    systemSource:
+      'This calendar supplies system date facts. Managed calendars maintain settings on top of it; the system calendar cannot be edited here.',
     selectionRequired: 'No calendar selected',
     created: 'Calendar created',
     updated: 'Calendar updated',
@@ -235,7 +256,7 @@ export const calendarEn = {
     add: 'Add event',
     range: 'Query range',
     rangeDescription:
-      'The server filters accessible private and published calendar events by date, returning up to 200 items.',
+      'Browse your private events and accessible published events by date. Use the page controls to view all results.',
     startDate: 'Start date',
     endDate: 'End date',
     noLocation: 'No location',
@@ -272,6 +293,8 @@ export const calendarEn = {
     noConflicts: 'No conflicts are awaiting review.',
   },
   managedOverrides: {
+    partialReview:
+      'Review information is incomplete, so publication is unavailable. Refresh to retry; if this persists, contact the calendar administrator.',
     saved: 'Managed override draft saved',
     discarded: 'Draft discarded',
     noDraft: 'No publishable draft',
@@ -314,6 +337,7 @@ export const calendarEn = {
     noRevisions: 'No revisions yet.',
   },
   managedEvents: {
+    revisionVersion: 'Revision version {{version}}',
     publishWarning:
       'Publish this reviewed draft to members of this calendar. The expected draft version is checked again on publication.',
     discardWarning:
@@ -339,10 +363,18 @@ export const calendarEn = {
     withdraw: 'Withdraw',
     cancel: 'Cancel',
     empty: 'This calendar has no managed events.',
+    noEditableCalendar:
+      'No editable managed calendars are available. Ask a calendar publisher for an Editor or Publisher role.',
+    manageCalendars: 'Manage calendars',
     addTitle: 'Add managed event draft',
     editTitle: 'Edit managed event draft',
   },
   projections: {
+    destination: 'Destination calendar',
+    directConsequence:
+      'Events synchronized by this source publish directly to authorized readers without individual human review. Use only for a trusted source.',
+    draftConsequence:
+      'Events synchronized by this source are saved as drafts. A calendar publisher reviews them before publication to authorized readers.',
     saved: 'Projection grant saved',
     disabled: 'Projection grant disabled',
     title: 'Projection Grants',
@@ -369,6 +401,27 @@ export const calendarEn = {
     empty: 'This calendar has no projection sources.',
   },
   imports: {
+    process: 'Import process',
+    stagePrepare: 'Prepare sources',
+    stageValidate: 'Validate files',
+    stageReview: 'Review changes',
+    stagePublish: 'Publish or reject',
+    uploading: 'Uploading…',
+    validating: 'Validating…',
+    reviewing: 'Submitting review…',
+    publishing: 'Publishing…',
+    next: {
+      UPLOADED: 'Files are uploaded. Validate their content and format next.',
+      VALIDATED:
+        'Validation passed. Check field changes and source evidence before recording a review decision.',
+      INVALID:
+        'Validation failed. Read the issues, correct the source files, and create a new import.',
+      REVIEWED:
+        'The review is recorded. With publication permission, publish these changes or reject the import.',
+      PUBLISHED: 'This import is published. Files, changes, and review evidence remain available.',
+      REJECTED:
+        'This import was rejected. Evidence is retained; create a new import for later changes.',
+    },
     title: 'Annual Data Imports',
     description:
       'Publish annual date facts offline with immutable files, hashes, diff previews, and explicit human review.',

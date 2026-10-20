@@ -13,6 +13,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
 import { stateMotion } from '@/design/motion'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { useFirstEntrance } from '@/hooks/useFirstEntrance'
 import { ApiError } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -42,6 +43,7 @@ export function LoginActivitySection() {
   const motionEnabled = useMotionPreference()
   const epoch = useAuthStore((state) => state.sessionEpoch)
   const [range, setRange] = useState<HeatRange>('WEEK')
+  const [focus, setFocus] = useState({ row: 0, column: new Date().getHours() })
   const insights = useQuery({
     queryKey: ['system', 'logs', 'login', 'insights', epoch, range],
     queryFn: ({ signal }) => getLoginInsights(range, signal),
@@ -53,7 +55,7 @@ export function LoginActivitySection() {
   const stats = insights.data
   const successRate = stats && stats.total > 0 ? (stats.succeeded / stats.total) * 100 : null
   return (
-    <section aria-labelledby="login-activity-title" className="login-activity p-5">
+    <section aria-labelledby="login-activity-title" className="login-activity p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="login-activity-title" className="font-semibold">
@@ -131,7 +133,12 @@ export function LoginActivitySection() {
           </dl>
         )}
         {heatmap.data ? (
-          <Heatmap data={heatmap.data} motionEnabled={motionEnabled} />
+          <Heatmap
+            data={heatmap.data}
+            motionEnabled={motionEnabled}
+            focus={focus}
+            setFocus={setFocus}
+          />
         ) : (
           heatmap.isPending && <Skeleton className="h-48 w-full" />
         )}
@@ -140,15 +147,23 @@ export function LoginActivitySection() {
   )
 }
 
-function Heatmap({ data, motionEnabled }: { data: LoginHeatmap; motionEnabled: boolean }) {
+function Heatmap({
+  data,
+  motionEnabled,
+  focus,
+  setFocus,
+}: {
+  data: LoginHeatmap
+  motionEnabled: boolean
+  focus: { row: number; column: number }
+  setFocus: (value: { row: number; column: number }) => void
+}) {
   const { t } = useTranslation('system')
   const rows = heatmapRows(data.cells)
-  const [focus, setFocus] = useState({ row: 0, column: new Date().getHours() })
-  const [hovered, setHovered] = useState<LoginHeatmapCell | null>(null)
-  // The wave plays only for the first data this section receives; later ranges recolour in place.
-  const [firstData, setFirstData] = useState<LoginHeatmap | null>(null)
-  if (!firstData) setFirstData(data)
-  const wave = motionEnabled && data === firstData
+  const [hovered, setHovered] = useState<{ row: number; column: number } | null>(null)
+  const first = useFirstEntrance('system:login:heatmap')
+  const [waveDone, setWaveDone] = useState(!motionEnabled)
+  const wave = motionEnabled && first && !waveDone
   const weekday = (day: number) => t(`logInsight.weekday${day}`)
   const describe = (cell: LoginHeatmapCell) =>
     cell.slots === 0
@@ -160,7 +175,7 @@ function Heatmap({ data, motionEnabled }: { data: LoginHeatmap; motionEnabled: b
           total: cell.total,
           failed: cell.failed,
         })
-  const shown = hovered ?? rows[focus.row][focus.column]
+  const shown = hovered ? rows[hovered.row][hovered.column] : rows[focus.row][focus.column]
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const next = moveCell(focus, event.key)
     if (!next) return
@@ -180,6 +195,9 @@ function Heatmap({ data, motionEnabled }: { data: LoginHeatmap; motionEnabled: b
         className="login-heatmap"
         data-wave={wave || undefined}
         onKeyDown={onKeyDown}
+        onAnimationEnd={(event) => {
+          if ((event.target as HTMLElement).dataset.cell === '6-23') setWaveDone(true)
+        }}
       >
         <div role="row" className="login-heatmap-row" aria-hidden="true">
           <span className="login-heatmap-day" />
@@ -213,7 +231,8 @@ function Heatmap({ data, motionEnabled }: { data: LoginHeatmap; motionEnabled: b
                   className="login-heatmap-cell"
                   style={style}
                   onFocus={() => setFocus({ row: rowIndex, column })}
-                  onPointerEnter={() => setHovered(cell)}
+                  onClick={() => setFocus({ row: rowIndex, column })}
+                  onPointerEnter={() => setHovered({ row: rowIndex, column })}
                   onPointerLeave={() => setHovered(null)}
                 />
               )

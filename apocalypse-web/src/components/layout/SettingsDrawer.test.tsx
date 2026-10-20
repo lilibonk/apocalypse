@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const selected = vi.hoisted(() => ({ theme: 'system', density: 'comfortable', language: 'zh' }))
+const selected = vi.hoisted(() => ({
+  theme: 'system',
+  density: 'comfortable',
+  language: 'zh',
+  motionEnabled: true,
+}))
 
 vi.mock('@/stores/settings', async (original) => {
   const settings = await original<typeof import('@/stores/settings')>()
@@ -23,6 +28,10 @@ vi.mock('@/components/ui/sheet', () => ({
 vi.mock('@/components/MotionCollapse', () => ({ MotionCollapse: () => null }))
 
 import { SettingsDrawer } from './SettingsDrawer'
+import { CAPABILITY_META } from '@/stores/settings'
+
+const motionCapability = CAPABILITY_META.find(({ key }) => key === 'motion')!
+const originalMotionExposure = motionCapability.exposed
 
 const render = () => renderToStaticMarkup(<SettingsDrawer open onOpenChange={vi.fn()} />)
 const pressedLabels = (html: string) =>
@@ -35,6 +44,13 @@ beforeEach(() => {
   selected.theme = 'system'
   selected.density = 'comfortable'
   selected.language = 'zh'
+  selected.motionEnabled = true
+  vi.stubEnv('DEV', false)
+})
+
+afterEach(() => {
+  motionCapability.exposed = originalMotionExposure
+  vi.unstubAllEnvs()
 })
 
 describe('settings option semantics', () => {
@@ -53,7 +69,7 @@ describe('settings option semantics', () => {
     expect(pressedLabels(html)).toEqual(['跟随系统', '舒适', '中文'])
     expect(html.match(/aria-pressed="false"/g)).toHaveLength(4)
     expect(html.match(/type="button" aria-pressed=/g)).toHaveLength(7)
-    expect(html).not.toContain('tabindex="-1"')
+    expect(html).not.toMatch(/<button[^>]*tabindex="-1"/)
   })
 
   it('keeps the announced selection in sync with controlled settings', () => {
@@ -61,5 +77,31 @@ describe('settings option semantics', () => {
     selected.density = 'compact'
     selected.language = 'en'
     expect(pressedLabels(render())).toEqual(['深色', '紧凑', 'English'])
+  })
+
+  it.each([false, true])('exposes a named motion preference outside the lab when DEV=%s', (dev) => {
+    vi.stubEnv('DEV', dev)
+    const html = render()
+    const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? []
+    expect(switches).toHaveLength(1)
+    const motionSwitch = switches[0]!
+    const id = motionSwitch.match(/ id="([^"]+)"/)?.[1]
+    const descriptionId = motionSwitch.match(/aria-describedby="([^"]+)"/)?.[1]
+    expect(id).toBeTruthy()
+    expect(descriptionId).toBeTruthy()
+    expect(html).toContain(`for="${id}"`)
+    expect(html).toContain('>界面动画</label>')
+    expect(html).toContain(`id="${descriptionId}"`)
+    expect(html).toContain('始终遵循系统的减少动态效果设置')
+    expect(motionSwitch).toContain('aria-checked="true"')
+  })
+
+  it('announces the current disabled preference and hides a trimmed motion capability', () => {
+    selected.motionEnabled = false
+    expect(render()).toContain('aria-checked="false"')
+    motionCapability.exposed = false
+    const html = render()
+    expect(html).not.toContain('role="switch"')
+    expect(html).not.toContain('>界面动画</label>')
   })
 })

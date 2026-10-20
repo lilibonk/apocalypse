@@ -39,6 +39,33 @@ export function fitView(
   }
 }
 
+/** Explicit overview may shrink labels; normal fit and manual zoom retain their readable limits. */
+export function fitOverview(
+  frameWidth: number,
+  frameHeight: number,
+  contentWidth: number,
+  contentHeight: number,
+  padding = 24,
+): View {
+  if (
+    frameWidth <= padding * 2 ||
+    frameHeight <= padding * 2 ||
+    contentWidth <= 0 ||
+    contentHeight <= 0
+  )
+    return { x: 0, y: 0, scale: 1 }
+  const scale = Math.min(
+    1,
+    (frameWidth - padding * 2) / contentWidth,
+    (frameHeight - padding * 2) / contentHeight,
+  )
+  return {
+    scale,
+    x: (frameWidth - contentWidth * scale) / 2,
+    y: (frameHeight - contentHeight * scale) / 2,
+  }
+}
+
 /** Smallest pan that brings a content-space box (plus margin) inside the frame; scale unchanged. */
 export function panIntoView(
   view: View,

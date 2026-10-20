@@ -1,4 +1,5 @@
 import { motion } from 'motion/react'
+import type { ReactNode } from 'react'
 import { KeyRound, Plus, ShieldCheck, Unlink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { insightMotion } from '@/design/motion'
@@ -26,6 +27,21 @@ function GrantEdge({ y, state }: { y: number; state: GrantNode['state'] }) {
       className="role-menu-editor-edge"
       data-state={state}
     />
+  )
+}
+
+function GrantPosition({ y, children }: { y: number; children: ReactNode }) {
+  const enabled = useMotionPreference()
+  const target = { top: `${(y / 510) * 100}%`, opacity: 1 }
+  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
+  return (
+    <motion.div
+      className="absolute left-0 w-full"
+      initial={enabled ? { ...target, opacity: 0 } : target}
+      animate={controls}
+    >
+      {children}
+    </motion.div>
   )
 }
 
@@ -76,7 +92,7 @@ export function RoleGrantGraph({
         const linked = ['linked', 'added', 'updated'].includes(node.state)
         const name = node.definition?.name ?? node.id
         return (
-          <div key={node.id}>
+          <GrantPosition key={node.id} y={y(index)}>
             <button
               type="button"
               className="role-menu-editor-node flex items-center justify-center"
@@ -85,7 +101,7 @@ export function RoleGrantGraph({
               style={{
                 width: `${(56 / 780) * 100}%`,
                 left: `${(500 / 780) * 100}%`,
-                top: `${(y(index) / 510) * 100}%`,
+                top: 0,
               }}
               aria-pressed={selectedId === node.id}
               aria-label={t('authorization.inspect', { name })}
@@ -98,7 +114,7 @@ export function RoleGrantGraph({
               style={{
                 width: `${(205 / 780) * 100}%`,
                 left: `${(545 / 780) * 100}%`,
-                top: `${(y(index) / 510) * 100}%`,
+                top: 0,
               }}
             >
               <button
@@ -134,7 +150,7 @@ export function RoleGrantGraph({
                 </Button>
               ) : null}
             </div>
-          </div>
+          </GrantPosition>
         )
       })}
     </div>

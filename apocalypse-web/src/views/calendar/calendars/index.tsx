@@ -31,7 +31,15 @@ import { Label } from '@/components/ui/label'
 import { usePerm } from '@/hooks/usePerm'
 
 import type { CalendarRecord, CalendarRole } from '../calendar.api'
-import { CalendarPageFrame, DataEmpty, InlineError, StateBadge } from '../calendar.ui'
+import {
+  CalendarPageFrame,
+  CalendarPagination,
+  CalendarQueryStatus,
+  CalendarTrace,
+  DataEmpty,
+  InlineError,
+  StateBadge,
+} from '../calendar.ui'
 import { toErrorMessage } from '../calendar.format'
 import { CalendarConfirm } from '../calendar-confirm'
 
@@ -63,6 +71,7 @@ function CalendarManagementPage() {
   const [memberOpen, setMemberOpen] = useState(false)
   const [memberUserId, setMemberUserId] = useState('')
   const [memberRole, setMemberRole] = useState<CalendarRole>('READER')
+  const [memberPaging, setMemberPaging] = useState({ calendarId: '', page: 1 })
 
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
   const selectedId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
@@ -70,9 +79,10 @@ function CalendarManagementPage() {
     : (calendarsQuery.data?.[0]?.id ?? '')
   const selected = calendarsQuery.data?.find((calendar) => calendar.id === selectedId) ?? null
   const canManageSelected = selected?.kind === 'MANAGED' && selected.currentUserRole === 'PUBLISHER'
+  const memberPage = memberPaging.calendarId === selectedId ? memberPaging.page : 1
   const membersQuery = useQuery(
     calendarQueries.members(
-      { calendarId: selectedId, page: 1, size: 50 },
+      { calendarId: selectedId, page: memberPage, size: 20 },
       canManageSelected && canReadMembers,
     ),
   )
@@ -84,6 +94,7 @@ function CalendarManagementPage() {
     setMemberOpen(false)
     setMemberUserId('')
     setMemberRole('READER')
+    setMemberPaging({ calendarId: '', page: 1 })
   })
 
   const refresh = () => {
@@ -203,7 +214,11 @@ function CalendarManagementPage() {
       }
     >
       {calendarsQuery.error && <InlineError message={toErrorMessage(calendarsQuery.error)} />}
-      <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <CalendarQueryStatus
+        loading={calendarsQuery.isLoading}
+        fetching={calendarsQuery.isFetching}
+      />
+      <div className="grid items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <Card className="gap-4 py-4">
           <CardHeader className="px-4">
             <CardTitle>{t('calendars.contexts')}</CardTitle>
@@ -214,7 +229,11 @@ function CalendarManagementPage() {
               <button
                 key={calendar.id}
                 type="button"
-                onClick={() => setCalendarSelection(calendar.id)}
+                onClick={() => {
+                  setCalendarSelection(calendar.id)
+                  setMemberOpen(false)
+                  setMemberUserId('')
+                }}
                 className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
                 data-selected={selectedId === calendar.id}
               >
@@ -222,12 +241,13 @@ function CalendarManagementPage() {
                   <span className="truncate text-sm font-medium">{calendar.name}</span>
                   <Badge variant="outline">{t(`calendarKinds.${calendar.kind}`)}</Badge>
                 </span>
-                <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
-                  {calendar.calendarKey}
+                <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <StateBadge value={calendar.state} />
+                  {calendar.currentUserRole && t(`roles.${calendar.currentUserRole}`)}
                 </span>
               </button>
             ))}
-            {!calendarsQuery.isLoading && (calendarsQuery.data ?? []).length === 0 && (
+            {calendarsQuery.isSuccess && calendarsQuery.data.length === 0 && (
               <DataEmpty>{t('calendars.noVisible')}</DataEmpty>
             )}
           </CardContent>
@@ -235,7 +255,7 @@ function CalendarManagementPage() {
 
         <div className="space-y-5">
           {!selected ? (
-            <DataEmpty>{t('calendars.choose')}</DataEmpty>
+            calendarsQuery.isSuccess && <DataEmpty>{t('calendars.choose')}</DataEmpty>
           ) : (
             <>
               <Card className="gap-4 py-4">
@@ -243,7 +263,7 @@ function CalendarManagementPage() {
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div>
                       <CardTitle>{selected.name}</CardTitle>
-                      <CardDescription>{selected.calendarKey}</CardDescription>
+                      <CardDescription>{t(`calendarKinds.${selected.kind}`)}</CardDescription>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <StateBadge value={selected.state} />
@@ -289,6 +309,11 @@ function CalendarManagementPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-3 px-4 text-sm sm:grid-cols-2 sm:px-6">
+                  {selected.kind === 'SYSTEM' && (
+                    <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground sm:col-span-2">
+                      {t('calendars.systemSource')}
+                    </p>
+                  )}
                   <div className="rounded-md border border-border p-3">
                     <div className="text-xs text-muted-foreground">{t('calendars.regionZone')}</div>
                     <div className="mt-1 font-medium">
@@ -301,6 +326,14 @@ function CalendarManagementPage() {
                       {calendarsQuery.data?.find((item) => item.id === selected.parentId)?.name ??
                         '—'}
                     </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <CalendarTrace>
+                      <p>
+                        {selected.calendarKey} ·{' '}
+                        {t('workspace.version', { version: selected.version })}
+                      </p>
+                    </CalendarTrace>
                   </div>
                 </CardContent>
               </Card>
@@ -322,6 +355,10 @@ function CalendarManagementPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2 px-4 sm:px-6">
+                    <CalendarQueryStatus
+                      loading={membersQuery.isLoading}
+                      fetching={membersQuery.isFetching}
+                    />
                     {membersQuery.error && (
                       <InlineError message={toErrorMessage(membersQuery.error)} />
                     )}
@@ -374,8 +411,31 @@ function CalendarManagementPage() {
                         </div>
                       </div>
                     ))}
-                    {!membersQuery.isLoading && (membersQuery.data?.list ?? []).length === 0 && (
-                      <DataEmpty>{t('calendars.noMembers')}</DataEmpty>
+                    {membersQuery.isSuccess && membersQuery.data.list.length === 0 && (
+                      <DataEmpty>
+                        {t(
+                          membersQuery.data.total > 0
+                            ? 'workspace.emptyPage'
+                            : 'calendars.noMembers',
+                        )}
+                      </DataEmpty>
+                    )}
+                    {membersQuery.data && (
+                      <CalendarPagination
+                        page={memberPage}
+                        size={20}
+                        total={membersQuery.data.total}
+                        fetching={
+                          membersQuery.isFetching ||
+                          saveMemberMutation.isPending ||
+                          removeMemberMutation.isPending
+                        }
+                        onPage={(page) => {
+                          setMemberPaging({ calendarId: selectedId, page })
+                          setMemberOpen(false)
+                          setMemberUserId('')
+                        }}
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -395,17 +455,17 @@ function CalendarManagementPage() {
           </DialogHeader>
           <div className="grid gap-4">
             <FormInput
+              id="calendar-name"
+              label={t('calendars.name')}
+              value={form.name}
+              onChange={(name) => setForm((value) => ({ ...value, name }))}
+            />
+            <FormInput
               id="calendar-key"
               label={t('calendars.calendarKey')}
               value={form.calendarKey}
               disabled={editing !== 'new'}
               onChange={(calendarKey) => setForm((value) => ({ ...value, calendarKey }))}
-            />
-            <FormInput
-              id="calendar-name"
-              label={t('calendars.name')}
-              value={form.name}
-              onChange={(name) => setForm((value) => ({ ...value, name }))}
             />
             <div className="grid gap-1.5">
               <Label htmlFor="calendar-parent">{t('calendars.parent')}</Label>
@@ -426,19 +486,21 @@ function CalendarManagementPage() {
                   ))}
               </FieldSelect>
             </div>
-            <FormInput
-              id="calendar-region"
-              label={t('calendars.regionCode')}
-              value={form.regionCode}
-              disabled={editing !== 'new'}
-              onChange={(regionCode) => setForm((value) => ({ ...value, regionCode }))}
-            />
-            <FormInput
-              id="calendar-zone"
-              label={t('calendars.zoneId')}
-              value={form.zoneId}
-              onChange={(zoneId) => setForm((value) => ({ ...value, zoneId }))}
-            />
+            <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+              <FormInput
+                id="calendar-region"
+                label={t('calendars.regionCode')}
+                value={form.regionCode}
+                disabled={editing !== 'new'}
+                onChange={(regionCode) => setForm((value) => ({ ...value, regionCode }))}
+              />
+              <FormInput
+                id="calendar-zone"
+                label={t('calendars.zoneId')}
+                value={form.zoneId}
+                onChange={(zoneId) => setForm((value) => ({ ...value, zoneId }))}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>

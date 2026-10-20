@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,11 +19,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 
-import type { DataImportRecord, DataImportTarget } from '../calendar.api'
+import type { DataImportRecord, DataImportState, DataImportTarget } from '../calendar.api'
 import {
   CalendarPageFrame,
   CalendarTrace,
+  CalendarPagination,
+  CalendarQueryStatus,
   DataEmpty,
   InlineError,
   StateBadge,
@@ -53,6 +57,7 @@ function DataImportPage() {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState('')
   const [workspace, setWorkspace] = useState('new')
+  const [historyPage, setHistoryPage] = useState(1)
   const [targetType, setTargetType] = useState<DataImportTarget>('MANAGED_OVERRIDE')
   const [calendarId, setCalendarId] = useState('')
   const [year, setYear] = useState(nextYear)
@@ -71,7 +76,7 @@ function DataImportPage() {
   const [sourceAttested, setSourceAttested] = useState(false)
 
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
-  const importsQuery = useQuery(calendarQueries.dataImports({ page: 1, size: 100 }))
+  const importsQuery = useQuery(calendarQueries.dataImports({ page: historyPage, size: 20 }))
   const managedCalendars = useMemo(
     () =>
       (calendarsQuery.data ?? []).filter(
@@ -110,6 +115,7 @@ function DataImportPage() {
       setEvidenceFile(null)
       setReviewNote('')
       setSourceAttested(false)
+      setHistoryPage(1)
     },
     selectedId,
   )
@@ -158,6 +164,7 @@ function DataImportPage() {
     onSuccess: (value) => {
       toast.success(t('imports.uploaded'))
       setSelectedId(value.id)
+      setHistoryPage(1)
       setWorkspace('history')
       setDataFile(null)
       setEvidenceFile(null)
@@ -318,6 +325,9 @@ function DataImportPage() {
           <TabsTrigger value="history">{t('imports.history')}</TabsTrigger>
         </TabsList>
         <TabsContent value="new" className="max-w-3xl">
+          <div className="mb-4">
+            <ImportStages />
+          </div>
           <Card className="gap-4 py-4">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle>{t('imports.newImport')}</CardTitle>
@@ -516,213 +526,320 @@ function DataImportPage() {
                   onClick={() => uploadMutation.mutate()}
                 >
                   <Upload />
-                  {t('imports.upload')}
+                  {t(uploadMutation.isPending ? 'imports.uploading' : 'imports.upload')}
                 </Button>
               </Perm>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="history">
-          <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <Card className="gap-4 py-4">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle>{t('imports.history')}</CardTitle>
-                <CardDescription>{t('imports.historyHint')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 px-4 sm:px-6">
-                {(importsQuery.data?.list ?? []).map((value) => (
-                  <button
-                    key={value.id}
-                    type="button"
-                    data-selected={selectedId === value.id}
-                    onClick={() => {
-                      setSelectedId(value.id)
-                      setSourceAttested(false)
-                      setReviewNote('')
-                    }}
-                    className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/40 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium">{value.importKey}</span>
-                      <StateBadge value={value.state} />
-                    </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {value.dataYear} · {t(`importTargets.${value.targetType}`)}
-                    </span>
-                  </button>
-                ))}
-                {!importsQuery.isLoading && (importsQuery.data?.list ?? []).length === 0 && (
-                  <DataEmpty>{t('imports.noImports')}</DataEmpty>
-                )}
-              </CardContent>
-            </Card>
-            {!selected ? (
-              <DataEmpty>{t('imports.selectImport')}</DataEmpty>
-            ) : (
-              <div className="space-y-5">
-                <Card className="gap-4 py-4">
-                  <CardHeader className="px-4 sm:px-6">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <CardTitle>{selected.importKey}</CardTitle>
-                        <CardDescription>
-                          {t(`importTargets.${selected.targetType}`)} · {selected.regionCode} ·{' '}
-                          {selected.dataYear}
-                        </CardDescription>
+          <CalendarQueryStatus
+            loading={importsQuery.isLoading}
+            fetching={importsQuery.isFetching}
+          />
+          {importsQuery.isSuccess && importsQuery.data.total === 0 ? (
+            <div className="space-y-3">
+              <DataEmpty>{t('imports.noImports')}</DataEmpty>
+              <Perm perm="calendar:data-import:upload">
+                <div className="flex justify-center">
+                  <Button variant="outline" onClick={() => setWorkspace('new')}>
+                    {t('imports.newImport')}
+                  </Button>
+                </div>
+              </Perm>
+            </div>
+          ) : (
+            <div className="grid items-start gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+              <Card className="gap-4 py-4">
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle>{t('imports.history')}</CardTitle>
+                  <CardDescription>{t('imports.historyHint')}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 px-4 sm:px-6">
+                  {(importsQuery.data?.list ?? []).map((value) => (
+                    <button
+                      key={value.id}
+                      type="button"
+                      data-selected={selectedId === value.id}
+                      onClick={() => {
+                        setSelectedId(value.id)
+                        setSourceAttested(false)
+                        setReviewNote('')
+                      }}
+                      className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/40 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{value.importKey}</span>
+                        <StateBadge value={value.state} />
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {value.dataYear} · {t(`importTargets.${value.targetType}`)}
+                      </span>
+                    </button>
+                  ))}
+                  {importsQuery.isSuccess && importsQuery.data.list.length === 0 && (
+                    <DataEmpty>{t('workspace.emptyPage')}</DataEmpty>
+                  )}
+                  {importsQuery.data && (
+                    <CalendarPagination
+                      page={historyPage}
+                      size={20}
+                      total={importsQuery.data.total}
+                      fetching={
+                        importsQuery.isFetching ||
+                        uploadMutation.isPending ||
+                        validateMutation.isPending ||
+                        reviewMutation.isPending ||
+                        publishMutation.isPending ||
+                        rejectMutation.isPending
+                      }
+                      onPage={(page) => {
+                        setHistoryPage(page)
+                        setSelectedId('')
+                        setSourceAttested(false)
+                        setReviewNote('')
+                      }}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+              {!selected ? (
+                (importsQuery.data?.list.length ?? 0) > 0 && (
+                  <DataEmpty>{t('imports.selectImport')}</DataEmpty>
+                )
+              ) : (
+                <div className="space-y-5">
+                  <ImportStages state={selected.state} />
+                  <Card className="gap-4 py-4">
+                    <CardHeader className="px-4 sm:px-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <CardTitle>{selected.importKey}</CardTitle>
+                          <CardDescription>
+                            {t(`importTargets.${selected.targetType}`)} · {selected.regionCode} ·{' '}
+                            {selected.dataYear}
+                          </CardDescription>
+                        </div>
+                        <StateBadge value={selected.state} />
                       </div>
-                      <StateBadge value={selected.state} />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4 px-4 sm:px-6">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <FileSummary
-                        label={t('imports.dataFile')}
-                        file={selected.dataFile}
-                        onDownload={() => fileMutation.mutate({ value: selected, type: 'data' })}
-                      />
-                      {selected.evidenceFile ? (
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-4 sm:px-6">
+                      <div className="grid gap-3 sm:grid-cols-2">
                         <FileSummary
-                          label={t('imports.evidenceFile')}
-                          file={selected.evidenceFile}
-                          onDownload={() =>
-                            fileMutation.mutate({ value: selected, type: 'evidence' })
-                          }
+                          label={t('imports.dataFile')}
+                          file={selected.dataFile}
+                          onDownload={() => fileMutation.mutate({ value: selected, type: 'data' })}
                         />
-                      ) : (
-                        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-                          {t('imports.noEvidence')}
-                        </div>
-                      )}
-                    </div>
-                    <CalendarTrace>
-                      <div className="text-xs text-muted-foreground">
-                        {t('imports.normalizedHash')}
-                      </div>
-                      <div className="mt-1 break-all font-mono text-xs">
-                        {selected.normalizedPayloadHash ?? '—'}
-                      </div>
-                    </CalendarTrace>
-                    <div className="flex flex-wrap gap-2">
-                      <Perm perm="calendar:data-import:upload">
-                        <Button
-                          disabled={selected.state !== 'UPLOADED' || validateMutation.isPending}
-                          onClick={() => validateMutation.mutate(selected.id)}
-                        >
-                          <FileCheck2 />
-                          {t('imports.validate')}
-                        </Button>
-                      </Perm>
-                      <Button variant="outline" onClick={refresh}>
-                        <RefreshCw />
-                        {t('imports.refresh')}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {selected.validation && (
-                  <Card className="gap-4 py-4">
-                    <CardHeader className="px-4 sm:px-6">
-                      <CardTitle>{t('imports.validation')}</CardTitle>
-                      <CardDescription>
-                        {selected.validation.validatorVersion} · {selected.validation.rowCount}{' '}
-                        {t('imports.rows')}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 px-4 sm:px-6">
-                      {selected.validation.valid ? (
-                        <div className="flex items-center gap-2 text-sm text-success-foreground">
-                          <ShieldCheck className="size-4" />
-                          {t('imports.validationPassed')}
-                        </div>
-                      ) : (
-                        selected.validation.issues.map((issue, index) => (
-                          <InlineError
-                            key={`${issue.rowNumber}-${issue.column}-${index}`}
-                            message={`${t('imports.row')} ${issue.rowNumber || '—'} · ${issue.column || 'CSV'} · ${issue.message}`}
+                        {selected.evidenceFile ? (
+                          <FileSummary
+                            label={t('imports.evidenceFile')}
+                            file={selected.evidenceFile}
+                            onDownload={() =>
+                              fileMutation.mutate({ value: selected, type: 'evidence' })
+                            }
                           />
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {(diffQuery.data || diffQuery.error) && (
-                  <Card className="gap-4 py-4">
-                    <CardHeader className="px-4 sm:px-6">
-                      <CardTitle>{t('imports.diff')}</CardTitle>
-                      <CardDescription>{t('imports.diffHint')}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4 px-4 sm:px-6">
-                      {diffQuery.error && <InlineError message={toErrorMessage(diffQuery.error)} />}
-                      {diffQuery.data && <DiffPanel value={diffQuery.data} />}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {canReviewSelected && ['VALIDATED', 'REVIEWED'].includes(selected.state) && (
-                  <Card className="gap-4 py-4">
-                    <CardHeader className="px-4 sm:px-6">
-                      <CardTitle>{t('imports.reviewGate')}</CardTitle>
-                      <CardDescription>{t('imports.reviewHint')}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4 px-4 sm:px-6">
-                      <Textarea
-                        value={reviewNote}
-                        maxLength={500}
-                        placeholder={t('imports.reviewNote')}
-                        onChange={(event) => setReviewNote(event.target.value)}
-                      />
-                      {selected.state === 'VALIDATED' && (
-                        <label className="flex items-start gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            checked={sourceAttested}
-                            onChange={(event) => setSourceAttested(event.target.checked)}
-                          />
-                          <span>{t('imports.attestation')}</span>
-                        </label>
-                      )}
-                      <Perm perm="calendar:data-import:publish">
-                        <div className="flex flex-wrap gap-2">
-                          {selected.state === 'VALIDATED' && (
-                            <Button
-                              disabled={!sourceAttested || reviewMutation.isPending}
-                              onClick={() => reviewMutation.mutate()}
-                            >
-                              <ShieldCheck />
-                              {t('imports.review')}
-                            </Button>
-                          )}
-                          {selected.state === 'REVIEWED' && (
-                            <Button
-                              disabled={!diffQuery.data || publishMutation.isPending}
-                              onClick={() => publishMutation.mutate()}
-                            >
-                              <Send />
-                              {t('imports.publish')}
-                            </Button>
-                          )}
+                        ) : (
+                          <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+                            {t('imports.noEvidence')}
+                          </div>
+                        )}
+                      </div>
+                      <CalendarTrace>
+                        <div className="text-xs text-muted-foreground">
+                          {t('imports.normalizedHash')}
+                        </div>
+                        <div className="mt-1 break-all font-mono text-xs">
+                          {selected.normalizedPayloadHash ?? '—'}
+                        </div>
+                      </CalendarTrace>
+                      <div className="flex flex-wrap gap-2">
+                        <Perm perm="calendar:data-import:upload">
                           <Button
-                            variant="outline"
-                            disabled={rejectMutation.isPending}
-                            onClick={() => rejectMutation.mutate()}
+                            disabled={selected.state !== 'UPLOADED' || validateMutation.isPending}
+                            onClick={() => validateMutation.mutate(selected.id)}
                           >
-                            <XCircle />
-                            {t('imports.reject')}
+                            <FileCheck2 />
+                            {t(
+                              validateMutation.isPending
+                                ? 'imports.validating'
+                                : 'imports.validate',
+                            )}
                           </Button>
-                        </div>
-                      </Perm>
+                        </Perm>
+                        <Button variant="outline" onClick={refresh}>
+                          <RefreshCw />
+                          {t('imports.refresh')}
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
-                )}
-              </div>
-            )}
-          </div>
+
+                  {selected.validation && (
+                    <Card className="gap-4 py-4">
+                      <CardHeader className="px-4 sm:px-6">
+                        <CardTitle>{t('imports.validation')}</CardTitle>
+                        <CardDescription>
+                          {selected.validation.validatorVersion} · {selected.validation.rowCount}{' '}
+                          {t('imports.rows')}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2 px-4 sm:px-6">
+                        {selected.validation.valid ? (
+                          <div className="flex items-center gap-2 text-sm text-success-foreground">
+                            <ShieldCheck className="size-4" />
+                            {t('imports.validationPassed')}
+                          </div>
+                        ) : (
+                          selected.validation.issues.map((issue, index) => (
+                            <InlineError
+                              key={`${issue.rowNumber}-${issue.column}-${index}`}
+                              message={`${t('imports.row')} ${issue.rowNumber || '—'} · ${issue.column || 'CSV'} · ${issue.message}`}
+                            />
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {(diffQuery.data || diffQuery.error) && (
+                    <Card className="gap-4 py-4">
+                      <CardHeader className="px-4 sm:px-6">
+                        <CardTitle>{t('imports.diff')}</CardTitle>
+                        <CardDescription>{t('imports.diffHint')}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4 px-4 sm:px-6">
+                        {diffQuery.error && (
+                          <InlineError message={toErrorMessage(diffQuery.error)} />
+                        )}
+                        {diffQuery.data && <DiffPanel value={diffQuery.data} />}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {canReviewSelected && ['VALIDATED', 'REVIEWED'].includes(selected.state) && (
+                    <Card className="gap-4 py-4">
+                      <CardHeader className="px-4 sm:px-6">
+                        <CardTitle>{t('imports.reviewGate')}</CardTitle>
+                        <CardDescription>{t('imports.reviewHint')}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4 px-4 sm:px-6">
+                        <Textarea
+                          value={reviewNote}
+                          maxLength={500}
+                          placeholder={t('imports.reviewNote')}
+                          onChange={(event) => setReviewNote(event.target.value)}
+                        />
+                        {selected.state === 'VALIDATED' && (
+                          <label className="flex items-start gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={sourceAttested}
+                              onChange={(event) => setSourceAttested(event.target.checked)}
+                            />
+                            <span>{t('imports.attestation')}</span>
+                          </label>
+                        )}
+                        <Perm perm="calendar:data-import:publish">
+                          <div className="flex flex-wrap gap-2">
+                            {selected.state === 'VALIDATED' && (
+                              <Button
+                                disabled={!sourceAttested || reviewMutation.isPending}
+                                onClick={() => reviewMutation.mutate()}
+                              >
+                                <ShieldCheck />
+                                {t(
+                                  reviewMutation.isPending ? 'imports.reviewing' : 'imports.review',
+                                )}
+                              </Button>
+                            )}
+                            {selected.state === 'REVIEWED' && (
+                              <Button
+                                disabled={!diffQuery.data || publishMutation.isPending}
+                                onClick={() => publishMutation.mutate()}
+                              >
+                                <Send />
+                                {t(
+                                  publishMutation.isPending
+                                    ? 'imports.publishing'
+                                    : 'imports.publish',
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              disabled={rejectMutation.isPending}
+                              onClick={() => rejectMutation.mutate()}
+                            >
+                              <XCircle />
+                              {t('imports.reject')}
+                            </Button>
+                          </div>
+                        </Perm>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </CalendarPageFrame>
+  )
+}
+
+function ImportStages({ state }: { state?: DataImportState }) {
+  const { t } = useTranslation('calendar')
+  const stages = [
+    'imports.stagePrepare',
+    'imports.stageValidate',
+    'imports.stageReview',
+    'imports.stagePublish',
+  ]
+  const active =
+    state === undefined
+      ? 0
+      : state === 'UPLOADED' || state === 'INVALID'
+        ? 1
+        : state === 'VALIDATED'
+          ? 2
+          : state === 'REVIEWED'
+            ? 3
+            : state === 'PUBLISHED'
+              ? 4
+              : -1
+  return (
+    <div className="space-y-3">
+      <ol className="grid gap-2 sm:grid-cols-4" aria-label={t('imports.process')}>
+        {stages.map((stage, index) => (
+          <li
+            key={stage}
+            aria-current={index === active ? 'step' : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-md border border-border p-3 text-sm transition-colors',
+              index === active && 'border-primary/40 bg-primary/5',
+              index < active && 'bg-muted/40',
+            )}
+          >
+            <span
+              className={cn(
+                'flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs tabular-nums',
+                index === active && 'bg-primary text-primary-foreground',
+              )}
+            >
+              {index + 1}
+            </span>
+            <span>{t(stage)}</span>
+          </li>
+        ))}
+      </ol>
+      {state && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t(`imports.next.${state}`)}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -768,14 +885,16 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {summaries.map(([label, count]) => (
           <div key={label} className="rounded-md border border-border p-2 text-center">
-            <div className="text-lg font-semibold">{count}</div>
+            <div className="text-lg font-semibold">
+              <AnimatedNumber value={count} />
+            </div>
             <div className="text-xs text-muted-foreground">{t(`changes.${label}`)}</div>
           </div>
         ))}
       </div>
       <div className="max-h-96 overflow-auto rounded-md border border-border">
         <table className="w-full min-w-[42rem] text-left text-sm">
-          <thead className="sticky top-0 bg-muted/90 text-xs text-muted-foreground backdrop-blur">
+          <thead className="sticky top-0 bg-table-head text-xs text-muted-foreground">
             <tr>
               <th className="px-3 py-2">{t('imports.date')}</th>
               <th className="px-3 py-2">{t('imports.change')}</th>

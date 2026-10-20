@@ -80,18 +80,22 @@ function DeptWorkspace() {
   const [editing, setEditing] = useState<DeptTreeNode | null>(null)
   const [defaultParentId, setDefaultParentId] = useState<SnowflakeId>(ROOT_DEPT_ID)
   const [deleting, setDeleting] = useState<DeptTreeNode | null>(null)
+  const [focusRequest, setFocusRequest] = useState<{ id: string; sequence: number }>()
+  const [lastResult, setLastResult] = useState('')
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'depts', 'tree'],
     queryFn: getDeptTree,
   })
-  useResourceDenial({
+  const denial = useResourceDenial({
     errors: [error],
-    clear: { queryKey: ['system', 'depts', 'tree'] },
+    clear: { queryKey: ['system', 'depts'] },
     reset: () => {
       setDialogOpen(false)
       setEditing(null)
       setDeleting(null)
+      setFocusRequest(undefined)
+      setLastResult('')
     },
   })
   const tree = isResourceDenied(error) ? undefined : data
@@ -101,6 +105,7 @@ function DeptWorkspace() {
   const localKey = JSON.stringify([dialogOpen, editing?.id, deleting?.id])
   const saveMutation = useModuleMutation(undefined, {
     localKey,
+    onDenied: denial,
     mutationFn: async (run, values: DeptFormValues) => {
       const body: DeptSaveReq = {
         parentId: values.parentId,
@@ -117,12 +122,19 @@ function DeptWorkspace() {
         requiredPerms: [permission],
         requiredAllScopePerms: [permission],
         execute: async (transport) => {
-          if (editing) await updateDept(editing.id, body, transport)
-          else await createDept(body, transport)
+          if (editing) {
+            await updateDept(editing.id, body, transport)
+            return editing.id
+          }
+          return createDept(body, transport)
         },
       })
     },
-    onSuccess: () => {
+    onSuccess: (id, values) => {
+      setFocusRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+      setLastResult(
+        systemT(editing ? 'deptChart.updated' : 'deptChart.created', { name: values.deptName }),
+      )
       toast.success(
         editing
           ? t('common.部门已更新', { defaultValue: '部门已更新' })
@@ -142,6 +154,7 @@ function DeptWorkspace() {
 
   const deleteMutation = useModuleMutation(undefined, {
     localKey,
+    onDenied: denial,
     mutationFn: (run, id: SnowflakeId) =>
       run({
         scope: undefined,
@@ -150,6 +163,16 @@ function DeptWorkspace() {
         execute: (transport) => deleteDept(id, transport),
       }),
     onSuccess: () => {
+      if (deleting) {
+        setFocusRequest((current) => ({
+          id:
+            deleting.parentId === ROOT_DEPT_ID
+              ? (tree?.find((node) => node.id !== deleting.id)?.id ?? '')
+              : deleting.parentId,
+          sequence: (current?.sequence ?? 0) + 1,
+        }))
+        setLastResult(systemT('deptChart.deleted', { name: deleting.deptName }))
+      }
       toast.success(t('common.部门已删除', { defaultValue: '部门已删除' }))
       setDeleting(null)
       void invalidate()
@@ -238,13 +261,25 @@ function DeptWorkspace() {
         onRetry={() => void refetch()}
       />
       {view === 'chart' && isLoading && <Skeleton className="h-[34rem] w-full" />}
-      {view === 'chart' && tree && (
-        <DeptOrgChart
-          tree={tree}
-          onCreateChild={openCreate}
-          onEdit={openEdit}
-          onDelete={setDeleting}
-        />
+      {lastResult && (
+        <p
+          role="status"
+          className="rounded-control border border-border-subtle bg-card px-3 py-2 text-sm"
+        >
+          {lastResult}
+        </p>
+      )}
+      {tree && (
+        <div hidden={view !== 'chart'}>
+          <DeptOrgChart
+            focusRequest={focusRequest}
+            active={view === 'chart'}
+            tree={tree}
+            onCreateChild={openCreate}
+            onEdit={openEdit}
+            onDelete={setDeleting}
+          />
+        </div>
       )}
       {view === 'table' && (!error || tree !== undefined) && (
         <div

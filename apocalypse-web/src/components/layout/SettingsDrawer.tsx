@@ -1,5 +1,5 @@
 /**
- * 用户设置只暴露主题、密度与语言。
+ * 用户设置暴露主题、密度、动画与语言。
  *
  * 布局、强调色等脚手架验证能力仅在开发环境的“外观实验室”出现，
  * 不再把实现细节暴露给正式产品用户。错误的全局反色色弱模式已移除。
@@ -25,6 +25,7 @@ import { PixelWaveLab } from '@/effects/PixelWave/PixelWaveLab'
 import { cn } from '@/lib/utils'
 import {
   ACCENTS,
+  isCapabilityExposed,
   useSettings,
   useSettingsStore,
   type Accent,
@@ -103,6 +104,8 @@ export function SettingsDrawer({
   const settings = useSettings()
   const store = useSettingsStore()
   const [labOpen, setLabOpen] = useState(false)
+  const motionId = useId()
+  const motionDescriptionId = `${motionId}-description`
   const ct = (key: string) => t(`common.${key}`, { defaultValue: key })
 
   return (
@@ -111,7 +114,9 @@ export function SettingsDrawer({
         <SheetHeader>
           <SheetTitle>{ct('界面设置')}</SheetTitle>
           <SheetDescription>
-            {t('common.调整阅读体验与界面语言', { defaultValue: '调整阅读体验与界面语言。' })}
+            {t('common.调整阅读体验与界面语言', {
+              defaultValue: '调整阅读体验、界面动画与语言。',
+            })}
           </SheetDescription>
         </SheetHeader>
 
@@ -133,6 +138,27 @@ export function SettingsDrawer({
               onChange={store.setDensity}
             />
           </Section>
+
+          {isCapabilityExposed('motion') && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor={motionId}>
+                  {t('common.interfaceMotion', { defaultValue: '界面动画' })}
+                </Label>
+                <p id={motionDescriptionId} className="text-xs leading-5 text-muted-foreground">
+                  {t('common.interfaceMotionDescription', {
+                    defaultValue: '关闭后直接呈现变化结果；始终遵循系统的减少动态效果设置。',
+                  })}
+                </p>
+              </div>
+              <Switch
+                id={motionId}
+                aria-describedby={motionDescriptionId}
+                checked={settings.motionEnabled}
+                onCheckedChange={store.setMotionEnabled}
+              />
+            </div>
+          )}
 
           <Section title={ct('语言')}>
             <OptionRow<Language>
@@ -263,14 +289,6 @@ export function SettingsDrawer({
                             id="setting-gray"
                             checked={settings.grayMode}
                             onCheckedChange={store.setGrayMode}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="setting-motion">{ct('动画')}</Label>
-                          <Switch
-                            id="setting-motion"
-                            checked={settings.motionEnabled}
-                            onCheckedChange={store.setMotionEnabled}
                           />
                         </div>
                       </div>

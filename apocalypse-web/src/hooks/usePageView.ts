@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 
 /**
  * Current page view from the `view` search parameter (replace navigation, so views do not pile up
@@ -10,6 +10,7 @@ export function usePageView<View extends string>(
   param = 'view',
 ): [View, (view: View) => void] {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const requested = searchParams.get(param)
   const view = allowed.find((candidate) => candidate === requested) ?? allowed[0]
   const setView = useCallback(
@@ -20,9 +21,9 @@ export function usePageView<View extends string>(
           params.set(param, next)
           return params
         },
-        { replace: true },
+        { replace: true, state: location.state },
       ),
-    [param, setSearchParams],
+    [param, setSearchParams, location.state],
   )
   return [view, setView]
 }

@@ -44,3 +44,11 @@ export function saveConfigValues(
     ...transport,
   })
 }
+
+/** Existing exact-key lookup: reload only the edited parameters across paginated results. */
+export function getConfigByKey(
+  key: string,
+  transport: Pick<RequestOptions, 'signal' | 'context'> = {},
+): Promise<ConfigRow> {
+  return request<ConfigRow>(`/system/configs/key/${encodeURIComponent(key)}`, transport)
+}

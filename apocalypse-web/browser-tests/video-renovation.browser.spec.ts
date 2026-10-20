@@ -7,6 +7,78 @@ async function fillLogin(page: Page) {
   await page.getByLabel('密码', { exact: true }).fill('fixture-only-password')
 }
 
+for (const initiallyOff of [false, true]) {
+  test(`page transition preserves child state across motion and OS preferences (initially off: ${initiallyOff})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await page.goto(
+      `/test-fixtures/video-surfaces.html?surface=page-transition${initiallyOff ? '&motionOff' : ''}`,
+    )
+    const wrapper = page.locator('[data-slot="page-transition"]')
+    const state = page.getByTestId('transition-state')
+    const draft = page.getByLabel('Unsaved draft', { exact: true })
+    const expand = page.getByRole('button', { name: 'Expand record', exact: true })
+    await expect(wrapper).toHaveCount(1)
+    const originalWrapper = await wrapper.elementHandle()
+    const instance = await state.getAttribute('data-instance')
+    expect(instance).toBeTruthy()
+    await draft.fill('Unsubmitted local change')
+    await page.getByRole('button', { name: 'Increment count', exact: true }).click()
+    await expand.click()
+
+    const expectPreserved = async () => {
+      await expect(wrapper).toHaveCount(1)
+      expect(await originalWrapper!.evaluate((node) => node.isConnected)).toBe(true)
+      await expect(state).toHaveAttribute('data-instance', instance!)
+      await expect(state).toHaveAttribute('data-count', '1')
+      await expect(draft).toHaveValue('Unsubmitted local change')
+      await expect(expand).toHaveAttribute('aria-expanded', 'true')
+      await expect(page.getByText('Expanded record details', { exact: true })).toBeVisible()
+    }
+    const expectSettled = async () => {
+      await expect(wrapper).toHaveCSS('opacity', '1')
+      await expect(wrapper).toHaveCSS('transform', 'none')
+      expect(
+        await wrapper.evaluate(
+          (node) =>
+            node.getAnimations().filter((animation) => animation.playState === 'running').length,
+        ),
+      ).toBe(0)
+    }
+
+    for (const enabled of [false, true, false, true]) {
+      await page
+        .getByRole('button', { name: enabled ? 'Motion on' : 'Motion off', exact: true })
+        .click()
+      await expect(page.locator('html')).toHaveAttribute('data-motion', enabled ? 'on' : 'off')
+      await expectPreserved()
+      if (!enabled) await expectSettled()
+    }
+
+    await draft.focus()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expectPreserved()
+    await expectSettled()
+    await expect(draft).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Motion on', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await expectPreserved()
+    await expect(draft).toBeFocused()
+
+    // AppLayout still intentionally keys page transitions by pathname. Only a
+    // route change, not a preference change, should replace this local subtree.
+    await page.getByRole('button', { name: 'Navigate to next page', exact: true }).click()
+    await expect(state).not.toHaveAttribute('data-instance', instance!)
+    await expect(state).toHaveAttribute('data-count', '0')
+    await expect(draft).toHaveValue('')
+    await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  })
+}
+
 test('login submit collapses while waiting, keeps focus and refuses duplicate submits', async ({
   page,
 }) => {
@@ -66,7 +138,7 @@ test('role page without a requested role opens the overview, drills into a chain
   await expect(roles).toHaveAttribute('aria-expanded', 'true')
   await page.getByRole('button', { name: 'Resize role 启用', exact: true }).click()
   await expect(page.getByRole('group', { name: '「Resize role」的授权链' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^成员\s*0$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^角色成员.*0$/ })).toBeVisible()
   await page.getByRole('button', { name: '权限全景', exact: true }).click()
   await expect(page.getByRole('button', { name: /^角色 1，/ })).toBeVisible()
 })
@@ -228,16 +300,22 @@ test('frozen log columns sit edge to edge and shade only while content is beneat
   await expect.poll(async () => (await frozen()).shaded).toBe(false)
 })
 
-test('online sessions keep the list and the overview apart, and the detail offers the kick', async ({
+test('online accounts expand devices and retain the session list as a compatible view', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=online')
   const views = page.getByRole('group', { name: '页面视图' })
-  // The list view is the classic table only; the counts live in the overview view.
-  await expect(page.getByRole('table')).toBeVisible()
-  await expect(page.locator('#online-insights-title')).toHaveCount(0)
-  await views.getByRole('button', { name: '概览', exact: true }).click()
+  await expect(views.getByRole('button', { name: '账号与设备', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(page.getByRole('table')).toHaveCount(0)
+  const alice = page.locator('[data-account="alice"]')
+  await alice.locator('button[aria-expanded]').click()
+  await expect(alice.getByRole('listitem')).toHaveCount(2)
+  await expect(alice.getByRole('listitem').getByRole('button', { name: '强退该账号' })).toHaveCount(
+    0,
+  )
   const figure = (label: string) =>
     page.locator('dl > div').filter({ hasText: label }).locator('.sr-only')
   await expect(figure('在线会话')).toHaveText('3')
@@ -256,34 +334,35 @@ test('online sessions keep the list and the overview apart, and the detail offer
   await expect(page.getByRole('alertdialog')).toContainText('alice')
 })
 
-test('permission module chips open the catalog list filtered to that module', async ({ page }) => {
+test('permission module chips filter the object workspace and preserve filters in the list', async ({
+  page,
+}) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=permission')
   const views = page.getByRole('group', { name: '页面视图' })
-  await views.getByRole('button', { name: '概览', exact: true }).click()
-  const chip = page.getByRole('button', { name: /查看模块 calendar 的/ })
-  await expect(chip).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.getByText('核心', { exact: true })).toBeVisible()
-  await chip.click()
-  // The chip leads into the list view with the existing module filter applied.
-  await expect(views.getByRole('button', { name: '列表', exact: true })).toHaveAttribute(
+  await expect(views.getByRole('button', { name: '工作区', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
+  const chip = page.getByRole('button', { name: /^calendar 2/ })
+  await chip.click()
+  await expect(chip).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('fixture-saves')).toHaveAttribute(
     'data-permission-module',
     'calendar',
   )
+  await page.getByRole('button', { name: '查看动作：读取日期详情', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: '定义上下文' })).toContainText(
+    'calendar:day:read',
+  )
+  await views.getByRole('button', { name: '列表', exact: true }).click()
   await expect(page.getByRole('cell', { name: 'calendar:day:list' }).first()).toBeVisible()
   await expect(page.getByRole('cell', { name: 'system:user:list' })).toHaveCount(0)
   await expect(page.getByPlaceholder('如 calendar')).toHaveValue('calendar')
-  await views.getByRole('button', { name: '概览', exact: true }).click()
-  await expect(page.getByRole('button', { name: /查看模块 calendar 的/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await views.getByRole('button', { name: '列表', exact: true }).click()
+  await views.getByRole('button', { name: '工作区', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: '查看动作：读取日期详情', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: '重置', exact: true }).click()
-  // The unfiltered page comes back from the query cache, so assert on the rows, not the request.
-  await expect(page.getByRole('cell', { name: 'system:user:list' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '查看动作：读取用户', exact: true })).toBeVisible()
   await expect(page.getByPlaceholder('如 calendar')).toHaveValue('')
 })
