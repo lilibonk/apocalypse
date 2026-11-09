@@ -124,7 +124,7 @@ pnpm dev
 
 访问 [http://localhost:5173](http://localhost:5173)，使用 `admin` 和刚才设置的密码登录。首次成功启动后移除一次性密码变量，后续启动不会重置管理员密码。Windows、环境排查与完整命令见[快速开始](docs/getting-started.md)。
 
-> 空库依次运行 V1 与后续迁移；已有 V1 基线通过 `V2__permission_authorization.sql` 转换为独立业务授权与导航关系，不重建业务数据。本候选还包含 V3 Calendar 修订历史索引，构建时间与磁盘空间须计入维护窗口。切换前备份并停止全部旧实例（含登录和 refresh），核验重复权限的逐角色等价性与模块冲突。切换、数据库恢复均须使用全新 JWT 签名密钥，用户重新登录、服务账号重新签发并验证管理 scope；新授权写入后只能采用兼容新模型的版本修复。
+> 空库自动执行统一的 `V1__init.sql` 初始基线（含独立业务授权 `sys_permission`/`sys_role_permission`、导航关系 `sys_role_navigation` 与 Calendar 完整结构）；平台级迁移固定在 `V1.x` 区间，下游业务模块迁移固定在 `V100.x+` 区间。版本升级或数据库恢复均须停止全部旧实例、使用全新 JWT 签名密钥，用户重新登录、服务账号重新签发并验证管理 scope。
 
 ## 开始构建你的业务
 

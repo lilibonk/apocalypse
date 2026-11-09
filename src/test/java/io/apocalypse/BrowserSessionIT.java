@@ -455,28 +455,28 @@ class BrowserSessionIT extends AbstractIntegrationTest {
                     .code())
             .isZero();
       } else {
-        assertThat(versions.current(username).credential()).isEqualTo(before + 1);
+        assertThat(versions.current(username).credential()).isEqualTo(before);
         assertThat(cookieValue(winner, REFRESH_COOKIE).isEmpty()).isTrue();
-        for (Reply session : List.of(browser, machine)) {
-          assertThat(
-                  send(
-                          "GET",
-                          "/system/users/me",
-                          null,
-                          headers(
-                              "Authorization",
-                              "Bearer " + session.body().at("/data/accessToken").asText()))
-                      .code())
-              .isEqualTo(40100);
-        }
         assertThat(
                 send(
-                        "POST",
-                        "/auth/refresh",
-                        Map.of("refreshToken", machine.body().at("/data/refreshToken").asText()),
-                        List.of())
+                        "GET",
+                        "/system/users/me",
+                        null,
+                        headers(
+                            "Authorization",
+                            "Bearer " + browser.body().at("/data/accessToken").asText()))
                     .code())
             .isEqualTo(40100);
+        assertThat(
+                send(
+                        "GET",
+                        "/system/users/me",
+                        null,
+                        headers(
+                            "Authorization",
+                            "Bearer " + machine.body().at("/data/accessToken").asText()))
+                    .code())
+            .isZero();
         assertThat(
                 send("POST", "/auth/browser/refresh", null, browserHeaders(csrfValue, refresh))
                     .code())
@@ -486,7 +486,7 @@ class BrowserSessionIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void successfulLogoutDeletesCookiesAndDurablyRevokesAllSessionsWhenRedisOnlineViewIsGone() {
+  void successfulLogoutDeletesCookiesAndRevokesBrowserSessionWithoutKickingOtherDevices() {
     Csrf csrf = bootstrap();
     Reply browser = login(csrf);
     assertSuccess(browser);
@@ -495,8 +495,9 @@ class BrowserSessionIT extends AbstractIntegrationTest {
     String browserAccess = browser.body().at("/data/accessToken").asText();
     String machineAccess = machine.body().at("/data/accessToken").asText();
     String machineRefresh = machine.body().at("/data/refreshToken").asText();
-    List<String> accessIds =
-        List.of(jwtDecoder.decode(browserAccess).getId(), jwtDecoder.decode(machineAccess).getId());
+    String browserAccessId = jwtDecoder.decode(browserAccess).getId();
+    String machineAccessId = jwtDecoder.decode(machineAccess).getId();
+    List<String> accessIds = List.of(browserAccessId, machineAccessId);
     accessIds.forEach(jti -> redis.delete(OnlineUserRegistry.ONLINE_KEY_PREFIX + jti));
     assertThat(accessIds.stream().anyMatch(jti -> registry.find(jti).isPresent())).isFalse();
     long before = versions.current(username).credential();
@@ -508,7 +509,7 @@ class BrowserSessionIT extends AbstractIntegrationTest {
             browserHeaders(
                 cookieValue(browser, "XSRF-TOKEN"), cookieValue(browser, REFRESH_COOKIE)));
     assertSuccess(logout);
-    assertThat(versions.current(username).credential()).isEqualTo(before + 1);
+    assertThat(versions.current(username).credential()).isEqualTo(before);
     assertThat(cookieAttributes(logout, REFRESH_COOKIE))
         .contains("Max-Age=0", "Path=/", "Secure", "HttpOnly", "SameSite=Strict")
         .doesNotContain("Domain=");
@@ -517,16 +518,27 @@ class BrowserSessionIT extends AbstractIntegrationTest {
         .contains("Path=/", "Secure", "SameSite=Strict");
     assertThat(cookieValue(logout, "XSRF-TOKEN").isEmpty()).isTrue();
     assertThat(cookieExpired(logout, "XSRF-TOKEN")).isTrue();
-    assertThat(accessIds.stream().anyMatch(registry::isBlacklisted)).isFalse();
-    for (String access : List.of(browserAccess, machineAccess)) {
-      assertThat(
-              send("GET", "/system/users/me", null, headers("Authorization", "Bearer " + access))
-                  .code())
-          .isEqualTo(40100);
-    }
+    assertThat(registry.isBlacklisted(browserAccessId)).isTrue();
+    assertThat(registry.isBlacklisted(machineAccessId)).isFalse();
+    assertThat(
+            send(
+                    "GET",
+                    "/system/users/me",
+                    null,
+                    headers("Authorization", "Bearer " + browserAccess))
+                .code())
+        .isEqualTo(40100);
+    assertThat(
+            send(
+                    "GET",
+                    "/system/users/me",
+                    null,
+                    headers("Authorization", "Bearer " + machineAccess))
+                .code())
+        .isZero();
     assertThat(
             send("POST", "/auth/refresh", Map.of("refreshToken", machineRefresh), List.of()).code())
-        .isEqualTo(40100);
+        .isZero();
     Reply oldBrowser =
         send(
             "POST",

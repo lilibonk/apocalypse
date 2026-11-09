@@ -3,7 +3,9 @@ package io.apocalypse.framework.redis;
 import io.apocalypse.framework.security.OnlineUserRegistry;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.cache.support.NullValue;
@@ -14,32 +16,65 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** 显式类型 ID 的 Redis JSON 序列化器。反序列化从固定注册表选类型，从不采信载荷中的 Java class 名。 */
+/** 显式类型 ID 的 Redis JSON 序列化器。反序列化从已登记的模块注册表选类型，从不采信载荷中的 Java class 名。 */
 final class SafeRedisValueSerializer implements RedisSerializer<Object> {
 
-  private static final String USER_RESPONSE_CLASS =
-      "io.apocalypse.system.user.dto.response.UserResp";
+  private static final Set<String> RESERVED_TYPE_IDS =
+      Set.of("string", "null-value", "online-user", "string-list", "empty-list");
 
-  private static final String DICT_DATA_RESPONSE_CLASS =
-      "io.apocalypse.system.dict.dto.response.DictDataResp";
-
-  private static final String LOGIN_INSIGHT_RESPONSE_CLASS =
-      "io.apocalypse.system.log.dto.response.LoginInsightResp";
-
-  private static final String LOGIN_HEATMAP_RESPONSE_CLASS =
-      "io.apocalypse.system.log.dto.response.LoginHeatmapResp";
-
-  private static final Set<String> REGISTERED_CLASSES =
-      Set.of(
-          USER_RESPONSE_CLASS,
-          DICT_DATA_RESPONSE_CLASS,
-          LOGIN_INSIGHT_RESPONSE_CLASS,
-          LOGIN_HEATMAP_RESPONSE_CLASS);
+  private static final RedisCacheTypeRegistration DEFAULT_SYSTEM_REGISTRATION =
+      RedisCacheTypeRegistration.builder()
+          .singleClassName("user-response", "io.apocalypse.system.user.dto.response.UserResp")
+          .listClassName("dict-data-list", "io.apocalypse.system.dict.dto.response.DictDataResp")
+          .singleClassName(
+              "login-insight", "io.apocalypse.system.log.dto.response.LoginInsightResp")
+          .singleClassName(
+              "login-heatmap", "io.apocalypse.system.log.dto.response.LoginHeatmapResp")
+          .build();
 
   private final ObjectMapper objectMapper;
 
+  private final Map<String, RedisCacheTypeRegistration.Entry> byTypeId;
+
+  private final Map<String, String> singleTypeIdByClass;
+
+  private final Map<String, String> listTypeIdByElementClass;
+
   SafeRedisValueSerializer(ObjectMapper objectMapper) {
+    this(objectMapper, List.of(DEFAULT_SYSTEM_REGISTRATION));
+  }
+
+  SafeRedisValueSerializer(
+      ObjectMapper objectMapper, List<RedisCacheTypeRegistration> registrations) {
     this.objectMapper = objectMapper;
+    List<RedisCacheTypeRegistration> effective =
+        (registrations == null || registrations.isEmpty())
+            ? List.of(DEFAULT_SYSTEM_REGISTRATION)
+            : registrations;
+    Map<String, RedisCacheTypeRegistration.Entry> typeMap = new LinkedHashMap<>();
+    Map<String, String> singleMap = new LinkedHashMap<>();
+    Map<String, String> listMap = new LinkedHashMap<>();
+    for (RedisCacheTypeRegistration registration : effective) {
+      for (RedisCacheTypeRegistration.Entry entry : registration.entries()) {
+        if (RESERVED_TYPE_IDS.contains(entry.typeId())) {
+          throw new IllegalArgumentException(
+              "Redis cache typeId is reserved by framework: " + entry.typeId());
+        }
+        RedisCacheTypeRegistration.Entry existing = typeMap.putIfAbsent(entry.typeId(), entry);
+        if (existing != null && !existing.equals(entry)) {
+          throw new IllegalArgumentException(
+              "Duplicate Redis cache typeId registration: " + entry.typeId());
+        }
+        if (entry.list()) {
+          listMap.put(entry.className(), entry.typeId());
+        } else {
+          singleMap.put(entry.className(), entry.typeId());
+        }
+      }
+    }
+    this.byTypeId = Map.copyOf(typeMap);
+    this.singleTypeIdByClass = Map.copyOf(singleMap);
+    this.listTypeIdByElementClass = Map.copyOf(listMap);
   }
 
   @Override
@@ -74,18 +109,18 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
         case "null-value" -> NullValue.INSTANCE;
         case "online-user" ->
             objectMapper.treeToValue(required(value), OnlineUserRegistry.OnlineUser.class);
-        case "user-response" ->
-            objectMapper.treeToValue(required(value), registeredClass(USER_RESPONSE_CLASS));
-        case "login-insight" ->
-            objectMapper.treeToValue(
-                required(value), registeredClass(LOGIN_INSIGHT_RESPONSE_CLASS));
-        case "login-heatmap" ->
-            objectMapper.treeToValue(
-                required(value), registeredClass(LOGIN_HEATMAP_RESPONSE_CLASS));
         case "string-list" -> stringList(requiredArray(value));
-        case "dict-data-list" -> objectList(requiredArray(value), DICT_DATA_RESPONSE_CLASS);
         case "empty-list" -> List.of();
-        default -> throw new SerializationException("Unknown Redis value type id: " + type);
+        default -> {
+          RedisCacheTypeRegistration.Entry entry = byTypeId.get(type);
+          if (entry == null) {
+            throw new SerializationException("Unknown Redis value type id: " + type);
+          }
+          if (entry.list()) {
+            yield objectList(requiredArray(value), entry.className());
+          }
+          yield objectMapper.treeToValue(required(value), registeredClass(entry.className()));
+        }
       };
     } catch (SerializationException e) {
       throw e;
@@ -94,7 +129,7 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
     }
   }
 
-  private static String typeId(Object value) {
+  private String typeId(Object value) {
     if (value instanceof String) {
       return "string";
     }
@@ -104,14 +139,9 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
     if (value instanceof OnlineUserRegistry.OnlineUser) {
       return "online-user";
     }
-    if (USER_RESPONSE_CLASS.equals(value.getClass().getName())) {
-      return "user-response";
-    }
-    if (LOGIN_INSIGHT_RESPONSE_CLASS.equals(value.getClass().getName())) {
-      return "login-insight";
-    }
-    if (LOGIN_HEATMAP_RESPONSE_CLASS.equals(value.getClass().getName())) {
-      return "login-heatmap";
+    String singleTypeId = singleTypeIdByClass.get(value.getClass().getName());
+    if (singleTypeId != null) {
+      return singleTypeId;
     }
     if (value instanceof List<?> list) {
       if (list.isEmpty()) {
@@ -120,9 +150,15 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
       if (list.stream().allMatch(String.class::isInstance)) {
         return "string-list";
       }
-      if (list.stream()
-          .allMatch(item -> DICT_DATA_RESPONSE_CLASS.equals(item.getClass().getName()))) {
-        return "dict-data-list";
+      Object first = list.getFirst();
+      if (first != null) {
+        String elementClass = first.getClass().getName();
+        String listTypeId = listTypeIdByElementClass.get(elementClass);
+        if (listTypeId != null
+            && list.stream()
+                .allMatch(item -> item != null && elementClass.equals(item.getClass().getName()))) {
+          return listTypeId;
+        }
       }
     }
     throw new SerializationException(
@@ -159,8 +195,9 @@ final class SafeRedisValueSerializer implements RedisSerializer<Object> {
     return result;
   }
 
-  private static Class<?> registeredClass(String className) throws ClassNotFoundException {
-    if (!REGISTERED_CLASSES.contains(className)) {
+  private Class<?> registeredClass(String className) throws ClassNotFoundException {
+    if (!singleTypeIdByClass.containsKey(className)
+        && !listTypeIdByElementClass.containsKey(className)) {
       throw new SerializationException("Redis value class is not registered: " + className);
     }
     return Class.forName(className);

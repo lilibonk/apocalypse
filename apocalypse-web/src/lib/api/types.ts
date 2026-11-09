@@ -92,6 +92,15 @@ export interface CurrentUser {
   allScopePerms: string[]
 }
 
+/** GET /system/users/me/sessions 的单条会话。 */
+export interface SelfSession {
+  jti: string
+  loginTime: string
+  ip: string | null
+  userAgent: string | null
+  current: boolean
+}
+
 /** 字典数据项。 */
 export interface DictData {
   id: SnowflakeId

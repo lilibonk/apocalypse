@@ -28,6 +28,11 @@ public final class SecurityUtils {
     return Optional.ofNullable(authentication.getName());
   }
 
+  /** 当前会话令牌 ID（JWT {@code jti}），未登录或不包含时为空。 */
+  public static Optional<String> currentSessionJti() {
+    return currentJwt().map(Jwt::getId);
+  }
+
   /** 当前身份是否拥有指定权限。 */
   public static boolean hasAuthority(String authority) {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

@@ -19,6 +19,8 @@ export default definePageSchema({
   description: '系统用户的增删改查',
   entityName: '用户',
   createPerm: 'system:user:add',
+  exportPerm: 'system:user:list',
+  exportFileName: 'users.csv',
   search: [
     { name: 'keyword', label: '用户名 / 昵称', type: 'input', placeholder: '用户名 / 昵称' },
   ],

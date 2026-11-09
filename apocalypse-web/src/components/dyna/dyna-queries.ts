@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { captureRequestContext, request } from '@/lib/api/client'
+import { captureRequestContext, rawRequest, request } from '@/lib/api/client'
 import type { PageResult } from '@/lib/api/types'
 import type { ModuleOperation, ModuleScope, ScopedRequest } from '@/lib/query/module-scope'
 import type { DynaPageSchema, DynaStatusToggleAction } from './schema'
@@ -90,6 +90,11 @@ export function createDynaQueries(schema: DynaPageSchema, scope?: ModuleScope) {
         request<void>(`${schema.endpoint}/${id}`, { method: 'DELETE', ...transport }),
       schema.rowActions?.find((action) => action.kind === 'delete')?.requiresAllScope,
     ),
+    exportCsv: operation(schema.exportPerm, (transport, search: Record<string, string>) => {
+      const query: Record<string, string | undefined> = {}
+      for (const [key, value] of Object.entries(search)) query[key] = value || undefined
+      return rawRequest<Blob>(`${schema.endpoint}/export`, 'blob', { query, ...transport })
+    }),
     toggles,
   }
 }

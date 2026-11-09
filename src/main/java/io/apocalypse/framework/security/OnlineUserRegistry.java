@@ -3,12 +3,16 @@ package io.apocalypse.framework.security;
 import io.apocalypse.framework.redis.RedisKeyScanner;
 
 import java.io.Serializable;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -39,6 +43,8 @@ public class OnlineUserRegistry {
 
   private final SecurityProperties securityProperties;
 
+  private final ObjectProvider<Clock> clockProvider;
+
   /** 在线用户视图（Redis JSON 存储）。refreshJti 记录本次会话关联的 refresh token jti，供强退联动拉黑。 */
   public record OnlineUser(
       String username, LocalDateTime loginTime, String ip, String userAgent, String refreshJti)
@@ -54,26 +60,54 @@ public class OnlineUserRegistry {
         .opsForValue()
         .set(
             ONLINE_KEY_PREFIX + jti,
-            new OnlineUser(username, LocalDateTime.now(), ip, userAgent, refreshJti),
+            new OnlineUser(username, now(), ip, userAgent, refreshJti),
             Duration.ofMinutes(securityProperties.getJwt().getTtlMinutes()));
   }
 
-  /** 全量在线会话。使用 SCAN 分批遍历，避免 KEYS 阻塞 Redis 主线程。 */
+  /** 全量在线会话。使用 SCAN 分批遍历键名，再通过 MGET（{@code multiGet}）单次往返批量读取值，避免 N+1 阻塞。 */
   public List<OnlineSession> listAll() {
     Set<String> keys = RedisKeyScanner.scan(redisTemplate, ONLINE_KEY_PREFIX + "*");
     if (keys.isEmpty()) {
       return List.of();
     }
-    return keys.stream()
-        .sorted()
-        .map(
-            key -> {
-              Object value = redisTemplate.opsForValue().get(key);
-              return value instanceof OnlineUser user
-                  ? new OnlineSession(key.substring(ONLINE_KEY_PREFIX.length()), user)
-                  : null;
+    List<String> sortedKeys = keys.stream().sorted().toList();
+    List<Object> values = redisTemplate.opsForValue().multiGet(sortedKeys);
+    if (values == null || values.isEmpty()) {
+      return List.of();
+    }
+    List<OnlineSession> sessions = new ArrayList<>(sortedKeys.size());
+    for (int i = 0; i < sortedKeys.size() && i < values.size(); i++) {
+      if (values.get(i) instanceof OnlineUser user) {
+        sessions.add(
+            new OnlineSession(sortedKeys.get(i).substring(ONLINE_KEY_PREFIX.length()), user));
+      }
+    }
+    return List.copyOf(sessions);
+  }
+
+  /** 指定用户的在线会话列表（按登录时间倒序）。 */
+  public List<OnlineSession> listByUsername(String username) {
+    if (!StringUtils.hasText(username)) {
+      return List.of();
+    }
+    return listAll().stream()
+        .filter(session -> username.equals(session.user().username()))
+        .sorted(
+            (a, b) -> {
+              LocalDateTime left = a.user().loginTime();
+              LocalDateTime right = b.user().loginTime();
+              if (left == null && right == null) {
+                return a.jti().compareTo(b.jti());
+              }
+              if (left == null) {
+                return 1;
+              }
+              if (right == null) {
+                return -1;
+              }
+              int cmp = right.compareTo(left);
+              return cmp != 0 ? cmp : a.jti().compareTo(b.jti());
             })
-        .filter(session -> session != null)
         .toList();
   }
 
@@ -84,7 +118,7 @@ public class OnlineUserRegistry {
   }
 
   /**
-   * 强退：删在线条目 + access jti 写入黑名单（TTL = 令牌剩余有效期；已过期则不占位）； 关联的 refresh jti 一并拉黑（TTL = refresh
+   * 强退单会话：删在线条目 + access jti 写入黑名单（TTL = 令牌剩余有效期；已过期则不占位）； 关联的 refresh jti 一并拉黑（TTL = refresh
    * 剩余有效期），杜绝强退后换发新令牌。
    */
   public void kick(String jti) {
@@ -137,17 +171,22 @@ public class OnlineUserRegistry {
     }
   }
 
+  private LocalDateTime now() {
+    Clock clock = clockProvider.getIfAvailable(Clock::systemUTC);
+    return LocalDateTime.ofInstant(clock.instant(), ZoneId.systemDefault());
+  }
+
   /** 令牌剩余有效期（毫秒）：登录时间 + TTL - 当前时间。 */
   private long remainingValidityMillis(OnlineUser user) {
     LocalDateTime expireAt =
         user.loginTime().plusMinutes(securityProperties.getJwt().getTtlMinutes());
-    return Duration.between(LocalDateTime.now(), expireAt).toMillis();
+    return Duration.between(now(), expireAt).toMillis();
   }
 
   /** refresh 令牌剩余有效期（毫秒）：登录时间 + refresh TTL（天） - 当前时间；已过期返回负值（调用方不占位）。 */
   private long remainingRefreshValidityMillis(OnlineUser user) {
     LocalDateTime expireAt =
         user.loginTime().plusDays(securityProperties.getJwt().getRefreshTtlDays());
-    return Duration.between(LocalDateTime.now(), expireAt).toMillis();
+    return Duration.between(now(), expireAt).toMillis();
   }
 }

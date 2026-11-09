@@ -120,4 +120,128 @@ class UserCrudIT extends AbstractIntegrationTest {
 
     deleteForData("/system/users/" + userId, token);
   }
+
+  @Test
+  void selfServiceProfilePasswordAndSessionManagement() {
+    String adminToken = loginAndGetToken("admin", ADMIN_PASSWORD);
+    JsonNode created =
+        postForData(
+            "/system/users",
+            Map.of(
+                "username", "self_service_user",
+                "password", "SelfPass123",
+                "nickname", "初始昵称"),
+            adminToken);
+    long userId = created.get("id").asLong();
+
+    try {
+      String tokenA = loginAndGetToken("self_service_user", "SelfPass123");
+      String tokenB = loginAndGetToken("self_service_user", "SelfPass123");
+
+      // 1. 更新个人基础资料
+      JsonNode updatedProfile =
+          putForData("/system/users/me/profile", Map.of("nickname", "自助修改昵称"), tokenA);
+      assertThat(updatedProfile.get("nickname").asText()).isEqualTo("自助修改昵称");
+
+      // 2. 查看个人在线会话列表（应看到 2 个会话，且当前会话 current=true）
+      JsonNode sessions = getForData("/system/users/me/sessions", tokenA);
+      assertThat(sessions.size()).isEqualTo(2);
+      String otherJti = null;
+      int currentCount = 0;
+      for (JsonNode session : sessions) {
+        assertThat(session.get("jti").asText()).isNotBlank();
+        if (session.get("current").asBoolean()) {
+          currentCount++;
+        } else {
+          otherJti = session.get("jti").asText();
+        }
+      }
+      assertThat(currentCount).isEqualTo(1);
+      assertThat(otherJti).isNotBlank();
+
+      // 3. 越权防护：禁止踢除其他用户的会话
+      JsonNode adminSessions = getForData("/system/users/me/sessions", adminToken);
+      String adminJti = adminSessions.get(0).get("jti").asText();
+      JsonNode crossKick =
+          exchangeRaw("/system/users/me/sessions/" + adminJti, HttpMethod.DELETE, null, tokenA);
+      assertThat(crossKick.get("code").asInt()).isEqualTo(40400);
+
+      // 4. 踢除自己的另一个会话 tokenB，tokenA 保持有效
+      deleteForData("/system/users/me/sessions/" + otherJti, tokenA);
+      JsonNode tokenBAfterKick =
+          exchangeRaw("/system/users/me/sessions", HttpMethod.GET, null, tokenB);
+      assertThat(tokenBAfterKick.get("code").asInt()).isEqualTo(40100);
+      assertThat(getForData("/system/users/me/sessions", tokenA).size()).isEqualTo(1);
+
+      // 5. 自助修改密码：旧密码错误返回 10000（BIZ_ERROR）
+      JsonNode wrongOldPwd =
+          exchangeRaw(
+              "/system/users/me/password",
+              HttpMethod.PUT,
+              Map.of("oldPassword", "WrongPass123", "newPassword", "NewSelfPass123"),
+              tokenA);
+      assertThat(wrongOldPwd.get("code").asInt()).isEqualTo(10000);
+
+      // 6. 自助修改密码成功：自动递增 cv 使旧令牌全部失效，新密码可正常登录
+      JsonNode changePwd =
+          exchangeRaw(
+              "/system/users/me/password",
+              HttpMethod.PUT,
+              Map.of("oldPassword", "SelfPass123", "newPassword", "NewSelfPass123"),
+              tokenA);
+      assertThat(changePwd.get("code").asInt()).isZero();
+      JsonNode tokenAAfterPwdChange =
+          exchangeRaw("/system/users/me/sessions", HttpMethod.GET, null, tokenA);
+      assertThat(tokenAAfterPwdChange.get("code").asInt()).isEqualTo(40100);
+
+      String tokenC = loginAndGetToken("self_service_user", "NewSelfPass123");
+      assertThat(getForData("/system/users/me/sessions", tokenC).size()).isEqualTo(1);
+
+      // 7. 注销本人全部设备会话
+      deleteForData("/system/users/me/sessions", tokenC);
+      JsonNode tokenCAfterRevokeAll =
+          exchangeRaw("/system/users/me/sessions", HttpMethod.GET, null, tokenC);
+      assertThat(tokenCAfterRevokeAll.get("code").asInt()).isEqualTo(40100);
+    } finally {
+      deleteForData("/system/users/" + userId, adminToken);
+    }
+  }
+
+  @Test
+  void exportUsersCsvIncludesUtf8BomAndNeutralizesFormulaInjection() {
+    String adminToken = loginAndGetToken("admin", ADMIN_PASSWORD);
+    JsonNode created =
+        postForData(
+            "/system/users",
+            Map.of(
+                "username", "csv_formula_user",
+                "password", "CsvPass123",
+                "nickname", "=CMD|'/C calc'!A0"),
+            adminToken);
+    long userId = created.get("id").asLong();
+
+    try {
+      org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+      headers.setBearerAuth(adminToken);
+      var response =
+          restTemplate.exchange(
+              "/system/users/export?keyword=csv_formula_user",
+              HttpMethod.GET,
+              new org.springframework.http.HttpEntity<>(headers),
+              byte[].class);
+      assertThat(response.getStatusCode().value()).isEqualTo(200);
+      byte[] body = response.getBody();
+      assertThat(body).isNotNull();
+      assertThat(body[0]).isEqualTo((byte) 0xEF);
+      assertThat(body[1]).isEqualTo((byte) 0xBB);
+      assertThat(body[2]).isEqualTo((byte) 0xBF);
+      String csvText =
+          new String(body, 3, body.length - 3, java.nio.charset.StandardCharsets.UTF_8);
+      assertThat(csvText)
+          .contains("用户ID,用户名,昵称,部门,状态,创建时间")
+          .contains("csv_formula_user,'=CMD|'/C calc'!A0");
+    } finally {
+      deleteForData("/system/users/" + userId, adminToken);
+    }
+  }
 }

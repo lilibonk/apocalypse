@@ -60,7 +60,7 @@ public class SecurityConfig {
 
   @Bean
   @ConditionalOnMissingBean(Clock.class)
-  public Clock authorizationClock() {
+  public static Clock authorizationClock() {
     return Clock.systemUTC();
   }
 

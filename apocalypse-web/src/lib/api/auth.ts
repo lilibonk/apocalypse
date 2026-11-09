@@ -6,7 +6,7 @@
  */
 
 import { request } from './client'
-import type { CurrentUser, TokenPair } from './types'
+import type { CurrentUser, SelfSession, TokenPair, UserInfo } from './types'
 
 /** 后端原始登录响应（字段以实际为准，宽松收）。 */
 interface RawTokenResponse {
@@ -60,4 +60,46 @@ export async function logout(): Promise<void> {
 /** 当前登录用户视图（用户/角色/权限/菜单树）。 */
 export function fetchCurrentUser(): Promise<CurrentUser> {
   return request<CurrentUser>('/system/users/me', { noRefresh: true, authorization: false })
+}
+
+/** 当前登录用户自助修改昵称。 */
+export function updateSelfProfile(nickname: string): Promise<UserInfo> {
+  return request<UserInfo>('/system/users/me/profile', {
+    method: 'PUT',
+    body: { nickname },
+    authorization: false,
+  })
+}
+
+/** 当前登录用户自助修改密码（成功后服务端递增凭证版本，废止全部旧会话）。 */
+export function updateSelfPassword(oldPassword: string, newPassword: string): Promise<void> {
+  return request<void>('/system/users/me/password', {
+    method: 'PUT',
+    body: { oldPassword, newPassword },
+    authorization: false,
+  })
+}
+
+/** 当前登录用户的活跃在线设备列表。 */
+export function fetchSelfSessions(options?: { signal?: AbortSignal }): Promise<SelfSession[]> {
+  return request<SelfSession[]>('/system/users/me/sessions', {
+    signal: options?.signal,
+    authorization: false,
+  })
+}
+
+/** 当前登录用户自助下线指定设备会话。 */
+export function revokeSelfSession(jti: string): Promise<void> {
+  return request<void>(`/system/users/me/sessions/${encodeURIComponent(jti)}`, {
+    method: 'DELETE',
+    authorization: false,
+  })
+}
+
+/** 当前登录用户自助注销全部设备会话。 */
+export function revokeAllSelfSessions(): Promise<void> {
+  return request<void>('/system/users/me/sessions', {
+    method: 'DELETE',
+    authorization: false,
+  })
 }

@@ -1,6 +1,6 @@
 # 开发业务模块
 
-Apocalypse 是单 Maven 模块的模块化单体。业务代码放在 `io.apocalypse.<业务域>/`，由 Spring Modulith 和 ArchUnit 在 `./mvnw verify` 中检查边界；前端页面放在 `apocalypse-web/src/views/<业务域>/`。项目不提供代码生成器；模块按下列显式接入步骤、现有组件和自动化边界检查开发。不要把 Calendar 的日期领域模型复制为一般业务模板。
+Apocalypse 是单 Maven 模块的模块化单体。业务代码放在 `io.apocalypse.<业务域>/`，由 Spring Modulith 和 ArchUnit 在 `./mvnw verify` 中检查边界；前端页面放在 `apocalypse-web/src/views/<业务域>/`。可通过 `node scripts/create-module.mjs <key> [--title <中文名>] [--dry-run]` 生成符合全套架构门禁的前后端模块骨架与 `V100_<n>__<key>_init.sql` 迁移模板（新项目首次派生时也可使用 `node scripts/rebrand-scaffold.mjs --group <pkg> --artifact <name> --dry-run` 一键重命名工程包路径）；所有模块均遵守下列显式接入步骤、现有组件和自动化边界检查。不要把 Calendar 的日期领域模型复制为一般业务模板。
 
 ## 后端接入顺序
 
@@ -8,7 +8,7 @@ Apocalypse 是单 Maven 模块的模块化单体。业务代码放在 `io.apocal
 2. 在本模块 `infrastructure/config/` 提供一个 `@ModuleConfiguration` 入口，只扫描本域并显式导入运行配置。扫描需排除配置类并保留 `TypeExcludeFilter`，MapperScan 也只能限定本域。常驻的 system 与可选模块采用不同装配方式；需要开关时，先复用 `framework.capability` 的声明、guard 与 `@ConditionalOnCapability`，不要另造前端或 Redis 开关。实际双模块启停参考测试专用的 `src/test/java/io/apocalypse/fixture/` 和 `OptionalModuleLifecycleIT`。
 3. 用 `record` 定义 `dto.request` / `dto.response`。Controller 位于 `controller` 或 `interfaces`，返回裸业务值，由统一响应层包装为 `R<T>`；业务错误抛 `BizException`。持久化对象和 MyBatis-Plus 查询类型留在 mapper/infrastructure，不暴露到模块 API。
 4. 在模块入口声明纯元数据 `PermissionActionDefinition` Bean，列出每个业务动作的 code、moduleKey 与是否支持部门数据范围；可选模块关闭时也必须保留这些声明，不读取运行资源。动作使用 `PermissionActionRegistry.Action.business(code, moduleKey, systemScope)`，code 按 `域:对象:动作` 命名，不占用 `ROLE_` / `SCOPE_`。同一 code 只能声明一次；只有确实接入统一部门范围约束的动作才声明 `systemScope=true`。参考 `SystemPermissionActions` 与 `CalendarPermissionActions`。
-5. 数据库 DDL 只新增按顺序命名的 Flyway `V<n>__*.sql`。分别新增 `sys_permission` 动作定义、`sys_menu` C/M 导航、需要的 `sys_role_permission` 业务授权和 `sys_role_navigation` 导航分配；新增定义本身不授予任何角色。定义的 code、module_key 与代码声明一致，导航的 `module_key` 与能力 key 一致。启动校验要求每个代码动作都有对应定义，并拒绝未知的可执行定义或模块归属冲突。历史 F/perms 和 `sys_role_menu` 仅保留迁移证据，不再写入或用于授权；已有迁移不可重写。
+5. 数据库 DDL 只新增 Flyway 迁移脚本，并严格遵守版本区间隔离：平台级迁移占用 `V1.x`（`V1__init.sql`、`V1_<n>__*.sql`），下游业务模块迁移固定在 `V100.x+`（如 `V100_1__<key>_*.sql`），由 `FlywayMigrationVersionRulesTest` 自动门禁并开启 `out-of-order: true` 防止上游升级与业务二开冲突。分别新增 `sys_permission` 动作定义、`sys_menu` C/M 导航、需要的 `sys_role_permission` 业务授权和 `sys_role_navigation` 导航分配；新增定义本身不授予任何角色。定义的 code、module_key 与代码声明一致，导航的 `module_key` 与能力 key 一致。启动校验要求每个代码动作都有对应定义，并拒绝未知的可执行定义或模块归属冲突；已有迁移不可重写。
 6. 后端接口用已登记的字面量 `@PreAuthorize("hasAuthority('域:对象:动作')")`。统一 `LiveAuthorizationManagerFactory` 按同一方法调用快照判定当前授权、模块状态、范围和有效期，不以 JWT 里的旧业务权限作依据。含用户归属的数据从登录身份推导 owner，在读取与写入两侧做对象授权。
 
 最小可选模块可以按以下文件清单接入。`<key>` 是同一个能力 key；迁移版本号、权限 ID 与菜单 ID 必须在当前仓库中选择未占用值，不能直接复制别的模块的种子 ID。测试夹具 `src/test/java/io/apocalypse/fixture/` 展示装配写法，但它只在测试 classpath、测试 profile 下生效，不能原样当成生产模块。其隔离测试先执行 Flyway 并准备对应动作定义，再启动模块上下文；新增模块也必须同时满足声明和数据库校验。
@@ -21,10 +21,10 @@ src/main/java/io/apocalypse/<key>/infrastructure/config/*ModuleConfiguration.jav
 src/main/java/io/apocalypse/<key>/infrastructure/config/*RuntimeConfiguration.java
 src/main/java/io/apocalypse/<key>/infrastructure/config/*PermissionActions.java
 src/main/java/io/apocalypse/<key>/interfaces/*Controller.java
-src/main/resources/db/migration/V<n>__<key>_*.sql
+src/main/resources/db/migration/V100_1__<key>_*.sql
 ```
 
-需要缓存的读结果使用 `@Cacheable(sync = true)` 与脚手架两级缓存，不直接读写 Redis。缓存值进入 Redis 前必须在 `SafeRedisValueSerializer` 的固定类型注册表登记，未登记类型写入即失败。默认 TTL 为全局 `apocalypse.cache.l1/l2`；可以容忍有界滞后的聚合结果用 `apocalypse.cache.caches.<name>.max-age-seconds` 设定上限，任一层都不会返回计算后超过该秒数的值。不得缓存含用户数据范围或有效期判定的最终允许结果。
+需要缓存的读结果使用 `@Cacheable(sync = true)` 与脚手架两级缓存，不直接读写 Redis。缓存值进入 Redis 前必须在模块入口提供 `RedisCacheTypeRegistration` Bean 向 `SafeRedisValueSerializer` 登记 `typeId -> Class` 映射，未登记类型写入即失败。默认 TTL 为全局 `apocalypse.cache.l1/l2`；可以容忍有界滞后的聚合结果用 `apocalypse.cache.caches.<name>.max-age-seconds` 设定上限，任一层都不会返回计算后超过该秒数的值。不得缓存含用户数据范围或有效期判定的最终允许结果。
 
 ## 授权与导航契约
 

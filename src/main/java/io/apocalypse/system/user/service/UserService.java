@@ -1,12 +1,15 @@
 package io.apocalypse.system.user.service;
 
+import io.apocalypse.common.csv.SafeCsvSupport;
 import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
+import io.apocalypse.framework.security.AuthService;
 import io.apocalypse.framework.security.LiveAuthorizationService;
 import io.apocalypse.framework.security.LoginUser;
 import io.apocalypse.framework.security.LoginUserQuery;
+import io.apocalypse.framework.security.OnlineUserRegistry;
 import io.apocalypse.framework.security.PasswordPolicy;
 import io.apocalypse.framework.security.SecurityUtils;
 import io.apocalypse.framework.security.TokenVersionStore;
@@ -19,9 +22,12 @@ import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.service.DeptService;
 import io.apocalypse.system.menu.service.MenuService;
 import io.apocalypse.system.role.service.RoleService;
+import io.apocalypse.system.user.dto.request.SelfPasswordUpdateReq;
+import io.apocalypse.system.user.dto.request.SelfProfileUpdateReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
 import io.apocalypse.system.user.dto.response.CurrentUserResp;
+import io.apocalypse.system.user.dto.response.SelfSessionResp;
 import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.entity.SysUserEntity;
 import io.apocalypse.system.user.mapper.SysUserMapper;
@@ -69,6 +75,10 @@ public class UserService implements UserApi, LoginUserQuery {
   private final PasswordEncoder passwordEncoder;
 
   private final TokenVersionStore tokenVersionStore;
+
+  private final OnlineUserRegistry onlineUserRegistry;
+
+  private final AuthService authService;
 
   /**
    * 自代理引用：让 {@link #getById(Long)} 复用 {@link #getIdentityDetail(Long)} 的缓存（直接 this 调用会绕过 AOP 代理）。
@@ -163,6 +173,35 @@ public class UserService implements UserApi, LoginUserQuery {
             includeChildren)
         .map(userConvert::toResp)
         .map(this::withDeptName);
+  }
+
+  /** 按当前授权数据范围导出用户 CSV（UTF-8 BOM + 公式注入防护，单次上限 2000 行）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public byte[] exportCsv(String keyword, Long deptId, boolean includeChildren) {
+    DataScopeResp scope = dataScopeService.resolve("system:user:list");
+    List<List<String>> rows = new java.util.ArrayList<>();
+    int pageSize = 200;
+    for (int pageNo = 1; pageNo <= 10; pageNo++) {
+      PageResult<UserResp> batch =
+          sysUserMapper
+              .pageByKeyword(pageNo, pageSize, keyword, scope, deptId, includeChildren)
+              .map(userConvert::toResp)
+              .map(this::withDeptName);
+      for (UserResp u : batch.list()) {
+        rows.add(
+            List.of(
+                u.id() == null ? "" : String.valueOf(u.id()),
+                u.username() == null ? "" : u.username(),
+                u.nickname() == null ? "" : u.nickname(),
+                u.deptName() == null ? "" : u.deptName(),
+                u.status() != null && u.status() == SysUserEntity.STATUS_ENABLED ? "正常" : "停用",
+                u.createTime() == null ? "" : u.createTime().toString().replace('T', ' ')));
+      }
+      if (batch.list().size() < pageSize || rows.size() >= batch.total()) {
+        break;
+      }
+    }
+    return SafeCsvSupport.writeUtf8BomCsv(List.of("用户ID", "用户名", "昵称", "部门", "状态", "创建时间"), rows);
   }
 
   /** 新增用户。密码按 {@link PasswordPolicy} 校验强度（登录不校验，仅新建/重置校验）。 */
@@ -304,6 +343,61 @@ public class UserService implements UserApi, LoginUserQuery {
         authorization.evaluatedAt(),
         authorization.nextTransitionAt(),
         authorization.allScopePerms());
+  }
+
+  /** 当前登录用户自助修改个人资料（仅允许修改自身展示昵称）。 */
+  @Transactional
+  @CacheEvict(cacheNames = "user", key = "#userId")
+  public UserResp updateSelfProfile(Long userId, SelfProfileUpdateReq req) {
+    SysUserEntity entity = requireById(userId);
+    entity.setNickname(req.nickname().trim());
+    entity.setUpdateBy(entity.getUsername());
+    ConcurrencyGuard.requireSingleRow(sysUserMapper.updateById(entity));
+    return withDeptName(userConvert.toResp(sysUserMapper.selectById(userId)));
+  }
+
+  /** 当前登录用户自助修改密码：核验原密码 + 校验新密码强度 + 递增凭证版本全量撤销旧令牌。 */
+  @Transactional
+  @CacheEvict(cacheNames = "user", key = "#userId")
+  public void changeSelfPassword(Long userId, SelfPasswordUpdateReq req) {
+    SysUserEntity entity = requireById(userId);
+    if (!passwordEncoder.matches(req.oldPassword(), entity.getPassword())) {
+      throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "原密码不正确");
+    }
+    PasswordPolicy.validate(req.newPassword());
+    entity.setPassword(passwordEncoder.encode(req.newPassword()));
+    entity.setUpdateBy(entity.getUsername());
+    ConcurrencyGuard.requireSingleRow(sysUserMapper.updateById(entity));
+    authService.revokeAllSessions(entity.getUsername());
+  }
+
+  /** 当前登录用户的活跃在线会话列表。 */
+  public List<SelfSessionResp> listSelfSessions(String username, String currentJti) {
+    return onlineUserRegistry.listByUsername(username).stream()
+        .map(
+            session ->
+                new SelfSessionResp(
+                    session.jti(),
+                    session.user().loginTime(),
+                    session.user().ip(),
+                    session.user().userAgent(),
+                    Objects.equals(currentJti, session.jti())))
+        .toList();
+  }
+
+  /** 当前登录用户自助下线单条设备会话（严格校验会话归属当前用户，防横向越权）。 */
+  public void revokeSelfSession(String username, String jti) {
+    onlineUserRegistry
+        .find(jti)
+        .filter(user -> username.equals(user.username()))
+        .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "会话不存在或已下线"));
+    authService.kickUser(jti);
+  }
+
+  /** 当前登录用户自助注销全部设备会话（递增数据库凭证版本并清理全部在线条目）。 */
+  @Transactional
+  public void revokeAllSelfSessions(String username) {
+    authService.revokeAllSessions(username);
   }
 
   private SysUserEntity requireById(Long id) {

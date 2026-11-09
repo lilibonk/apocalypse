@@ -38,9 +38,10 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 认证服务：账密登录（走 {@link LoginUserQuery} 防腐端口）与 client_credentials 服务账号令牌。
  *
- * <p>账密登录内置登录安全四件套之二的失败锁定与审计：失败时 {@code INCR apoc:login:fail:{username}}（首次设 10 分钟 TTL），累计 ≥5 次直接抛
- * 42901 锁定；成功登录后清除计数。成功/失败分别发布 {@link LoginSucceededEvent} / {@link LoginFailedEvent}（system 域异步落
- * sys_login_log）；签发的用户令牌带 {@code jti} 并注册在线条目。
+ * <p>账密登录内置登录安全四件套之二的失败锁定与审计：失败时 {@code INCR apoc:login:fail:{username}:{ip}}（首次设 10 分钟 TTL），累计 ≥5
+ * 次直接抛 42901 锁定（按账号+来源 IP 隔离，防止单一攻击源通过伪造失败尝试全局锁死管理员账号）；成功登录后清除计数。成功/失败分别发布 {@link
+ * LoginSucceededEvent} / {@link LoginFailedEvent}（system 域异步落 sys_login_log）；签发的用户令牌带 {@code jti}
+ * 并注册在线条目。
  *
  * <p>登录签发双令牌：access token（TTL 走 {@code jwt.ttl-minutes}）+ refresh token（claim {@code
  * type=refresh}，TTL 走 {@code jwt.refresh-ttl-days}，默认 7 天）。refresh 采用旋转机制：旧 refresh jti
@@ -102,7 +103,7 @@ public class AuthService {
     if (query == null) {
       return Optional.empty();
     }
-    String failKey = LOGIN_FAIL_PREFIX + username;
+    String failKey = failKey(username, ip);
     if (failCount(failKey) >= MAX_FAIL_COUNT) {
       throw new BizException(ErrorCode.ACCOUNT_LOCKED);
     }
@@ -209,29 +210,35 @@ public class AuthService {
     return issueToken(user, ip, userAgent);
   }
 
-  /** 管理员强退所选用户的全部设备；在线条目仅用于解析用户，撤销以数据库凭证代次为准。 */
+  /**
+   * 管理员按所选会话（jti）精准强退该单会话（accessJti + refreshJti 联动拉黑，不影响该用户其他设备）；全设备撤销使用 {@link
+   * #revokeAllSessions(String)}。
+   */
   @Transactional
   public void kickUser(String jti) {
-    String username =
-        onlineUserRegistry
-            .find(jti)
-            .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "在线条目已失效，请刷新列表后重试"))
-            .username();
-    revokeAllSessions(username);
+    onlineUserRegistry
+        .find(jti)
+        .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "在线条目已失效，请刷新列表后重试"));
+    onlineUserRegistry.kick(jti);
   }
 
-  /** 主动注销采用持久化凭证代次，可靠撤销该用户全部 access/refresh token；Redis 在线条目同步清理，仅作为快速路径和在线视图。 */
+  /** 当前会话主动注销：仅吊销当前会话的 access/refresh 令牌对并移除其在线条目，不影响同一账号在其他设备的会话。 */
   @Transactional
   public void logout(Jwt accessToken) {
     if (accessToken == null
         || !TOKEN_TYPE_ACCESS.equals(accessToken.getClaimAsString("type"))
+        || !StringUtils.hasText(accessToken.getId())
         || !StringUtils.hasText(accessToken.getSubject())) {
       throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
     }
-    revokeAllSessions(accessToken.getSubject());
+    revokeSessionTokens(
+        accessToken.getId(),
+        accessToken.getClaimAsString("rtj"),
+        accessToken.getIssuedAt(),
+        accessToken.getExpiresAt());
   }
 
-  /** 浏览器即使 access 已过期，也可用仍有效的 HttpOnly refresh 持久化注销全部会话。 */
+  /** 浏览器即使内存 access 已过期，也可用仍有效的 HttpOnly refresh 精准注销当前浏览器会话。 */
   @Transactional
   public void logoutRefresh(String refreshToken) {
     Jwt jwt;
@@ -263,10 +270,15 @@ public class AuthService {
             jwt.getId(), Duration.between(Instant.now(), jwt.getExpiresAt()))) {
       throw new BizException(ErrorCode.UNAUTHORIZED.getCode(), "凭证已失效");
     }
-    revokeAllSessions(user.username());
+    Instant issuedAt = jwt.getIssuedAt() != null ? jwt.getIssuedAt() : Instant.now();
+    Instant accessExpiresAt =
+        issuedAt.plusSeconds(securityProperties.getJwt().getTtlMinutes() * 60L);
+    revokeSessionTokens(jwt.getClaimAsString("atj"), jwt.getId(), issuedAt, accessExpiresAt);
   }
 
-  private void revokeAllSessions(String username) {
+  /** 持久化递增用户凭证代次并清理全部 Redis 在线会话（用于“注销全部设备”、管理员全设备强退、改密与禁用账号）。 */
+  @Transactional
+  public void revokeAllSessions(String username) {
     tokenVersionStore.invalidateCredential(username);
     try {
       onlineUserRegistry.kickAll(username);
@@ -276,16 +288,40 @@ public class AuthService {
     }
   }
 
+  private void revokeSessionTokens(
+      String accessJti, String refreshJti, Instant issuedAt, Instant accessExpiresAt) {
+    Instant now = Instant.now();
+    if (StringUtils.hasText(accessJti)) {
+      try {
+        onlineUserRegistry.kick(accessJti);
+      } catch (RuntimeException e) {
+        log.warn("单会话在线条目清理异常，继续执行令牌黑名单兜底: {}", e.getMessage());
+      }
+      Instant effectiveAccessExpiry =
+          accessExpiresAt != null
+              ? accessExpiresAt
+              : now.plusSeconds(securityProperties.getJwt().getTtlMinutes() * 60L);
+      onlineUserRegistry.blacklist(accessJti, Duration.between(now, effectiveAccessExpiry));
+    }
+    if (StringUtils.hasText(refreshJti)) {
+      Instant base = issuedAt != null ? issuedAt : now;
+      Instant refreshExpiresAt =
+          base.plus(Duration.ofDays(securityProperties.getJwt().getRefreshTtlDays()));
+      onlineUserRegistry.blacklist(refreshJti, Duration.between(now, refreshExpiresAt));
+    }
+  }
+
   /**
    * 用户令牌对：access token 的 {@code authorities} claim = permissions 原样 + roles 加 {@code ROLE_} 前缀； 不带
-   * scope claim（scope 仅用于 client 令牌，见 {@link #issueClientToken}）。access {@code jti} 用于在线注册与黑名单强退；
-   * refresh token 独立 jti + {@code type=refresh} claim + {@code atj} 关联 access jti（旋转时注销旧在线条目），
-   * 不携带权限。
+   * scope claim（scope 仅用于 client 令牌，见 {@link #issueClientToken}）。access {@code jti} 用于在线注册与黑名单强退，
+   * {@code rtj} 关联配对的 refresh jti；refresh token 独立 jti + {@code type=refresh} claim + {@code atj}
+   * 关联 access jti（旋转或单会话注销时互相关联），不携带权限。
    */
   private TokenResponse issueToken(LoginUser user, String ip, String userAgent) {
     Instant now = Instant.now();
     long ttlSeconds = securityProperties.getJwt().getTtlMinutes() * 60;
     String accessJti = UUID.randomUUID().toString();
+    String refreshJti = UUID.randomUUID().toString();
     List<String> authorities = new ArrayList<>(user.permissions());
     user.roles().stream().map(role -> "ROLE_" + role).forEach(authorities::add);
     TokenVersionStore.VersionSnapshot versions = user.versions();
@@ -299,12 +335,12 @@ public class AuthService {
             .expiresAt(now.plusSeconds(ttlSeconds))
             .claim("type", TOKEN_TYPE_ACCESS)
             .claim("uid", user.id())
+            .claim("rtj", refreshJti)
             .claim("authorities", authorities)
             .claim("av", versions.globalAuthorization())
             .claim("uv", versions.userAuthorization())
             .claim("cv", versions.credential())
             .build();
-    String refreshJti = UUID.randomUUID().toString();
     JwtClaimsSet refreshClaims =
         JwtClaimsSet.builder()
             .issuer(securityProperties.getJwt().getIssuer())
@@ -320,6 +356,11 @@ public class AuthService {
             .build();
     onlineUserRegistry.register(accessJti, refreshJti, user.username(), ip, userAgent);
     return new TokenResponse(encode(accessClaims), encode(refreshClaims), "Bearer", ttlSeconds);
+  }
+
+  private static String failKey(String username, String ip) {
+    String normalizedIp = StringUtils.hasText(ip) ? ip.trim() : "unknown";
+    return LOGIN_FAIL_PREFIX + username + ":" + normalizedIp;
   }
 
   /** 当前失败计数（key 不存在视为 0）。 */

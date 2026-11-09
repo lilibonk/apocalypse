@@ -7,9 +7,10 @@ import io.apocalypse.system.menu.entity.SysMenuEntity;
 import io.apocalypse.system.menu.mapper.SysMenuMapper;
 import io.apocalypse.system.menu.service.MenuService;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -32,74 +34,21 @@ import org.springframework.mock.env.MockEnvironment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 在独立同构 schema 中真实执行冻结 V1 -> V2，检查每个角色的来源而非只比较数量。 */
+/** 验证单一 V1 交付基线的独立业务权限、C/M 导航语义，以及“平台 V1.x + 下游业务 V100.x”迁移演进互操作性。 */
 class PermissionMigrationIT extends AbstractIntegrationTest {
 
   @Test
-  void preservesExactIdentitiesDormantSourcesAndPerRoleEnabledState() {
-    inV1Schema(
+  void unifiedV1BaselineContainsCleanTablesAndExactDeclaredPermissions() {
+    inFreshV1Schema(
         jdbc -> {
-          jdbc.update(
-              """
-          INSERT INTO sys_role(id, role_name, role_key, status, data_scope)
-          VALUES (70001, 'enabled', 'migration-enabled', 1, 'DEPT'),
-                 (70002, 'disabled', 'migration-disabled', 0, 'ALL')
-          """);
-          jdbc.update(
-              """
-          INSERT INTO sys_menu(id, menu_name, menu_type, perms, status, visible)
-          VALUES (70001, 'one', 'C', 'migration:exact', 1, 0),
-                 (70002, 'two', 'M', 'migration:exact', 0, 1),
-                 (70003, 'spaces', 'F', ' migration:exact ', 1, 0),
-                 (70004, 'deleted', 'F', 'migration:deleted', 1, 0)
-          """);
-          jdbc.update("UPDATE sys_menu SET deleted = 1 WHERE id = 70004");
-          jdbc.update(
-              """
-          INSERT INTO sys_role_menu(role_id, menu_id)
-          VALUES (70001,70001), (70002,70002), (70001,70003), (70002,70004)
-          """);
-          var original =
-              jdbc.queryForList(
-                  """
-          SELECT rm.role_id, m.perms AS code, r.data_scope
-          FROM sys_role_menu rm JOIN sys_menu m ON m.id = rm.menu_id JOIN sys_role r ON r.id = rm.role_id
-          WHERE m.deleted = 0 AND m.status = 1 AND r.deleted = 0 AND r.status = 1
-            AND m.perms IS NOT NULL AND m.perms <> ''
-          GROUP BY rm.role_id, m.perms, r.data_scope ORDER BY rm.role_id, m.perms
-          """);
-          migrateLatest(jdbc);
-          var migrated =
-              jdbc.queryForList(
-                  """
-          SELECT rp.role_id, p.code, r.data_scope
-          FROM sys_role_permission rp JOIN sys_permission p ON p.id = rp.permission_id
-          JOIN sys_role r ON r.id = rp.role_id
-          WHERE rp.enabled AND p.deleted = 0 AND p.status = 1 AND r.deleted = 0 AND r.status = 1
-            AND p.code NOT IN ('system:permission:list','system:permission:edit')
-          ORDER BY rp.role_id,p.code
-          """);
-          assertThat(migrated).isEqualTo(original);
+          assertThat(
+                  jdbc.queryForObject("SELECT to_regclass('sys_role_menu') IS NULL", Boolean.class))
+              .isTrue();
           assertThat(
                   jdbc.queryForObject(
-                      "SELECT status FROM sys_permission WHERE code='migration:exact'",
-                      Integer.class))
-              .isEqualTo(1);
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT enabled FROM sys_role_permission WHERE role_id=70002 AND permission_id=70001",
+                      "SELECT to_regclass('sys_permission_migration_source') IS NULL",
                       Boolean.class))
-              .isFalse();
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT status FROM sys_permission WHERE code='migration:deleted'",
-                      Integer.class))
-              .isZero();
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_permission WHERE code=' migration:exact '",
-                      Integer.class))
-              .isEqualTo(1);
+              .isTrue();
           assertThat(
                   jdbc.queryForObject(
                       "SELECT count(*) FROM sys_role_navigation rn JOIN sys_menu m ON m.id=rn.menu_id WHERE m.menu_type='F'",
@@ -107,24 +56,14 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
               .isZero();
           assertThat(
                   jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_role_navigation WHERE role_id=70002 AND menu_id=70002",
-                      Integer.class))
-              .isEqualTo(1);
-          assertThat(
-                  jdbc.queryForObject(
                       "SELECT lifecycle FROM sys_permission WHERE code='order:create'",
                       String.class))
               .isEqualTo("LEGACY");
           assertThat(
                   jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_permission_migration_source WHERE role_id=70002",
-                      Integer.class))
-              .isEqualTo(2);
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_permission_migration_source WHERE source_version='V2:management-delegation'",
-                      Integer.class))
-              .isPositive();
+                      "SELECT lifecycle FROM sys_permission WHERE code='system:permission:list'",
+                      String.class))
+              .isEqualTo("ACTIVE");
           assertThat(
                   jdbc.queryForObject(
                       "SELECT count(*) FROM sys_menu WHERE component='system/permission/index'",
@@ -134,79 +73,92 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void conflictingModuleOwnershipStopsTheMigration() {
-    inV1Schema(
+  void permissionCatalogueRejectsReservedPrefixesAndInvalidWindowConstraints() {
+    inFreshV1Schema(
         jdbc -> {
-          jdbc.update(
-              """
-          INSERT INTO sys_menu(id,menu_name,menu_type,perms,module_key)
-          VALUES(70001,'conflict','F','system:user:list','calendar')
-          """);
-          assertThatThrownBy(() -> migrateLatest(jdbc))
-              .hasMessageContaining("conflicting module ownership");
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT to_regclass('sys_permission') IS NULL", Boolean.class))
-              .isTrue();
+          assertThatThrownBy(
+                  () ->
+                      jdbc.update(
+                          """
+                          INSERT INTO sys_permission
+                            (id, code, name, resource, action, status, lifecycle, declaration_source)
+                          VALUES (70001, 'ROLE_admin', 'reserved', 'role', 'admin', 1, 'ACTIVE', 'test')
+                          """))
+              .hasMessageContaining("ck_sys_permission_code");
+          assertThatThrownBy(
+                  () ->
+                      jdbc.update(
+                          """
+                          INSERT INTO sys_permission
+                            (id, code, name, resource, action, status, lifecycle, declaration_source)
+                          VALUES (70002, 'SCOPE_read', 'reserved', 'scope', 'read', 1, 'ACTIVE', 'test')
+                          """))
+              .hasMessageContaining("ck_sys_permission_code");
         });
   }
 
   @Test
-  void reservedAuthorityIdentityStopsTheMigration() {
-    inV1Schema(
-        jdbc -> {
-          jdbc.update(
-              "INSERT INTO sys_menu(id,menu_name,menu_type,perms) VALUES(70001,'reserved','F','ROLE_admin')");
-          assertThatThrownBy(() -> migrateLatest(jdbc))
-              .hasMessageContaining("reserved authority prefix");
-        });
+  void platformV1PatchCleanlyAppliesAfterDownstreamBusinessV100Migration(@TempDir Path extraDir)
+      throws Exception {
+    Path v100 = extraDir.resolve("V100_1__crm_customer.sql");
+    Files.writeString(
+        v100,
+        """
+        CREATE TABLE crm_customer (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL
+        );
+        """);
+
+    String schema = "permission_" + UUID.randomUUID().toString().replace("-", "");
+    String url =
+        POSTGRES.getJdbcUrl()
+            + (POSTGRES.getJdbcUrl().contains("?") ? "&" : "?")
+            + "currentSchema="
+            + schema;
+    var source = new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword());
+    try {
+      // 1. 下游项目初始化平台 V1 并应用自己的业务迁移 V100_1
+      Flyway initial =
+          Flyway.configure()
+              .dataSource(source)
+              .schemas(schema)
+              .defaultSchema(schema)
+              .locations("classpath:db/migration", "filesystem:" + extraDir)
+              .outOfOrder(true)
+              .load();
+      assertThat(initial.migrate().migrationsExecuted).isEqualTo(2);
+
+      // 2. 上游平台后续发布 V1_1 平台补丁，下游同步后无冲突应用
+      Path v1Patch = extraDir.resolve("V1_1__platform_audit_comment.sql");
+      Files.writeString(
+          v1Patch, "COMMENT ON TABLE sys_permission IS 'Verified V1.1 upstream patch';");
+
+      Flyway upgraded =
+          Flyway.configure()
+              .dataSource(source)
+              .schemas(schema)
+              .defaultSchema(schema)
+              .locations("classpath:db/migration", "filesystem:" + extraDir)
+              .outOfOrder(true)
+              .load();
+      assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);
+      upgraded.validate();
+
+      var jdbc = new JdbcTemplate(source);
+      assertThat(
+              jdbc.queryForList(
+                  "SELECT version FROM flyway_schema_history WHERE success AND type = 'SQL' ORDER BY installed_rank",
+                  String.class))
+          .containsExactly("1", "100.1", "1.1");
+    } finally {
+      jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+    }
   }
 
   @Test
-  void nonEquivalentMenuManagementEntrypointsRequireReview() {
-    inV1Schema(
-        jdbc -> {
-          jdbc.update(
-              """
-          INSERT INTO sys_menu(id,parent_id,menu_name,menu_type,path,component)
-          VALUES(70001,0,'other','M','other/menu','system/menu/index')
-          """);
-          assertThatThrownBy(() -> migrateLatest(jdbc))
-              .hasMessageContaining("ambiguous menu-management navigation");
-        });
-  }
-
-  @Test
-  void newNavigationPreservesDeletedAndModuleQualifiedEntrypoint() {
-    inV1Schema(
-        jdbc -> {
-          jdbc.update("UPDATE sys_menu SET deleted=1,module_key='fixture',perms=NULL WHERE id=103");
-          jdbc.update(
-              "INSERT INTO sys_menu(id,menu_name,menu_type,perms) VALUES(70001,'independent list','F','system:menu:list')");
-          jdbc.update("INSERT INTO sys_role_menu(role_id,menu_id) VALUES(1,70001)");
-          migrateLatest(jdbc);
-          var navigation =
-              jdbc.queryForMap(
-                  "SELECT id,deleted,module_key FROM sys_menu WHERE component='system/permission/index'");
-          assertThat(navigation.get("deleted")).isEqualTo(1);
-          assertThat(navigation.get("module_key")).isEqualTo("fixture");
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_role_navigation WHERE role_id=1 AND menu_id=?",
-                      Integer.class,
-                      navigation.get("id")))
-              .isEqualTo(1);
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT count(*) FROM sys_role_navigation n JOIN sys_menu m ON m.id=n.menu_id WHERE n.role_id=1 AND m.component='system/permission/index' AND m.deleted=0",
-                      Integer.class))
-              .isZero();
-        });
-  }
-
-  @Test
-  void everyRolesNavigationTreeAndRoutesMatchTheFrozenV1SemanticsAfterMigration() {
-    inV1Schema(
+  void everyRolesNavigationTreeAndRoutesMatchExpectedSemanticsAcrossCapabilities() {
+    inFreshV1Schema(
         jdbc -> {
           jdbc.update(
               """
@@ -238,14 +190,15 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
               """);
           jdbc.update(
               """
-              INSERT INTO sys_role_menu(role_id,menu_id)
+              INSERT INTO sys_role_navigation(role_id,menu_id)
               SELECT r.id,m.id FROM sys_role r CROSS JOIN sys_menu m
-              WHERE r.id BETWEEN 71001 AND 71003
+              WHERE r.id BETWEEN 71001 AND 71003 AND m.menu_type IN ('C', 'M')
               """);
           jdbc.update(
               """
-              INSERT INTO sys_role_menu(role_id,menu_id)
-              SELECT 71004,id FROM sys_menu WHERE id IN (160,161,162,163,164,165,71101,71105,71106,71108)
+              INSERT INTO sys_role_navigation(role_id,menu_id)
+              SELECT 71004,id FROM sys_menu
+              WHERE id IN (160,71101,71105,71106,71108) AND menu_type IN ('C', 'M')
               """);
           List<Long> roles = jdbc.queryForList("SELECT id FROM sys_role ORDER BY id", Long.class);
           for (Long roleId : roles) {
@@ -257,34 +210,11 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
                 "unused-fixture-password");
             jdbc.update("INSERT INTO sys_user_role(user_id,role_id) VALUES(?,?)", userId, roleId);
           }
-          Map<Boolean, Map<Long, List<MenuTreeNode>>> before = new HashMap<>();
-          for (boolean calendar : List.of(false, true)) {
-            Map<Long, List<MenuTreeNode>> byRole = new HashMap<>();
-            for (Long roleId : roles) {
-              byRole.put(roleId, frozenV1Navigation(jdbc, 800000 + roleId, capabilities(calendar)));
-            }
-            before.put(calendar, byRole);
-          }
-          assertThat(routes(before.get(false).get(71001L)))
-              .extracting(RouteView::path)
-              .contains("/fixture/child", "/orphan", "/absolute/segment", "/absolute-route")
-              .doesNotContain(
-                  "/fixture/hidden",
-                  "/fixture/disabled",
-                  "/fixture/deleted",
-                  "/fixture/unknown/child",
-                  "/fixture/optional/child");
-          assertThat(routes(before.get(true).get(71001L)))
-              .extracting(RouteView::path)
-              .contains("/fixture/optional/child");
-          assertThat(before.get(false).get(71002L)).isEmpty();
-          assertThat(before.get(false).get(71003L)).isEmpty();
 
-          migrateLatest(jdbc);
           Configuration configuration = new Configuration();
           configuration.setMapUnderscoreToCamelCase(true);
           configuration.setEnvironment(
-              new Environment("migration-v2", new JdbcTransactionFactory(), jdbc.getDataSource()));
+              new Environment("baseline-v1", new JdbcTransactionFactory(), jdbc.getDataSource()));
           configuration.addMapper(SysMenuMapper.class);
           try (var session = new SqlSessionFactoryBuilder().build(configuration).openSession()) {
             for (boolean calendar : List.of(false, true)) {
@@ -298,19 +228,35 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
                       null,
                       null);
               for (Long roleId : roles) {
-                List<MenuTreeNode> expected = before.get(calendar).get(roleId);
-                List<MenuTreeNode> complete = production.treeByUserId(800000 + roleId);
-                assertThat(countComponent(complete, "system/permission/index"))
-                    .as("the only added route follows the existing management entry qualification")
-                    .isEqualTo(countComponent(expected, "system/menu/index"));
-                List<MenuTreeNode> actual = canonicalNavigation(complete);
+                List<MenuTreeNode> expected =
+                    expectedNavigation(jdbc, 800000 + roleId, capabilities(calendar));
+                List<MenuTreeNode> actual =
+                    canonicalNavigation(production.treeByUserId(800000 + roleId));
                 assertThat(actual)
-                    .as("all existing navigation fields: role=%s calendar=%s", roleId, calendar)
+                    .as("all navigation fields: role=%s calendar=%s", roleId, calendar)
                     .isEqualTo(expected);
                 assertThat(routes(actual))
                     .as("every effective route: role=%s calendar=%s", roleId, calendar)
                     .isEqualTo(routes(expected));
               }
+              List<MenuTreeNode> activeRoutes = production.treeByUserId(800000 + 71001L);
+              if (!calendar) {
+                assertThat(routes(activeRoutes))
+                    .extracting(RouteView::path)
+                    .contains("/fixture/child", "/orphan", "/absolute/segment", "/absolute-route")
+                    .doesNotContain(
+                        "/fixture/hidden",
+                        "/fixture/disabled",
+                        "/fixture/deleted",
+                        "/fixture/unknown/child",
+                        "/fixture/optional/child");
+              } else {
+                assertThat(routes(activeRoutes))
+                    .extracting(RouteView::path)
+                    .contains("/fixture/optional/child");
+              }
+              assertThat(production.treeByUserId(800000 + 71002L)).isEmpty();
+              assertThat(production.treeByUserId(800000 + 71003L)).isEmpty();
             }
           }
           assertThat(
@@ -319,31 +265,21 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
                       Integer.class))
               .as("disabled role and disabled navigation relationship remain stored")
               .isEqualTo(1);
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT lifecycle FROM sys_permission WHERE code='order:create'",
-                      String.class))
-              .isEqualTo("LEGACY");
-          assertThat(
-                  jdbc.queryForObject(
-                      "SELECT module_key FROM sys_permission WHERE code='migration:unknown'",
-                      String.class))
-              .isEqualTo("unknown-module");
         });
   }
 
-  /** Frozen V1 query and returned-ancestor rules; F nodes were never frontend navigation routes. */
-  private static List<MenuTreeNode> frozenV1Navigation(
+  private static List<MenuTreeNode> expectedNavigation(
       JdbcTemplate jdbc, long userId, CapabilityRegistry capabilities) {
     List<SysMenuEntity> menus =
         jdbc.query(
             """
             SELECT DISTINCT m.* FROM sys_menu m
-            JOIN sys_role_menu rm ON m.id=rm.menu_id
+            JOIN sys_role_navigation rm ON m.id=rm.menu_id
             JOIN sys_role r ON rm.role_id=r.id
             JOIN sys_user_role ur ON rm.role_id=ur.role_id
             WHERE ur.user_id=? AND r.deleted=0 AND r.status=1
-              AND m.deleted=0 AND m.status=1 AND m.visible=1 ORDER BY m.sort
+              AND m.deleted=0 AND m.status=1 AND m.visible=1 AND m.menu_type IN ('C', 'M')
+            ORDER BY m.sort
             """,
             new BeanPropertyRowMapper<>(SysMenuEntity.class),
             userId);
@@ -398,8 +334,6 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
   private static List<MenuTreeNode> canonicalNavigation(List<MenuTreeNode> nodes) {
     return nodes.stream()
         .filter(node -> !"F".equals(node.type()))
-        // This is the approved new management entry, not an unexplained difference in old routes.
-        .filter(node -> !"system/permission/index".equals(node.component()))
         .sorted(Comparator.comparing(MenuTreeNode::sort).thenComparing(MenuTreeNode::id))
         .map(
             node ->
@@ -428,16 +362,6 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
             .withProperty("apocalypse.capabilities.calendar.enabled", Boolean.toString(calendar)));
   }
 
-  private static long countComponent(List<MenuTreeNode> nodes, String component) {
-    return nodes.stream()
-        .mapToLong(
-            node ->
-                (component.equals(node.component()) ? 1 : 0)
-                    + countComponent(node.children(), component))
-        .sum();
-  }
-
-  /** Same route contract as flattenMenuRoutes: absolute/multi-segment paths reset the parent. */
   private static List<RouteView> routes(List<MenuTreeNode> nodes) {
     List<RouteView> result = new ArrayList<>();
     appendRoutes(nodes, "", null, result);
@@ -467,7 +391,7 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
   private record RouteView(
       String path, String title, String component, String icon, String moduleKey) {}
 
-  private void inV1Schema(Consumer<JdbcTemplate> test) {
+  private void inFreshV1Schema(Consumer<JdbcTemplate> test) {
     String schema = "permission_" + UUID.randomUUID().toString().replace("-", "");
     String url =
         POSTGRES.getJdbcUrl()
@@ -476,20 +400,10 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
             + schema;
     var source = new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword());
     try {
-      Flyway.configure()
-          .dataSource(source)
-          .schemas(schema)
-          .defaultSchema(schema)
-          .target("1")
-          .load()
-          .migrate();
+      Flyway.configure().dataSource(source).schemas(schema).defaultSchema(schema).load().migrate();
       test.accept(new JdbcTemplate(source));
     } finally {
       jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
     }
-  }
-
-  private static void migrateLatest(JdbcTemplate jdbc) {
-    Flyway.configure().dataSource(jdbc.getDataSource()).load().migrate();
   }
 }

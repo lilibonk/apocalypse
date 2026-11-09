@@ -7,17 +7,26 @@ import io.apocalypse.framework.log.OperLog;
 import io.apocalypse.framework.security.SecurityUtils;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.user.dto.request.ResetPasswordReq;
+import io.apocalypse.system.user.dto.request.SelfPasswordUpdateReq;
+import io.apocalypse.system.user.dto.request.SelfProfileUpdateReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
 import io.apocalypse.system.user.dto.response.CurrentUserResp;
+import io.apocalypse.system.user.dto.response.SelfSessionResp;
 import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.service.UserService;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -51,6 +60,51 @@ public class UserController {
     return userService.currentUser(userId);
   }
 
+  /** 当前登录用户自助修改个人资料（昵称）。 */
+  @PutMapping("/me/profile")
+  @OperLog(title = "个人中心", businessType = "UPDATE")
+  public UserResp updateMyProfile(@Validated @RequestBody SelfProfileUpdateReq req) {
+    Long userId =
+        SecurityUtils.currentUserId().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    return userService.updateSelfProfile(userId, req);
+  }
+
+  /** 当前登录用户自助修改密码（验证原密码后递增凭证版本，废止全部旧会话）。 */
+  @PutMapping("/me/password")
+  @OperLog(title = "个人中心", businessType = "UPDATE")
+  public void updateMyPassword(@Validated @RequestBody SelfPasswordUpdateReq req) {
+    Long userId =
+        SecurityUtils.currentUserId().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    userService.changeSelfPassword(userId, req);
+  }
+
+  /** 当前登录用户的活跃在线设备会话列表。 */
+  @GetMapping("/me/sessions")
+  public List<SelfSessionResp> mySessions() {
+    String username =
+        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    String currentJti = SecurityUtils.currentSessionJti().orElse(null);
+    return userService.listSelfSessions(username, currentJti);
+  }
+
+  /** 当前登录用户自助下线指定设备会话。 */
+  @DeleteMapping("/me/sessions/{jti}")
+  @OperLog(title = "个人中心", businessType = "FORCE")
+  public void revokeMySession(@PathVariable String jti) {
+    String username =
+        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    userService.revokeSelfSession(username, jti);
+  }
+
+  /** 当前登录用户自助注销全部设备会话。 */
+  @DeleteMapping("/me/sessions")
+  @OperLog(title = "个人中心", businessType = "FORCE")
+  public void revokeAllMySessions() {
+    String username =
+        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    userService.revokeAllSelfSessions(username);
+  }
+
   /** 分页查询。 */
   @GetMapping("/page")
   @PreAuthorize("hasAuthority('system:user:list')")
@@ -64,6 +118,25 @@ public class UserController {
       @RequestParam(required = false) Long deptId,
       @RequestParam(defaultValue = "false") boolean includeChildren) {
     return userService.page(page, size, keyword, deptId, includeChildren);
+  }
+
+  /** 按当前授权数据范围导出用户 CSV（带 UTF-8 BOM 与公式注入防护）。 */
+  @GetMapping("/export")
+  @PreAuthorize("hasAuthority('system:user:list')")
+  @OperLog(title = "用户管理", businessType = "EXPORT")
+  public ResponseEntity<byte[]> exportCsv(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Long deptId,
+      @RequestParam(defaultValue = "false") boolean includeChildren) {
+    byte[] bytes = userService.exportCsv(keyword, deptId, includeChildren);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
+    headers.setContentLength(bytes.length);
+    headers.setContentDisposition(
+        ContentDisposition.attachment().filename("users.csv", StandardCharsets.UTF_8).build());
+    headers.setCacheControl(CacheControl.noStore());
+    headers.set("X-Content-Type-Options", "nosniff");
+    return ResponseEntity.ok().headers(headers).body(bytes);
   }
 
   @GetMapping("/department-options")

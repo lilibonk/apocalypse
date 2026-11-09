@@ -47,6 +47,18 @@ public interface SysOperLogMapper extends BaseMapper<SysOperLogEntity> {
   @Delete("DELETE FROM sys_oper_log WHERE oper_time < #{cutoff}")
   int deleteBefore(java.time.LocalDateTime cutoff);
 
+  @Delete(
+      """
+      DELETE FROM sys_oper_log
+      WHERE id IN (
+        SELECT id FROM sys_oper_log
+        WHERE oper_time < #{cutoff}
+        ORDER BY oper_time ASC
+        LIMIT #{limit}
+      )
+      """)
+  int deleteBatchBefore(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
+
   /** 按操作人关键字分页（按操作时间倒序）。 */
   default PageResult<SysOperLogEntity> pageByKeyword(int page, int size, String keyword) {
     LambdaQueryWrapper<SysOperLogEntity> wrapper = new LambdaQueryWrapper<>();

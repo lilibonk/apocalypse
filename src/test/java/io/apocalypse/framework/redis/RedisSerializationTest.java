@@ -86,4 +86,28 @@ class RedisSerializationTest {
     assertThatThrownBy(() -> restricted.deserialize(attackerControlledPayload))
         .isInstanceOf(SerializationException.class);
   }
+
+  public record CustomModuleView(Long id, String code) {}
+
+  @Test
+  void customModuleRegistrationRoundTripsAndRejectsReservedOrConflictingTypeIds() {
+    RedisCacheTypeRegistration custom =
+        RedisCacheTypeRegistration.builder()
+            .single("custom-module-view", CustomModuleView.class)
+            .list("custom-module-view-list", CustomModuleView.class)
+            .build();
+    SafeRedisValueSerializer serializer =
+        new SafeRedisValueSerializer(new ObjectMapper(), List.of(custom));
+    CustomModuleView view = new CustomModuleView(100L, "CRM-01");
+
+    assertThat(serializer.deserialize(serializer.serialize(view))).isEqualTo(view);
+    assertThat(serializer.deserialize(serializer.serialize(List.of(view))))
+        .isEqualTo(List.of(view));
+
+    RedisCacheTypeRegistration reserved =
+        RedisCacheTypeRegistration.builder().single("string", CustomModuleView.class).build();
+    assertThatThrownBy(() -> new SafeRedisValueSerializer(new ObjectMapper(), List.of(reserved)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("reserved");
+  }
 }

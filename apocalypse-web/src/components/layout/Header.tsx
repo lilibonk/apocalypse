@@ -3,7 +3,7 @@
  * layout='topbar' / 'mixed' 时兼任顶部主导航（顶层菜单横排）。
  */
 
-import { ChevronsLeft, LogOut, Menu, Moon, Search, Settings2, Sun } from 'lucide-react'
+import { ChevronsLeft, LogOut, Menu, Moon, Search, Settings2, Sun, UserCog } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
@@ -33,6 +33,7 @@ interface HeaderProps {
   onOpenMobileNav: () => void
   onOpenCommand: () => void
   onOpenSettings: () => void
+  onOpenProfile?: () => void
   /** topbar / mixed 模式传入顶层菜单。 */
   topMenus?: MenuNode[]
 }
@@ -43,6 +44,7 @@ export function Header({
   onOpenMobileNav,
   onOpenCommand,
   onOpenSettings,
+  onOpenProfile,
   topMenus,
 }: HeaderProps) {
   const navigate = useNavigate()
@@ -178,6 +180,12 @@ export function Header({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          {onOpenProfile && (
+            <DropdownMenuItem onClick={onOpenProfile}>
+              <UserCog className="size-4" />
+              {t('common.个人中心', { defaultValue: '个人中心' })}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => void handleLogout()} disabled={loggingOut}>
             <LogOut className="size-4" />
             {t('common.退出登录', { defaultValue: '退出登录' })}

@@ -210,6 +210,10 @@ export interface DynaPageSchema {
   createRequiresAllScope?: boolean
   /** 新增按钮文案（默认 `新增${entityName ?? ''}`）。 */
   createLabel?: string
+  /** 顶部「导出 CSV」按钮权限串（请求 GET {endpoint}/export）；缺省不渲染导出按钮。 */
+  exportPerm?: string
+  /** 导出文件名（默认 `${key}.csv`）。 */
+  exportFileName?: string
   search?: DynaSearchField[]
   columns: DynaColumn[]
   form?: {
@@ -389,6 +393,8 @@ export const pageSchemaValidator = z
     createPerm: permsString.optional(),
     createRequiresAllScope: z.boolean().optional(),
     createLabel: z.string().optional(),
+    exportPerm: permsString.optional(),
+    exportFileName: z.string().min(1).optional(),
     search: z.array(searchFieldSchema).optional(),
     columns: z.array(columnSchema).min(1, 'columns 至少一列'),
     form: z

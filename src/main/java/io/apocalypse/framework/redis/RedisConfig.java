@@ -1,5 +1,6 @@
 package io.apocalypse.framework.redis;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -18,11 +19,14 @@ public class RedisConfig {
    */
   @Bean
   public RedisTemplate<String, Object> redisTemplate(
-      RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
+      RedisConnectionFactory connectionFactory,
+      ObjectMapper objectMapper,
+      ObjectProvider<RedisCacheTypeRegistration> registrations) {
     RedisTemplate<String, Object> template = new RedisTemplate<>();
     template.setConnectionFactory(connectionFactory);
     StringRedisSerializer stringSerializer = new StringRedisSerializer();
-    SafeRedisValueSerializer valueSerializer = new SafeRedisValueSerializer(objectMapper);
+    SafeRedisValueSerializer valueSerializer =
+        new SafeRedisValueSerializer(objectMapper, registrations.orderedStream().toList());
     template.setKeySerializer(stringSerializer);
     template.setHashKeySerializer(stringSerializer);
     template.setValueSerializer(valueSerializer);

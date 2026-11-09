@@ -41,7 +41,7 @@ class BootstrapAdminIT extends AbstractIntegrationTest {
                       + schema
                       + ".flyway_schema_history WHERE success AND type = 'SQL' ORDER BY installed_rank",
                   String.class))
-          .containsExactly("1", "2", "3");
+          .containsExactly("1");
       assertThat(
               jdbcTemplate.queryForObject(
                   "SELECT data_scope FROM " + schema + ".sys_role WHERE role_key = 'admin'",

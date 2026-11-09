@@ -18,6 +18,7 @@ import { BrandSignature } from '@/components/BrandSignature'
 import { CommandPalette } from '@/components/layout/CommandPalette'
 import { useRecentRoutes } from '@/stores/recent-routes'
 import { Header } from '@/components/layout/Header'
+import { ProfileDrawer } from '@/components/layout/ProfileDrawer'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TabBar } from '@/components/layout/TabBar'
@@ -51,6 +52,7 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // 路由 → 页签同步；页签存菜单原文，翻译在 TabBar 渲染层实时完成（切语言自动跟随）
@@ -136,6 +138,7 @@ export function AppLayout() {
           onOpenMobileNav={() => setMobileNavOpen(true)}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
           topMenus={topMenus}
         />
         {tabsEnabled && (
@@ -185,6 +188,7 @@ export function AppLayout() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <SettingsDrawer open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   )
 }

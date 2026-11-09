@@ -45,6 +45,21 @@ public interface SysLoginLogMapper extends BaseMapper<SysLoginLogEntity> {
   @Delete("DELETE FROM sys_login_log WHERE login_time < #{cutoff}")
   int deleteBefore(java.time.LocalDateTime cutoff);
 
+  @Delete(
+      """
+      DELETE FROM sys_login_log
+      WHERE id IN (
+        SELECT id FROM sys_login_log
+        WHERE login_time < #{cutoff}
+        ORDER BY login_time ASC
+        LIMIT #{limit}
+      )
+      """)
+  int deleteBatchBefore(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
+
+  @Select("SELECT pg_try_advisory_xact_lock(#{lockKey})")
+  boolean tryAcquireCleanupLock(@Param("lockKey") long lockKey);
+
   /** 按登录名关键字分页（按登录时间倒序）。 */
   default PageResult<SysLoginLogEntity> pageByKeyword(int page, int size, String keyword) {
     LambdaQueryWrapper<SysLoginLogEntity> wrapper = new LambdaQueryWrapper<>();

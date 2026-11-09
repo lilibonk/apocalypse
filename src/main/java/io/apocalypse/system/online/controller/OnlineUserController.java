@@ -42,11 +42,19 @@ public class OnlineUserController {
         .toList();
   }
 
-  /** 按所选会话（jti）确定用户，并强退该用户全部设备。 */
+  /** 按所选会话（jti）精准强退该单会话。 */
   @DeleteMapping("/{jti}")
   @PreAuthorize("hasAuthority('system:online:kick')")
   @OperLog(title = "在线用户", businessType = "FORCE")
   public void kick(@PathVariable String jti) {
     authService.kickUser(jti);
+  }
+
+  /** 强退指定用户的全部设备会话（递增数据库凭证版本并清理全部在线条目）。 */
+  @DeleteMapping("/user/{username}")
+  @PreAuthorize("hasAuthority('system:online:kick')")
+  @OperLog(title = "在线用户", businessType = "FORCE")
+  public void kickAllByUsername(@PathVariable String username) {
+    authService.revokeAllSessions(username);
   }
 }

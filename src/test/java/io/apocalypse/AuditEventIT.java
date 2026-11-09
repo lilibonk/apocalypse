@@ -5,6 +5,7 @@ import io.apocalypse.common.event.OperLoggedEvent;
 import io.apocalypse.system.listener.LogPersistListener;
 import io.apocalypse.system.log.mapper.SysLoginLogMapper;
 import io.apocalypse.system.log.mapper.SysOperLogMapper;
+import io.apocalypse.system.log.service.AuditLogCleanup;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -23,6 +24,8 @@ class AuditEventIT extends AbstractIntegrationTest {
   @Autowired private SysLoginLogMapper loginLogMapper;
 
   @Autowired private SysOperLogMapper operLogMapper;
+
+  @Autowired private AuditLogCleanup auditLogCleanup;
 
   @Test
   void duplicateDeliveryCreatesOnlyOneAuditRow() {
@@ -131,7 +134,7 @@ class AuditEventIT extends AbstractIntegrationTest {
               .defaultSchema(schema)
               .locations("classpath:db/migration")
               .load();
-      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(3);
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
       UUID eventId = UUID.randomUUID();
       jdbcTemplate.update(
           "INSERT INTO "
@@ -158,5 +161,37 @@ class AuditEventIT extends AbstractIntegrationTest {
     } finally {
       jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
     }
+  }
+
+  @Test
+  void batchedCleanupDeletesExpiredLogsUnderAdvisoryLock() {
+    UUID expiredEventId = UUID.randomUUID();
+    UUID recentEventId = UUID.randomUUID();
+    LogPersistListener listener = new LogPersistListener(loginLogMapper, operLogMapper);
+    listener.onLoginSucceeded(
+        new LoginSucceededEvent(
+            expiredEventId,
+            LocalDateTime.now().minusDays(200),
+            "expired_user",
+            "127.0.0.1",
+            "test"));
+    listener.onLoginSucceeded(
+        new LoginSucceededEvent(
+            recentEventId, LocalDateTime.now().minusDays(5), "recent_user", "127.0.0.1", "test"));
+
+    auditLogCleanup.cleanup();
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sys_login_log WHERE event_id = ?",
+                Integer.class,
+                expiredEventId))
+        .isZero();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sys_login_log WHERE event_id = ?",
+                Integer.class,
+                recentEventId))
+        .isEqualTo(1);
   }
 }

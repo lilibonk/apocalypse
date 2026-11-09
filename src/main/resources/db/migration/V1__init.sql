@@ -133,16 +133,81 @@ COMMENT ON COLUMN sys_menu.deleted IS '逻辑删除：0=正常 1=已删除';
 CREATE INDEX idx_sys_menu_parent ON sys_menu (parent_id);
 CREATE INDEX idx_sys_menu_sort ON sys_menu (sort);
 
--- ========== 角色-菜单关联 ==========
-CREATE TABLE sys_role_menu (
-    role_id BIGINT NOT NULL REFERENCES sys_role (id),
-    menu_id BIGINT NOT NULL REFERENCES sys_menu (id),
+-- ========== 独立业务权限与导航关联 ==========
+CREATE TABLE sys_permission (
+    id BIGINT PRIMARY KEY,
+    code VARCHAR(128) NOT NULL UNIQUE,
+    name VARCHAR(64) NOT NULL,
+    description VARCHAR(500),
+    module_key VARCHAR(64),
+    resource VARCHAR(128) NOT NULL,
+    action VARCHAR(128) NOT NULL,
+    status SMALLINT NOT NULL DEFAULT 1 CHECK (status IN (0, 1)),
+    lifecycle VARCHAR(16) NOT NULL CHECK (lifecycle IN ('ACTIVE', 'DEPRECATED', 'LEGACY')),
+    declaration_source VARCHAR(256) NOT NULL,
+    remark VARCHAR(500),
+    create_time TIMESTAMP NOT NULL DEFAULT now(),
+    update_time TIMESTAMP NOT NULL DEFAULT now(),
+    create_by VARCHAR(64),
+    update_by VARCHAR(64),
+    version INT NOT NULL DEFAULT 0,
+    deleted INT NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+    CONSTRAINT ck_sys_permission_code CHECK (code <> '' AND code NOT LIKE 'ROLE\_%' ESCAPE '\'
+                                           AND code NOT LIKE 'SCOPE\_%' ESCAPE '\')
+);
+COMMENT ON TABLE sys_permission IS 'Independent business action catalogue; navigation grants no business authority';
+CREATE INDEX idx_sys_permission_module_resource ON sys_permission (module_key, resource);
+
+CREATE TABLE sys_role_permission (
+    role_id BIGINT NOT NULL REFERENCES sys_role(id),
+    permission_id BIGINT NOT NULL REFERENCES sys_permission(id),
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    scope_override VARCHAR(24) NOT NULL DEFAULT 'INHERIT_ROLE'
+        CHECK (scope_override IN ('INHERIT_ROLE', 'ALL', 'DEPT', 'DEPT_AND_CHILDREN')),
+    valid_from TIMESTAMPTZ,
+    valid_until TIMESTAMPTZ,
+    PRIMARY KEY (role_id, permission_id),
+    CONSTRAINT ck_sys_role_permission_window CHECK
+        (valid_from IS NULL OR valid_until IS NULL OR valid_from < valid_until)
+);
+CREATE INDEX idx_sys_role_permission_permission ON sys_role_permission(permission_id);
+CREATE INDEX idx_sys_role_permission_window ON sys_role_permission(role_id, valid_from, valid_until);
+
+CREATE TABLE sys_role_navigation (
+    role_id BIGINT NOT NULL REFERENCES sys_role(id),
+    menu_id BIGINT NOT NULL REFERENCES sys_menu(id),
     PRIMARY KEY (role_id, menu_id)
 );
-COMMENT ON TABLE  sys_role_menu IS '角色-菜单关联';
-COMMENT ON COLUMN sys_role_menu.role_id IS '角色 ID';
-COMMENT ON COLUMN sys_role_menu.menu_id IS '菜单 ID';
-CREATE INDEX idx_sys_role_menu_menu ON sys_role_menu (menu_id);
+CREATE INDEX idx_sys_role_navigation_menu ON sys_role_navigation(menu_id);
+
+CREATE TABLE sys_role_authorization_state (
+    role_id BIGINT PRIMARY KEY REFERENCES sys_role(id),
+    revision BIGINT NOT NULL DEFAULT 0 CHECK (revision >= 0)
+);
+
+CREATE TABLE sys_permission_catalog_state (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    revision BIGINT NOT NULL DEFAULT 0 CHECK (revision >= 0)
+);
+
+CREATE TABLE sys_authorization_audit (
+    id BIGINT PRIMARY KEY,
+    event_id UUID NOT NULL UNIQUE,
+    occurred_at TIMESTAMP NOT NULL,
+    actor_id BIGINT,
+    subject_type VARCHAR(32) NOT NULL,
+    subject_id BIGINT NOT NULL,
+    before_revision BIGINT NOT NULL,
+    after_revision BIGINT NOT NULL,
+    before_configuration TEXT NOT NULL,
+    after_configuration TEXT NOT NULL,
+    diff_hash CHAR(64) NOT NULL,
+    request_id VARCHAR(128)
+);
+CREATE INDEX idx_sys_authorization_audit_time ON sys_authorization_audit(occurred_at);
+CREATE INDEX idx_sys_authorization_audit_subject
+    ON sys_authorization_audit(subject_type, subject_id, occurred_at);
+COMMENT ON TABLE sys_authorization_audit IS 'Append-only complete authorization configuration audit';
 
 
 CREATE TABLE order_info (
@@ -923,6 +988,8 @@ COMMENT ON COLUMN sys_menu.module_key IS '编译期业务能力稳定键；NULL=
 COMMENT ON COLUMN sys_role.data_scope IS 'Operation-specific role scope: ALL / DEPT / DEPT_AND_CHILDREN';
 CREATE INDEX idx_cal_data_import_uploader_created
     ON cal_data_import (uploader_user_id, create_time DESC);
+-- Revision counters include discarded drafts; the active-row partial indexes cannot serve them.
+CREATE INDEX idx_cal_event_revision_event_history ON cal_event_revision (event_id);
 
 -- ========== 首版种子数据 ==========
 -- 管理员默认禁用；首次启动通过显式一次性密码启用。
@@ -1106,9 +1173,51 @@ VALUES
      2, 1, 1, 'system', 'system');
 
 
--- 内置管理员显式拥有全部种子权限；新建角色仍默认 DEPT。
-INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 1, id FROM sys_menu;
+-- 权限目录导航菜单
+INSERT INTO sys_menu
+    (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, status,
+     deleted, module_key, create_by, update_by)
+SELECT (SELECT max(id) + 1 FROM sys_menu), parent_id, '权限目录', 'M', 'system/permission',
+       'system/permission/index', 'key-round', sort + 1, visible, status,
+       deleted, module_key, 'system', 'system'
+FROM sys_menu WHERE component = 'system/menu/index' AND menu_type = 'M' ORDER BY id LIMIT 1;
+
+-- 权限目录与角色授权版本状态基线
+INSERT INTO sys_permission_catalog_state (id, revision) VALUES (1, 0);
+INSERT INTO sys_role_authorization_state (role_id, revision) SELECT id, 0 FROM sys_role;
+
+-- 独立业务权限定义种子（ACTIVE 对应已声明业务动作，LEGACY 对应退役 order 动作）
+INSERT INTO sys_permission
+    (id, code, name, description, module_key, resource, action, status, lifecycle,
+     declaration_source, create_by, update_by)
+SELECT min(id), perms, min(menu_name), 'Baseline permission definition', min(module_key),
+       CASE WHEN strpos(perms, ':') > 0 THEN split_part(perms, ':', 2) ELSE perms END,
+       CASE WHEN strpos(perms, ':') > 0 THEN regexp_replace(perms, '^.*:', '') ELSE '' END,
+       CASE WHEN bool_or(deleted = 0 AND status = 1) THEN 1 ELSE 0 END,
+       CASE WHEN perms LIKE 'order:%' THEN 'LEGACY' ELSE 'ACTIVE' END,
+       CASE WHEN perms LIKE 'order:%'
+            THEN 'V1:sys_menu'
+            ELSE 'code:' || coalesce(min(module_key), 'system')
+       END,
+       'system', 'system'
+FROM sys_menu WHERE perms IS NOT NULL AND perms <> '' GROUP BY perms;
+
+INSERT INTO sys_permission
+    (id, code, name, description, module_key, resource, action, status, lifecycle,
+     declaration_source, create_by, update_by)
+SELECT (SELECT coalesce(max(id), 0) FROM sys_permission) + row_number() OVER (ORDER BY code),
+       code, name, 'Independent permission catalogue management', NULL, 'permission', action,
+       1, 'ACTIVE', 'code:system', 'system', 'system'
+FROM (VALUES ('system:permission:list', '权限目录查询', 'list'),
+             ('system:permission:edit', '权限目录维护', 'edit'))
+     AS additions(code, name, action);
+
+-- 内置管理员显式拥有全部种子业务权限与 C/M 导航；新建角色仍默认 DEPT。
+INSERT INTO sys_role_permission (role_id, permission_id, enabled)
+SELECT 1, id, true FROM sys_permission;
+
+INSERT INTO sys_role_navigation (role_id, menu_id)
+SELECT 1, id FROM sys_menu WHERE menu_type IN ('C', 'M');
 
 INSERT INTO security_token_version (version_key, version_value)
 VALUES ('credential:user:admin', 1);

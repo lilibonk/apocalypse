@@ -22,7 +22,7 @@ import static org.mockito.Mockito.doThrow;
 
 import tools.jackson.databind.JsonNode;
 
-/** 管理员全设备撤销覆盖刷新链、独立登录和刷新交错；在线索引只用于选择用户。 */
+/** 管理员单会话强退（/{jti}）与全设备撤销（/user/{username}）回归测试。 */
 class AdminSessionRevocationIT extends AbstractIntegrationTest {
 
   @Autowired private JwtDecoder jwtDecoder;
@@ -34,7 +34,7 @@ class AdminSessionRevocationIT extends AbstractIntegrationTest {
   @MockitoSpyBean private OnlineUserRegistry onlineUserRegistry;
 
   @Test
-  void kickRevokesRotatedAndIndependentLoginsWithoutRevokingAnotherUser() {
+  void singleKickRevokesTargetSessionOnlyAndUserWideKickRevokesAllDevicesDurably() {
     String admin = loginAndGetToken("admin", ADMIN_PASSWORD);
     String username = createUser(admin);
     JsonNode first = login(username);
@@ -43,11 +43,24 @@ class AdminSessionRevocationIT extends AbstractIntegrationTest {
     assertThat(rotated.get("code").asInt()).isZero();
     long before = tokenVersionStore.current(username).credential();
 
+    // 单会话强退仅吊销所选会话 rotated，不影响同一用户的独立设备 independent
     deleteForData("/system/online-users/" + jti(rotated), admin);
+    assertThat(tokenVersionStore.current(username).credential()).isEqualTo(before);
+    assertRevoked(rotated);
+    assertThat(
+            exchangeRaw(
+                    "/system/users/me",
+                    HttpMethod.GET,
+                    null,
+                    independent.at("/data/accessToken").asText())
+                .get("code")
+                .asInt())
+        .isZero();
 
+    // 全设备强退递增数据库凭证代次，即使清空 Redis 黑名单也不会复活任何旧令牌
+    deleteForData("/system/online-users/user/" + username, admin);
     assertThat(tokenVersionStore.current(username).credential()).isEqualTo(before + 1);
     for (JsonNode pair : List.of(first, independent, rotated)) {
-      // Loss of Redis blacklist state must not revive a database-revoked token.
       redis.delete(OnlineUserRegistry.BLACKLIST_KEY_PREFIX + jti(pair));
       redis.delete(
           OnlineUserRegistry.BLACKLIST_KEY_PREFIX
@@ -68,7 +81,7 @@ class AdminSessionRevocationIT extends AbstractIntegrationTest {
         .when(onlineUserRegistry)
         .kickAll(username);
 
-    deleteForData("/system/online-users/" + jti(pair), admin);
+    deleteForData("/system/online-users/user/" + username, admin);
 
     assertThat(tokenVersionStore.current(username).credential()).isEqualTo(before + 1);
     assertRevoked(pair);
@@ -88,16 +101,14 @@ class AdminSessionRevocationIT extends AbstractIntegrationTest {
     assertThat(result.get("code").asInt()).isEqualTo(40400);
     assertThat(tokenVersionStore.current(username).credential()).isEqualTo(before);
     deleteForData("/system/online-users/" + jti(another), admin);
-    assertRevoked(first);
     assertRevoked(another);
   }
 
   @Test
-  void concurrentRefreshCannotSurviveASuccessfulAdministratorKick() throws Exception {
+  void concurrentRefreshCannotSurviveASuccessfulAdministratorUserWideKick() throws Exception {
     String admin = loginAndGetToken("admin", ADMIN_PASSWORD);
     String username = createUser(admin);
     JsonNode first = login(username);
-    // A second visible login gives the administrator a stable selection while A rotates.
     JsonNode selected = login(username);
     CountDownLatch start = new CountDownLatch(1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -113,7 +124,7 @@ class AdminSessionRevocationIT extends AbstractIntegrationTest {
               () -> {
                 await(start);
                 return exchangeRaw(
-                    "/system/online-users/" + jti(selected), HttpMethod.DELETE, null, admin);
+                    "/system/online-users/user/" + username, HttpMethod.DELETE, null, admin);
               },
               executor);
       start.countDown();

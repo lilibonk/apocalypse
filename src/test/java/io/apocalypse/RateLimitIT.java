@@ -11,14 +11,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import tools.jackson.databind.JsonNode;
 
 /**
- * 限流集成测试：独立上下文（login 限流覆盖为 2/min），同一来源第 3 次登录应返回 42900。 限流器 Redis key
+ * 限流集成测试：独立上下文（login 限流覆盖为 2/min），同一来源第 3 次登录应返回 42900，不同受信任代理转发 IP 独立计数。 限流器 Redis key
  * 带速率状态（已存在不覆盖），每个用例前后清理，避免污染共享容器中的其他 IT。
  */
 @SpringBootTest(
@@ -51,14 +54,25 @@ class RateLimitIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void thirdLoginWithinWindowReturns42900() {
+  void thirdLoginWithinWindowReturns42900AndDifferentForwardedIpUsesIndependentBucket() {
     Map<String, String> loginBody = Map.of("username", "admin", "password", ADMIN_PASSWORD);
-    assertThat(exchangeRaw("/auth/login", HttpMethod.POST, loginBody, null).get("code").asInt())
-        .isEqualTo(0);
-    assertThat(exchangeRaw("/auth/login", HttpMethod.POST, loginBody, null).get("code").asInt())
-        .isEqualTo(0);
+    assertThat(loginFromIp(loginBody, "203.0.113.10").get("code").asInt()).isEqualTo(0);
+    assertThat(loginFromIp(loginBody, "203.0.113.10").get("code").asInt()).isEqualTo(0);
 
-    JsonNode third = exchangeRaw("/auth/login", HttpMethod.POST, loginBody, null);
-    assertThat(third.get("code").asInt()).as("窗口内第 3 次应被限流").isEqualTo(42900);
+    JsonNode third = loginFromIp(loginBody, "203.0.113.10");
+    assertThat(third.get("code").asInt()).as("同一客户端 IP 窗口内第 3 次应被限流").isEqualTo(42900);
+
+    JsonNode otherIp = loginFromIp(loginBody, "198.51.100.88");
+    assertThat(otherIp.get("code").asInt()).as("不同转发 IP 应独立限流").isEqualTo(0);
+  }
+
+  private JsonNode loginFromIp(Map<String, String> loginBody, String clientIp) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("X-Forwarded-For", clientIp);
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            "/auth/login", HttpMethod.POST, new HttpEntity<>(loginBody, headers), String.class);
+    assertThat(response.getStatusCode().value()).isEqualTo(200);
+    return objectMapper.readTree(response.getBody());
   }
 }

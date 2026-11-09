@@ -64,4 +64,39 @@ class TwoLevelCacheRaceTest {
       }
     }
   }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void sequentialSingleKeyRemoteInvalidationDoesNotEvictSiblingL1Entries() {
+    RedisTemplate<String, Object> redis = mock(RedisTemplate.class);
+    ValueOperations<String, Object> values = mock(ValueOperations.class);
+    StringRedisTemplate strings = mock(StringRedisTemplate.class);
+    ValueOperations<String, String> generations = mock(ValueOperations.class);
+    when(redis.opsForValue()).thenReturn(values);
+    when(strings.opsForValue()).thenReturn(generations);
+    when(generations.get("apoc:cache:generation:users")).thenReturn("0");
+    when(values.get("apoc:v2:users:1")).thenReturn("user-1-v1", "user-1-v2");
+    when(values.get("apoc:v2:users:2")).thenReturn("user-2-v1", "user-2-should-not-reload");
+
+    TwoLevelCache cache =
+        new TwoLevelCache(
+            "users",
+            new CacheProperties(),
+            redis,
+            strings,
+            mock(RedissonClient.class),
+            message -> {},
+            "local");
+
+    // Populate L1 for both keys
+    assertThat(cache.get(1L, String.class)).isEqualTo("user-1-v1");
+    assertThat(cache.get(2L, String.class)).isEqualTo("user-2-v1");
+
+    // Invalidate only key 1 with sequential generation 1
+    cache.applyRemoteInvalidation(new CacheInvalidateMessage("users", "1", "remote", 1));
+
+    // Key 1 reloads from L2, while key 2 stays in L1 without hitting L2 again
+    assertThat(cache.get(1L, String.class)).isEqualTo("user-1-v2");
+    assertThat(cache.get(2L, String.class)).isEqualTo("user-2-v1");
+  }
 }

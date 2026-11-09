@@ -27,9 +27,17 @@ class PermissionManagementIT extends AbstractIntegrationTest {
 
   @Test
   void legacyRoleMenuProtocolAndPermissionMenuWritesAreRejected() {
-    int before =
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT to_regclass('sys_role_menu') IS NULL", Boolean.class))
+        .isTrue();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT to_regclass('sys_permission_migration_source') IS NULL", Boolean.class))
+        .isTrue();
+    int beforeNavigation =
         jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM sys_role_menu WHERE role_id=1", Integer.class);
+            "SELECT count(*) FROM sys_role_navigation WHERE role_id=1", Integer.class);
     assertThat(
             exchangeRaw("/system/roles/1/menus", HttpMethod.GET, null, admin())
                 .path("code")
@@ -42,8 +50,8 @@ class PermissionManagementIT extends AbstractIntegrationTest {
         .isEqualTo(40000);
     assertThat(
             jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM sys_role_menu WHERE role_id=1", Integer.class))
-        .isEqualTo(before);
+                "SELECT count(*) FROM sys_role_navigation WHERE role_id=1", Integer.class))
+        .isEqualTo(beforeNavigation);
     assertThat(
             exchangeRaw(
                     "/system/menus",

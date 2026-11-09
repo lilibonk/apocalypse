@@ -150,7 +150,7 @@ public class TwoLevelCache implements Cache {
     Object value;
     synchronized (l1Monitor) {
       // L1 命中直接返回（含空值哨兵）
-      value = l1.getIfPresent(key);
+      value = l1.getIfPresent(l1Key(key));
       if (value != null) {
         return toWrapper(value);
       }
@@ -169,7 +169,7 @@ public class TwoLevelCache implements Cache {
         // 失效先于 L2 响应到达时，不得把旧响应重新写入已经清理的 L1。
         // 有最大年龄的缓存不回填：L2 条目年龄未知，回填会让 L1 超出上限。
         if (readEpoch == invalidationEpoch && maxAgeSeconds == null) {
-          l1.put(key, value);
+          l1.put(l1Key(key), value);
         }
       }
       return toWrapper(value);
@@ -248,7 +248,7 @@ public class TwoLevelCache implements Cache {
                             Long.toString(jitteredTtlSeconds()).getBytes(StandardCharsets.UTF_8)));
     synchronized (l1Monitor) {
       if (Long.valueOf(1).equals(stored) && writeEpoch == invalidationEpoch) {
-        l1.put(key, storeValue);
+        l1.put(l1Key(key), storeValue);
       }
     }
   }
@@ -269,9 +269,9 @@ public class TwoLevelCache implements Cache {
                             redisKey(key).getBytes(StandardCharsets.UTF_8),
                             generationKey().getBytes(StandardCharsets.UTF_8)));
     Assert.notNull(generation, "缓存失效未返回代数");
-    advanceLocalGeneration(generation);
+    advanceLocalGenerationForSingleKey(key, generation);
     invalidationPublisher.accept(
-        new CacheInvalidateMessage(name, String.valueOf(key), instanceId, generation));
+        new CacheInvalidateMessage(name, l1Key(key), instanceId, generation));
   }
 
   @Override
@@ -287,7 +287,7 @@ public class TwoLevelCache implements Cache {
   /** 仅失效本实例 L1（供失效广播订阅方调用）。 */
   public void evictLocal(Object key) {
     synchronized (l1Monitor) {
-      l1.invalidate(key);
+      l1.invalidate(l1Key(key));
       invalidationEpoch++;
     }
   }
@@ -299,16 +299,32 @@ public class TwoLevelCache implements Cache {
     }
   }
 
-  /** 区域失效与代数推进原子完成：兼容非 String key，也覆盖之前漏收的失效消息。 */
+  /**
+   * 远程失效与代数推进原子完成：连续代数单 key 失效仅淘汰目标 key（避免单 key 更新清空整张 L1 缓存区）， 若存在代数跳跃（之前漏收广播）或整区清空（{@code key ==
+   * null}）则清空本区 L1 自愈。
+   */
   public void applyRemoteInvalidation(CacheInvalidateMessage message) {
     synchronized (l1Monitor) {
-      clearLocalUnderLock();
-      localGeneration = Math.max(localGeneration, message.generation());
+      if (message.key() != null && message.generation() == localGeneration + 1) {
+        l1.invalidate(l1Key(message.key()));
+        invalidationEpoch++;
+        localGeneration = message.generation();
+      } else if (message.key() != null && message.generation() <= localGeneration) {
+        l1.invalidate(l1Key(message.key()));
+        invalidationEpoch++;
+      } else {
+        clearLocalUnderLock();
+        localGeneration = Math.max(localGeneration, message.generation());
+      }
     }
   }
 
+  private static String l1Key(Object key) {
+    return String.valueOf(key);
+  }
+
   private String redisKey(Object key) {
-    return KEY_PREFIX + name + ':' + key;
+    return KEY_PREFIX + name + ':' + l1Key(key);
   }
 
   private String generationKey() {
@@ -320,6 +336,19 @@ public class TwoLevelCache implements Cache {
     long resolved = generation == null ? readGeneration() : generation;
     advanceLocalGeneration(resolved);
     return resolved;
+  }
+
+  private void advanceLocalGenerationForSingleKey(Object key, long generation) {
+    synchronized (l1Monitor) {
+      if (generation == localGeneration + 1) {
+        l1.invalidate(l1Key(key));
+        invalidationEpoch++;
+        localGeneration = generation;
+      } else {
+        clearLocalUnderLock();
+        localGeneration = Math.max(localGeneration, generation);
+      }
+    }
   }
 
   private void advanceLocalGeneration(long generation) {

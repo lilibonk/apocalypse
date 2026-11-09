@@ -14,6 +14,7 @@
 
 import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Download,
   Eye,
   KeyRound,
   LayoutDashboard,
@@ -94,6 +95,19 @@ function rowIdOf(row: Row, rowKey: string): string {
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback
+}
+
+function triggerBlobDownload(blob: Blob, fileName: string): void {
+  if (typeof window === 'undefined' || typeof URL.createObjectURL !== 'function') return
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.style.display = 'none'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 export interface DynaPageProps {
@@ -373,6 +387,20 @@ function DynaPageContent({
     onError: (error) => toast.error(errorText(error, t('操作失败'))),
   })
 
+  const exportMutation = useModuleMutation(queryScope, {
+    onDenied,
+    localKey,
+    mutationFn: (run) => run(queries.exportCsv, appliedSearch),
+    onSuccess: (blob) => {
+      triggerBlobDownload(blob, schema.exportFileName ?? `${schema.key}.csv`)
+      toast.success(commonText('common.导出成功', { defaultValue: 'CSV 导出成功' }))
+    },
+    onError: (error) =>
+      toast.error(
+        errorText(error, commonText('common.导出失败', { defaultValue: 'CSV 导出失败' })),
+      ),
+  })
+
   const customPending = customMutation.isPending
   const togglePending = toggleMutation.isPending
   // Stable handlers keep the memoised table and its rows from re-rendering when a layer opens.
@@ -633,6 +661,18 @@ function DynaPageContent({
       >
         <RefreshCw className="size-4" />
       </Button>
+      {schema.exportPerm && (
+        <Perm perm={schema.exportPerm}>
+          <Button
+            variant="outline"
+            onClick={() => exportMutation.mutate(undefined)}
+            disabled={exportMutation.isPending}
+          >
+            <Download className="size-4" />
+            {commonText('common.导出CSV', { defaultValue: '导出 CSV' })}
+          </Button>
+        </Perm>
+      )}
       {schema.createPerm && schema.form && (
         <Perm perm={schema.createPerm} requiresAllScope={schema.createRequiresAllScope}>
           <Button onClick={() => setDialog({ mode: 'create', row: null })}>
