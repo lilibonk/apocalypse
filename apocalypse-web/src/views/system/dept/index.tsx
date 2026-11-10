@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils'
 import { Network, Rows3 } from 'lucide-react'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { usePageView } from '@/hooks/usePageView'
+import { useWindowedRows } from '@/hooks/useWindowedRows'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 
@@ -222,7 +223,8 @@ function DeptWorkspace() {
     () => new Set(expandableIds.filter((id) => !expanded.has(id))),
     [expandableIds, expanded],
   )
-  const rows = tree ? flattenDeptTree(tree, collapsed) : []
+  const rows = useMemo(() => (tree ? flattenDeptTree(tree, collapsed) : []), [tree, collapsed])
+  const windowed = useWindowedRows(rows)
   const totalDepartments = tree ? flattenDeptTree(tree, new Set()).length : 0
   const deletingChildCount = deleting?.children?.length ?? 0
 
@@ -286,123 +288,146 @@ function DeptWorkspace() {
           className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
           aria-busy={isFetching}
         >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('common.部门名称', { defaultValue: '部门名称' })}</TableHead>
-                <TableHead>{t('common.负责人', { defaultValue: '负责人' })}</TableHead>
-                <TableHead>{t('common.联系电话', { defaultValue: '联系电话' })}</TableHead>
-                <TableHead className="w-16">{t('common.排序', { defaultValue: '排序' })}</TableHead>
-                <TableHead className="w-20">{t('common.状态', { defaultValue: '状态' })}</TableHead>
-                <TableHead>{t('common.备注', { defaultValue: '备注' })}</TableHead>
-                <TableHead className="w-32 text-right">
-                  {t('common.操作', { defaultValue: '操作' })}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading &&
-                Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={index}>
-                    {Array.from({ length: 7 }).map((__, cell) => (
-                      <TableCell key={cell}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              {!isLoading && rows.length === 0 && (
+          <div
+            onScroll={windowed.onScroll}
+            style={windowed.maxHeight ? { maxHeight: `${windowed.maxHeight}px` } : undefined}
+            className={cn(windowed.windowed && 'overflow-y-auto')}
+          >
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                    {t('common.暂无数据', { defaultValue: '暂无数据' })}
-                  </TableCell>
+                  <TableHead>{t('common.部门名称', { defaultValue: '部门名称' })}</TableHead>
+                  <TableHead>{t('common.负责人', { defaultValue: '负责人' })}</TableHead>
+                  <TableHead>{t('common.联系电话', { defaultValue: '联系电话' })}</TableHead>
+                  <TableHead className="w-16">
+                    {t('common.排序', { defaultValue: '排序' })}
+                  </TableHead>
+                  <TableHead className="w-20">
+                    {t('common.状态', { defaultValue: '状态' })}
+                  </TableHead>
+                  <TableHead>{t('common.备注', { defaultValue: '备注' })}</TableHead>
+                  <TableHead className="w-32 text-right">
+                    {t('common.操作', { defaultValue: '操作' })}
+                  </TableHead>
                 </TableRow>
-              )}
-              {rows.map((row) => {
-                const node = row.node
-                const isCollapsed = collapsed.has(node.id)
-                return (
-                  <TableRow key={node.id}>
-                    <TableCell>
-                      <div
-                        className="flex items-center gap-1"
-                        style={{ paddingLeft: `calc(var(--spacing) * ${row.depth * 6})` }}
+              </TableHeader>
+              <TableBody>
+                {isLoading &&
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      {Array.from({ length: 7 }).map((__, cell) => (
+                        <TableCell key={cell}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                {!isLoading && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                      {t('common.暂无数据', { defaultValue: '暂无数据' })}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {windowed.topSpacerHeight > 0 && (
+                  <TableRow aria-hidden="true" style={{ height: `${windowed.topSpacerHeight}px` }}>
+                    <TableCell colSpan={7} className="p-0" />
+                  </TableRow>
+                )}
+                {windowed.visibleRows.map((row) => {
+                  const node = row.node
+                  const isCollapsed = collapsed.has(node.id)
+                  return (
+                    <TableRow key={node.id}>
+                      <TableCell>
+                        <div
+                          className="flex items-center gap-1"
+                          style={{ paddingLeft: `calc(var(--spacing) * ${row.depth * 6})` }}
+                        >
+                          {row.hasChildren ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-6 shrink-0"
+                              aria-expanded={!isCollapsed}
+                              aria-label={
+                                isCollapsed
+                                  ? t('common.展开', { defaultValue: '展开' })
+                                  : t('common.折叠', { defaultValue: '折叠' })
+                              }
+                              onClick={() => toggleExpanded(node.id)}
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  'size-3.5 transition-transform',
+                                  !isCollapsed && 'rotate-90',
+                                )}
+                              />
+                            </Button>
+                          ) : (
+                            <span className="size-6 shrink-0" />
+                          )}
+                          <span className="font-medium">{node.deptName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{node.leader ?? '-'}</TableCell>
+                      <TableCell>{node.phone ?? '-'}</TableCell>
+                      <TableCell>{node.sort}</TableCell>
+                      <TableCell>
+                        <DictTag type="sys_user_status" value={node.status} />
+                      </TableCell>
+                      <TableCell
+                        className="max-w-48 truncate text-muted-foreground"
+                        title={node.remark ?? undefined}
                       >
-                        {row.hasChildren ? (
+                        {node.remark ?? '-'}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <Perm perm="system:dept:add" requiresAllScope>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="size-6 shrink-0"
-                            aria-expanded={!isCollapsed}
-                            aria-label={
-                              isCollapsed
-                                ? t('common.展开', { defaultValue: '展开' })
-                                : t('common.折叠', { defaultValue: '折叠' })
-                            }
-                            onClick={() => toggleExpanded(node.id)}
+                            aria-label={t('common.新增下级', { defaultValue: '新增下级' })}
+                            onClick={() => openCreate(node.id)}
                           >
-                            <ChevronRight
-                              className={cn(
-                                'size-3.5 transition-transform',
-                                !isCollapsed && 'rotate-90',
-                              )}
-                            />
+                            <Plus className="size-3.5" />
                           </Button>
-                        ) : (
-                          <span className="size-6 shrink-0" />
-                        )}
-                        <span className="font-medium">{node.deptName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{node.leader ?? '-'}</TableCell>
-                    <TableCell>{node.phone ?? '-'}</TableCell>
-                    <TableCell>{node.sort}</TableCell>
-                    <TableCell>
-                      <DictTag type="sys_user_status" value={node.status} />
-                    </TableCell>
-                    <TableCell
-                      className="max-w-48 truncate text-muted-foreground"
-                      title={node.remark ?? undefined}
-                    >
-                      {node.remark ?? '-'}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      <Perm perm="system:dept:add" requiresAllScope>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t('common.新增下级', { defaultValue: '新增下级' })}
-                          onClick={() => openCreate(node.id)}
-                        >
-                          <Plus className="size-3.5" />
-                        </Button>
-                      </Perm>
-                      <Perm perm="system:dept:edit" requiresAllScope>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t('common.编辑', { defaultValue: '编辑' })}
-                          onClick={() => openEdit(node)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </Perm>
-                      <Perm perm="system:dept:remove" requiresAllScope>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t('common.删除', { defaultValue: '删除' })}
-                          onClick={() => setDeleting(node)}
-                        >
-                          <Trash2 className="size-3.5 text-destructive" />
-                        </Button>
-                      </Perm>
-                    </TableCell>
+                        </Perm>
+                        <Perm perm="system:dept:edit" requiresAllScope>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('common.编辑', { defaultValue: '编辑' })}
+                            onClick={() => openEdit(node)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </Perm>
+                        <Perm perm="system:dept:remove" requiresAllScope>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t('common.删除', { defaultValue: '删除' })}
+                            onClick={() => setDeleting(node)}
+                          >
+                            <Trash2 className="size-3.5 text-destructive" />
+                          </Button>
+                        </Perm>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {windowed.bottomSpacerHeight > 0 && (
+                  <TableRow
+                    aria-hidden="true"
+                    style={{ height: `${windowed.bottomSpacerHeight}px` }}
+                  >
+                    <TableCell colSpan={7} className="p-0" />
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </div>
           {tree !== undefined && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
               <span>

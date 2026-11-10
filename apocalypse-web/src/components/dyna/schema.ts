@@ -18,7 +18,7 @@ import { z } from 'zod'
 // 类型定义
 // ---------------------------------------------------------------------------
 
-/** 表单字段类型 v1（收敛集，禁止贪多；新类型必须先扩展本枚举与渲染器）。 */
+/** 表单字段类型（收敛集，禁止贪多；新类型必须先扩展本枚举与渲染器）。 */
 export type DynaFieldType =
   | 'input'
   | 'textarea'
@@ -26,10 +26,12 @@ export type DynaFieldType =
   | 'number'
   | 'select'
   | 'dict'
+  | 'tree-select'
   | 'date'
   | 'datetime'
   | 'switch'
   | 'radio'
+  | 'upload'
 
 /** select / radio 的静态选项。 */
 export interface DynaOption {
@@ -44,6 +46,22 @@ export interface DynaOption {
 
 export type DynaOptionTone = 'success' | 'warning' | 'destructive' | 'secondary'
 
+/** 树形选择节点（tree-select）。 */
+export interface DynaTreeNodeOption {
+  label: string
+  value: string
+  children?: DynaTreeNodeOption[]
+}
+
+/**
+ * 纯数据字段显隐条件（M4）：严禁字符串 eval 脚本，仅支持强类型相等或集合包含判定。
+ */
+export interface DynaVisibleWhen {
+  field: string
+  equals?: string | number | boolean
+  in?: ReadonlyArray<string | number | boolean>
+}
+
 /** 表单字段（DynaForm 渲染 + 校验 + 提交转换的事实来源）。 */
 export interface DynaFormField {
   /** 提交 body 的字段名，也是行数据回填的 key。 */
@@ -57,11 +75,13 @@ export interface DynaFormField {
   help?: string
   /** select / radio 必填：静态选项。 */
   options?: DynaOption[]
+  /** tree-select 树形选项。 */
+  treeOptions?: DynaTreeNodeOption[]
   /** Backend business labels (e.g. department names) remain raw. */
   translateOptions?: boolean
   /** dict 必填：后端字典类型（react-query 调 /system/dict/data/type/{type}）。 */
   dictType?: string
-  /** select / dict / radio 提交值类型：默认 string；'number' 时提交前 Number()（如状态位）。 */
+  /** select / dict / radio / tree-select 提交值类型：默认 string；'number' 时提交前 Number()（如状态位）。 */
   valueType?: 'string' | 'number'
   minLength?: number
   maxLength?: number
@@ -79,17 +99,29 @@ export interface DynaFormField {
   disabledInEdit?: boolean
   /** 布局：占满整行（默认字段两列网格中的 1 列）。 */
   span?: 1 | 2
+  /** 条件显隐声明（隐藏时自动跳过校验与提交）。 */
+  visibleWhen?: DynaVisibleWhen
+  /** upload 字段允许的 MIME 或后缀列表（如 '.csv,text/csv'）。 */
+  accept?: string
+  /** upload 字段最大文件体积（MB）。 */
+  maxSizeMb?: number
 }
 
-/** 搜索区字段（v1 收敛为三种控件）。 */
+/** 搜索区字段。 */
 export interface DynaSearchField {
   /** 查询参数名（GET {endpoint}/page 的 query key）。 */
   name: string
   label?: string
-  type: 'input' | 'select' | 'dict'
+  type: 'input' | 'select' | 'dict' | 'tree-select' | 'date-range' | 'number-range'
   placeholder?: string
   options?: DynaOption[]
+  treeOptions?: DynaTreeNodeOption[]
   dictType?: string
+  /**
+   * date-range / number-range 自定义起止参数名；
+   * 缺省为 [`${name}Begin`, `${name}End`] 或 [`${name}Min`, `${name}Max`]。
+   */
+  rangeKeys?: readonly [string, string]
 }
 
 /** 表格列。 */
@@ -104,6 +136,10 @@ export interface DynaColumn {
   sticky?: 'right'
   /** Static enum label mapping; values remain unchanged in the row/API. */
   options?: DynaOption[]
+  /** 是否允许点击列头触发排序（映射 query: sortField & sortOrder）。 */
+  sortable?: boolean
+  /** 是否提供一键复制按钮（适用于雪花 ID、编码、流水号等）。 */
+  copyable?: boolean
 }
 
 /** 行操作：编辑（打开 DynaForm）。 */
@@ -214,6 +250,14 @@ export interface DynaPageSchema {
   exportPerm?: string
   /** 导出文件名（默认 `${key}.csv`）。 */
   exportFileName?: string
+  /** 顶部「导入 CSV」按钮权限串（请求 POST {endpoint}/import 与 GET {endpoint}/import-template）。 */
+  importPerm?: string
+  /** 导入模板下载地址（默认 `${endpoint}/import-template`）。 */
+  importTemplatePath?: string
+  /** 导入模板文件名（默认 `${key}-template.csv`）。 */
+  importTemplateFileName?: string
+  /** 批量删除权限串（配置后开启表格行多选与批量删除工具栏）。 */
+  batchDeletePerm?: string
   search?: DynaSearchField[]
   columns: DynaColumn[]
   form?: {
@@ -252,6 +296,33 @@ const optionSchema = z.object({
   tone: z.enum(['success', 'warning', 'destructive', 'secondary']).optional(),
 })
 
+const treeOptionSchema: z.ZodType<DynaTreeNodeOption> = z.lazy(() =>
+  z.object({
+    label: z.string().min(1),
+    value: z.string(),
+    children: z.array(treeOptionSchema).optional(),
+  }),
+)
+
+const visibleWhenSchema = z
+  .object({
+    field: z.string().min(1),
+    equals: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    in: z
+      .array(z.union([z.string(), z.number(), z.boolean()]))
+      .min(1)
+      .optional(),
+  })
+  .check((ctx) => {
+    if (ctx.value.equals === undefined && (!ctx.value.in || ctx.value.in.length === 0)) {
+      ctx.issues.push({
+        code: 'custom',
+        message: 'visibleWhen 必须指定 equals 或非空 in',
+        input: ctx.value,
+      })
+    }
+  })
+
 const formFieldSchema = z
   .object({
     name: z.string().min(1),
@@ -263,15 +334,18 @@ const formFieldSchema = z
       'number',
       'select',
       'dict',
+      'tree-select',
       'date',
       'datetime',
       'switch',
       'radio',
+      'upload',
     ]),
     required: z.boolean().optional(),
     placeholder: z.string().optional(),
     help: z.string().optional(),
     options: z.array(optionSchema).optional(),
+    treeOptions: z.array(treeOptionSchema).optional(),
     translateOptions: z.boolean().optional(),
     dictType: z.string().min(1).optional(),
     valueType: z.enum(['string', 'number']).optional(),
@@ -285,12 +359,18 @@ const formFieldSchema = z
     hideInEdit: z.boolean().optional(),
     disabledInEdit: z.boolean().optional(),
     span: z.union([z.literal(1), z.literal(2)]).optional(),
+    visibleWhen: visibleWhenSchema.optional(),
+    accept: z.string().optional(),
+    maxSizeMb: z.number().positive().optional(),
   })
   .check((ctx) => {
     const field = ctx.value
     const fail = (message: string) => ctx.issues.push({ code: 'custom', message, input: field })
     if ((field.type === 'select' || field.type === 'radio') && !field.options?.length) {
       fail(`字段 ${field.name}：${field.type} 类型必须提供非空 options`)
+    }
+    if (field.type === 'tree-select' && !field.treeOptions?.length && !field.options?.length) {
+      fail(`字段 ${field.name}：tree-select 类型必须提供非空 treeOptions 或 options`)
     }
     if (field.type === 'dict' && !field.dictType) {
       fail(`字段 ${field.name}：dict 类型必须绑定 dictType`)
@@ -304,16 +384,21 @@ const searchFieldSchema = z
   .object({
     name: z.string().min(1),
     label: z.string().min(1).optional(),
-    type: z.enum(['input', 'select', 'dict']),
+    type: z.enum(['input', 'select', 'dict', 'tree-select', 'date-range', 'number-range']),
     placeholder: z.string().optional(),
     options: z.array(optionSchema).optional(),
+    treeOptions: z.array(treeOptionSchema).optional(),
     dictType: z.string().min(1).optional(),
+    rangeKeys: z.tuple([z.string().min(1), z.string().min(1)]).optional(),
   })
   .check((ctx) => {
     const field = ctx.value
     const fail = (message: string) => ctx.issues.push({ code: 'custom', message, input: field })
     if (field.type === 'select' && !field.options?.length) {
       fail(`搜索项 ${field.name}：select 类型必须提供非空 options`)
+    }
+    if (field.type === 'tree-select' && !field.treeOptions?.length && !field.options?.length) {
+      fail(`搜索项 ${field.name}：tree-select 类型必须提供非空 treeOptions 或 options`)
     }
     if (field.type === 'dict' && !field.dictType) {
       fail(`搜索项 ${field.name}：dict 类型必须绑定 dictType`)
@@ -328,6 +413,8 @@ const columnSchema = z
     dictType: z.string().min(1).optional(),
     sticky: z.literal('right').optional(),
     options: z.array(optionSchema).optional(),
+    sortable: z.boolean().optional(),
+    copyable: z.boolean().optional(),
   })
   .check((ctx) => {
     const column = ctx.value
@@ -395,6 +482,10 @@ export const pageSchemaValidator = z
     createLabel: z.string().optional(),
     exportPerm: permsString.optional(),
     exportFileName: z.string().min(1).optional(),
+    importPerm: permsString.optional(),
+    importTemplatePath: z.string().regex(/^\//, 'importTemplatePath 必须以 / 开头').optional(),
+    importTemplateFileName: z.string().min(1).optional(),
+    batchDeletePerm: permsString.optional(),
     search: z.array(searchFieldSchema).optional(),
     columns: z.array(columnSchema).min(1, 'columns 至少一列'),
     form: z

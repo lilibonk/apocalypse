@@ -1,7 +1,9 @@
 import { AxiosError, isCancel, type AxiosAdapter } from 'axios'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, configureClient, http, request, rawRequest } from './client'
+import { toastApiError } from './error-toast'
 
 const originalAdapter = http.defaults.adapter
 afterEach(() => {
@@ -154,5 +156,18 @@ describe('API refresh replay', () => {
     expect(adapter).toHaveBeenCalledTimes(2)
     expect(tryRefresh).toHaveBeenCalledOnce()
     expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('toastApiError surfaces ApiError traceId in toast description with copy action', () => {
+    const spy = vi.spyOn(toast, 'error').mockImplementation(() => 'toast-1')
+    toastApiError(new ApiError(40000, '参数校验失败', 'tr-abc-123'), '默认错误')
+    expect(spy).toHaveBeenCalledWith(
+      '参数校验失败',
+      expect.objectContaining({
+        description: 'Trace: tr-abc-123',
+        action: expect.objectContaining({ label: expect.any(String) }),
+      }),
+    )
+    spy.mockRestore()
   })
 })

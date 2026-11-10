@@ -45,6 +45,18 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
       DataScopeResp scope,
       Long deptId,
       boolean includeChildren) {
+    return pageByKeyword(page, size, keyword, scope, deptId, includeChildren, null, null);
+  }
+
+  default PageResult<SysUserEntity> pageByKeyword(
+      int page,
+      int size,
+      String keyword,
+      DataScopeResp scope,
+      Long deptId,
+      boolean includeChildren,
+      String sortField,
+      String sortOrder) {
     LambdaQueryWrapper<SysUserEntity> wrapper = new LambdaQueryWrapper<>();
     if (deptId != null) {
       if (includeChildren) {
@@ -73,7 +85,18 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
                   .or()
                   .like(SysUserEntity::getNickname, keyword));
     }
-    wrapper.orderByDesc(SysUserEntity::getCreateTime, SysUserEntity::getId);
+    boolean asc = "asc".equalsIgnoreCase(sortOrder);
+    if ("username".equals(sortField)) {
+      if (asc) {
+        wrapper.orderByAsc(SysUserEntity::getUsername, SysUserEntity::getId);
+      } else {
+        wrapper.orderByDesc(SysUserEntity::getUsername, SysUserEntity::getId);
+      }
+    } else if ("createTime".equals(sortField) && asc) {
+      wrapper.orderByAsc(SysUserEntity::getCreateTime, SysUserEntity::getId);
+    } else {
+      wrapper.orderByDesc(SysUserEntity::getCreateTime, SysUserEntity::getId);
+    }
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));
   }
 

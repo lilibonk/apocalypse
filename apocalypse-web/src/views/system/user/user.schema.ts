@@ -21,15 +21,19 @@ export default definePageSchema({
   createPerm: 'system:user:add',
   exportPerm: 'system:user:list',
   exportFileName: 'users.csv',
+  importPerm: 'system:user:add',
+  importTemplatePath: '/system/users/import-template',
+  importTemplateFileName: 'users-template.csv',
+  batchDeletePerm: 'system:user:remove',
   search: [
     { name: 'keyword', label: '用户名 / 昵称', type: 'input', placeholder: '用户名 / 昵称' },
   ],
   columns: [
-    { key: 'username', title: '用户名' },
+    { key: 'username', title: '用户名', copyable: true },
     { key: 'nickname', title: '昵称' },
     { key: 'deptName', title: '部门' },
     { key: 'status', title: '状态', type: 'dict', dictType: 'sys_user_status' },
-    { key: 'createTime', title: '创建时间', type: 'datetime' },
+    { key: 'createTime', title: '创建时间', type: 'datetime', sortable: true },
   ],
   detail: {
     title: '用户详情',

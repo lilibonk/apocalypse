@@ -20,6 +20,7 @@ for (const initiallyOff of [false, true]) {
     const draft = page.getByLabel('Unsaved draft', { exact: true })
     const expand = page.getByRole('button', { name: 'Expand record', exact: true })
     await expect(wrapper).toHaveCount(1)
+    await expect(wrapper).toHaveCSS('opacity', '1')
     const originalWrapper = await wrapper.elementHandle()
     const instance = await state.getAttribute('data-instance')
     expect(instance).toBeTruthy()
@@ -76,6 +77,7 @@ for (const initiallyOff of [false, true]) {
     await expect(state).toHaveAttribute('data-count', '0')
     await expect(draft).toHaveValue('')
     await expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await expect(wrapper).toHaveCSS('opacity', '1')
   })
 }
 

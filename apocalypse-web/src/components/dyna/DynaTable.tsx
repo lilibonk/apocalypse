@@ -6,7 +6,8 @@
  */
 
 import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Inbox, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Inbox, SearchX } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { DictTag } from '@/components/DictTag'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,7 @@ import { isResourceDenied } from '@/lib/query/use-resource-denial'
 import { DynaQueryFeedback } from './DynaQueryFeedback'
 import { DynaPagination } from './DynaPagination'
 import type { DynaColumn } from './schema'
+import type { DynaSortState } from './use-dyna-url-state'
 import { useDynaText } from './use-dyna'
 
 export interface DynaTableProps {
@@ -51,35 +53,72 @@ export interface DynaTableProps {
   paginated?: boolean
   /** Row (by `rowKey`) whose detail Sheet is open; it keeps a stable highlight until it closes. */
   activeRowKey?: string | null
+  /** Row (by `rowKey`) that was just created, edited, or toggled; triggers the fluid row pulse (FE-W2 P4). */
+  mutatedRowKey?: string | null
+  /** 当前激活的列排序状态（FE-W5 M4）。 */
+  sort?: DynaSortState | null
+  onSortChange?: (field: string) => void
+  /** 是否开启行多选（FE-W6 M3 批量操作）。 */
+  selectable?: boolean
+  selectedKeys?: readonly string[]
+  onSelectedKeysChange?: (keys: string[]) => void
 }
 
 function CellValue({ column, row }: { column: DynaColumn; row: Record<string, unknown> }) {
   const t = useDynaText()
   const raw = row[column.key]
 
-  if (column.type === 'dict' && column.dictType) {
-    return <DictTag type={column.dictType} value={raw as string | number | null | undefined} />
+  const content = (() => {
+    if (column.type === 'dict' && column.dictType) {
+      return <DictTag type={column.dictType} value={raw as string | number | null | undefined} />
+    }
+    if (raw === null || raw === undefined || raw === '') {
+      return <span className="text-muted-foreground">-</span>
+    }
+    if (column.type === 'datetime') {
+      return (
+        <span className="text-muted-foreground">{String(raw).replace('T', ' ').slice(0, 19)}</span>
+      )
+    }
+    if (column.options) {
+      const option = column.options.find((option) => option.value === String(raw))
+      if (!option) return <>{t('unknownOption')}</>
+      if (!option.tone) return <>{t(option.label)}</>
+      return (
+        <Badge variant={option.tone}>
+          <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+          {t(option.label)}
+        </Badge>
+      )
+    }
+    return <>{String(raw)}</>
+  })()
+
+  if (!column.copyable || raw === null || raw === undefined || raw === '') {
+    return content
   }
-  if (raw === null || raw === undefined || raw === '') {
-    return <span className="text-muted-foreground">-</span>
-  }
-  if (column.type === 'datetime') {
-    return (
-      <span className="text-muted-foreground">{String(raw).replace('T', ' ').slice(0, 19)}</span>
-    )
-  }
-  if (column.options) {
-    const option = column.options.find((option) => option.value === String(raw))
-    if (!option) return <>{t('unknownOption')}</>
-    if (!option.tone) return <>{t(option.label)}</>
-    return (
-      <Badge variant={option.tone}>
-        <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-        {t(option.label)}
-      </Badge>
-    )
-  }
-  return <>{String(raw)}</>
+
+  const rawText = String(raw)
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>{content}</span>
+      <button
+        type="button"
+        data-slot="cell-copy-button"
+        aria-label={`${t('copy')} ${rawText}`}
+        className="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        onClick={(event) => {
+          event.stopPropagation()
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            void navigator.clipboard.writeText(rawText)
+          }
+          toast.success(t('copied'))
+        }}
+      >
+        <Copy className="size-3" aria-hidden="true" />
+      </button>
+    </span>
+  )
 }
 
 /** Right offsets of frozen columns, 0 = rightmost; literal class names so Tailwind emits them. */
@@ -154,26 +193,50 @@ function frozenEdge(shown: boolean) {
 /** One desktop row; memoised so a highlight or layer change re-renders only the affected row. */
 const DynaTableRow = memo(function DynaTableRow({
   row,
+  rowKeyValue,
   columns,
   actions,
   frozenEdgeKey,
   frozenOverlap,
   active,
+  mutated,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   row: Record<string, unknown>
+  rowKeyValue: string
   columns: DynaColumn[]
   actions: DynaTableProps['actions']
   frozenEdgeKey: string | null
   frozenOverlap: boolean
   active: boolean
+  mutated: boolean
+  selectable: boolean
+  selected: boolean
+  onToggleSelect?: (key: string) => void
 }) {
+  const t = useDynaText()
   const hasActions = Boolean(actions)
   const actionsFrozen = hasActions ? 0 : null
   return (
     <TableRow
       className="group [&>td:first-child]:font-medium"
       data-origin-active={active ? '' : undefined}
+      data-mutated-pulse={mutated ? 'true' : undefined}
+      data-just-mutated={mutated ? 'true' : undefined}
     >
+      {selectable && (
+        <TableCell className="w-10">
+          <input
+            type="checkbox"
+            checked={selected}
+            aria-label={`${t('selectRow')} ${rowKeyValue}`}
+            className="size-4 rounded border-border accent-primary"
+            onChange={() => onToggleSelect?.(rowKeyValue)}
+          />
+        </TableCell>
+      )}
       {columns.map((column) => (
         <TableCell
           key={column.key}
@@ -206,14 +269,20 @@ const DynaTableCard = memo(function DynaTableCard({
   row,
   columns,
   actions,
+  mutated,
 }: {
   row: Record<string, unknown>
   columns: DynaColumn[]
   actions: DynaTableProps['actions']
+  mutated: boolean
 }) {
   const t = useDynaText()
   return (
-    <article className="space-y-3 p-4">
+    <article
+      className="space-y-3 p-4"
+      data-mutated-pulse={mutated ? 'true' : undefined}
+      data-just-mutated={mutated ? 'true' : undefined}
+    >
       <dl className="grid grid-cols-[minmax(5.5rem,auto)_1fr] gap-x-3 gap-y-2 text-sm">
         {columns.map((column) => (
           <div key={column.key} className="contents">
@@ -257,6 +326,12 @@ export const DynaTable = memo(function DynaTable({
   pageSizeOptions = [10, 20, 50, 100],
   paginated = true,
   activeRowKey = null,
+  mutatedRowKey = null,
+  sort = null,
+  onSortChange,
+  selectable = false,
+  selectedKeys = [],
+  onSelectedKeysChange,
 }: DynaTableProps) {
   const t = useDynaText()
   const canShowData = rows !== undefined && !isResourceDenied(error)
@@ -269,6 +344,30 @@ export const DynaTable = memo(function DynaTable({
   )
   const edge = (isEdge: boolean) => frozenEdge(isEdge && frozenOverlap)
   const actionsFrozen = hasActions ? 0 : null
+
+  const selectedSet = new Set(selectedKeys)
+  const pageRowKeys = (rows ?? []).map((row, idx) => String(row[rowKey] ?? idx))
+  const allPageSelected = pageRowKeys.length > 0 && pageRowKeys.every((key) => selectedSet.has(key))
+
+  const handleToggleRow = (key: string) => {
+    if (!onSelectedKeysChange) return
+    if (selectedSet.has(key)) {
+      onSelectedKeysChange(selectedKeys.filter((item) => item !== key))
+    } else {
+      onSelectedKeysChange([...selectedKeys, key])
+    }
+  }
+
+  const handleToggleAll = () => {
+    if (!onSelectedKeysChange) return
+    if (allPageSelected) {
+      const pageSet = new Set(pageRowKeys)
+      onSelectedKeysChange(selectedKeys.filter((item) => !pageSet.has(item)))
+    } else {
+      const merged = new Set([...selectedKeys, ...pageRowKeys])
+      onSelectedKeysChange([...merged])
+    }
+  }
 
   return (
     <>
@@ -323,20 +422,68 @@ export const DynaTable = memo(function DynaTable({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {columns.map((column) => (
-                        <TableHead
-                          key={column.key}
-                          data-frozen={frozenIndex(column, columns, hasActions) ?? undefined}
-                          className={cn(
-                            frozenClass(frozenIndex(column, columns, hasActions)),
-                            column.sticky === 'right' && 'w-40 min-w-40',
-                            'bg-(--table-head)',
-                            edge(column.key === frozenEdgeKey),
-                          )}
-                        >
-                          {t(column.title)}
+                      {selectable && (
+                        <TableHead className="w-10 bg-(--table-head)">
+                          <input
+                            type="checkbox"
+                            checked={allPageSelected}
+                            aria-label={t('selectAllRows')}
+                            className="size-4 rounded border-border accent-primary"
+                            onChange={handleToggleAll}
+                          />
                         </TableHead>
-                      ))}
+                      )}
+                      {columns.map((column) => {
+                        const isSorted = sort?.field === column.key
+                        const ariaSort = isSorted
+                          ? sort?.order === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : column.sortable
+                            ? 'none'
+                            : undefined
+                        return (
+                          <TableHead
+                            key={column.key}
+                            aria-sort={ariaSort}
+                            data-frozen={frozenIndex(column, columns, hasActions) ?? undefined}
+                            className={cn(
+                              frozenClass(frozenIndex(column, columns, hasActions)),
+                              column.sticky === 'right' && 'w-40 min-w-40',
+                              'bg-(--table-head)',
+                              edge(column.key === frozenEdgeKey),
+                            )}
+                          >
+                            {column.sortable && onSortChange ? (
+                              <button
+                                type="button"
+                                data-slot="column-sort-button"
+                                className="inline-flex items-center gap-1 font-medium text-foreground transition-colors hover:text-primary"
+                                onClick={() => onSortChange(column.key)}
+                              >
+                                <span>{t(column.title)}</span>
+                                {isSorted ? (
+                                  sort?.order === 'asc' ? (
+                                    <ArrowUp className="size-3.5 text-primary" aria-hidden="true" />
+                                  ) : (
+                                    <ArrowDown
+                                      className="size-3.5 text-primary"
+                                      aria-hidden="true"
+                                    />
+                                  )
+                                ) : (
+                                  <ArrowUpDown
+                                    className="size-3.5 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </button>
+                            ) : (
+                              t(column.title)
+                            )}
+                          </TableHead>
+                        )
+                      })}
                       {actions && (
                         <TableHead
                           data-frozen={actionsFrozen ?? undefined}
@@ -352,30 +499,42 @@ export const DynaTable = memo(function DynaTable({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows?.map((row, index) => (
-                      <DynaTableRow
-                        key={(row[rowKey] as string | number | undefined) ?? index}
-                        row={row}
-                        columns={columns}
-                        actions={actions}
-                        frozenEdgeKey={frozenEdgeKey}
-                        frozenOverlap={frozenOverlap}
-                        active={activeRowKey !== null && String(row[rowKey]) === activeRowKey}
-                      />
-                    ))}
+                    {rows?.map((row, index) => {
+                      const keyStr = String((row[rowKey] as string | number | undefined) ?? index)
+                      return (
+                        <DynaTableRow
+                          key={keyStr}
+                          row={row}
+                          rowKeyValue={keyStr}
+                          columns={columns}
+                          actions={actions}
+                          frozenEdgeKey={frozenEdgeKey}
+                          frozenOverlap={frozenOverlap}
+                          active={activeRowKey !== null && keyStr === activeRowKey}
+                          mutated={mutatedRowKey !== null && keyStr === mutatedRowKey}
+                          selectable={selectable}
+                          selected={selectedSet.has(keyStr)}
+                          onToggleSelect={handleToggleRow}
+                        />
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
 
               <div className="divide-y divide-border md:hidden">
-                {rows?.map((row, index) => (
-                  <DynaTableCard
-                    key={(row[rowKey] as string | number | undefined) ?? index}
-                    row={row}
-                    columns={columns}
-                    actions={actions}
-                  />
-                ))}
+                {rows?.map((row, index) => {
+                  const keyStr = String((row[rowKey] as string | number | undefined) ?? index)
+                  return (
+                    <DynaTableCard
+                      key={keyStr}
+                      row={row}
+                      columns={columns}
+                      actions={actions}
+                      mutated={mutatedRowKey !== null && keyStr === mutatedRowKey}
+                    />
+                  )
+                })}
               </div>
             </>
           )}

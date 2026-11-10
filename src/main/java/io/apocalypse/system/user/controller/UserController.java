@@ -9,8 +9,10 @@ import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.user.dto.request.ResetPasswordReq;
 import io.apocalypse.system.user.dto.request.SelfPasswordUpdateReq;
 import io.apocalypse.system.user.dto.request.SelfProfileUpdateReq;
+import io.apocalypse.system.user.dto.request.UserBatchDeleteReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
+import io.apocalypse.system.user.dto.response.CsvImportResultResp;
 import io.apocalypse.system.user.dto.response.CurrentUserResp;
 import io.apocalypse.system.user.dto.response.SelfSessionResp;
 import io.apocalypse.system.user.dto.response.UserResp;
@@ -19,6 +21,7 @@ import io.apocalypse.system.user.service.UserService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import lombok.RequiredArgsConstructor;
 
@@ -116,8 +120,10 @@ public class UserController {
           int size,
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) Long deptId,
-      @RequestParam(defaultValue = "false") boolean includeChildren) {
-    return userService.page(page, size, keyword, deptId, includeChildren);
+      @RequestParam(defaultValue = "false") boolean includeChildren,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder) {
+    return userService.page(page, size, keyword, deptId, includeChildren, sortField, sortOrder);
   }
 
   /** 按当前授权数据范围导出用户 CSV（带 UTF-8 BOM 与公式注入防护）。 */
@@ -143,6 +149,53 @@ public class UserController {
   @PreAuthorize("hasAuthority('system:user:add') or hasAuthority('system:user:edit')")
   public List<DeptTreeNode> departmentOptions(@RequestParam String operation) {
     return userService.departmentOptions(operation);
+  }
+
+  /** 检查用户名是否可用（{@code true} = 未被占用，供前端失焦防抖预检）。 */
+  @GetMapping("/check-username")
+  @PreAuthorize("hasAuthority('system:user:add') or hasAuthority('system:user:edit')")
+  public boolean checkUsernameAvailable(@RequestParam String username) {
+    return !userService.existsByUsername(username);
+  }
+
+  /** 下载用户批量导入标准 CSV 模板（带 UTF-8 BOM）。 */
+  @GetMapping("/import-template")
+  @PreAuthorize("hasAuthority('system:user:add')")
+  public ResponseEntity<byte[]> downloadImportTemplate() {
+    byte[] bytes = userService.exportImportTemplateCsv();
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
+    headers.setContentLength(bytes.length);
+    headers.setContentDisposition(
+        ContentDisposition.attachment()
+            .filename("users-template.csv", StandardCharsets.UTF_8)
+            .build());
+    headers.setCacheControl(CacheControl.noStore());
+    headers.set("X-Content-Type-Options", "nosniff");
+    return ResponseEntity.ok().headers(headers).body(bytes);
+  }
+
+  /** 批量导入用户 CSV。 */
+  @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAuthority('system:user:add')")
+  @OperLog(title = "用户管理", businessType = "IMPORT")
+  public CsvImportResultResp importCsv(@RequestParam("file") MultipartFile file) {
+    if (file == null || file.isEmpty()) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "上传的 CSV 文件不能为空");
+    }
+    try {
+      return userService.importCsv(file.getBytes());
+    } catch (IOException ex) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "读取 CSV 文件失败");
+    }
+  }
+
+  /** 批量删除用户（逻辑删）。 */
+  @DeleteMapping("/batch")
+  @PreAuthorize("hasAuthority('system:user:remove')")
+  @OperLog(title = "用户管理", businessType = "DELETE")
+  public void deleteBatch(@Validated @RequestBody UserBatchDeleteReq req) {
+    userService.deleteBatch(req.ids());
   }
 
   /** 详情。 */

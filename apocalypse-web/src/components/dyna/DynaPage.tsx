@@ -25,6 +25,7 @@ import {
   Power,
   RefreshCw,
   Trash2,
+  Upload,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -49,6 +50,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PixelScale } from '@/effects/PixelWave'
 import { ApiError, assertPermissionAccess } from '@/lib/api/client'
+import { toastApiError } from '@/lib/api/error-toast'
 import type { PageResult } from '@/lib/api/types'
 import { ModuleAccess } from '@/lib/query/ModuleAccess'
 import type { ModuleOperation, ModuleScope } from '@/lib/query/module-scope'
@@ -62,7 +64,8 @@ import { useStableCallback } from '@/hooks/useStableCallback'
 import { createDynaQueries } from './dyna-queries'
 
 import { DynaDetail } from './DynaDetail'
-import { DynaForm, type DynaFormProps } from './DynaForm'
+import { DynaForm, type DynaAsyncFieldValidator, type DynaFormProps } from './DynaForm'
+import { DynaImportDialog } from './DynaImportDialog'
 import { DynaSearch } from './DynaSearch'
 import { DynaTable, type DynaTableProps } from './DynaTable'
 import {
@@ -71,6 +74,7 @@ import {
   type DynaPageSchema,
   type DynaStatusToggleAction,
 } from './schema'
+import { expandSearchFieldKeys, useDynaUrlState } from './use-dyna-url-state'
 import { useDynaText } from './use-dyna'
 
 type Row = Record<string, unknown>
@@ -93,10 +97,6 @@ function rowIdOf(row: Row, rowKey: string): string {
   return String(id)
 }
 
-function errorText(error: unknown, fallback: string): string {
-  return error instanceof ApiError ? error.message : fallback
-}
-
 function triggerBlobDownload(blob: Blob, fileName: string): void {
   if (typeof window === 'undefined' || typeof URL.createObjectURL !== 'function') return
   const url = URL.createObjectURL(blob)
@@ -115,6 +115,8 @@ export interface DynaPageProps {
   queryScope?: ModuleScope
   /** Page-owned server option loading; default forms keep the schema renderer. */
   formComponent?: ComponentType<DynaFormProps>
+  /** Optional field-level async validators (e.g. uniqueness check on blur/debounce/submit). */
+  asyncValidators?: Record<string, DynaAsyncFieldValidator>
   /**
    * custom 行操作的 handler 注册表：action.key → 点击回调（拿到整行数据）。
    * 越出标准 CRUD 的行级动作（授权弹窗、跳转等）由页面经此注入；
@@ -243,6 +245,7 @@ function DynaPageContent({
   view,
   onViewChange,
   formComponent: FormComponent = DynaForm,
+  asyncValidators,
 }: DynaPageProps & {
   queries: ReturnType<typeof createDynaQueries>
   view: DynaView
@@ -258,14 +261,25 @@ function DynaPageContent({
   const defaultPageSize = schema.pageSize ?? 10
   const entity = t(schema.entityName ?? '记录')
 
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [draftSearch, setDraftSearch] = useState<Record<string, string>>(
-    entryContext?.filters ?? {},
-  )
-  const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>(
-    entryContext?.filters ?? {},
-  )
+  const searchFieldNames = useMemo(() => expandSearchFieldKeys(schema.search), [schema.search])
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    draftSearch,
+    setDraftSearch,
+    appliedSearch,
+    setAppliedSearch,
+    sort,
+    setSort,
+    toggleSort,
+  } = useDynaUrlState({
+    embedded,
+    defaultPageSize,
+    searchFieldNames,
+    entryFilters: entryContext?.filters,
+  })
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [viewing, setViewing] = useState<Row | null>(null)
   const [deleting, setDeleting] = useState<Row | null>(null)
@@ -273,6 +287,16 @@ function DynaPageContent({
   const [mutationDenial, setMutationDenial] = useState<ApiError | null>(null)
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(
     entryContext?.selectedRowKey ?? null,
+  )
+  const [mutatedRowKey, setMutatedRowKey] = useState<string | null>(null)
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([])
+  const [batchDeleting, setBatchDeleting] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  const effectiveSearch = useMemo(
+    () =>
+      sort ? { ...appliedSearch, sortField: sort.field, sortOrder: sort.order } : appliedSearch,
+    [appliedSearch, sort],
   )
 
   const { data, isLoading, isFetching, error, refetch } = useQuery<PageResult<Row>>(
@@ -282,7 +306,7 @@ function DynaPageContent({
         endpoint: schema.endpoint,
         page,
         size: pageSize,
-        search: appliedSearch,
+        search: effectiveSearch,
       },
       validation.success,
     ),
@@ -298,6 +322,9 @@ function DynaPageContent({
       setDeleting(null)
       setToggling(null)
       setSelectedRowKey(null)
+      setSelectedKeys([])
+      setBatchDeleting(false)
+      setImporting(false)
     },
   })
   const onDenied = {
@@ -328,11 +355,13 @@ function DynaPageContent({
   const localKey = JSON.stringify([
     page,
     pageSize,
-    appliedSearch,
+    effectiveSearch,
     dialog,
     deleting,
     toggling,
     viewing,
+    batchDeleting,
+    importing,
   ])
 
   const saveMutation = useModuleMutation(queryScope, {
@@ -342,12 +371,18 @@ function DynaPageContent({
       input.mode === 'create'
         ? run(queries.create, input.body)
         : run(queries.edit, { id: input.id!, body: input.body }),
-    onSuccess: (_result, input) => {
+    onSuccess: (result, input) => {
+      const savedId =
+        input.id ??
+        (result && typeof result === 'object' && rowKey in result
+          ? String((result as Row)[rowKey])
+          : null)
+      if (savedId) setMutatedRowKey(savedId)
       toast.success(t(input.mode === 'create' ? 'created' : 'updated', { entity }))
       setDialog(null)
       void invalidate()
     },
-    onError: (error) => toast.error(errorText(error, t('保存失败'))),
+    onError: (error) => toastApiError(error, t('保存失败')),
   })
 
   const deleteMutation = useModuleMutation(queryScope, {
@@ -359,7 +394,20 @@ function DynaPageContent({
       setDeleting(null)
       void invalidate()
     },
-    onError: (error) => toast.error(errorText(error, t('删除失败'))),
+    onError: (error) => toastApiError(error, t('删除失败')),
+  })
+
+  const batchDeleteMutation = useModuleMutation(queryScope, {
+    onDenied,
+    localKey,
+    mutationFn: (run, ids: readonly string[]) => run(queries.batchRemove, ids),
+    onSuccess: () => {
+      toast.success(t('deleted', { entity }))
+      setSelectedKeys([])
+      setBatchDeleting(false)
+      void invalidate()
+    },
+    onError: (error) => toastApiError(error, t('删除失败')),
   })
 
   const toggleMutation = useModuleMutation(queryScope, {
@@ -370,12 +418,13 @@ function DynaPageContent({
       if (!operation) throw new Error('Unknown Dyna action')
       return run(operation, input)
     },
-    onSuccess: () => {
+    onSuccess: (_result, input) => {
+      setMutatedRowKey(input.id)
       toast.success(t('操作成功'))
       setToggling(null)
       void invalidate()
     },
-    onError: (error) => toast.error(errorText(error, t('操作失败'))),
+    onError: (error) => toastApiError(error, t('操作失败')),
   })
 
   const customMutation = useModuleMutation(queryScope, {
@@ -384,21 +433,19 @@ function DynaPageContent({
     mutationFn: (run, input: { action: ScopedDynaAction; row: Row }) =>
       run(input.action.operation, input.row),
     onSuccess: (result, input) => input.action.onSuccess?.(result, input.row),
-    onError: (error) => toast.error(errorText(error, t('操作失败'))),
+    onError: (error) => toastApiError(error, t('操作失败')),
   })
 
   const exportMutation = useModuleMutation(queryScope, {
     onDenied,
     localKey,
-    mutationFn: (run) => run(queries.exportCsv, appliedSearch),
+    mutationFn: (run) => run(queries.exportCsv, effectiveSearch),
     onSuccess: (blob) => {
       triggerBlobDownload(blob, schema.exportFileName ?? `${schema.key}.csv`)
       toast.success(commonText('common.导出成功', { defaultValue: 'CSV 导出成功' }))
     },
     onError: (error) =>
-      toast.error(
-        errorText(error, commonText('common.导出失败', { defaultValue: 'CSV 导出失败' })),
-      ),
+      toastApiError(error, commonText('common.导出失败', { defaultValue: 'CSV 导出失败' })),
   })
 
   const customPending = customMutation.isPending
@@ -411,12 +458,16 @@ function DynaPageContent({
   const resetFilters = useCallback(() => {
     setDraftSearch({})
     setAppliedSearch({})
+    setSort(null)
     setPage(1)
-  }, [])
-  const changePageSize = useCallback((size: number) => {
-    setPage(1)
-    setPageSize(size)
-  }, [])
+  }, [setAppliedSearch, setDraftSearch, setPage, setSort])
+  const changePageSize = useCallback(
+    (size: number) => {
+      setPage(1)
+      setPageSize(size)
+    },
+    [setPage, setPageSize],
+  )
   // The row a layer was opened from stays marked while that layer is open.
   const activeRow = viewing ?? dialog?.row ?? deleting ?? toggling?.row ?? null
   const activeRowKey = activeRow ? String(activeRow[rowKey] ?? '') : null
@@ -592,6 +643,10 @@ function DynaPageContent({
       customPending,
       togglePending,
       runCustom,
+      setViewing,
+      setDialog,
+      setDeleting,
+      setToggling,
     ],
   )
 
@@ -661,6 +716,26 @@ function DynaPageContent({
       >
         <RefreshCw className="size-4" />
       </Button>
+      {schema.batchDeletePerm && selectedKeys.length > 0 && (
+        <Perm perm={schema.batchDeletePerm}>
+          <Button
+            variant="destructive"
+            onClick={() => setBatchDeleting(true)}
+            disabled={batchDeleteMutation.isPending}
+          >
+            <Trash2 className="size-4" />
+            {t('batchDeleteCount', { count: selectedKeys.length })}
+          </Button>
+        </Perm>
+      )}
+      {schema.importPerm && (
+        <Perm perm={schema.importPerm}>
+          <Button variant="outline" onClick={() => setImporting(true)}>
+            <Upload className="size-4" />
+            {commonText('common.导入CSV', { defaultValue: '导入 CSV' })}
+          </Button>
+        </Perm>
+      )}
       {schema.exportPerm && (
         <Perm perm={schema.exportPerm}>
           <Button
@@ -715,6 +790,12 @@ function DynaPageContent({
     onPageChange: setPage,
     onPageSizeChange: changePageSize,
     activeRowKey: activeRowKey ?? selectedRowKey,
+    mutatedRowKey,
+    sort,
+    onSortChange: toggleSort,
+    selectable: Boolean(schema.batchDeletePerm),
+    selectedKeys,
+    onSelectedKeysChange: setSelectedKeys,
   }
 
   return (
@@ -776,6 +857,7 @@ function DynaPageContent({
           open={dialog !== null}
           initialRow={dialog?.row ?? null}
           submitting={saveMutation.isPending}
+          asyncValidators={asyncValidators}
           onOpenChange={(open) => !open && setDialog(null)}
           onSubmit={(body) =>
             dialog &&
@@ -796,6 +878,18 @@ function DynaPageContent({
         fields={schema.detail?.fields ?? schema.columns}
         record={viewing}
       />
+
+      {schema.importPerm && (
+        <DynaImportDialog
+          open={importing}
+          onOpenChange={setImporting}
+          endpoint={schema.endpoint}
+          templatePath={schema.importTemplatePath}
+          entityName={entity}
+          templateFileName={schema.importTemplateFileName ?? `${schema.key}-template.csv`}
+          onImported={() => void invalidate()}
+        />
+      )}
 
       <AlertDialog
         open={deleting !== null}
@@ -820,6 +914,36 @@ function DynaPageContent({
             >
               {deleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
               {deleteMutation.isPending ? t('删除中…') : t('确认删除')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={batchDeleting}
+        onOpenChange={(open) => !open && !batchDeleteMutation.isPending && setBatchDeleting(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('确认删除')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('batchDeleteHint', { count: selectedKeys.length, entity })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={batchDeleteMutation.isPending}>
+              {t('取消')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={batchDeleteMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                if (selectedKeys.length > 0) batchDeleteMutation.mutate(selectedKeys)
+              }}
+            >
+              {batchDeleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
+              {batchDeleteMutation.isPending ? t('删除中…') : t('确认删除')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

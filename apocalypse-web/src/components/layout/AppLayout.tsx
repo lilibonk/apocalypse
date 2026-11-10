@@ -19,6 +19,7 @@ import { CommandPalette } from '@/components/layout/CommandPalette'
 import { useRecentRoutes } from '@/stores/recent-routes'
 import { Header } from '@/components/layout/Header'
 import { ProfileDrawer } from '@/components/layout/ProfileDrawer'
+import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TabBar } from '@/components/layout/TabBar'
@@ -63,8 +64,11 @@ export function AppLayout() {
         ? '工作台'
         : (flattenMenuRoutes(menus).find((route) => route.path === location.pathname)?.title ??
           document.title)
-    openTab({ key: location.pathname, title: rawTitle })
-  }, [location.pathname, menus, tabsEnabled, openTab])
+    openTab(
+      { key: location.pathname, title: rawTitle },
+      location.search ? location.search : undefined,
+    )
+  }, [location.pathname, location.search, menus, tabsEnabled, openTab])
 
   const userId = useAuthStore((state) => state.user?.id)
   useEffect(() => {
@@ -154,9 +158,11 @@ export function AppLayout() {
         >
           {/* contentWidth=boxed：内容限宽居中；fluid：通栏 */}
           <div className={cn(contentWidth === 'boxed' && 'mx-auto w-full max-w-7xl')}>
-            <PageTransition key={location.pathname}>
-              <Outlet />
-            </PageTransition>
+            <RouteErrorBoundary>
+              <PageTransition key={location.pathname}>
+                <Outlet />
+              </PageTransition>
+            </RouteErrorBoundary>
           </div>
         </main>
       </div>

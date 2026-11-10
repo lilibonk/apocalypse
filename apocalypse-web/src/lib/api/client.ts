@@ -14,8 +14,18 @@ import axios, {
 } from 'axios'
 
 import type { RequestContext } from '@/lib/query/access-lease'
+import i18n from 'i18next'
 
 import { CODE_SUCCESS, CODE_UNAUTHORIZED, type R } from './types'
+
+function clientText(
+  key: string,
+  defaultValue: string,
+  params?: Record<string, string | number>,
+): string {
+  if (!i18n.isInitialized) return defaultValue
+  return i18n.t(key, { defaultValue, ...params })
+}
 
 /** 业务/系统统一错误。message 一律来自后端 R.message（中文直出），network 层给兜底文案。 */
 export class ApiError extends Error {
@@ -178,7 +188,7 @@ http.interceptors.response.use(
       try {
         data = typeof json === 'string' ? JSON.parse(json) : json
       } catch {
-        throw new ApiError(-1, '下载响应格式无效')
+        throw new ApiError(-1, clientText('common.apiInvalidDownloadFormat', '下载响应格式无效'))
       }
       if (!data || typeof data !== 'object' || !('code' in data) || data.code === CODE_SUCCESS)
         return response.data as never
@@ -191,7 +201,11 @@ http.interceptors.response.use(
       const retried = await handleUnauthorized(response.config)
       if (retried !== null) return retried.data as never
     }
-    throw new ApiError(envelope.code, envelope.message || '请求失败', envelope.traceId ?? null)
+    throw new ApiError(
+      envelope.code,
+      envelope.message || clientText('common.apiRequestFailed', '请求失败'),
+      envelope.traceId ?? null,
+    )
   },
   async (error: AxiosError) => {
     if (axios.isCancel(error)) throw error
@@ -201,7 +215,10 @@ http.interceptors.response.use(
         // HTTP 层未认证（过滤器直接拒绝，未走 R 包装）：按 40100 语义处理
         const retried = await handleUnauthorized(error.config)
         if (retried !== null) return retried.data as never
-        throw new ApiError(CODE_UNAUTHORIZED, '未认证或凭证无效')
+        throw new ApiError(
+          CODE_UNAUTHORIZED,
+          clientText('common.apiUnauthorized', '未认证或凭证无效'),
+        )
       }
       const body: unknown = error.response.data
       if (
@@ -218,9 +235,14 @@ http.interceptors.response.use(
           'traceId' in body && typeof body.traceId === 'string' ? body.traceId : null,
         )
       }
-      throw new ApiError(error.response.status, `服务异常（HTTP ${error.response.status}）`)
+      throw new ApiError(
+        error.response.status,
+        clientText('common.apiHttpError', `服务异常（HTTP ${error.response.status}）`, {
+          status: error.response.status,
+        }),
+      )
     }
-    throw new ApiError(-1, '网络异常，请检查网络连接')
+    throw new ApiError(-1, clientText('common.apiNetworkError', '网络异常，请检查网络连接'))
   },
 )
 

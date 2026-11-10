@@ -25,8 +25,8 @@ test('account selection carries through list, edit readback and pagination', asy
   await expect(page.getByRole('button', { name: '选择账号：成员 11', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '选择账号：成员 1', exact: true })).toHaveCount(0)
   await views.getByRole('button', { name: '列表', exact: true }).click()
-  await expect(page.getByRole('cell', { name: 'account-11', exact: true })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'account-1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('cell', { name: /^account-11(?:\s|$)/ })).toBeVisible()
+  await expect(page.getByRole('cell', { name: /^account-1(?:\s|$)/ })).toHaveCount(0)
 })
 
 test('a denied account scope removes object data and does not claim an empty success', async ({
@@ -55,7 +55,7 @@ test('a command handoff searches the guarded source and keeps context across vie
   await expect(page.getByRole('button', { name: '选择账号：成员 1', exact: true })).toHaveCount(0)
   await views.getByRole('button', { name: '列表', exact: true }).click()
   await expect(search).toHaveValue('account-12')
-  await expect(page.getByRole('cell', { name: 'account-12', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: /^account-12(?:\s|$)/ })).toBeVisible()
   await views.getByRole('button', { name: '工作区', exact: true }).click()
   await search.fill('no-such-account')
   await page.getByRole('button', { name: '查询', exact: true }).click()

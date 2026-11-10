@@ -1,6 +1,6 @@
 /**
- * 多页签状态：打开/关闭/激活。key 用路由 path（同路径复用同一页签）。
- * 仅运行时状态，不持久化。
+ * 多页签状态：打开/关闭/激活，以及各页签的 URL 查询串快照（searchByKey）。
+ * key 用路由 path（同路径复用同一页签）。仅运行时状态，不持久化。
  *
  * title 约定：存**菜单原文**（未翻译），渲染层（TabBar）经 useMenuTitle 实时
  * 翻译 —— 切语言时页签自动跟随，不存翻译快照（历史 bug：快照导致页签不随语言变）。
@@ -18,7 +18,12 @@ export interface TabItem {
 interface TabsState {
   tabs: TabItem[]
   activeKey: string | null
-  open: (tab: TabItem) => void
+  /** 各页签最近一次的查询参数快照（如 "?page=2&keyword=admin"），切页签时不断流。 */
+  searchByKey: Record<string, string>
+  open: (tab: TabItem, search?: string) => void
+  setTabSearch: (key: string, search: string) => void
+  getTabSearch: (key: string) => string
+  targetHref: (key: string) => string
   close: (key: string) => string | null
   closeOthers: (key: string) => void
   closeLeft: (key: string) => void
@@ -44,6 +49,23 @@ export function normalizeTabKey(key: string) {
   return key.length > 1 ? key.replace(/\/+$/, '') : key
 }
 
+function normalizeSearch(search: string | undefined): string {
+  if (!search || search === '?') return ''
+  return search.startsWith('?') ? search : `?${search}`
+}
+
+function retainSearchMap(
+  searchByKey: Record<string, string>,
+  keptTabs: readonly TabItem[],
+): Record<string, string> {
+  const allowed = new Set(keptTabs.map((item) => item.key))
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(searchByKey)) {
+    if (allowed.has(key) && value) next[key] = value
+  }
+  return next
+}
+
 function normalizeTabs(tabs: TabItem[]) {
   const unique = new Map<string, TabItem>()
   for (const tab of tabs) {
@@ -62,29 +84,65 @@ function ensureDashboard(tabs: TabItem[]) {
 export const useTabsStore = create<TabsState>()((set, get) => ({
   tabs: [],
   activeKey: null,
+  searchByKey: {},
 
-  open(tab) {
+  open(tab, search) {
     const key = normalizeTabKey(tab.key)
     const normalizedTab = isPinnedTab(key) ? DASHBOARD_TAB : { ...tab, key }
     const tabs = normalizeTabs(get().tabs)
     const tabsWithDashboard = isPinnedTab(key) ? tabs : ensureDashboard(tabs)
-    if (!tabsWithDashboard.some((item) => item.key === key)) {
-      set({ tabs: [...tabsWithDashboard, normalizedTab], activeKey: key })
-    } else {
-      set({ tabs: tabsWithDashboard, activeKey: key })
+    const nextTabs = tabsWithDashboard.some((item) => item.key === key)
+      ? tabsWithDashboard
+      : [...tabsWithDashboard, normalizedTab]
+    const nextSearchMap = { ...get().searchByKey }
+    if (search !== undefined) {
+      const normalized = normalizeSearch(search)
+      if (normalized) nextSearchMap[key] = normalized
+      else delete nextSearchMap[key]
     }
+    set({
+      tabs: nextTabs,
+      activeKey: key,
+      searchByKey: retainSearchMap(nextSearchMap, nextTabs),
+    })
+  },
+
+  setTabSearch(key, search) {
+    const normalizedKey = normalizeTabKey(key)
+    const normalizedSearch = normalizeSearch(search)
+    const current = get().searchByKey[normalizedKey] ?? ''
+    if (current === normalizedSearch) return
+    const nextSearchMap = { ...get().searchByKey }
+    if (normalizedSearch) nextSearchMap[normalizedKey] = normalizedSearch
+    else delete nextSearchMap[normalizedKey]
+    set({ searchByKey: nextSearchMap })
+  },
+
+  getTabSearch(key) {
+    return get().searchByKey[normalizeTabKey(key)] ?? ''
+  },
+
+  targetHref(key) {
+    const normalizedKey = normalizeTabKey(key)
+    const search = get().searchByKey[normalizedKey] ?? ''
+    return search ? `${normalizedKey}${search}` : normalizedKey
   },
 
   /** 关闭页签；当前页签关闭后统一回工作台，非当前页签不触发跳转。 */
   close(key) {
     if (isPinnedTab(key)) return null
-    const { tabs, activeKey } = get()
+    const { tabs, activeKey, searchByKey } = get()
     const next = tabs.filter((item) => item.key !== key)
     if (activeKey !== key) {
-      set({ tabs: next })
+      set({ tabs: next, searchByKey: retainSearchMap(searchByKey, next) })
       return null
     }
-    set({ tabs: ensureDashboard(next), activeKey: DASHBOARD_TAB.key })
+    const kept = ensureDashboard(next)
+    set({
+      tabs: kept,
+      activeKey: DASHBOARD_TAB.key,
+      searchByKey: retainSearchMap(searchByKey, kept),
+    })
     return DASHBOARD_TAB.key
   },
 
@@ -93,32 +151,45 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     const kept = ensureDashboard(
       get().tabs.filter((item) => isPinnedTab(item.key) || item.key === key),
     )
-    set({ tabs: kept, activeKey: key })
+    set({
+      tabs: kept,
+      activeKey: key,
+      searchByKey: retainSearchMap(get().searchByKey, kept),
+    })
   },
 
   closeLeft(key) {
-    const { tabs } = get()
+    const { tabs, searchByKey } = get()
     const index = tabs.findIndex((item) => item.key === key)
     if (index < 0) return
-    const kept = tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex >= index)
-    set({ tabs: ensureDashboard(kept) })
+    const kept = ensureDashboard(
+      tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex >= index),
+    )
+    set({ tabs: kept, searchByKey: retainSearchMap(searchByKey, kept) })
   },
 
   closeRight(key) {
-    const { tabs } = get()
+    const { tabs, searchByKey } = get()
     const index = tabs.findIndex((item) => item.key === key)
     if (index < 0) return
-    const kept = tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex <= index)
-    set({ tabs: ensureDashboard(kept) })
+    const kept = ensureDashboard(
+      tabs.filter((item, itemIndex) => isPinnedTab(item.key) || itemIndex <= index),
+    )
+    set({ tabs: kept, searchByKey: retainSearchMap(searchByKey, kept) })
   },
 
   closeAll() {
     const dashboard = get().tabs.find((item) => isPinnedTab(item.key)) ?? DASHBOARD_TAB
-    set({ tabs: [dashboard], activeKey: dashboard.key })
+    const kept = [dashboard]
+    set({
+      tabs: kept,
+      activeKey: dashboard.key,
+      searchByKey: retainSearchMap(get().searchByKey, kept),
+    })
   },
 
   activate(key) {
-    set({ activeKey: key })
+    set({ activeKey: normalizeTabKey(key) })
   },
 
   retainAllowed(allowedKeys) {
@@ -129,10 +200,11 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
     set({
       tabs,
       activeKey: activeKey && allowed.has(activeKey) ? activeKey : DASHBOARD_TAB.key,
+      searchByKey: retainSearchMap(get().searchByKey, tabs),
     })
   },
 
   reset() {
-    set({ tabs: [], activeKey: null })
+    set({ tabs: [], activeKey: null, searchByKey: {} })
   },
 }))

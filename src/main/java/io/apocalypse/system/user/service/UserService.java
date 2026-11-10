@@ -26,13 +26,16 @@ import io.apocalypse.system.user.dto.request.SelfPasswordUpdateReq;
 import io.apocalypse.system.user.dto.request.SelfProfileUpdateReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.request.UserUpdateReq;
+import io.apocalypse.system.user.dto.response.CsvImportResultResp;
 import io.apocalypse.system.user.dto.response.CurrentUserResp;
 import io.apocalypse.system.user.dto.response.SelfSessionResp;
 import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.entity.SysUserEntity;
 import io.apocalypse.system.user.mapper.SysUserMapper;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -163,6 +166,18 @@ public class UserService implements UserApi, LoginUserQuery {
   /** 分页查询，可按部门（及其下级）筛选；部门条件与当前动作数据范围取交集。 */
   public PageResult<UserResp> page(
       int page, int size, String keyword, Long deptId, boolean includeChildren) {
+    return page(page, size, keyword, deptId, includeChildren, null, null);
+  }
+
+  /** 分页查询，支持受控列排序（{@code createTime} / {@code username}）。 */
+  public PageResult<UserResp> page(
+      int page,
+      int size,
+      String keyword,
+      Long deptId,
+      boolean includeChildren,
+      String sortField,
+      String sortOrder) {
     return sysUserMapper
         .pageByKeyword(
             page,
@@ -170,7 +185,9 @@ public class UserService implements UserApi, LoginUserQuery {
             keyword,
             dataScopeService.resolve("system:user:list"),
             deptId,
-            includeChildren)
+            includeChildren,
+            sortField,
+            sortOrder)
         .map(userConvert::toResp)
         .map(this::withDeptName);
   }
@@ -202,6 +219,85 @@ public class UserService implements UserApi, LoginUserQuery {
       }
     }
     return SafeCsvSupport.writeUtf8BomCsv(List.of("用户ID", "用户名", "昵称", "部门", "状态", "创建时间"), rows);
+  }
+
+  /** 检查用户名是否已存在（供表单失焦防抖预检）。 */
+  @Transactional(readOnly = true)
+  public boolean existsByUsername(String username) {
+    if (!StringUtils.hasText(username)) {
+      return false;
+    }
+    return sysUserMapper.existsByUsername(username.trim());
+  }
+
+  /** 生成用户批量导入标准 CSV 模板（带 UTF-8 BOM）。 */
+  public byte[] exportImportTemplateCsv() {
+    return SafeCsvSupport.writeUtf8BomCsv(
+        List.of("username", "nickname", "password", "deptId"),
+        List.of(List.of("demo_user", "示例用户", "Demo@123456", "")));
+  }
+
+  /** 批量导入用户 CSV（单次上限 500 行）：逐行校验格式、密码强度、部门范围与重名，返回成功/失败行数及逐行错误明细。 */
+  public CsvImportResultResp importCsv(byte[] bytes) {
+    if (bytes == null || bytes.length == 0) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "CSV 文件内容不能为空");
+    }
+    List<Map<String, String>> parsedRows = SafeCsvSupport.parseCsv(bytes, 500);
+    if (parsedRows.isEmpty()) {
+      return new CsvImportResultResp(0, 0, 0, List.of());
+    }
+    int successCount = 0;
+    int failureCount = 0;
+    List<String> errors = new ArrayList<>();
+    for (int i = 0; i < parsedRows.size(); i++) {
+      int lineNo = i + 2;
+      Map<String, String> row = parsedRows.get(i);
+      String username = firstCell(row, "username", "用户名");
+      String nickname = firstCell(row, "nickname", "昵称");
+      String password = firstCell(row, "password", "密码");
+      String deptIdText = firstCell(row, "deptId", "部门ID");
+      try {
+        if (!StringUtils.hasText(username)) {
+          throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "用户名不能为空");
+        }
+        if (username.length() > 64) {
+          throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "用户名长度不能超过 64");
+        }
+        if (!StringUtils.hasText(password)) {
+          throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "密码不能为空");
+        }
+        Long deptId = null;
+        if (StringUtils.hasText(deptIdText)) {
+          try {
+            deptId = Long.parseLong(deptIdText);
+          } catch (NumberFormatException ex) {
+            throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "部门ID格式非法: " + deptIdText);
+          }
+        }
+        self.getObject()
+            .create(
+                new UserCreateReq(
+                    username, password, StringUtils.hasText(nickname) ? nickname : null, deptId));
+        successCount++;
+      } catch (BizException ex) {
+        if (ex.getCode() == ErrorCode.FORBIDDEN.getCode()
+            || ex.getCode() == ErrorCode.UNAUTHORIZED.getCode()) {
+          throw ex;
+        }
+        failureCount++;
+        String label = StringUtils.hasText(username) ? username : "未填用户名";
+        errors.add("第 " + lineNo + " 行（" + label + "）：" + ex.getMessage());
+      }
+    }
+    return new CsvImportResultResp(parsedRows.size(), successCount, failureCount, errors);
+  }
+
+  private static String firstCell(Map<String, String> row, String primaryKey, String aliasKey) {
+    String val = row.get(primaryKey);
+    if (val == null) {
+      val = row.get(aliasKey);
+    }
+    return val == null ? "" : val.trim();
   }
 
   /** 新增用户。密码按 {@link PasswordPolicy} 校验强度（登录不校验，仅新建/重置校验）。 */
@@ -276,6 +372,20 @@ public class UserService implements UserApi, LoginUserQuery {
     sysUserMapper.deleteRolesByUserId(id);
     roleService.recordUserRoleChange(id, roleIds, List.of());
     tokenVersionStore.invalidateCredential(entity.getUsername());
+  }
+
+  /** 批量删除用户（事务内逐条执行数据范围与受保护账号校验，任一越权整体回滚）。 */
+  @Transactional
+  public void deleteBatch(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "待删除用户ID列表不能为空");
+    }
+    for (Long id : ids) {
+      if (id == null) {
+        throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "待删除用户ID不能为空");
+      }
+      self.getObject().delete(id);
+    }
   }
 
   /** 重置密码：按 {@link PasswordPolicy} 校验强度后重置（admin 种子弱口令是历史妥协，仅登录放行）。 */

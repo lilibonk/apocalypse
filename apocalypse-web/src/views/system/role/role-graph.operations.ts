@@ -100,6 +100,7 @@ export async function invalidateRoleGraphQueries(client: QueryClient, roleId?: s
   await Promise.all([
     client.invalidateQueries({ queryKey: ['dyna', '/system/roles', 'system-role'] }),
     client.invalidateQueries({ queryKey: ['system', 'roles', 'permission-graph-choices'] }),
+    client.invalidateQueries({ queryKey: ['system', 'authorization', 'insights'] }),
     ...(roleId ? [client.invalidateQueries({ queryKey: ['system', 'roles', roleId] })] : []),
   ])
 }

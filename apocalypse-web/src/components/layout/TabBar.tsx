@@ -26,6 +26,7 @@ export function TabBar() {
   const tabs = useTabsStore((state) => state.tabs)
   const activeKey = useTabsStore((state) => state.activeKey)
   const activate = useTabsStore((state) => state.activate)
+  const targetHref = useTabsStore((state) => state.targetHref)
   const close = useTabsStore((state) => state.close)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const guard = useGuardedTabClose()
@@ -45,7 +46,7 @@ export function TabBar() {
           const title = menuTitle(tab.title)
           const activateTab = () => {
             activate(tab.key)
-            navigate(tab.key)
+            void navigate(targetHref(tab.key))
           }
           const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
             let nextIndex: number | null = null
@@ -57,7 +58,7 @@ export function TabBar() {
             event.preventDefault()
             const nextTab = tabs[nextIndex]
             activate(nextTab.key)
-            navigate(nextTab.key)
+            void navigate(targetHref(nextTab.key))
             tabRefs.current[nextIndex]?.focus()
           }
           return (

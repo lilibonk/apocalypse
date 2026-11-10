@@ -107,7 +107,12 @@ function PanoramaBody({
   const motionEnabled = useMotionPreference()
   const first = useFirstEntrance('role:panorama')
   const [branch, setBranch] = useState<Dial | null>(null)
+  const [branchPage, setBranchPage] = useState(1)
   const [focus, setFocus] = useState<Dial | null>(null)
+  const selectBranch = (next: Dial | null) => {
+    setBranch(next)
+    setBranchPage(1)
+  }
   if (query.isPending)
     return <Skeleton className="role-panorama-canvas h-auto w-full rounded-2xl" />
   if (query.isError)
@@ -160,7 +165,7 @@ function PanoramaBody({
         hint: t('panorama.navigationHint', { count: data.unassignedNavigationCount }),
       },
     }
-  const items: BranchItem[] =
+  const allBranchItems: BranchItem[] =
     branch === 'roles'
       ? roles.map((role) => ({
           key: role.id,
@@ -169,14 +174,14 @@ function PanoramaBody({
           onOpen: () => onChooseRole(role),
         }))
       : branch === 'users'
-        ? data.usersWithoutRoles.slice(0, ITEM_LIMIT).map((user) => ({
+        ? data.usersWithoutRoles.map((user) => ({
             key: user.id,
             label: user.nickname || user.username,
             detail: t('panorama.noRole'),
             onOpen: routeFor('system/user') ? () => navigate(routeFor('system/user')!) : undefined,
           }))
         : branch === 'permissions'
-          ? data.permissionModules.slice(0, ITEM_LIMIT).map((module) => ({
+          ? data.permissionModules.map((module) => ({
               key: module.key ?? 'core',
               label: module.key ?? t('panorama.coreModule'),
               detail: `${t('panorama.permissionCount', { count: module.count })}${module.enabled ? '' : ` · ${t('panorama.moduleDisabled')}`}`,
@@ -185,7 +190,7 @@ function PanoramaBody({
                 : undefined,
             }))
           : branch === 'navigation'
-            ? data.unassignedNavigation.slice(0, ITEM_LIMIT).map((menu) => ({
+            ? data.unassignedNavigation.map((menu) => ({
                 key: menu.menuId,
                 label: menu.menuName,
                 detail: t('panorama.unassigned'),
@@ -197,6 +202,13 @@ function PanoramaBody({
                   : undefined,
               }))
             : []
+  const localBranchPages =
+    branch && branch !== 'roles' ? Math.max(1, Math.ceil(allBranchItems.length / ITEM_LIMIT)) : 1
+  const currentBranchPage = Math.min(branchPage, localBranchPages)
+  const items: BranchItem[] =
+    branch === 'roles'
+      ? allBranchItems
+      : allBranchItems.slice((currentBranchPage - 1) * ITEM_LIMIT, currentBranchPage * ITEM_LIMIT)
   const itemY = (index: number) =>
     items.length <= 1 ? HUB.y : 70 + (index * (VIEW.height - 140)) / (items.length - 1)
   const dialPoint = (dial: Dial) =>
@@ -204,9 +216,9 @@ function PanoramaBody({
   const hubPoint = branch === null ? HUB : { x: 64, y: HUB.y, r: 22 }
   const extra =
     branch === 'users'
-      ? data.usersWithoutRolesCount - items.length
+      ? Math.max(0, data.usersWithoutRolesCount - allBranchItems.length)
       : branch === 'navigation'
-        ? data.unassignedNavigationCount - items.length
+        ? Math.max(0, data.unassignedNavigationCount - allBranchItems.length)
         : 0
   return (
     <div className="space-y-4">
@@ -217,7 +229,7 @@ function PanoramaBody({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setBranch(null)}
+            onClick={() => selectBranch(null)}
             aria-label={t('panorama.back')}
           >
             <ArrowLeft aria-hidden="true" />
@@ -238,7 +250,7 @@ function PanoramaBody({
         onKeyDown={(event) => {
           if (event.key === 'Escape' && branch) {
             event.stopPropagation()
-            setBranch(null)
+            selectBranch(null)
           }
         }}
       >
@@ -369,7 +381,7 @@ function PanoramaBody({
               onMouseLeave={() => setFocus(null)}
               onFocus={() => setFocus(dial)}
               onBlur={() => setFocus(null)}
-              onClick={() => setBranch(branch === dial ? null : dial)}
+              onClick={() => selectBranch(branch === dial ? null : dial)}
             >
               <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
               <span className="insight-metric text-xl font-semibold">{meta.count}</span>
@@ -427,6 +439,31 @@ function PanoramaBody({
               disabled={rolePage >= rolePages}
               aria-label={t('panorama.nextRoles')}
               onClick={() => onRolePage(rolePage + 1)}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+        {branch && branch !== 'roles' && localBranchPages > 1 && (
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={currentBranchPage <= 1}
+              aria-label={t('panorama.previousRoles')}
+              onClick={() => setBranchPage(currentBranchPage - 1)}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <span className="tabular-nums">
+              {currentBranchPage} / {localBranchPages}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={currentBranchPage >= localBranchPages}
+              aria-label={t('panorama.nextRoles')}
+              onClick={() => setBranchPage(currentBranchPage + 1)}
             >
               <ChevronRight aria-hidden="true" />
             </Button>

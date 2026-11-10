@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 
 import { AppProviders } from '@/app/providers'
 import { AppRouter } from '@/app/router'
+import { clearPreloadRecoveryMark, installPreloadRecovery } from '@/lib/preload-recovery'
 // stores/auth 模块加载时完成 client 接线，必须先于任何请求
 import { startBrowserSessionSync, useAuthStore } from '@/stores/auth'
 // i18n 初始化（zh 默认，设置面板语言切换由 providers 同步）
@@ -10,6 +11,8 @@ import '@/i18n'
 
 import './index.css'
 
+installPreloadRecovery()
+clearPreloadRecoveryMark()
 startBrowserSessionSync()
 void useAuthStore.getState().bootstrap()
 

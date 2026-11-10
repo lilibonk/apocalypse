@@ -42,12 +42,14 @@ import { ApiError } from '@/lib/api/client'
 import { summarizeUserAgent } from '@/lib/user-agent'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useModuleMutation } from '@/lib/query/use-module-mutation'
+import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
 import { useAuthStore } from '@/stores/auth'
 
 import { kickOnlineUser, listOnlineUsers, type OnlineUserRow } from './online.api'
 import { OnlineAccounts } from './OnlineAccounts'
 
 const QUERY_KEY = ['system', 'online-users'] as const
+const ONLINE_PULSE_KEYS = [QUERY_KEY] as const
 
 const columns: DynaColumn[] = [
   { key: 'username', title: '用户名' },
@@ -75,6 +77,7 @@ function OnlineUserWorkspace() {
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(ONLINE_VIEWS)
   const view = desktop ? requestedView : 'list'
+  useRealtimePulse({ queryKeys: ONLINE_PULSE_KEYS })
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: QUERY_KEY,

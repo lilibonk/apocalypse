@@ -8,23 +8,39 @@ import io.apocalypse.system.log.entity.SysLoginLogEntity;
 import io.apocalypse.system.log.entity.SysOperLogEntity;
 import io.apocalypse.system.log.mapper.SysLoginLogMapper;
 import io.apocalypse.system.log.mapper.SysOperLogMapper;
+import io.apocalypse.system.realtime.service.RealtimePulseHub;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
 
 /**
  * 日志落库监听：framework 发布登录与操作日志事件，本域监听落库。{@code @ApplicationModuleListener} = 事务提交后异步消费 +
  * event_publication 留痕。监听器不吞异常：失败事件保持未完成并由 Modulith 重投；日志表以 event_id 唯一键保证重复投递幂等。
  */
 @Component
-@RequiredArgsConstructor
 public class LogPersistListener {
 
   private final SysLoginLogMapper sysLoginLogMapper;
 
   private final SysOperLogMapper sysOperLogMapper;
+
+  private final RealtimePulseHub realtimePulseHub;
+
+  public LogPersistListener(
+      SysLoginLogMapper sysLoginLogMapper, SysOperLogMapper sysOperLogMapper) {
+    this(sysLoginLogMapper, sysOperLogMapper, null);
+  }
+
+  @Autowired
+  public LogPersistListener(
+      SysLoginLogMapper sysLoginLogMapper,
+      SysOperLogMapper sysOperLogMapper,
+      RealtimePulseHub realtimePulseHub) {
+    this.sysLoginLogMapper = sysLoginLogMapper;
+    this.sysOperLogMapper = sysOperLogMapper;
+    this.realtimePulseHub = realtimePulseHub;
+  }
 
   /** 登录成功落 sys_login_log。 */
   @ApplicationModuleListener
@@ -40,6 +56,9 @@ public class LogPersistListener {
     entity.setMessage("登录成功");
     entity.setLoginTime(event.occurredAt());
     sysLoginLogMapper.insertIdempotent(entity);
+    if (realtimePulseHub != null) {
+      realtimePulseHub.broadcast("loginSucceeded");
+    }
   }
 
   /** 登录失败落 sys_login_log。 */
@@ -82,5 +101,8 @@ public class LogPersistListener {
     entity.setCostTime(event.costTime());
     entity.setOperTime(event.occurredAt());
     sysOperLogMapper.insertIdempotent(entity);
+    if (realtimePulseHub != null) {
+      realtimePulseHub.broadcast("operationLogged");
+    }
   }
 }

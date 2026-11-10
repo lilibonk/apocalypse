@@ -4,6 +4,7 @@ import io.apocalypse.framework.log.OperLog;
 import io.apocalypse.framework.security.AuthService;
 import io.apocalypse.framework.security.OnlineUserRegistry;
 import io.apocalypse.system.online.dto.response.OnlineUserResp;
+import io.apocalypse.system.realtime.service.RealtimePulseHub;
 
 import java.util.List;
 
@@ -25,6 +26,8 @@ public class OnlineUserController {
   private final OnlineUserRegistry onlineUserRegistry;
 
   private final AuthService authService;
+
+  private final RealtimePulseHub realtimePulseHub;
 
   /** 在线用户列表。 */
   @GetMapping
@@ -48,6 +51,7 @@ public class OnlineUserController {
   @OperLog(title = "在线用户", businessType = "FORCE")
   public void kick(@PathVariable String jti) {
     authService.kickUser(jti);
+    realtimePulseHub.broadcast("onlineChanged");
   }
 
   /** 强退指定用户的全部设备会话（递增数据库凭证版本并清理全部在线条目）。 */
@@ -56,5 +60,6 @@ public class OnlineUserController {
   @OperLog(title = "在线用户", businessType = "FORCE")
   public void kickAllByUsername(@PathVariable String username) {
     authService.revokeAllSessions(username);
+    realtimePulseHub.broadcast("onlineChanged");
   }
 }

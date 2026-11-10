@@ -8,11 +8,12 @@
  *   Jackson 不做 boolean→Integer 强转，直接发 boolean 会被 400/500 拒绝）
  * - 空字符串 → 不提交（后端 optional 语义）
  * - 编辑态剔除 disabledInEdit 字段（如用户名只读展示不进 body）
+ * - visibleWhen 条件不满足时：自动跳过校验并从提交 body 中剔除
  */
 
 import { z } from 'zod'
 
-import type { DynaFormField } from './schema'
+import type { DynaFormField, DynaOption, DynaTreeNodeOption } from './schema'
 
 /** 表单值统一形态：文本类 string，switch boolean。 */
 export type DynaFormValues = Record<string, string | boolean>
@@ -34,71 +35,139 @@ export type DynaValidatorMessage = (
   params: Record<string, string | number>,
 ) => string
 
+/** 展平树形选项为带层级缩进前缀的平面选项列表（供 FieldSelect 渲染）。 */
+export function flattenTreeNodeOptions(
+  nodes: readonly DynaTreeNodeOption[] | undefined,
+  depth = 0,
+): DynaOption[] {
+  if (!nodes || nodes.length === 0) return []
+  const result: DynaOption[] = []
+  const prefix = depth > 0 ? `${'　'.repeat(depth)}└ ` : ''
+  for (const node of nodes) {
+    result.push({ label: `${prefix}${node.label}`, value: node.value })
+    if (node.children?.length) {
+      result.push(...flattenTreeNodeOptions(node.children, depth + 1))
+    }
+  }
+  return result
+}
+
+/** 判断字段在当前表单值下是否满足 visibleWhen 条件。 */
+export function isFieldVisible(field: DynaFormField, values: DynaFormValues): boolean {
+  const rule = field.visibleWhen
+  if (!rule) return true
+  const raw = values[rule.field]
+  const match = (expected: string | number | boolean) => {
+    if (typeof expected === 'boolean') return Boolean(raw) === expected
+    return String(raw ?? '') === String(expected)
+  }
+  if (rule.equals !== undefined && !match(rule.equals)) return false
+  if (rule.in && rule.in.length > 0 && !rule.in.some(match)) return false
+  return true
+}
+
 /** 按模式过滤可见字段（hideInCreate / hideInEdit）。 */
 export function visibleFields(fields: DynaFormField[], mode: 'create' | 'edit'): DynaFormField[] {
   return fields.filter((field) => (mode === 'create' ? !field.hideInCreate : !field.hideInEdit))
 }
 
-/** 从字段 schema 生成 zod 校验器（v1：文本长度、数字格式/范围、必选约束）。 */
+/** 从字段 schema 生成 zod 校验器（支持 visibleWhen 条件豁免）。 */
 export function buildFormValidator(fields: DynaFormField[], msg: DynaValidatorMessage) {
   const shape: Record<string, z.ZodType> = {}
 
   for (const field of fields) {
-    const { name, label, type } = field
-
-    if (type === 'switch') {
-      shape[name] = z.boolean()
-      continue
-    }
-
-    if (type === 'number') {
-      let rule = z.string()
-      if (field.required) rule = rule.min(1, msg('msgInputRequired', { label }))
-      shape[name] = rule
-        .refine((v) => v === '' || !Number.isNaN(Number(v)), msg('msgNumber', { label }))
-        .refine(
-          (v) => v === '' || field.min === undefined || Number(v) >= field.min,
-          msg('msgMin', { label, min: field.min ?? '' }),
-        )
-        .refine(
-          (v) => v === '' || field.max === undefined || Number(v) <= field.max,
-          msg('msgMax', { label, max: field.max ?? '' }),
-        )
-      continue
-    }
-
-    if (type === 'select' || type === 'dict' || type === 'radio') {
-      shape[name] = field.required
-        ? z.string().min(1, msg('msgSelectRequired', { label }))
-        : z.string()
-      continue
-    }
-
-    // input / textarea / password / date / datetime
-    let rule = z.string()
-    if (field.required) rule = rule.min(1, msg('msgInputRequired', { label }))
-    if (field.maxLength !== undefined) {
-      rule = rule.max(field.maxLength, msg('msgMaxLen', { label, max: field.maxLength }))
-    }
-    if (field.minLength !== undefined) {
-      rule = field.required
-        ? rule.min(field.minLength, msg('msgMinLen', { label, min: field.minLength }))
-        : rule.refine(
-            (v) => v === '' || v.length >= (field.minLength ?? 0),
-            msg('msgMinLen', { label, min: field.minLength }),
-          )
-    }
-    if (field.maxUtf8Bytes !== undefined) {
-      shape[name] = rule.refine(
-        (value) => new TextEncoder().encode(value).length <= field.maxUtf8Bytes!,
-        msg('msgMaxBytes', { label, max: field.maxUtf8Bytes }),
-      )
-      continue
-    }
-    shape[name] = rule
+    const { name, type } = field
+    shape[name] = type === 'switch' ? z.boolean() : z.string()
   }
 
-  return z.object(shape)
+  return z.object(shape).superRefine((values, ctx) => {
+    const formValues = values as DynaFormValues
+    for (const field of fields) {
+      if (!isFieldVisible(field, formValues)) continue
+      const { name, label, type } = field
+      if (type === 'switch') continue
+      const raw = formValues[name]
+      const text = typeof raw === 'string' ? raw : ''
+
+      if (type === 'number') {
+        if (field.required && text === '') {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: msg('msgInputRequired', { label }),
+          })
+          continue
+        }
+        if (text !== '' && Number.isNaN(Number(text))) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: msg('msgNumber', { label }),
+          })
+          continue
+        }
+        if (text !== '' && field.min !== undefined && Number(text) < field.min) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: msg('msgMin', { label, min: field.min }),
+          })
+        }
+        if (text !== '' && field.max !== undefined && Number(text) > field.max) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: msg('msgMax', { label, max: field.max }),
+          })
+        }
+        continue
+      }
+
+      if (type === 'select' || type === 'dict' || type === 'radio' || type === 'tree-select') {
+        if (field.required && text === '') {
+          ctx.addIssue({
+            code: 'custom',
+            path: [name],
+            message: msg('msgSelectRequired', { label }),
+          })
+        }
+        continue
+      }
+
+      // input / textarea / password / date / datetime / upload
+      if (field.required && text === '') {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: msg('msgInputRequired', { label }),
+        })
+      }
+      if (field.maxLength !== undefined && text.length > field.maxLength) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: msg('msgMaxLen', { label, max: field.maxLength }),
+        })
+      }
+      if (field.minLength !== undefined && text !== '' && text.length < field.minLength) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: msg('msgMinLen', { label, min: field.minLength }),
+        })
+      }
+      if (
+        field.maxUtf8Bytes !== undefined &&
+        new TextEncoder().encode(text).length > field.maxUtf8Bytes
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: msg('msgMaxBytes', { label, max: field.maxUtf8Bytes }),
+        })
+      }
+    }
+  })
 }
 
 /** 新增态表单初值：defaultValue → 表单态（switch 转 boolean，其余转 string）。 */
@@ -128,7 +197,7 @@ export function rowToFormValues(
   return values
 }
 
-/** 表单值 → 提交 body（编辑态剔除 disabledInEdit；空串剔除；number 转换）。 */
+/** 表单值 → 提交 body（编辑态剔除 disabledInEdit；隐藏字段剔除；空串剔除；number 转换）。 */
 export function formValuesToBody(
   fields: DynaFormField[],
   values: DynaFormValues,
@@ -137,6 +206,7 @@ export function formValuesToBody(
   const body: Record<string, unknown> = {}
   for (const field of fields) {
     if (mode === 'edit' && field.disabledInEdit) continue
+    if (!isFieldVisible(field, values)) continue
     const value = values[field.name]
 
     if (field.type === 'switch') {

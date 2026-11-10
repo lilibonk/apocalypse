@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAuthStore } from '@/stores/auth'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
 import schema from './role.schema'
 import { localizeRoleSchema, RoleForm } from './RoleForm'
 import { RolePermissionWorkspace } from './RolePermissionWorkspace'
@@ -98,6 +99,12 @@ export function GrantUsersDialog({
   )
 }
 
+const ROLE_PULSE_KEYS = [
+  ['dyna', '/system/roles', 'system-role'],
+  ['system', 'roles'],
+  ['system', 'authorization', 'insights'],
+] as const
+
 export default function RolePage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   return <RolePageContent key={authorizationEpoch} />
@@ -107,6 +114,7 @@ function RolePageContent() {
   const auth = useAuthStore()
   const client = useQueryClient()
   const desktop = useDesktopViewport()
+  useRealtimePulse({ queryKeys: ROLE_PULSE_KEYS })
   const canInspectGraph = desktop && canReadRoleWorkspace(auth)
   // One description for both views, so switching never changes the header.
   const localizedSchema = useMemo(

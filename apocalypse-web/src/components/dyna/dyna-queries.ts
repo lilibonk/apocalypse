@@ -90,11 +90,30 @@ export function createDynaQueries(schema: DynaPageSchema, scope?: ModuleScope) {
         request<void>(`${schema.endpoint}/${id}`, { method: 'DELETE', ...transport }),
       schema.rowActions?.find((action) => action.kind === 'delete')?.requiresAllScope,
     ),
+    batchRemove: operation(schema.batchDeletePerm, (transport, ids: readonly string[]) =>
+      request<void>(`${schema.endpoint}/batch`, {
+        method: 'DELETE',
+        body: { ids },
+        ...transport,
+      }),
+    ),
     exportCsv: operation(schema.exportPerm, (transport, search: Record<string, string>) => {
       const query: Record<string, string | undefined> = {}
       for (const [key, value] of Object.entries(search)) query[key] = value || undefined
       return rawRequest<Blob>(`${schema.endpoint}/export`, 'blob', { query, ...transport })
     }),
+    importCsv: operation(schema.importPerm, (transport, csvContent: string) =>
+      request<unknown>(`${schema.endpoint}/import`, {
+        method: 'POST',
+        body: { csv: csvContent },
+        ...transport,
+      }),
+    ),
+    downloadImportTemplate: operation(schema.importPerm, (transport) =>
+      rawRequest<Blob>(schema.importTemplatePath ?? `${schema.endpoint}/import-template`, 'blob', {
+        ...transport,
+      }),
+    ),
     toggles,
   }
 }

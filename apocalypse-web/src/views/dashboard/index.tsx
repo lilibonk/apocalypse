@@ -27,6 +27,7 @@ import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
+import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
 import { cn } from '@/lib/utils'
 import { resolvePageComponent } from '@/routes/component-map'
 import { flattenMenuRoutes } from '@/routes/menu-routes'
@@ -77,8 +78,11 @@ interface ActivityDetailState {
   open: boolean
 }
 
+const DASHBOARD_PULSE_KEYS = [['dashboard']] as const
+
 export default function DashboardPage() {
   const desktop = useDesktopViewport()
+  useRealtimePulse({ queryKeys: DASHBOARD_PULSE_KEYS })
   return desktop ? <DesktopDashboard /> : <MobileDashboard />
 }
 

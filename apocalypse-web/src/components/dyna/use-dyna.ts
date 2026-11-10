@@ -10,7 +10,8 @@ import { useTranslation } from 'react-i18next'
 
 import { useDict } from '@/components/DictTag'
 
-import type { DynaOption } from './schema'
+import { flattenTreeNodeOptions } from './form-model'
+import type { DynaOption, DynaTreeNodeOption } from './schema'
 
 export function useDynaText(): (text: string, params?: Record<string, string | number>) => string {
   const { t } = useTranslation()
@@ -22,13 +23,15 @@ export function useDynaText(): (text: string, params?: Record<string, string | n
   )
 }
 
-/** 静态 options 优先；绑了 dictType 走字典（react-query 缓存，见 DictTag.tsx 的 useDict）。 */
+/** 静态 options 优先；treeOptions 展平为层级列表；绑了 dictType 走字典（react-query 缓存，见 DictTag.tsx 的 useDict）。 */
 export function useFieldOptions(field: {
   options?: DynaOption[]
+  treeOptions?: DynaTreeNodeOption[]
   dictType?: string
 }): DynaOption[] {
   const dictQuery = useDict(field.dictType ?? '')
   if (field.options) return field.options
+  if (field.treeOptions) return flattenTreeNodeOptions(field.treeOptions)
   if (!field.dictType) return []
   return (dictQuery.data ?? []).map((item) => ({ label: item.dictLabel, value: item.dictValue }))
 }

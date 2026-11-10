@@ -3,16 +3,28 @@ package io.apocalypse.system.listener;
 import io.apocalypse.common.event.AuthorizationChangedEvent;
 import io.apocalypse.system.authorization.entity.AuthorizationAuditEntity;
 import io.apocalypse.system.authorization.mapper.AuthorizationAuditMapper;
+import io.apocalypse.system.realtime.service.RealtimePulseHub;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 
-import lombok.RequiredArgsConstructor;
-
 @Component
-@RequiredArgsConstructor
 public class AuthorizationAuditListener {
   private final AuthorizationAuditMapper mapper;
+
+  private final RealtimePulseHub realtimePulseHub;
+
+  public AuthorizationAuditListener(AuthorizationAuditMapper mapper) {
+    this(mapper, null);
+  }
+
+  @Autowired
+  public AuthorizationAuditListener(
+      AuthorizationAuditMapper mapper, RealtimePulseHub realtimePulseHub) {
+    this.mapper = mapper;
+    this.realtimePulseHub = realtimePulseHub;
+  }
 
   @ApplicationModuleListener
   public void onAuthorizationChanged(AuthorizationChangedEvent event) {
@@ -29,5 +41,8 @@ public class AuthorizationAuditListener {
     entity.setDiffHash(event.diffHash());
     entity.setRequestId(event.requestId());
     mapper.insertIdempotent(entity);
+    if (realtimePulseHub != null) {
+      realtimePulseHub.broadcast("authorizationChanged");
+    }
   }
 }

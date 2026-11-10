@@ -40,6 +40,8 @@ test('form validation, keyboard escape and focus return run in a real portal', a
   await expect(dialog.getByText('请输入Name', { exact: true })).toBeVisible()
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Fixture')
   await page.keyboard.press('Escape')
+  await expect(dialog.locator('[data-slot="dirty-form-guard"]')).toBeVisible()
+  await dialog.getByRole('button', { name: '放弃并关闭', exact: true }).click()
   await expect(dialog).toBeHidden()
   await expect(trigger).toBeFocused()
   await trigger.click()

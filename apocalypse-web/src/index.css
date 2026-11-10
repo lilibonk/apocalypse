@@ -64,3 +64,30 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+@keyframes dyna-row-pulse {
+  0% {
+    background-color: color-mix(in oklch, var(--primary) 18%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+tr[data-mutated-pulse='true'],
+article[data-mutated-pulse='true'] {
+  animation: dyna-row-pulse var(--duration-path-pulse, 520ms)
+    var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+html[data-motion='off'] tr[data-mutated-pulse='true'],
+html[data-motion='off'] article[data-mutated-pulse='true'] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  tr[data-mutated-pulse='true'],
+  article[data-mutated-pulse='true'] {
+    animation: none;
+  }
+}

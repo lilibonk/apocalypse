@@ -11,6 +11,7 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.ObjectMapper;
@@ -36,6 +37,9 @@ public class ResponseWrapperAdvice implements ResponseBodyAdvice<Object> {
     // Binary/file responses carry their own status and headers and must not be wrapped as JSON.
     if (ResponseEntity.class.isAssignableFrom(returnType.getParameterType())) {
       return true;
+    }
+    if (ResponseBodyEmitter.class.isAssignableFrom(returnType.getParameterType())) {
+      return false;
     }
     String packageName = declaringClass.getPackageName();
     // 排除 springdoc（/v3/api-docs、swagger-ui）与 actuator 端点

@@ -3,7 +3,7 @@
  * (config | oper | dept | palette | page-transition) over a local Axios adapter.
  * No production import or backend.
  */
-import { useState, useSyncExternalStore } from 'react'
+import { StrictMode, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 
@@ -570,7 +570,7 @@ function Fixture() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
+const fixture = (
   <AppProviders>
     <MemoryRouter
       initialEntries={[
@@ -584,5 +584,9 @@ createRoot(document.getElementById('root')!).render(
     >
       <Fixture />
     </MemoryRouter>
-  </AppProviders>,
+  </AppProviders>
+)
+
+createRoot(document.getElementById('root')!).render(
+  surface === 'page-transition' ? <StrictMode>{fixture}</StrictMode> : fixture,
 )

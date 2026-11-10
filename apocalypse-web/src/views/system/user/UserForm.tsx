@@ -44,7 +44,7 @@ export function UserForm(props: DynaFormProps) {
         {
           name: 'deptId',
           label: t('user.department'),
-          type: 'select' as const,
+          type: 'tree-select' as const,
           translateOptions: false,
           options: deptOptions,
           help: t(
