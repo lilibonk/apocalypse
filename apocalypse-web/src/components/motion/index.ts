@@ -20,3 +20,19 @@ export {
   type PulseIndicatorTone,
   type PulseIndicatorVariant,
 } from './PulseIndicator'
+export { SvgThemeFilters } from './SvgThemeFilters'
+export { SketchBox, type SketchBoxProps } from './SketchBox'
+export {
+  FluidConduitOverlay,
+  type ConduitLink,
+  type FluidConduitOverlayProps,
+} from './FluidConduitOverlay'
+export {
+  buildSketchPaths,
+  buildTwinBankRiver,
+  sampleCubic,
+  type SampledPoint,
+  type SketchPathPair,
+} from './procedural-geometry'
+export { ApoParticleOrb, type ApoParticleOrbProps } from './ApoParticleOrb'
+export { SketchApoPeeker, type SketchApoPeekerProps } from './SketchApoPeeker'

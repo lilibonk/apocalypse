@@ -20,6 +20,13 @@
   border-color: color-mix(in oklch, var(--primary) 42%, var(--border-subtle));
 }
 
+.config-group[data-dirty-group='true'] {
+  border-color: color-mix(in oklch, var(--conduit-core) 58%, var(--border-subtle));
+  box-shadow:
+    inset 3px 0 0 var(--conduit-core),
+    0 0 0 1px color-mix(in oklch, var(--conduit-core) 16%, transparent);
+}
+
 .config-save-result {
   animation: config-save-enter var(--motion-duration-standard) var(--motion-ease-enter);
 }

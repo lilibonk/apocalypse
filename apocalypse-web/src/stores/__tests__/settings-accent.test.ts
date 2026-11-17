@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const storage = new Map<string, string>()
 const storageKey = 'apocalypse.settings'
 const preferences = {
-  theme: 'dark',
+  themeWorld: 'fluid',
   accent: 'periwinkle',
   density: 'compact',
   layout: 'mixed',
@@ -33,18 +33,22 @@ afterEach(() => {
 })
 
 function saveLegacySettings(version: number) {
-  storage.set(storageKey, JSON.stringify({ state: { ...preferences, mascotSkin: 'v4' }, version }))
+  storage.set(
+    storageKey,
+    JSON.stringify({ state: { ...preferences, theme: 'dark', mascotSkin: 'v4' }, version }),
+  )
 }
 
-describe('settings persistence after retiring mascot skins', () => {
-  it('rehydrates every v4 preference, removes the retired field, and writes v5 storage', async () => {
+describe('settings persistence after retiring mascot skins and ThemeMode', () => {
+  it('rehydrates every v4 preference, strips retired fields, defaults themeWorld to fluid, and writes v7 storage', async () => {
     saveLegacySettings(4)
     const { useSettingsStore } = await import('../settings')
 
     expect(useSettingsStore.persist.hasHydrated()).toBe(true)
     expect(useSettingsStore.getState()).toMatchObject(preferences)
     expect(useSettingsStore.getState()).not.toHaveProperty('mascotSkin')
-    expect(JSON.parse(storage.get(storageKey)!)).toEqual({ state: preferences, version: 5 })
+    expect(useSettingsStore.getState()).not.toHaveProperty('theme')
+    expect(JSON.parse(storage.get(storageKey)!)).toEqual({ state: preferences, version: 7 })
   })
 
   it.each([0, 1, 2, 3])(
@@ -56,21 +60,31 @@ describe('settings persistence after retiring mascot skins', () => {
 
       expect(useSettingsStore.getState()).toMatchObject(migrated)
       expect(useSettingsStore.getState()).not.toHaveProperty('mascotSkin')
-      expect(JSON.parse(storage.get(storageKey)!)).toEqual({ state: migrated, version: 5 })
+      expect(useSettingsStore.getState()).not.toHaveProperty('theme')
+      expect(JSON.parse(storage.get(storageKey)!)).toEqual({ state: migrated, version: 7 })
     },
   )
 
-  it('changing a current accent preserves other preferences without recreating skin state', async () => {
-    storage.set(storageKey, JSON.stringify({ state: preferences, version: 5 }))
+  it('changing a current accent or themeWorld preserves other preferences without recreating retired state', async () => {
+    storage.set(
+      storageKey,
+      JSON.stringify({ state: { ...preferences, theme: 'dark' }, version: 6 }),
+    )
     const { useSettingsStore } = await import('../settings')
 
     useSettingsStore.getState().setAccent('rose')
+    useSettingsStore.getState().setThemeWorld('sketchbook')
 
-    expect(useSettingsStore.getState()).toMatchObject({ ...preferences, accent: 'rose' })
+    expect(useSettingsStore.getState()).toMatchObject({
+      ...preferences,
+      accent: 'rose',
+      themeWorld: 'sketchbook',
+    })
     expect(useSettingsStore.getState()).not.toHaveProperty('mascotSkin')
+    expect(useSettingsStore.getState()).not.toHaveProperty('theme')
     expect(JSON.parse(storage.get(storageKey)!)).toEqual({
-      state: { ...preferences, accent: 'rose' },
-      version: 5,
+      state: { ...preferences, accent: 'rose', themeWorld: 'sketchbook' },
+      version: 7,
     })
   })
 })

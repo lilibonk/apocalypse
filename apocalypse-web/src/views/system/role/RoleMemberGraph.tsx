@@ -1,11 +1,11 @@
-import { motion } from 'motion/react'
-import type { ComponentProps } from 'react'
+import { useMemo, useRef } from 'react'
 import { Link2, Plus, ShieldCheck, Unlink, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { insightMotion } from '@/design/motion'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
+import { FluidConduitOverlay, SketchBox, type ConduitLink } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+
 import type { RoleGraphMember } from './role-permission.queries'
 import type { RoleMemberLinkState } from './role-member-draft.model'
 import './role-stage.css'
@@ -14,33 +14,6 @@ export interface RoleMemberGraphNode {
   id: string
   member?: RoleGraphMember
   state?: RoleMemberLinkState
-}
-
-function MemberEdge({ y, state }: { y: number; state: RoleMemberLinkState }) {
-  const enabled = useMotionPreference()
-  const target = { d: `M 530 210 C 370 210,370 ${y},190 ${y}` }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.path
-      initial={target}
-      animate={controls}
-      className="role-member-edit-edge"
-      data-state={state}
-    />
-  )
-}
-
-function MemberNode({ y, ...props }: ComponentProps<typeof motion.button> & { y: number }) {
-  const enabled = useMotionPreference()
-  const target = { top: `${(y / 460) * 100}%`, opacity: 1 }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.button
-      {...props}
-      initial={enabled ? { ...target, opacity: 0 } : target}
-      animate={controls}
-    />
-  )
 }
 
 export function RoleMemberGraph({
@@ -59,81 +32,123 @@ export function RoleMemberGraph({
   disabled?: boolean
 }) {
   const { t } = useTranslation('system')
-  const nodeY = (index: number) => (nodes.length === 1 ? 210 : ((index + 0.5) / nodes.length) * 460)
+  const stageRef = useRef<HTMLDivElement>(null)
+
+  const conduitLinks = useMemo<ConduitLink[]>(
+    () =>
+      nodes.map((node) => {
+        const state = node.state ?? 'linked'
+        const linked = state === 'linked' || state === 'added'
+        return {
+          id: `member-link-${node.id}`,
+          from: `member-node-${node.id}`,
+          to: 'member-role-hub',
+          enabled: linked,
+          scope: selectedId === node.id ? 'ALL' : linked ? 'STANDARD' : 'BROKEN',
+        }
+      }),
+    [nodes, selectedId],
+  )
+
+  const linkedCount = nodes.filter((node) => {
+    const state = node.state ?? 'linked'
+    return state === 'linked' || state === 'added'
+  }).length
+
   return (
     <div
-      className="role-members-canvas relative mt-4"
-      style={{ minHeight: `calc(var(--spacing) * ${Math.max(1, nodes.length) * 28})` }}
+      ref={stageRef}
+      className="relative mt-4 rounded-panel border border-border-subtle bg-card/60 p-4 sm:p-5"
       role="group"
       aria-label={t('roleMembers.graph')}
     >
-      <svg
-        viewBox="0 0 720 460"
-        preserveAspectRatio="none"
-        className="absolute inset-0 size-full"
-        fill="none"
-        aria-hidden="true"
-      >
-        {nodes.map((node, index) => (
-          <MemberEdge key={node.id} y={nodeY(index)} state={node.state ?? 'linked'} />
-        ))}
-      </svg>
-      <div className="role-members-center absolute text-center">
-        <span className="role-permission-role-icon flex size-16 items-center justify-center rounded-full border border-border">
-          <ShieldCheck className="size-7" />
-        </span>
-        <p className="role-members-center-label absolute break-words text-sm font-semibold">
-          {roleName}
-        </p>
-      </div>
-      {nodes.map((node, index) => {
-        const state = node.state ?? 'linked'
-        const linked = state === 'linked' || state === 'added'
-        const name = node.member?.nickname || node.member?.username || node.id
-        const StateIcon = linked ? Link2 : state === 'removed' ? Unlink : Plus
-        return (
-          <MemberNode
-            y={nodeY(index)}
-            type="button"
-            key={node.id}
-            className="role-members-node absolute flex items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            data-state={state}
-            data-selected={selectedId === node.id}
-            aria-pressed={onToggle ? linked : selectedId === node.id}
-            disabled={disabled}
-            onClick={() => {
-              onSelect(node.id)
-              onToggle?.(node.id)
-            }}
-            aria-label={
-              onToggle
-                ? t(linked ? 'roleMemberEdit.removeNamed' : 'roleMemberEdit.addNamed', { name })
-                : t('roleMembers.inspect', { name })
-            }
-          >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-brand-text">
-              <UserRound className="size-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {node.member ? name : t('roleMemberEdit.unreadProfile')}
-              </span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">
-                {node.member?.username ?? node.id}
-              </span>
-              {onToggle && (
-                <span
-                  className="mt-1 block truncate text-xs"
-                  title={t(`roleMemberEdit.state.${state}`)}
+      <FluidConduitOverlay
+        containerRef={stageRef}
+        links={conduitLinks}
+        flow="horizontal"
+        minContainerWidth={460}
+        pulseKey={`${selectedId ?? 'none'}-${linkedCount}`}
+      />
+
+      <div className="relative z-[2] grid items-center gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,10.5rem)] md:gap-11">
+        <ul className="space-y-2.5">
+          {nodes.map((node) => {
+            const state = node.state ?? 'linked'
+            const linked = state === 'linked' || state === 'added'
+            const name = node.member?.nickname || node.member?.username || node.id
+            const StateIcon = linked ? Link2 : state === 'removed' ? Unlink : Plus
+            const active = selectedId === node.id
+            return (
+              <li key={node.id}>
+                <button
+                  type="button"
+                  data-conduit-anchor={`member-node-${node.id}`}
+                  data-state={state}
+                  data-selected={active}
+                  aria-pressed={onToggle ? linked : active}
+                  disabled={disabled}
+                  onClick={() => {
+                    onSelect(node.id)
+                    onToggle?.(node.id)
+                  }}
+                  aria-label={
+                    onToggle
+                      ? t(linked ? 'roleMemberEdit.removeNamed' : 'roleMemberEdit.addNamed', {
+                          name,
+                        })
+                      : t('roleMembers.inspect', { name })
+                  }
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-panel border border-border-subtle bg-card/92 p-3 text-left shadow-xs transition-colors hover:border-brand-text/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+                    active && 'border-brand-text/70 bg-primary/8',
+                    state === 'removed' && 'border-destructive/45 bg-destructive/5',
+                  )}
                 >
-                  {t(`roleMemberEdit.state.${state}`)}
-                </span>
-              )}
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-brand-text">
+                    <UserRound className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {node.member ? name : t('roleMemberEdit.unreadProfile')}
+                    </span>
+                    <span className="block truncate font-mono text-xs text-muted-foreground">
+                      @{node.member?.username ?? node.id}
+                    </span>
+                    {onToggle && (
+                      <Badge
+                        variant={linked ? 'secondary' : 'outline'}
+                        className="w-fit max-w-full text-[11px]"
+                      >
+                        {t(`roleMemberEdit.state.${state}`)}
+                      </Badge>
+                    )}
+                  </span>
+                  {onToggle && (
+                    <StateIcon className="size-4 shrink-0 text-brand-text" aria-hidden="true" />
+                  )}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+
+        <div className="flex justify-center">
+          <SketchBox
+            seed={47}
+            wash="normal"
+            data-conduit-anchor="member-role-hub"
+            className="w-full p-4 text-center"
+          >
+            <span className="role-permission-role-icon mx-auto mb-2 flex size-11 items-center justify-center rounded-full border border-border-subtle">
+              <ShieldCheck className="size-5" aria-hidden="true" />
             </span>
-            {onToggle && <StateIcon className="size-4 shrink-0" aria-hidden="true" />}
-          </MemberNode>
-        )
-      })}
+            <p className="truncate text-sm font-semibold text-foreground">{roleName}</p>
+            <p className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">
+              {linkedCount} / {nodes.length}
+            </p>
+          </SketchBox>
+        </div>
+      </div>
     </div>
   )
 }

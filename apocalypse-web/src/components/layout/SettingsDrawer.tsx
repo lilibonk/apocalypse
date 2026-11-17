@@ -1,8 +1,9 @@
 /**
- * 用户设置暴露主题、密度、动画与语言。
+ * 用户设置暴露风格世界、密度、动画与语言。
  *
  * 布局、强调色等脚手架验证能力仅在开发环境的“外观实验室”出现，
- * 不再把实现细节暴露给正式产品用户。错误的全局反色色弱模式已移除。
+ * 不再把实现细节暴露给正式产品用户。错误的全局反色色弱模式已移除；
+ * 明暗外观由风格世界（fluid / sketchbook / obsidian）唯一决定。
  */
 
 import { ChevronRight } from 'lucide-react'
@@ -34,7 +35,7 @@ import {
   type Density,
   type Language,
   type LayoutVariant,
-  type ThemeMode,
+  type ThemeWorld,
 } from '@/stores/settings'
 
 function OptionRow<T extends string>({
@@ -133,14 +134,20 @@ export function SettingsDrawer({
         </SheetHeader>
 
         <div className="space-y-6 px-6 pb-6">
-          <Section title={ct('主题')}>
-            <OptionRow<ThemeMode>
-              value={settings.theme}
-              options={['light', 'dark', 'system']}
-              labels={{ light: ct('浅色'), dark: ct('深色'), system: ct('跟随系统') }}
-              onChange={store.setTheme}
-            />
-          </Section>
+          {isCapabilityExposed('themeWorld') && (
+            <Section title={ct('风格世界')}>
+              <OptionRow<ThemeWorld>
+                value={settings.themeWorld}
+                options={['fluid', 'sketchbook', 'obsidian']}
+                labels={{
+                  fluid: ct('清透流体'),
+                  sketchbook: ct('手绘手账'),
+                  obsidian: ct('深邃夜色'),
+                }}
+                onChange={store.setThemeWorld}
+              />
+            </Section>
+          )}
 
           <Section title={ct('密度')}>
             <OptionRow<Density>

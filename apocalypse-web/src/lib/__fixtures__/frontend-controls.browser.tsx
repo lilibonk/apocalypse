@@ -71,9 +71,15 @@ function Controls() {
   }
   return (
     <>
-      <button onClick={() => useSettingsStore.getState().setTheme('light')}>Theme light</button>
-      <button onClick={() => useSettingsStore.getState().setTheme('dark')}>Theme dark</button>
-      <button onClick={() => useSettingsStore.getState().setTheme('system')}>Theme system</button>
+      <button onClick={() => useSettingsStore.getState().setThemeWorld('fluid')}>
+        World fluid
+      </button>
+      <button onClick={() => useSettingsStore.getState().setThemeWorld('sketchbook')}>
+        World sketchbook
+      </button>
+      <button onClick={() => useSettingsStore.getState().setThemeWorld('obsidian')}>
+        World obsidian
+      </button>
       <button onClick={() => toast.success('Ready')}>Show toast</button>
       <button onClick={() => setOpen('form')}>Open form</button>
       <button onClick={() => openUser('user-create')}>Create user</button>

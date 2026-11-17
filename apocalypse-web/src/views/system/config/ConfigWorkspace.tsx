@@ -380,7 +380,8 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
                   id={`config-group-${groupKey}`}
                   aria-labelledby={`config-group-heading-${groupKey}`}
                   data-active={isGroupHighlighted ? 'true' : 'false'}
-                  className="config-group rounded-panel border border-border-subtle bg-card transition-colors"
+                  data-dirty-group={groupDirtyCount > 0 ? 'true' : undefined}
+                  className="config-group sketch-surface rounded-panel border border-border-subtle bg-card transition-colors"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -732,7 +733,12 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
         }}
         onSave={() => save.mutate(saveItems(draft))}
       />
-      <DraftDiffDialog open={reviewing} items={diffItems} onOpenChange={setReviewing} />
+      <DraftDiffDialog
+        open={reviewing}
+        items={diffItems}
+        onOpenChange={setReviewing}
+        anchor="bottom-bar"
+      />
     </div>
   )
 }

@@ -11,24 +11,33 @@ test('real React/Axios/Dyna fixture rejects revoked and previous-account late ef
   expect(failures).toEqual([])
 })
 
-test('settings light/dark/system drives actual Sonner theme after next-themes removal', async ({
+test('theme world alone drives dark class and Sonner theme without OS colorScheme interference', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/frontend-controls.html')
   await page.getByRole('button', { name: 'Show toast', exact: true }).click()
-  for (const theme of ['light', 'dark'] as const) {
-    await page.getByRole('button', { name: `Theme ${theme}`, exact: true }).click()
-    await expect(page.locator('[data-sonner-toaster]')).toHaveAttribute('data-sonner-theme', theme)
+  for (const [world, expectedDark] of [
+    ['fluid', false],
+    ['sketchbook', false],
+    ['obsidian', true],
+  ] as const) {
+    await page.getByRole('button', { name: `World ${world}`, exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme-world', world)
+    await expect(page.locator('[data-sonner-toaster]')).toHaveAttribute(
+      'data-sonner-theme',
+      expectedDark ? 'dark' : 'light',
+    )
     expect(
       await page.locator('html').evaluate((element) => element.classList.contains('dark')),
-    ).toBe(theme === 'dark')
+    ).toBe(expectedDark)
   }
-  await page.getByRole('button', { name: 'Theme system', exact: true }).click()
+  await page.getByRole('button', { name: 'World fluid', exact: true }).click()
   await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('[data-sonner-toaster]')).toHaveAttribute('data-sonner-theme', 'light')
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await page.getByRole('button', { name: 'World obsidian', exact: true }).click()
   await expect(page.locator('[data-sonner-toaster]')).toHaveAttribute('data-sonner-theme', 'dark')
   await expect(page.locator('html')).toHaveClass(/dark/)
-  await page.emulateMedia({ colorScheme: 'light' })
-  await expect(page.locator('[data-sonner-toaster]')).toHaveAttribute('data-sonner-theme', 'light')
 })
 
 test('form validation, keyboard escape and focus return run in a real portal', async ({ page }) => {
@@ -132,4 +141,47 @@ test('the current accepted login still performs the intended navigation', async 
   await page.getByRole('button', { name: 'Finish login', exact: true }).click()
   await expect(page.getByText('Accepted navigation', { exact: true })).toBeVisible()
   await expect(page.getByTestId('identity')).toHaveAttribute('data-route', '/protected')
+})
+
+test('login stage defaults to fluid theme world, switches across sketchbook and obsidian, and replaces floating env pill', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/test-fixtures/login-lifecycle.html')
+
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('data-theme-world', 'fluid')
+  await expect(page.locator('[data-slot="login-env-pill"]')).toHaveCount(0)
+
+  await expect(page.locator('section.brand-slime-stage')).toBeVisible()
+  await expect(page.locator('[data-slot="sketch-box"]')).toBeVisible()
+  await expect(page.locator('[data-slot="login-submit"]')).toBeVisible()
+
+  const prefs = page.locator('[data-slot="login-preferences"]')
+  await expect(prefs).toBeVisible()
+
+  await prefs.getByRole('button', { name: '手绘手账', exact: true }).click()
+  await expect(html).toHaveAttribute('data-theme-world', 'sketchbook')
+
+  await prefs.getByRole('button', { name: '深邃夜色', exact: true }).click()
+  await expect(html).toHaveAttribute('data-theme-world', 'obsidian')
+  await expect(html).toHaveClass(/dark/)
+
+  await expect(prefs.getByRole('button', { name: '浅色', exact: true })).toHaveCount(0)
+  await expect(prefs.getByRole('button', { name: '深色', exact: true })).toHaveCount(0)
+  await expect(prefs.getByRole('button', { name: '跟随系统', exact: true })).toHaveCount(0)
+  await prefs.getByRole('button', { name: '清透流体', exact: true }).click()
+  await expect(html).toHaveAttribute('data-theme-world', 'fluid')
+  await expect(html).not.toHaveClass(/dark/)
+
+  const desktopFits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  )
+  expect(desktopFits).toBe(true)
+
+  await page.setViewportSize({ width: 375, height: 812 })
+  const mobileFits = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  )
+  expect(mobileFits).toBe(true)
 })

@@ -17,4 +17,5 @@ export {
   type EntityPillProps,
   type EntityReturnPillProps,
 } from './EntityPill'
+export { EntityPeekLink, type EntityPeekLinkProps } from './EntityPeekLink'
 export { LivingContextBar, type LivingContextBarProps } from './LivingContextBar'

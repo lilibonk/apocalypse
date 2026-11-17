@@ -153,6 +153,35 @@
   --pulse-mint: var(--brand-text);
   --pulse-primary: var(--primary);
 
+  /* 活水管道 / 手绘水彩 / 原位快览 / 粒子核正交原语 token */
+  --conduit-shadow: oklch(0.62 0.125 175 / 0.24);
+  --conduit-rim: oklch(0.58 0.13 180 / 0.36);
+  --conduit-pipe-start: oklch(0.72 0.14 166 / 0.56);
+  --conduit-pipe-mid: oklch(0.78 0.13 182 / 0.64);
+  --conduit-pipe-end: oklch(0.7 0.14 222 / 0.52);
+  --conduit-core: oklch(0.6 0.15 168);
+  --conduit-wide: oklch(0.54 0.14 170);
+  --conduit-highlight: oklch(1 0 0 / 0.92);
+  --conduit-muted: oklch(0.62 0.015 250 / 0.38);
+  --sketch-ink: oklch(0.28 0.012 145);
+  --sketch-washi: oklch(0.88 0.11 88 / 0.58);
+  --wash-mint: oklch(0.72 0.14 166 / 0.24);
+  --wash-sky: oklch(0.74 0.12 228 / 0.18);
+  --wash-amber: oklch(0.84 0.15 84 / 0.24);
+  --peek-surface: oklch(0.996 0.002 220 / 0.96);
+  --peek-border: oklch(0.72 0.11 172 / 0.36);
+  --peek-shadow: 0 10px 26px oklch(0.22 0.02 250 / 0.12);
+  --orb-core: oklch(0.52 0.14 174);
+  --orb-accent: oklch(0.66 0.14 208);
+  --orb-ring: oklch(0.62 0.14 178 / 0.42);
+  --orb-eye: oklch(0.99 0.005 180);
+  --orb-halo: oklch(0.74 0.14 176 / 0.36);
+  --orb-halo-fade: oklch(0.74 0.14 176 / 0);
+  --peeker-body: oklch(0.94 0.04 156);
+  --peeker-paw: oklch(0.96 0.03 156);
+  --peeker-cheek: oklch(0.79 0.11 26);
+  --peeker-eye: oklch(0.29 0.04 42);
+
   color-scheme: light;
 }
 
@@ -233,6 +262,34 @@
   --table-frozen-shade: oklch(0.02 0 0 / 0.45);
   --overlay-backdrop: oklch(0.08 0 0 / 0.56);
   --overlay-backdrop-nested: oklch(0.08 0 0 / 0.28);
+
+  --conduit-shadow: oklch(0.76 0.16 172 / 0.28);
+  --conduit-rim: oklch(0.78 0.14 182 / 0.38);
+  --conduit-pipe-start: oklch(0.74 0.14 166 / 0.48);
+  --conduit-pipe-mid: oklch(0.8 0.14 182 / 0.58);
+  --conduit-pipe-end: oklch(0.72 0.14 218 / 0.46);
+  --conduit-core: oklch(0.78 0.145 168);
+  --conduit-wide: oklch(0.85 0.155 174);
+  --conduit-highlight: oklch(0.98 0.01 180 / 0.72);
+  --conduit-muted: oklch(0.55 0.015 250 / 0.48);
+  --sketch-ink: oklch(0.86 0.018 140);
+  --sketch-washi: oklch(0.74 0.11 86 / 0.36);
+  --wash-mint: oklch(0.68 0.14 166 / 0.2);
+  --wash-sky: oklch(0.7 0.12 228 / 0.16);
+  --wash-amber: oklch(0.78 0.14 84 / 0.2);
+  --peek-surface: oklch(0.23 0.014 235 / 0.96);
+  --peek-border: oklch(0.76 0.14 176 / 0.38);
+  --peek-shadow: 0 12px 28px oklch(0.05 0 0 / 0.45);
+  --orb-core: oklch(0.83 0.14 174);
+  --orb-accent: oklch(0.78 0.13 210);
+  --orb-ring: oklch(0.84 0.15 176 / 0.44);
+  --orb-eye: oklch(0.99 0.005 180);
+  --orb-halo: oklch(0.8 0.16 174 / 0.4);
+  --orb-halo-fade: oklch(0.8 0.16 174 / 0);
+  --peeker-body: oklch(0.84 0.05 160);
+  --peeker-paw: oklch(0.88 0.04 160);
+  --peeker-cheek: oklch(0.74 0.12 26);
+  --peeker-eye: oklch(0.24 0.03 42);
 
   color-scheme: dark;
 }

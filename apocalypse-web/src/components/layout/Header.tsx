@@ -1,15 +1,27 @@
 /**
- * 顶栏：侧栏开关、cmdk 命令面板入口、主题快捷切换、设置入口、用户下拉。
+ * 顶栏：侧栏开关、cmdk 命令面板入口、风格世界快捷切换、设置入口、用户下拉。
  * layout='topbar' / 'mixed' 时兼任顶部主导航（顶层菜单横排）。
  */
 
-import { ChevronsLeft, LogOut, Menu, Moon, Search, Settings2, Sun, UserCog } from 'lucide-react'
+import {
+  Check,
+  ChevronsLeft,
+  Droplets,
+  LogOut,
+  Menu,
+  Palette,
+  Search,
+  Settings2,
+  Sparkles,
+  UserCog,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 
 import { MenuIcon } from '@/components/layout/MenuIcon'
+import { ApoParticleOrb } from '@/components/motion'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,7 +35,12 @@ import {
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { useTabsStore } from '@/stores/tabs'
 import { useAuthStore } from '@/stores/auth'
-import { useSettings, useSettingsStore } from '@/stores/settings'
+import {
+  isCapabilityExposed,
+  useSettings,
+  useSettingsStore,
+  type ThemeWorld,
+} from '@/stores/settings'
 import type { MenuNode } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 
@@ -52,10 +69,26 @@ export function Header({
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const resetTabs = useTabsStore((state) => state.reset)
-  const { theme } = useSettings()
-  const setTheme = useSettingsStore((state) => state.setTheme)
+  const { themeWorld } = useSettings()
+  const setThemeWorld = useSettingsStore((state) => state.setThemeWorld)
   const menuTitle = useMenuTitle()
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const worldOptions: { value: ThemeWorld; label: string; icon: typeof Droplets }[] = [
+    { value: 'fluid', label: t('common.清透流体', { defaultValue: '清透流体' }), icon: Droplets },
+    {
+      value: 'sketchbook',
+      label: t('common.手绘手账', { defaultValue: '手绘手账' }),
+      icon: Palette,
+    },
+    {
+      value: 'obsidian',
+      label: t('common.深邃夜色', { defaultValue: '深邃夜色' }),
+      icon: Sparkles,
+    },
+  ]
+  const CurrentWorldIcon =
+    worldOptions.find((option) => option.value === themeWorld)?.icon ?? Droplets
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -126,24 +159,48 @@ export function Header({
         variant="outline"
         size="sm"
         aria-label={t('common.搜索', { defaultValue: '搜索' })}
-        className="gap-2 border-border-subtle bg-card/60 text-muted-foreground max-sm:size-11 max-sm:px-0"
+        className="gap-2 rounded-full border-border-subtle bg-card/75 px-3 text-muted-foreground shadow-surface transition-colors hover:border-brand-text/40 hover:text-foreground max-sm:size-11 max-sm:px-0"
         onClick={onOpenCommand}
       >
-        <Search className="size-3.5" />
-        <span className="hidden sm:inline">{t('common.搜索', { defaultValue: '搜索' })}</span>
-        <kbd className="pointer-events-none hidden rounded border border-border-subtle bg-muted px-1.5 font-mono text-xs sm:inline">
+        <ApoParticleOrb size={18} />
+        <Search className="size-3.5 sm:hidden" />
+        <span className="hidden text-xs font-medium sm:inline">
+          {t('common.问问Apo', { defaultValue: '问问 Apo · 搜索或输入 ? 提问' })}
+        </span>
+        <kbd className="pointer-events-none hidden rounded-full border border-border-subtle bg-muted/80 px-1.5 py-0.5 font-mono text-[11px] sm:inline">
           ⌘K
         </kbd>
       </Button>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t('common.切换主题', { defaultValue: '切换主题' })}
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      >
-        {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      </Button>
+      {isCapabilityExposed('themeWorld') && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('common.风格世界', { defaultValue: '风格世界' })}
+            >
+              <CurrentWorldIcon className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuLabel>
+              {t('common.风格世界', { defaultValue: '风格世界' })}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {worldOptions.map((option) => {
+              const Icon = option.icon
+              return (
+                <DropdownMenuItem key={option.value} onSelect={() => setThemeWorld(option.value)}>
+                  <Icon className="size-4" />
+                  <span className="flex-1">{option.label}</span>
+                  {themeWorld === option.value && <Check className="size-4 text-brand-text" />}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <Button
         variant="ghost"

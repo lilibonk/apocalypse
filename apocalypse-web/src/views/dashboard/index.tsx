@@ -8,8 +8,8 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import { BrandHero } from '@/components/BrandHero'
 import { InsightCard } from '@/components/insights/InsightCard'
+import { ApoParticleOrb } from '@/components/motion'
 import { resolveMenuIcon } from '@/components/layout/menu-icons'
 import { LivingContextBar } from '@/components/navigation'
 import { Badge } from '@/components/ui/badge'
@@ -194,45 +194,61 @@ function DesktopDashboard() {
       : item.row.title || t('operation')
 
   return (
-    <div className="min-w-0 space-y-2.5 px-4 py-2.5 sm:px-5 sm:py-3">
+    <div data-theme-stage="" className="min-w-0 space-y-3 px-4 py-3 sm:px-6 sm:py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <PageHeader
             title={name ? t('welcome', { name }) : t('welcomeAnonymous')}
             description={t('subtitle')}
             actions={
-              (login.allowed || operation.allowed || online.allowed) && (
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
-                  disabled={
-                    login.isFetching ||
-                    operation.isFetching ||
-                    online.isFetching ||
-                    loginInsights.isFetching ||
-                    operationInsights.isFetching
+                  className="rounded-full border-border-subtle bg-card/85 px-3 shadow-surface"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
+                    )
                   }
-                  onClick={() => {
-                    if (login.allowed) {
-                      login.retry()
-                      loginInsights.retry()
-                    }
-                    if (operation.allowed) {
-                      operation.retry()
-                      operationInsights.retry()
-                    }
-                    if (online.allowed) online.retry()
-                  }}
                 >
-                  <RefreshCw className="size-4" aria-hidden="true" />
-                  {t('refresh')}
+                  <ApoParticleOrb size={18} />
+                  <span>{t('askApo')}</span>
+                  <kbd className="rounded-full border border-border-subtle bg-muted/80 px-1.5 font-mono text-[11px] text-muted-foreground">
+                    ⌘K
+                  </kbd>
                 </Button>
-              )
+                {(login.allowed || operation.allowed || online.allowed) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      login.isFetching ||
+                      operation.isFetching ||
+                      online.isFetching ||
+                      loginInsights.isFetching ||
+                      operationInsights.isFetching
+                    }
+                    onClick={() => {
+                      if (login.allowed) {
+                        login.retry()
+                        loginInsights.retry()
+                      }
+                      if (operation.allowed) {
+                        operation.retry()
+                        operationInsights.retry()
+                      }
+                      if (online.allowed) online.retry()
+                    }}
+                  >
+                    <RefreshCw className="size-4" aria-hidden="true" />
+                    {t('refresh')}
+                  </Button>
+                )}
+              </div>
             }
           />
-        </div>
-        <div className="hidden h-12 w-48 shrink-0 overflow-hidden rounded-control border border-border-subtle xl:block">
-          <BrandHero alt={t('brandHeroAlt')} />
         </div>
       </div>
 
@@ -249,10 +265,12 @@ function DesktopDashboard() {
         onlineHref={online.allowed ? onlineRoute?.path : undefined}
       >
         <InsightCard
-          className="flex h-full max-h-52 min-w-0 flex-col p-3 sm:p-3.5"
+          className="flex min-w-0 flex-col p-3.5 sm:p-4"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:activity"
-          order={5}
+          order={3}
+          sketchSeed={97}
+          conduitAnchor="dash-activity"
           aria-labelledby="dashboard-activity-title"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">

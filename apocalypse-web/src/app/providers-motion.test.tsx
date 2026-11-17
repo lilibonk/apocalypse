@@ -135,6 +135,7 @@ describe('product motion preference reaches CSS and JavaScript consumers', () =>
       await loadConsumers()
       expect(readConsumers()).toBe(true)
       expect(root.dataset.motion).toBe('on')
+      expect(root.dataset.themeWorld).toBe('fluid')
 
       // Both the command action and settings Switch use this real store action.
       settings.useSettingsStore.getState().setMotionEnabled(false)
@@ -145,6 +146,7 @@ describe('product motion preference reaches CSS and JavaScript consumers', () =>
       settings.useSettingsStore.getState().setMotionEnabled(true)
       expect(readConsumers()).toBe(true)
       expect(root.dataset.motion).toBe('on')
+      expect(root.dataset.themeWorld).toBe('fluid')
     },
   )
 

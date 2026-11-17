@@ -48,6 +48,8 @@ function MenuItemLink({
     <NavLink
       to={path}
       end
+      data-slot="sidebar-link"
+      data-active={isActive ? 'true' : undefined}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
@@ -170,6 +172,8 @@ export function Sidebar({ menus, collapsed }: { menus: MenuNode[]; collapsed: bo
         <TooltipTrigger asChild>
           <NavLink
             to="/dashboard"
+            data-slot="sidebar-link"
+            data-active={pathname === '/dashboard' ? 'true' : undefined}
             className={cn(
               'mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
               pathname === '/dashboard' && 'bg-primary/15 font-semibold text-brand-text',
@@ -194,6 +198,16 @@ export function Sidebar({ menus, collapsed }: { menus: MenuNode[]; collapsed: bo
         ) : (
           <MenuGroup key={node.id} node={node} parentPath="" collapsed={collapsed} depth={0} />
         ),
+      )}
+      {!collapsed && (
+        <div
+          aria-hidden="true"
+          data-slot="sidebar-obsidian-pulse"
+          className="obsidian-only mt-4 items-center gap-2 rounded-lg border border-border-subtle bg-card/50 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <span className="size-2 shrink-0 rounded-full bg-brand shadow-xs" />
+          <span className="truncate font-mono text-[11px] text-brand-text">LIVE STREAM</span>
+        </div>
       )}
     </nav>
   )

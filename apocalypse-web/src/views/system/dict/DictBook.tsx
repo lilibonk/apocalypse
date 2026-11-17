@@ -338,6 +338,7 @@ function DictCard({
   const header = useRef<HTMLButtonElement>(null)
   const [valueBusy, setValueBusy] = useState(false)
   const [typeBusy, setTypeBusy] = useState(false)
+  const [liveTotal, setLiveTotal] = useState<number | null>(null)
   const busy = valueBusy || typeBusy
 
   useEffect(() => {
@@ -347,6 +348,7 @@ function DictCard({
 
   const previewItems = batchItems ?? []
   const ratio = useMemo(() => computeDictRatio(batchItems ?? []), [batchItems])
+  const summaryCount = expanded && liveTotal !== null ? liveTotal : ratio.total
 
   const collapse = () => {
     if (busy || disabled) return
@@ -385,8 +387,8 @@ function DictCard({
         )}
         <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
           {t('dictBook.itemCountSummary', {
-            count: ratio.total,
-            defaultValue: `${ratio.total} 项`,
+            count: summaryCount,
+            defaultValue: `${summaryCount} 项`,
           })}
         </span>
         <ChevronDown
@@ -503,6 +505,7 @@ function DictCard({
         motionEnabled={motionEnabled}
         onBusyChange={setValueBusy}
         onTypeBusyChange={setTypeBusy}
+        onTotalChange={setLiveTotal}
         onTypeChanged={onTypeChanged}
       />
     </div>
@@ -512,7 +515,7 @@ function DictCard({
     <FlipExpandCard
       id={type.id}
       expanded={expanded}
-      className={cn('dict-card', expanded && 'dict-card-expanded')}
+      className={cn('dict-card sketch-surface', expanded && 'dict-card-expanded')}
       summary={summaryNode}
       expandedContent={expandedNode}
       footer={footerNode}
@@ -538,6 +541,7 @@ function DictValues({
   motionEnabled,
   onBusyChange,
   onTypeBusyChange,
+  onTotalChange,
   onTypeChanged,
 }: {
   type: DictTypeRow
@@ -545,6 +549,7 @@ function DictValues({
   motionEnabled: boolean
   onBusyChange: (busy: boolean) => void
   onTypeBusyChange: (busy: boolean) => void
+  onTotalChange: (total: number | null) => void
   onTypeChanged: (change: DictTypeChange) => void
 }) {
   const { t } = useTranslation('system')
@@ -836,6 +841,12 @@ function DictValues({
     return () => onTypeBusyChange(false)
   }, [typeBusy, onTypeBusyChange])
 
+  const liveTotal = values.data?.total ?? null
+  useEffect(() => {
+    onTotalChange(liveTotal)
+    return () => onTotalChange(null)
+  }, [liveTotal, onTotalChange])
+
   const pages = lastDictionaryPage(values.data?.total ?? 0, DICT_VALUE_PAGE_SIZE)
   if (values.data && !values.isPlaceholderData && page > pages) setPage(pages)
 
@@ -941,65 +952,79 @@ function DictValues({
           {t('dictBook.noValues')}
         </p>
       ) : (
-        <ul className="divide-y divide-border-subtle rounded-control border border-border-subtle">
-          {rows.map((row) => {
-            const isEditingRow = inlineDraft?.mode === 'edit' && inlineDraft.rowId === row.id
-            if (isEditingRow && inlineDraft) {
+        <div className="dict-values-table overflow-x-auto rounded-panel border border-border-subtle bg-card/85">
+          <div aria-hidden="true" className="dict-values-head">
+            <span>{t('dictBook.colLabel', { defaultValue: '标签预览' })}</span>
+            <span>{t('dictBook.colKey', { defaultValue: '存储键值' })}</span>
+            <span>{t('dictBook.colSort', { defaultValue: '排序' })}</span>
+            <span>{t('dictBook.colPalette', { defaultValue: '语义色阶' })}</span>
+            <span>{t('dictBook.colDefault', { defaultValue: '默认项' })}</span>
+            <span className="text-right">
+              {t('dictBook.colActions', { defaultValue: '状态 / 操作' })}
+            </span>
+          </div>
+          <ul className="divide-y divide-border-subtle">
+            {rows.map((row) => {
+              const isEditingRow = inlineDraft?.mode === 'edit' && inlineDraft.rowId === row.id
+              if (isEditingRow && inlineDraft) {
+                return (
+                  <li key={row.id} className="p-2.5">
+                    <InlineValueEditorRow
+                      draft={inlineDraft}
+                      submitting={save.isPending}
+                      onChange={setInlineDraft}
+                      onCancel={() => setInlineDraft(null)}
+                      onSubmit={() => {
+                        if (!inlineDraft.dictLabel.trim() || !inlineDraft.dictValue.trim()) {
+                          toast.error(
+                            t('dictBook.requiredFields', {
+                              defaultValue: '请填写字典标签与编码值',
+                            }),
+                          )
+                          return
+                        }
+                        save.mutate(inlineDraft)
+                      }}
+                    />
+                  </li>
+                )
+              }
+              const tone = resolveDictSwatchTone(type.dictType, row)
               return (
-                <li key={row.id} className="p-2.5">
-                  <InlineValueEditorRow
-                    draft={inlineDraft}
-                    submitting={save.isPending}
-                    onChange={setInlineDraft}
-                    onCancel={() => setInlineDraft(null)}
-                    onSubmit={() => {
-                      if (!inlineDraft.dictLabel.trim() || !inlineDraft.dictValue.trim()) {
-                        toast.error(
-                          t('dictBook.requiredFields', { defaultValue: '请填写字典标签与编码值' }),
-                        )
-                        return
-                      }
-                      save.mutate(inlineDraft)
-                    }}
-                  />
-                </li>
-              )
-            }
-            const tone = resolveDictSwatchTone(type.dictType, row)
-            return (
-              <li
-                key={row.id}
-                className="dict-value-row"
-                data-value-result={result?.id === row.id || undefined}
-              >
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-                  <span
-                    className="dict-swatch-chip"
-                    data-tone={tone}
-                    data-disabled={row.status !== 1 ? 'true' : undefined}
-                  >
-                    <span className="dict-swatch-dot-indicator" aria-hidden="true" />
-                    <span className="font-medium">{row.dictLabel}</span>
-                    {row.isDefault === 1 && <span className="dict-swatch-default">✓</span>}
-                  </span>
-                  <code className="rounded-sm bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                <li
+                  key={row.id}
+                  className="dict-value-row"
+                  data-value-result={result?.id === row.id || undefined}
+                >
+                  <div className="min-w-0">
+                    <span
+                      className="dict-swatch-chip"
+                      data-tone={tone}
+                      data-disabled={row.status !== 1 ? 'true' : undefined}
+                    >
+                      <span className="dict-swatch-dot-indicator" aria-hidden="true" />
+                      <span className="font-medium">{row.dictLabel}</span>
+                      {row.isDefault === 1 && <span className="dict-swatch-default">✓</span>}
+                    </span>
+                    {row.remark && (
+                      <span
+                        className="mt-0.5 block truncate text-[11px] text-muted-foreground"
+                        title={row.remark}
+                      >
+                        {row.remark}
+                      </span>
+                    )}
+                  </div>
+
+                  <code className="w-fit rounded-sm bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
                     {row.dictValue}
                   </code>
-                  <span className="text-xs text-muted-foreground tabular-nums">
+
+                  <span className="font-mono text-xs text-muted-foreground tabular-nums">
                     {t('dictBook.sort', { sort: row.sort ?? 0 })}
                   </span>
-                  {row.remark && (
-                    <span
-                      className="min-w-0 truncate text-xs text-muted-foreground"
-                      title={row.remark}
-                    >
-                      {row.remark}
-                    </span>
-                  )}
-                </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2.5">
-                  {/* 6-color semantic swatch picker (frame 0999.jpg) */}
+                  {/* 6-color semantic swatch picker (CT-06) */}
                   <div
                     role="group"
                     aria-label={t('dictBook.toneGroup', {
@@ -1036,49 +1061,51 @@ function DictValues({
                         isDefault: row.isDefault === 1 ? 0 : 1,
                       })
                     }
-                    className="h-7 px-2 text-xs"
+                    className="h-7 w-fit px-2 text-xs"
                   >
                     {row.isDefault === 1
                       ? t('dictBook.defaultActive', { defaultValue: '默认 ✓' })
                       : t('dictBook.setDefault', { defaultValue: '设为默认' })}
                   </Button>
 
-                  <Switch
-                    checked={row.status === 1}
-                    disabled={!canEdit || busy || typeBusy || values.isPlaceholderData}
-                    aria-label={t('dictBook.toggle', { label: row.dictLabel })}
-                    onCheckedChange={() =>
-                      patchRowMeta.mutate({ row, status: row.status === 1 ? 0 : 1 })
-                    }
-                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Switch
+                      checked={row.status === 1}
+                      disabled={!canEdit || busy || typeBusy || values.isPlaceholderData}
+                      aria-label={t('dictBook.toggle', { label: row.dictLabel })}
+                      onCheckedChange={() =>
+                        patchRowMeta.mutate({ row, status: row.status === 1 ? 0 : 1 })
+                      }
+                    />
 
-                  <Perm perm="system:dict:edit">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t('dictBook.edit', { label: row.dictLabel })}
-                      disabled={busy || typeBusy || values.isPlaceholderData}
-                      onClick={() => startEditInline(row)}
-                    >
-                      <Pencil aria-hidden="true" />
-                    </Button>
-                  </Perm>
-                  <Perm perm="system:dict:remove">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t('dictBook.delete', { label: row.dictLabel })}
-                      disabled={busy || typeBusy || values.isPlaceholderData}
-                      onClick={() => setDeleting(row)}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </Perm>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                    <Perm perm="system:dict:edit">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t('dictBook.edit', { label: row.dictLabel })}
+                        disabled={busy || typeBusy || values.isPlaceholderData}
+                        onClick={() => startEditInline(row)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                    </Perm>
+                    <Perm perm="system:dict:remove">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t('dictBook.delete', { label: row.dictLabel })}
+                        disabled={busy || typeBusy || values.isPlaceholderData}
+                        onClick={() => setDeleting(row)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </Perm>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
 
       {values.data && (

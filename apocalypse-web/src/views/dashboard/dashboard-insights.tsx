@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import {
   ArrowDownRight,
@@ -13,7 +13,12 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { InsightCard } from '@/components/insights/InsightCard'
-import { MetricValue } from '@/components/motion'
+import {
+  FluidConduitOverlay,
+  MetricValue,
+  SketchApoPeeker,
+  type ConduitLink,
+} from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { insightMotion } from '@/design/motion'
@@ -246,7 +251,7 @@ function PeriodTrend({
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-24 w-full overflow-visible rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-44 w-full overflow-visible rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring"
         role="img"
         tabIndex={0}
         aria-label={t('trendLabel', { total: insight.total })}
@@ -466,10 +471,40 @@ export function DashboardInsights({
   children: ReactNode
 }) {
   const { t } = useTranslation('dashboard')
+  const topStageRef = useRef<HTMLDivElement>(null)
   const insight = login.data
   const operations = operation.data
-  const categories = operations?.byBusinessType.slice(0, 4) ?? []
-  const remainder = operations?.byBusinessType.slice(4) ?? []
+  const conduitLinks = useMemo<ConduitLink[]>(
+    () => [
+      {
+        id: 'dash-hero-to-online',
+        from: 'dash-login-hero',
+        to: 'dash-online',
+        enabled: Boolean(online.allowed && (online.data?.length ?? 0) > 0),
+        scope: (online.data?.length ?? 0) > 3 ? 'ALL' : 'STANDARD',
+        fromOffsetY: -88,
+      },
+      {
+        id: 'dash-hero-to-operations',
+        from: 'dash-login-hero',
+        to: 'dash-operations',
+        enabled: Boolean(operation.allowed && (operations?.total ?? 0) > 0),
+        scope: (operations?.total ?? 0) > 20 ? 'ALL' : 'STANDARD',
+        fromOffsetY: 0,
+      },
+      {
+        id: 'dash-hero-to-activity',
+        from: 'dash-login-hero',
+        to: 'dash-activity',
+        enabled: Boolean(login.allowed || operation.allowed),
+        scope: 'STANDARD',
+        fromOffsetY: 96,
+      },
+    ],
+    [login.allowed, online.allowed, online.data?.length, operation.allowed, operations?.total],
+  )
+  const categories = operations?.byBusinessType.slice(0, 3) ?? []
+  const remainder = operations?.byBusinessType.slice(3) ?? []
   const distributionRows = [
     ...categories.map((item) => ({ ...item, kind: 'type' as const })),
     ...(remainder.length
@@ -491,34 +526,49 @@ export function DashboardInsights({
         ? t('unavailable')
         : t('noOperationRecords')
   return (
-    <div className="space-y-2.5">
-      <div className="dashboard-insight-top grid gap-2.5">
-        <InsightCard
-          className="dashboard-insight-hero flex flex-col p-3 sm:p-3.5"
-          motionEnabled={motionEnabled}
-          entranceKey="dashboard:login"
-          order={0}
-          aria-labelledby="dashboard-logins-title"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-3">
+      <div ref={topStageRef} className="relative">
+        <FluidConduitOverlay
+          containerRef={topStageRef}
+          links={conduitLinks}
+          flow="horizontal"
+          minContainerWidth={720}
+          pulseKey={range}
+        />
+        <div className="dashboard-insight-top relative z-[2] grid gap-3 lg:items-stretch lg:gap-10">
+          <InsightCard
+            className="dashboard-insight-hero relative flex flex-col justify-between overflow-visible p-4 sm:p-5"
+            motionEnabled={motionEnabled}
+            entranceKey="dashboard:login"
+            order={0}
+            sketchSeed={17}
+            wash="normal"
+            conduitAnchor="dash-login-hero"
+            aria-labelledby="dashboard-logins-title"
+          >
+            <SketchApoPeeker className="absolute -top-6 right-5 z-[6]" />
             <div>
-              <h2 id="dashboard-logins-title" className="text-sm font-semibold">
-                {t('loginOverview')}
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">{t('loginOverviewHint')}</p>
-            </div>
-            <RangeControl range={range} onRange={onRange} />
-          </div>
-          <div className="mt-2">
-            <SourceFeedback state={login} source={t('loginSource')} denied={t('noLoginAccess')} />
-          </div>
-          {insight && (
-            <>
-              <div className="grid items-center gap-4 lg:grid-cols-[0.78fr_1.22fr]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div>
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="insight-metric text-4xl font-medium sm:text-5xl">
+                  <h2 id="dashboard-logins-title" className="text-sm font-semibold">
+                    {t('loginOverview')}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('loginOverviewHint')}</p>
+                </div>
+                <RangeControl range={range} onRange={onRange} />
+              </div>
+              <div className="mt-2">
+                <SourceFeedback
+                  state={login}
+                  source={t('loginSource')}
+                  denied={t('noLoginAccess')}
+                />
+              </div>
+              {insight && (
+                <div className="mt-2 space-y-4">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-baseline gap-2.5">
+                      <span className="insight-metric text-4xl font-semibold sm:text-5xl">
                         <MetricValue
                           value={insight.total}
                           language={language}
@@ -529,249 +579,256 @@ export function DashboardInsights({
                       <span className="text-xs text-muted-foreground">{t('times')}</span>
                       <Comparison insight={insight} />
                     </div>
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
                       {t(`rangeTotal${insight.range}`)}
                     </p>
                   </div>
+                  <PeriodTrend insight={insight} motionEnabled={motionEnabled} />
                 </div>
-                <PeriodTrend insight={insight} motionEnabled={motionEnabled} />
-              </div>
-              <dl className="mt-2.5 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2.5 text-xs sm:grid-cols-6">
-                <Stat
-                  label={t('succeeded')}
-                  value={insight.succeeded}
-                  language={language}
-                  tone="brand"
-                />
-                <Stat label={t('failed')} value={insight.failed} language={language} />
-                <Stat
-                  label={t('distinctUsers')}
-                  value={insight.distinctUsers}
-                  language={language}
-                />
-                <Stat label={t('distinctIps')} value={insight.distinctIps} language={language} />
-                <Stat
-                  label={t(insight.bucketUnit === 'HOURS' ? 'peakHour' : 'peakDay')}
-                  value={insight.peak}
-                  language={language}
-                />
-                <Stat
-                  label={t(insight.bucketUnit === 'HOURS' ? 'averageHour' : 'averageDay')}
-                  value={insight.average}
-                  language={language}
-                  decimals={1}
-                />
-              </dl>
-              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                <WindowNote insight={insight} />
-                {loginHref && (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={loginHref}>
-                      {t('viewLogin')}
-                      <ArrowUpRight aria-hidden="true" />
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
-        </InsightCard>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
-          <InsightCard
-            className="flex flex-col justify-between gap-1.5 p-3 sm:p-3.5"
-            motionEnabled={motionEnabled}
-            entranceKey="dashboard:online"
-            order={1}
-            aria-labelledby="dashboard-sessions-title"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 id="dashboard-sessions-title" className="text-sm font-medium">
-                  {t('online')}
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t('onlineHint')}</p>
-              </div>
-              <MonitorDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <SourceFeedback state={online} source={t('online')} denied={t('noOnlineAccess')} />
-            {online.data !== undefined && (
-              <div data-slot="session-count" className="flex items-baseline gap-2">
-                <p className="insight-metric text-3xl font-medium sm:text-4xl">
-                  <MetricValue
-                    value={online.data.length}
-                    language={language}
-                    motionEnabled={motionEnabled}
-                    variant="tabular"
-                  />
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {online.data.length
-                    ? t('sessions', { count: online.data.length })
-                    : t('noSessions')}
-                </p>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              <p className="line-clamp-1 text-xs text-muted-foreground">{t('onlineDefinition')}</p>
-              {onlineHref && online.allowed && (
-                <Button variant="ghost" size="xs" className="shrink-0" asChild>
-                  <Link to={onlineHref}>
-                    {t('manageSessions')}
-                    <ArrowUpRight aria-hidden="true" />
-                  </Link>
-                </Button>
               )}
             </div>
-          </InsightCard>
-          <InsightCard
-            className="flex flex-col justify-between gap-1.5 p-3 sm:p-3.5"
-            motionEnabled={motionEnabled}
-            entranceKey="dashboard:operations"
-            order={2}
-            aria-labelledby="dashboard-operations-title"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="dashboard-operations-title" className="text-sm font-medium">
-                {t('operationsInRange')}
-              </h2>
-              <ScrollText className="size-4 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <SourceFeedback
-              state={operation}
-              source={t('operationSource')}
-              denied={t('noOperationAccess')}
-            />
-            {operations && (
-              <>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="insight-metric text-3xl font-medium sm:text-4xl">
-                    <MetricValue
-                      value={operations.total}
-                      language={language}
-                      motionEnabled={false}
-                      variant="tabular"
-                    />
-                  </span>
-                  <Comparison insight={operations} />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="line-clamp-1 text-xs text-muted-foreground">
-                    {t(`operationsTotal${operations.range}`)}
-                  </p>
-                  {operationHref && operation.allowed && (
-                    <Button variant="ghost" size="xs" className="shrink-0" asChild>
-                      <Link to={operationHref}>
-                        {t('viewOperations')}
+            {insight && (
+              <div className="mt-4 space-y-3">
+                <dl className="grid grid-cols-3 gap-x-3 gap-y-2 border-t border-border-subtle pt-3 text-xs sm:grid-cols-6">
+                  <Stat
+                    label={t('succeeded')}
+                    value={insight.succeeded}
+                    language={language}
+                    tone="brand"
+                  />
+                  <Stat label={t('failed')} value={insight.failed} language={language} />
+                  <Stat
+                    label={t('distinctUsers')}
+                    value={insight.distinctUsers}
+                    language={language}
+                  />
+                  <Stat label={t('distinctIps')} value={insight.distinctIps} language={language} />
+                  <Stat
+                    label={t(insight.bucketUnit === 'HOURS' ? 'peakHour' : 'peakDay')}
+                    value={insight.peak}
+                    language={language}
+                  />
+                  <Stat
+                    label={t(insight.bucketUnit === 'HOURS' ? 'averageHour' : 'averageDay')}
+                    value={insight.average}
+                    language={language}
+                    decimals={1}
+                  />
+                </dl>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <WindowNote insight={insight} />
+                  {loginHref && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={loginHref}>
+                        {t('viewLogin')}
                         <ArrowUpRight aria-hidden="true" />
                       </Link>
                     </Button>
                   )}
                 </div>
-              </>
-            )}
-            {!operations && operationHref && operation.allowed && (
-              <Button variant="ghost" size="xs" className="self-start" asChild>
-                <Link to={operationHref}>
-                  {t('viewOperations')}
-                  <ArrowUpRight aria-hidden="true" />
-                </Link>
-              </Button>
+              </div>
             )}
           </InsightCard>
-        </div>
-      </div>
-      <div className="dashboard-insight-bottom grid items-start gap-2.5 md:grid-cols-2">
-        <InsightCard
-          className="max-h-52 overflow-hidden p-3 sm:p-3.5"
-          motionEnabled={motionEnabled}
-          entranceKey="dashboard:success"
-          order={3}
-        >
-          <h2 className="text-sm font-semibold">{t('operationSuccess')}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('operationSuccessHint')}</p>
-          {operations && operations.total > 0 ? (
-            <div className="mt-2 flex items-center gap-4">
-              <SuccessGauge value={operations.successRate} language={language} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <dl className="grid grid-cols-2 gap-3 text-xs">
-                  <Stat label={t('succeeded')} value={operations.succeeded} language={language} />
-                  <Stat label={t('failed')} value={operations.failed} language={language} />
-                </dl>
-                {operations.unknown > 0 && (
-                  <p className="text-xs text-warning-foreground">
-                    {t('unknownResults', { count: operations.unknown })}
-                  </p>
+          <div className="flex min-w-0 flex-col gap-3">
+            <InsightCard
+              className="flex flex-col justify-between gap-2 p-3.5 sm:p-4"
+              motionEnabled={motionEnabled}
+              entranceKey="dashboard:online"
+              order={1}
+              sketchSeed={31}
+              conduitAnchor="dash-online"
+              aria-labelledby="dashboard-sessions-title"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="dashboard-sessions-title" className="text-sm font-semibold">
+                    {t('online')}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('onlineHint')}</p>
+                </div>
+                <MonitorDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <SourceFeedback state={online} source={t('online')} denied={t('noOnlineAccess')} />
+              {online.data !== undefined && (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div data-slot="session-count" className="flex items-baseline gap-2">
+                    <p className="insight-metric text-3xl font-semibold">
+                      <MetricValue
+                        value={online.data.length}
+                        language={language}
+                        motionEnabled={motionEnabled}
+                        variant="tabular"
+                      />
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {online.data.length
+                        ? t('sessions', { count: online.data.length })
+                        : t('noSessions')}
+                    </p>
+                  </div>
+                  {online.data.length > 0 && (
+                    <div aria-hidden="true" className="flex flex-wrap items-center gap-1">
+                      {online.data.slice(0, 12).map((row, idx) => (
+                        <span
+                          key={row.jti ?? `${row.username}-${idx}`}
+                          className="size-2.5 rounded-full bg-brand shadow-xs"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <p className="line-clamp-1 text-xs text-muted-foreground">
+                  {t('onlineDefinition')}
+                </p>
+                {onlineHref && online.allowed && (
+                  <Button variant="ghost" size="xs" className="shrink-0" asChild>
+                    <Link to={onlineHref}>
+                      {t('manageSessions')}
+                      <ArrowUpRight aria-hidden="true" />
+                    </Link>
+                  </Button>
                 )}
               </div>
-            </div>
-          ) : (
-            <p role="status" className="py-6 text-sm text-muted-foreground">
-              {noOperation}
-            </p>
-          )}
-        </InsightCard>
-        <InsightCard
-          className="flex flex-col overflow-hidden p-3 sm:p-3.5"
-          motionEnabled={motionEnabled}
-          entranceKey="dashboard:distribution"
-          order={4}
-        >
-          <h2 className="text-sm font-semibold">{t('distribution')}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('distributionHint')}</p>
-          {operations && operations.total > 0 ? (
-            <div className="mt-1.5 flex flex-col gap-1.5">
-              {distributionRows.map((item, index) => {
-                const knownKey = operationTypeKey(item.type)
-                const label =
-                  item.kind === 'remaining'
-                    ? t('typeOther')
-                    : knownKey
-                      ? t(knownKey)
-                      : (item.type ?? t('typeUnknown'))
-                return (
-                  <div key={item.kind === 'remaining' ? 'remaining' : `type-${item.type}`}>
-                    <div className="mb-0.5 flex items-start justify-between gap-2 text-xs">
-                      <span
-                        className="min-w-0 truncate"
-                        title={
-                          item.kind === 'remaining'
-                            ? remainder.map((entry) => entry.type ?? t('typeUnknown')).join(', ')
-                            : (item.type ?? undefined)
-                        }
-                      >
-                        {label}
+            </InsightCard>
+            <InsightCard
+              className="flex flex-col justify-between gap-2.5 p-3.5 sm:p-4"
+              motionEnabled={motionEnabled}
+              entranceKey="dashboard:operations"
+              order={2}
+              sketchSeed={53}
+              conduitAnchor="dash-operations"
+              aria-labelledby="dashboard-operations-title"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="dashboard-operations-title" className="text-sm font-semibold">
+                    {t('operationsInRange')}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t('operationSuccessHint')}
+                  </p>
+                </div>
+                <ScrollText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <SourceFeedback
+                state={operation}
+                source={t('operationSource')}
+                denied={t('noOperationAccess')}
+              />
+              {operations ? (
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="insight-metric text-2xl font-semibold">
+                        <MetricValue
+                          value={operations.total}
+                          language={language}
+                          motionEnabled={false}
+                          variant="tabular"
+                        />
                       </span>
-                      <span className="shrink-0 text-muted-foreground tabular-nums">
-                        {formatNumber.format(item.count)} ·{' '}
-                        {Math.round((item.count / operations.total) * 100)}%
-                      </span>
+                      <Comparison insight={operations} />
                     </div>
-                    <div
-                      className="h-1.5 overflow-hidden rounded-full bg-secondary"
-                      role="meter"
-                      aria-label={label}
-                      aria-valuemin={0}
-                      aria-valuemax={operations.total}
-                      aria-valuenow={item.count}
-                    >
-                      <DistributionBar
-                        value={item.count}
-                        total={operations.total}
-                        index={index}
-                        motionEnabled={motionEnabled}
-                      />
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t(`operationsTotal${operations.range}`)}
+                    </p>
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p role="status" className="py-6 text-sm text-muted-foreground">
-              {noOperation}
-            </p>
-          )}
-        </InsightCard>
-        <div className="min-w-0 md:col-span-2 lg:col-span-1">{children}</div>
+                  {operations.total > 0 ? (
+                    <div className="flex items-center gap-3.5 border-t border-border-subtle/70 pt-2.5">
+                      <SuccessGauge value={operations.successRate} language={language} />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <dl className="grid grid-cols-2 gap-2 text-xs">
+                          <Stat
+                            label={t('succeeded')}
+                            value={operations.succeeded}
+                            language={language}
+                            tone="brand"
+                          />
+                          <Stat label={t('failed')} value={operations.failed} language={language} />
+                        </dl>
+                        {operations.unknown > 0 && (
+                          <p className="text-xs text-warning-foreground">
+                            {t('unknownResults', { count: operations.unknown })}
+                          </p>
+                        )}
+                        <div className="space-y-1 pt-0.5">
+                          {distributionRows.map((item, index) => {
+                            const knownKey = operationTypeKey(item.type)
+                            const label =
+                              item.kind === 'remaining'
+                                ? t('typeOther')
+                                : knownKey
+                                  ? t(knownKey)
+                                  : (item.type ?? t('typeUnknown'))
+                            return (
+                              <div
+                                key={item.kind === 'remaining' ? 'remaining' : `type-${item.type}`}
+                              >
+                                <div className="mb-0.5 flex items-start justify-between gap-2 text-[11px]">
+                                  <span
+                                    className="min-w-0 truncate"
+                                    title={
+                                      item.kind === 'remaining'
+                                        ? remainder
+                                            .map((entry) => entry.type ?? t('typeUnknown'))
+                                            .join(', ')
+                                        : (item.type ?? undefined)
+                                    }
+                                  >
+                                    {label}
+                                  </span>
+                                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                                    {formatNumber.format(item.count)}
+                                  </span>
+                                </div>
+                                <div
+                                  className="h-1.5 overflow-hidden rounded-full bg-secondary"
+                                  role="meter"
+                                  aria-label={label}
+                                  aria-valuemin={0}
+                                  aria-valuemax={operations.total}
+                                  aria-valuenow={item.count}
+                                >
+                                  <DistributionBar
+                                    value={item.count}
+                                    total={operations.total}
+                                    index={index}
+                                    motionEnabled={motionEnabled}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p role="status" className="py-2 text-xs text-muted-foreground">
+                      {noOperation}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p role="status" className="py-2 text-xs text-muted-foreground">
+                  {noOperation}
+                </p>
+              )}
+              {operationHref && operation.allowed && (
+                <div className="flex justify-end">
+                  <Button variant="ghost" size="xs" asChild>
+                    <Link to={operationHref}>
+                      {t('viewOperations')}
+                      <ArrowUpRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </InsightCard>
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   )

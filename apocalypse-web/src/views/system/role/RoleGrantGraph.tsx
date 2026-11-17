@@ -1,12 +1,13 @@
-import { motion } from 'motion/react'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { KeyRound, Plus, ShieldCheck, Unlink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { insightMotion } from '@/design/motion'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
+
+import { FluidConduitOverlay, SketchBox, type ConduitLink } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { PermissionDefinition } from '../permission/permission.types'
+import type { RoleGrant } from './role-grant.model'
 import './role-stage.css'
 
 export interface GrantNode {
@@ -47,56 +48,10 @@ export function computeGrantGraphGeometry(count: number): {
   }
 }
 
-function GrantEdge({
-  y,
-  roleY,
-  state,
-  animate,
-}: {
-  y: number
-  roleY: number
-  state: GrantNode['state']
-  animate: boolean
-}) {
-  const target = { d: `M 150 ${roleY} C 335 ${roleY},335 ${y},500 ${y}` }
-  const controls = useSurfaceAnimation(target, animate, insightMotion.layout)
-  return (
-    <motion.path
-      initial={target}
-      animate={controls}
-      className="role-menu-editor-edge"
-      data-state={state}
-    />
-  )
-}
-
-function GrantPosition({
-  y,
-  canvasHeight,
-  animate,
-  children,
-}: {
-  y: number
-  canvasHeight: number
-  animate: boolean
-  children: ReactNode
-}) {
-  const target = { top: `${(y / canvasHeight) * 100}%`, opacity: 1 }
-  const controls = useSurfaceAnimation(target, animate, insightMotion.layout)
-  return (
-    <motion.div
-      className="absolute left-0 w-full"
-      initial={animate ? { ...target, opacity: 0 } : target}
-      animate={controls}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
 export function RoleGrantGraph({
   roleName,
   nodes,
+  grants,
   selectedId,
   editing,
   disabled,
@@ -105,6 +60,7 @@ export function RoleGrantGraph({
 }: {
   roleName: string
   nodes: readonly GrantNode[]
+  grants?: ReadonlyMap<string, RoleGrant>
   selectedId: string | null
   editing: boolean
   disabled: boolean
@@ -112,7 +68,7 @@ export function RoleGrantGraph({
   onToggle: (id: string) => void
 }) {
   const { t } = useTranslation('system')
-  const motionEnabled = useMotionPreference()
+  const stageRef = useRef<HTMLDivElement>(null)
   const modules = Array.from(new Set(nodes.map((node) => node.definition?.moduleKey ?? 'system')))
   const [activeModule, setActiveModule] = useState<string | null>(null)
   const effectiveModule = activeModule && modules.includes(activeModule) ? activeModule : null
@@ -120,11 +76,30 @@ export function RoleGrantGraph({
     ? nodes.filter((node) => (node.definition?.moduleKey ?? 'system') === effectiveModule)
     : nodes
 
-  const { canvasHeight, roleY, nodeY } = computeGrantGraphGeometry(visibleNodes.length)
-  const animate = motionEnabled && visibleNodes.length <= SPRING_NODE_BUDGET
+  const conduitLinks = useMemo<ConduitLink[]>(() => {
+    const links: ConduitLink[] = []
+    for (let idx = 0; idx < visibleNodes.length; idx += 1) {
+      const node = visibleNodes[idx]
+      const prev = idx > 0 ? visibleNodes[idx - 1] : null
+      const grant = grants?.get(node.id)
+      const linked = ['linked', 'added', 'updated'].includes(node.state)
+      links.push({
+        id: `valve-bus-${node.id}`,
+        from: prev ? `grant-valve-${prev.id}` : 'grant-bus-root',
+        to: `grant-valve-${node.id}`,
+        enabled: linked,
+        scope: grant?.scopeOverride === 'ALL' ? 'ALL' : linked ? 'STANDARD' : 'BROKEN',
+      })
+    }
+    return links
+  }, [grants, visibleNodes])
+
+  const linkedCount = visibleNodes.filter((n) =>
+    ['linked', 'added', 'updated'].includes(n.state),
+  ).length
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3 p-3 sm:p-4">
       {nodes.length > 12 && modules.length > 1 && (
         <div
           role="toolbar"
@@ -158,130 +133,134 @@ export function RoleGrantGraph({
           })}
         </div>
       )}
+
       <div
-        className={
-          canvasHeight > BASE_HEIGHT
-            ? 'max-h-[34rem] overflow-y-auto overflow-x-hidden rounded-panel'
-            : undefined
-        }
+        ref={stageRef}
+        role="group"
+        aria-label={t('authorization.title')}
+        className="relative max-h-[36rem] overflow-y-auto overflow-x-hidden pr-1"
       >
-        <div
-          className="role-menu-editor-canvas"
-          role="group"
-          aria-label={t('authorization.title')}
-          style={canvasHeight > BASE_HEIGHT ? { aspectRatio: `780 / ${canvasHeight}` } : undefined}
-        >
-          <svg
-            viewBox={`0 0 780 ${canvasHeight}`}
-            className="absolute inset-0 size-full"
-            aria-hidden="true"
-          >
-            {visibleNodes.map((node, index) => (
-              <GrantEdge
-                key={node.id}
-                y={nodeY(index)}
-                roleY={roleY}
-                state={node.state}
-                animate={animate}
-              />
-            ))}
-          </svg>
-          <div
-            className="role-menu-editor-node flex items-center justify-center"
-            data-role="true"
-            style={{
-              width: `${(104 / 780) * 100}%`,
-              left: `${(150 / 780) * 100}%`,
-              top: `${(roleY / canvasHeight) * 100}%`,
-            }}
-          >
-            <ShieldCheck className="size-8" strokeWidth={1.5} aria-hidden="true" />
+        <FluidConduitOverlay
+          containerRef={stageRef}
+          links={conduitLinks}
+          flow="vertical"
+          minContainerWidth={260}
+          pulseKey={`${effectiveModule ?? 'all'}-${linkedCount}`}
+        />
+
+        <div className="relative z-[2] space-y-3 pl-2 sm:pl-3">
+          <div className="flex items-center gap-3.5">
+            <span
+              data-conduit-anchor="grant-bus-root"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-primary/15 text-brand-text shadow-xs"
+            >
+              <ShieldCheck className="size-4" aria-hidden="true" />
+            </span>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">{roleName}</span>
+              <span>·</span>
+              <span className="tabular-nums">
+                {linkedCount} / {visibleNodes.length}
+              </span>
+            </div>
           </div>
-          <p
-            className="absolute line-clamp-3 break-words text-center text-sm font-semibold"
-            style={{
-              left: '4%',
-              top: `${((roleY + 76) / canvasHeight) * 100}%`,
-              width: '31%',
-            }}
-          >
-            {roleName}
-          </p>
-          {visibleNodes.map((node, index) => {
-            const linked = ['linked', 'added', 'updated'].includes(node.state)
-            const name = node.definition?.name ?? node.id
-            const currentY = nodeY(index)
-            return (
-              <GrantPosition
-                key={node.id}
-                y={currentY}
-                canvasHeight={canvasHeight}
-                animate={animate}
-              >
-                <button
-                  type="button"
-                  className="role-menu-editor-node flex items-center justify-center"
-                  data-state={node.state}
-                  data-active={selectedId === node.id}
-                  data-node-y={Math.round(currentY)}
-                  style={{
-                    width: `${(56 / 780) * 100}%`,
-                    left: `${(500 / 780) * 100}%`,
-                    top: 0,
-                  }}
-                  aria-pressed={selectedId === node.id}
-                  aria-label={t('authorization.inspect', { name })}
-                  onClick={() => onSelect(node.id)}
-                >
-                  <KeyRound className="size-5" aria-hidden="true" />
-                </button>
-                <div
-                  className="role-menu-editor-node-label space-y-2"
-                  style={{
-                    width: `${(205 / 780) * 100}%`,
-                    left: `${(545 / 780) * 100}%`,
-                    top: 0,
-                  }}
-                >
+
+          <ul className="space-y-3">
+            {visibleNodes.map((node) => {
+              const linked = ['linked', 'added', 'updated'].includes(node.state)
+              const name = node.definition?.name ?? node.id
+              const grant = grants?.get(node.id)
+              const isSelected = selectedId === node.id
+              return (
+                <li key={node.id} className="relative flex items-center gap-3 sm:gap-3.5">
                   <button
-                    className="block w-full truncate text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     type="button"
+                    data-conduit-anchor={`grant-valve-${node.id}`}
+                    data-state={node.state}
+                    data-active={isSelected}
+                    aria-pressed={isSelected}
+                    aria-label={t('authorization.inspect', { name })}
                     onClick={() => onSelect(node.id)}
+                    className={cn(
+                      'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      linked
+                        ? 'border-brand-text/50 bg-primary/15 text-brand-text'
+                        : 'border-border-subtle bg-muted text-muted-foreground',
+                      isSelected && 'ring-2 ring-ring',
+                    )}
                   >
-                    {node.definition?.name ?? t('authorization.definitionMissing')}
+                    <KeyRound className="size-3.5" aria-hidden="true" />
                   </button>
-                  <p
-                    className="truncate text-xs text-muted-foreground"
-                    title={node.definition?.code ?? node.id}
+
+                  <SketchBox
+                    seed={node.id.length * 7 + 13}
+                    wash={isSelected ? 'normal' : 'none'}
+                    className={cn(
+                      'min-w-0 flex-1 transition-colors',
+                      isSelected && 'border-brand-text/60',
+                    )}
                   >
-                    {node.definition?.code ?? node.id}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {node.definition
-                      ? `${node.definition.moduleKey ?? 'system'} / ${node.definition.resource} / ${node.definition.action}`
-                      : ''}
-                  </p>
-                  {editing ? (
-                    <Button
-                      size="xs"
-                      variant={linked ? 'ghost' : 'outline'}
-                      disabled={disabled || (!linked && !node.configurable)}
-                      onClick={() => onToggle(node.id)}
-                      aria-label={t(
-                        linked ? 'authorization.removeNamed' : 'authorization.addNamed',
-                        {
-                          name,
-                        },
-                      )}
-                    >
-                      {linked ? <Unlink className="size-3.5" /> : <Plus className="size-3.5" />}
-                      {t(`authorization.${node.state}`)}
-                    </Button>
-                  ) : null}
-                </div>
-              </GrantPosition>
-            )
-          })}
+                    <div className="grid items-center gap-2 p-2.5 sm:grid-cols-[minmax(0,1.4fr)_auto_auto_auto] sm:gap-3 sm:px-3.5 sm:py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => onSelect(node.id)}
+                        className="min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {node.definition?.name ?? t('authorization.definitionMissing')}
+                          </span>
+                        </div>
+                        <p
+                          className="mt-0.5 truncate font-mono text-xs text-muted-foreground"
+                          title={node.definition?.code ?? node.id}
+                        >
+                          {node.definition?.code ?? node.id}
+                        </p>
+                      </button>
+
+                      <Badge variant="outline" className="w-fit text-[11px]">
+                        {grant
+                          ? t(`authorization.${grant.scopeOverride}`, {
+                              defaultValue: grant.scopeOverride,
+                            })
+                          : t(`authorization.${node.state}`)}
+                      </Badge>
+
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {grant
+                          ? grant.validFrom || grant.validUntil
+                            ? `${grant.validFrom ? new Date(grant.validFrom).toLocaleDateString() : '∞'} → ${grant.validUntil ? new Date(grant.validUntil).toLocaleDateString() : '∞'}`
+                            : t('authorization.permanent', { defaultValue: '长期' })
+                          : t(`authorization.${node.state}`)}
+                      </span>
+
+                      {editing ? (
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant={linked ? 'ghost' : 'outline'}
+                          disabled={disabled || (!linked && !node.configurable)}
+                          onClick={() => onToggle(node.id)}
+                          aria-label={t(
+                            linked ? 'authorization.removeNamed' : 'authorization.addNamed',
+                            { name },
+                          )}
+                        >
+                          {linked ? (
+                            <Unlink className="size-3.5" aria-hidden="true" />
+                          ) : (
+                            <Plus className="size-3.5" aria-hidden="true" />
+                          )}
+                          <span>{t(`authorization.${node.state}`)}</span>
+                        </Button>
+                      ) : null}
+                    </div>
+                  </SketchBox>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       </div>
     </div>

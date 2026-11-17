@@ -4,11 +4,12 @@
  * Registered through command-questions.tsx; data stays in this module.
  */
 import type { UseQueryResult } from '@tanstack/react-query'
-import { CircleHelp, KeyRound } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { ArrowUpRight, CircleHelp, KeyRound, Menu as MenuIconGlyph, Shield } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { buildEntityRouteTarget, EntityPill, type EntityRouteIntent } from '@/components/navigation'
+import { FluidConduitOverlay, type ConduitLink } from '@/components/motion'
+import { buildEntityRouteTarget, type EntityRouteIntent } from '@/components/navigation'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import type { CommandQuestionPanelProps } from '@/components/layout/command-extensions'
@@ -204,141 +205,198 @@ function HoldersResult({
   navigate: CommandQuestionPanelProps['navigate']
 }) {
   const { t } = useTranslation('system')
+  const stageRef = useRef<HTMLDivElement>(null)
+  const roles = query.data?.roles
+  const permissionId = query.data?.permissionId ?? ''
+  const conduitLinks = useMemo<ConduitLink[]>(
+    () =>
+      (roles ?? []).slice(0, 5).map((role) => ({
+        id: `qa-fanout-${role.roleId}`,
+        from: 'qa-perm',
+        to: `qa-role-${role.roleId}`,
+        enabled: role.state === 'ACTIVE',
+        scope: role.effectiveScope === 'ALL' ? 'ALL' : 'STANDARD',
+      })),
+    [roles],
+  )
   if (query.isPending) return <Loading active />
   if (query.isError) return <Failure error={query.error} onRetry={() => void query.refetch()} />
   const data = query.data
   const permissionPath = routeFor(routes, 'system/permission')
   return (
     <AnswerFrame question={question} evaluatedAt={data.evaluatedAt}>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <EntityPill
-          kind="permission"
-          id={data.permissionId}
-          label={data.name}
-          sublabel={data.code}
-          moduleKey={data.moduleKey ?? '__core__'}
-          onNavigate={(intent) =>
-            navigateEntityFromQuestion(routes, navigate, intent, {
-              keyword: data.code,
-            })
-          }
+      <div ref={stageRef} className="relative">
+        <FluidConduitOverlay
+          containerRef={stageRef}
+          links={conduitLinks}
+          flow="horizontal"
+          minContainerWidth={460}
+          pulseKey={permissionId}
         />
-        {!data.moduleEnabled && (
-          <span className="text-xs text-muted-foreground">{t('commandQa.moduleDisabled')}</span>
-        )}
-        {permissionPath && (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() =>
-              navigateEntityFromQuestion(
-                routes,
-                navigate,
-                {
-                  kind: 'permission',
-                  id: data.permissionId,
-                  label: data.name,
-                  moduleKey: data.moduleKey ?? '__core__',
-                },
-                { keyword: data.code },
-              )
-            }
+        <div className="relative z-[2] grid gap-4 md:grid-cols-[minmax(0,11.5rem)_minmax(0,1fr)] md:items-start md:gap-9">
+          <div
+            data-conduit-anchor="qa-perm"
+            className="flex flex-col gap-2 rounded-panel border border-border-subtle bg-card/95 p-2.5 shadow-surface"
           >
-            {t('commandQa.openPermission')}
-          </Button>
-        )}
-      </div>
-      {data.roles.length === 0 ? (
-        <p role="status">{t('commandQa.noHolders')}</p>
-      ) : (
-        <>
-          <p className="mb-2">
-            {t('commandQa.holdersSummary', {
-              active: data.activeRoleCount,
-              total: data.roles.length,
-              users: data.coveredVisibleUserCount,
-            })}
-          </p>
-          <ul className="space-y-2">
-            {data.roles.map((role) => (
-              <li key={role.roleId} className="rounded-control bg-card p-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <EntityPill
-                    kind="role"
-                    id={role.roleId}
-                    label={role.roleName}
-                    sublabel={role.roleKey}
-                    onNavigate={(intent) =>
-                      navigateEntityFromQuestion(routes, navigate, intent, {
-                        roleId: role.roleId,
-                        roleKey: role.roleKey,
-                      })
-                    }
-                  />
-                  <span
-                    className="command-grant-state rounded-full px-2 py-0.5 text-xs"
-                    data-state={role.state}
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <KeyRound className="size-3.5 shrink-0 text-brand-text" aria-hidden="true" />
+              <span className="truncate">{data.name}</span>
+            </div>
+            <code className="truncate font-mono text-[11px] text-muted-foreground">
+              {data.code}
+            </code>
+            {!data.moduleEnabled && (
+              <span className="text-[11px] text-muted-foreground">
+                {t('commandQa.moduleDisabled')}
+              </span>
+            )}
+            {permissionPath && (
+              <Button
+                size="xs"
+                variant="outline"
+                className="mt-1 justify-between gap-1 text-xs"
+                onClick={() =>
+                  navigateEntityFromQuestion(
+                    routes,
+                    navigate,
+                    {
+                      kind: 'permission',
+                      id: data.permissionId,
+                      label: data.name,
+                      moduleKey: data.moduleKey ?? '__core__',
+                    },
+                    { keyword: data.code },
+                  )
+                }
+              >
+                <span>{t('commandQa.openPermission')}</span>
+                <ArrowUpRight className="size-3" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+
+          {data.roles.length === 0 ? (
+            <p role="status" className="relative z-[2] py-2 text-xs text-muted-foreground">
+              {t('commandQa.noHolders')}
+            </p>
+          ) : (
+            <div className="relative z-[2]">
+              <p className="mb-2 text-xs text-muted-foreground">
+                {t('commandQa.holdersSummary', {
+                  active: data.activeRoleCount,
+                  total: data.roles.length,
+                  users: data.coveredVisibleUserCount,
+                })}
+              </p>
+              <ul className="space-y-2">
+                {data.roles.map((role, index) => (
+                  <li
+                    key={role.roleId}
+                    data-conduit-anchor={index < 5 ? `qa-role-${role.roleId}` : undefined}
+                    className="rounded-control border border-border-subtle bg-card/95 p-2.5 shadow-xs"
                   >
-                    {t(`commandQa.state.${role.state}`)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {t(`authorization.${role.effectiveScope}`, {
-                      defaultValue: role.effectiveScope,
-                    })}
-                  </span>
-                </div>
-                {(role.validFrom || role.validUntil) && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t('commandQa.window', {
-                      from: role.validFrom ? new Date(role.validFrom).toLocaleString() : '—',
-                      until: role.validUntil ? new Date(role.validUntil).toLocaleString() : '—',
-                    })}
-                  </p>
-                )}
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {role.members.map((member) =>
-                    data.membersVisible ? (
-                      <EntityPill
-                        key={member.id}
-                        kind="user"
-                        id={member.id}
-                        label={member.nickname || member.username}
-                        sublabel={member.username}
-                        onNavigate={(intent) =>
-                          navigateEntityFromQuestion(routes, navigate, intent, {
-                            keyword: member.username,
-                          })
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="oracle-node-btn font-medium"
+                        onClick={() =>
+                          navigateEntityFromQuestion(
+                            routes,
+                            navigate,
+                            {
+                              kind: 'role',
+                              id: role.roleId,
+                              label: role.roleName,
+                            },
+                            { roleId: role.roleId, roleKey: role.roleKey },
+                          )
                         }
-                      />
-                    ) : (
-                      <span key={member.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                        {member.nickname || member.username}
+                      >
+                        <Shield className="size-3 text-brand-text" aria-hidden="true" />
+                        <span>{role.roleName}</span>
+                        <code className="font-mono text-[10px] text-muted-foreground">
+                          {role.roleKey}
+                        </code>
+                      </button>
+                      <span
+                        className="command-grant-state rounded-full px-2 py-0.5 text-xs"
+                        data-state={role.state}
+                      >
+                        {t(`commandQa.state.${role.state}`)}
                       </span>
-                    ),
-                  )}
-                  {role.visibleMemberCount > role.members.length && (
-                    <span className="text-xs text-muted-foreground">
-                      {t('commandQa.moreMembers', {
-                        count: role.visibleMemberCount - role.members.length,
-                      })}
-                    </span>
-                  )}
-                  {data.outOfScopeVisible && role.outOfScopeMemberCount > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {t('commandQa.outOfScope', { count: role.outOfScopeMemberCount })}
-                    </span>
-                  )}
-                  {!data.membersVisible && (
-                    <span className="text-xs text-muted-foreground">
-                      {t('commandQa.membersHidden')}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                      <span className="text-xs text-muted-foreground">
+                        {t(`authorization.${role.effectiveScope}`, {
+                          defaultValue: role.effectiveScope,
+                        })}
+                      </span>
+                    </div>
+                    {(role.validFrom || role.validUntil) && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t('commandQa.window', {
+                          from: role.validFrom ? new Date(role.validFrom).toLocaleString() : '—',
+                          until: role.validUntil ? new Date(role.validUntil).toLocaleString() : '—',
+                        })}
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {role.members.map((member) =>
+                        data.membersVisible ? (
+                          <button
+                            key={member.id}
+                            type="button"
+                            className="oracle-node-btn rounded-full"
+                            onClick={() =>
+                              navigateEntityFromQuestion(
+                                routes,
+                                navigate,
+                                {
+                                  kind: 'user',
+                                  id: member.id,
+                                  label: member.nickname || member.username,
+                                },
+                                { keyword: member.username },
+                              )
+                            }
+                          >
+                            <span className="inline-flex size-4 items-center justify-center rounded-full bg-primary/18 text-[10px] font-semibold text-brand-text">
+                              {(member.nickname || member.username).slice(0, 1).toUpperCase()}
+                            </span>
+                            <span>{member.nickname || member.username}</span>
+                          </button>
+                        ) : (
+                          <span
+                            key={member.id}
+                            className="rounded-full bg-muted px-2 py-0.5 text-xs"
+                          >
+                            {member.nickname || member.username}
+                          </span>
+                        ),
+                      )}
+                      {role.visibleMemberCount > role.members.length && (
+                        <span className="text-xs text-muted-foreground">
+                          {t('commandQa.moreMembers', {
+                            count: role.visibleMemberCount - role.members.length,
+                          })}
+                        </span>
+                      )}
+                      {data.outOfScopeVisible && role.outOfScopeMemberCount > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {t('commandQa.outOfScope', { count: role.outOfScopeMemberCount })}
+                        </span>
+                      )}
+                      {!data.membersVisible && (
+                        <span className="text-xs text-muted-foreground">
+                          {t('commandQa.membersHidden')}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
     </AnswerFrame>
   )
 }
@@ -400,18 +458,22 @@ function OverviewResult({
         <ul className="space-y-1.5">
           {data.idleRoles.map((role) => (
             <li key={role.roleId} className="flex flex-wrap items-center gap-2">
-              <EntityPill
-                kind="role"
-                id={role.roleId}
-                label={role.roleName}
-                sublabel={role.roleKey}
-                onNavigate={(intent) =>
-                  navigateEntityFromQuestion(routes, navigate, intent, {
-                    roleId: role.roleId,
-                    roleKey: role.roleKey,
-                  })
+              <button
+                type="button"
+                className="oracle-node-btn font-medium"
+                onClick={() =>
+                  navigateEntityFromQuestion(
+                    routes,
+                    navigate,
+                    { kind: 'role', id: role.roleId, label: role.roleName },
+                    { roleId: role.roleId, roleKey: role.roleKey },
+                  )
                 }
-              />
+              >
+                <Shield className="size-3 text-muted-foreground" aria-hidden="true" />
+                <span>{role.roleName}</span>
+                <code className="font-mono text-[10px] text-muted-foreground">{role.roleKey}</code>
+              </button>
               <span className="text-xs text-muted-foreground">
                 {t(`commandQa.idleReason.${role.reason}`)}
               </span>
@@ -435,20 +497,27 @@ function OverviewResult({
             <p className="mb-2">
               {t('commandQa.usersWithoutRolesSummary', { count: data.usersWithoutRolesCount })}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {data.usersWithoutRoles.map((user) => (
-                <EntityPill
+                <button
                   key={user.id}
-                  kind="user"
-                  id={user.id}
-                  label={user.nickname || user.username}
-                  sublabel={user.username}
-                  onNavigate={(intent) =>
-                    navigateEntityFromQuestion(routes, navigate, intent, {
-                      keyword: user.username,
-                    })
+                  type="button"
+                  className="oracle-node-btn rounded-full font-medium"
+                  onClick={() =>
+                    navigateEntityFromQuestion(
+                      routes,
+                      navigate,
+                      { kind: 'user', id: user.id, label: user.nickname || user.username },
+                      { keyword: user.username },
+                    )
                   }
-                />
+                >
+                  <span className="inline-flex size-4 items-center justify-center rounded-full bg-warning text-[10px] font-semibold text-warning-foreground">
+                    {(user.nickname || user.username).slice(0, 1).toUpperCase()}
+                  </span>
+                  <span>{user.nickname || user.username}</span>
+                  <span className="text-[10px] text-muted-foreground">@{user.username}</span>
+                </button>
               ))}
             </div>
             {userPath && data.usersWithoutRolesCount > 0 && (
@@ -476,17 +545,26 @@ function OverviewResult({
       <ul className="space-y-1.5">
         {data.unassignedNavigation.map((menu) => (
           <li key={menu.menuId} className="flex flex-wrap items-center gap-2">
-            <EntityPill
-              kind="menu"
-              id={menu.menuId}
-              label={menu.menuName}
-              focusTargetId={menu.menuId}
-              onNavigate={(intent) =>
-                navigateEntityFromQuestion(routes, navigate, intent, {
-                  menuId: menu.menuId,
-                })
+            <button
+              type="button"
+              className="oracle-node-btn font-medium"
+              onClick={() =>
+                navigateEntityFromQuestion(
+                  routes,
+                  navigate,
+                  {
+                    kind: 'menu',
+                    id: menu.menuId,
+                    label: menu.menuName,
+                    focusTargetId: menu.menuId,
+                  },
+                  { menuId: menu.menuId },
+                )
               }
-            />
+            >
+              <MenuIconGlyph className="size-3 text-brand-text" aria-hidden="true" />
+              <span>{menu.menuName}</span>
+            </button>
             <span className="text-xs text-muted-foreground">
               {menu.menuType === 'C' ? t('commandQa.directory') : t('commandQa.page')}
               {!menu.moduleEnabled && ` · ${t('commandQa.moduleDisabled')}`}

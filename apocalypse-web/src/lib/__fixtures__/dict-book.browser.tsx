@@ -23,7 +23,7 @@ useAuthStore.setState({
   allScopePerms: [],
   menus: [],
 })
-useSettingsStore.setState({ motionEnabled: false, language: 'zh', theme: 'light' })
+useSettingsStore.setState({ motionEnabled: false, language: 'zh', themeWorld: 'fluid' })
 let types: DictTypeRow[] = Array.from({ length: 13 }, (_, index) => ({
   id: `type-${index + 1}`,
   dictType: `fixture_${index + 1}`,
@@ -79,6 +79,16 @@ http.defaults.adapter = async (config) => {
         row.dictType === current.dictType ? { ...row, dictType: next.dictType } : row,
       )
     } else throw new Error(`Unexpected dictionary method: ${config.method}`)
+  } else if (path === '/system/dict/data/batch') {
+    const requested = String(query.dictTypes ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+    const grouped: Record<string, DictValueRow[]> = {}
+    for (const dictType of requested) {
+      grouped[dictType] = structuredClone(values.filter((row) => row.dictType === dictType))
+    }
+    data = grouped
   } else if (path === '/system/dict/data/page')
     data = page(values.filter((row) => !query.dictType || row.dictType === query.dictType))
   else if (path.startsWith('/system/dict/data/type/'))
@@ -93,9 +103,11 @@ http.defaults.adapter = async (config) => {
       dictType: String(body!.dictType),
       dictLabel: String(body!.dictLabel),
       dictValue: String(body!.dictValue),
-      status: 1,
-      sort: 0,
-      remark: null,
+      status: typeof body!.status === 'number' ? body!.status : 1,
+      sort: typeof body!.sort === 'number' ? body!.sort : 0,
+      tagTone: (body!.tagTone as DictValueRow['tagTone']) ?? 'NEUTRAL',
+      isDefault: typeof body!.isDefault === 'number' ? body!.isDefault : 0,
+      remark: typeof body!.remark === 'string' && body!.remark ? body!.remark : null,
     }
     values = [...values, row]
     data = row.id
@@ -111,7 +123,9 @@ http.defaults.adapter = async (config) => {
 createRoot(document.getElementById('root')!).render(
   <AppProviders>
     <MemoryRouter>
-      <DictPage />
+      <main className="spatial-main-container min-h-screen bg-background text-foreground">
+        <DictPage />
+      </main>
     </MemoryRouter>
   </AppProviders>,
 )

@@ -24,7 +24,12 @@ import { Perm } from '@/components/Perm'
 import { ZoomPanCanvas, type ZoomPanCanvasHandle } from '@/components/insights/graph/ZoomPanCanvas'
 import '@/components/insights/graph/graph.css'
 import { PathPulse } from '@/components/motion'
-import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import {
+  EntityPeekLink,
+  LivingContextBar,
+  useEntityIntent,
+  type EntitySourceRef,
+} from '@/components/navigation'
 import { FloatingHud, SpatialStage } from '@/components/spatial'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -297,46 +302,14 @@ export function DeptOrgChart({
       <FloatingHud
         slot="right-inspector"
         ariaLabel={t('deptChart.details')}
-        className="space-y-4 p-4 text-sm"
+        className="sketch-surface space-y-4 p-4 text-sm"
       >
-        <LivingContextBar source={deptIntent?.source}>
-          {parentNode && selectedNode && (
-            <EntityPill
-              key={`parent-${parentNode.id}`}
-              kind="dept"
-              id={parentNode.id}
-              label={parentNode.deptName}
-              size="sm"
-              source={{ kind: 'dept', id: selectedNode.id, label: selectedNode.deptName }}
-              onNavigate={() => select(parentNode.id)}
-            />
-          )}
-          {selectedNode && (
-            <EntityPill
-              key={`members-${selectedNode.id}`}
-              kind="user"
-              id={selectedNode.id}
-              label={
-                membersQuery.data
-                  ? t('deptChart.membersCount', { count: membersQuery.data.total })
-                  : t('deptChart.members')
-              }
-              size="sm"
-              intent={{
-                kind: 'user',
-                id: selectedNode.id,
-                deptId: selectedNode.id,
-                label: selectedNode.deptName,
-                triggerPulse: true,
-                source: { kind: 'dept', id: selectedNode.id, label: selectedNode.deptName },
-              }}
-            />
-          )}
-        </LivingContextBar>
+        {deptIntent?.source && <LivingContextBar source={deptIntent.source} />}
 
         <DeptIdentityHud
           tree={tree}
           node={selectedNode}
+          parentNode={parentNode}
           ancestorIds={ancestorIds}
           onSelect={select}
           onCreateChild={onCreateChild}
@@ -347,6 +320,7 @@ export function DeptOrgChart({
         {selectedNode && (
           <div className="border-t border-border-subtle pt-3">
             <DeptMembers
+              sourceRef={{ kind: 'dept', id: selectedNode.id, label: selectedNode.deptName }}
               canList={canListUsers}
               includeChildren={includeChildren}
               onIncludeChildrenChange={(value) => {
@@ -364,7 +338,7 @@ export function DeptOrgChart({
   )
 
   return (
-    <div className="dept-chart">
+    <div className="dept-chart" data-theme-stage="">
       <SpatialStage backdrop="dots" minHeight="36rem" hud={hud}>
         <div
           ref={canvas}
@@ -389,15 +363,31 @@ export function DeptOrgChart({
               className="absolute inset-0 overflow-visible"
               aria-hidden="true"
             >
-              {layout.edges.map((edge) => (
-                <PathPulse
-                  key={`${edge.from}-${edge.to}`}
-                  d={edge.d}
-                  tone="gold"
-                  active={path.has(edge.from) && path.has(edge.to)}
-                  pulseKey={pulse}
-                />
-              ))}
+              {layout.edges.map((edge) => {
+                const isEdgeActive = path.has(edge.from) && path.has(edge.to)
+                return (
+                  <g key={`${edge.from}-${edge.to}`}>
+                    <path
+                      d={edge.d}
+                      fill="none"
+                      stroke={isEdgeActive ? 'var(--conduit-shadow)' : 'var(--border-subtle)'}
+                      strokeWidth={isEdgeActive ? 10 : 2.5}
+                      strokeLinecap="round"
+                      className={isEdgeActive ? 'opacity-80' : 'opacity-60'}
+                    />
+                    {isEdgeActive && (
+                      <path
+                        d={edge.d}
+                        fill="none"
+                        stroke="var(--conduit-core)"
+                        strokeWidth={3.2}
+                        strokeLinecap="round"
+                      />
+                    )}
+                    <PathPulse d={edge.d} tone="gold" active={isEdgeActive} pulseKey={pulse} />
+                  </g>
+                )
+              })}
             </svg>
             {layout.nodes.map((item) => {
               const node = item.node
@@ -466,6 +456,7 @@ export function DeptOrgChart({
 function DeptIdentityHud({
   tree,
   node,
+  parentNode,
   ancestorIds,
   onSelect,
   onCreateChild,
@@ -474,6 +465,7 @@ function DeptIdentityHud({
 }: {
   tree: readonly DeptTreeNode[]
   node: DeptTreeNode | null
+  parentNode: DeptTreeNode | null
   ancestorIds: string[]
   onSelect: (id: string) => void
   onCreateChild: (parentId: SnowflakeId) => void
@@ -508,6 +500,19 @@ function DeptIdentityHud({
         <h2 id="dept-panel-title" className="mt-1 break-words text-base font-semibold">
           {node.deptName}
         </h2>
+        {parentNode && (
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>↑</span>
+            <EntityPeekLink
+              kind="dept"
+              id={parentNode.id}
+              label={parentNode.deptName}
+              source={{ kind: 'dept', id: node.id, label: node.deptName }}
+              onNavigate={() => onSelect(parentNode.id)}
+              className="text-xs"
+            />
+          </div>
+        )}
       </div>
       <dl className="grid grid-cols-2 gap-2.5 text-xs">
         <div>
@@ -560,6 +565,7 @@ function DeptIdentityHud({
 }
 
 function DeptMembers({
+  sourceRef,
   canList,
   includeChildren,
   onIncludeChildrenChange,
@@ -567,6 +573,7 @@ function DeptMembers({
   onPageChange,
   members,
 }: {
+  sourceRef: EntitySourceRef
   canList: boolean
   includeChildren: boolean
   onIncludeChildrenChange: (value: boolean) => void
@@ -621,9 +628,13 @@ function DeptMembers({
                 member.status !== 1 && 'opacity-70',
               )}
             >
-              <span className="truncate font-medium text-foreground">
-                {member.nickname || member.username}
-              </span>
+              <EntityPeekLink
+                kind="user"
+                id={String(member.id)}
+                label={member.nickname || member.username}
+                sublabel={`@${member.username}`}
+                source={sourceRef}
+              />
               <span className="truncate font-mono text-muted-foreground">@{member.username}</span>
             </li>
           ))}

@@ -1,12 +1,11 @@
-import { useLayoutEffect, useRef, useState, type Ref } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { motion } from 'motion/react'
-import { ChevronLeft, ChevronRight, KeyRound, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, KeyRound, ShieldCheck } from 'lucide-react'
 
+import { FluidConduitOverlay, SketchBox, type ConduitLink } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { insightMotion } from '@/design/motion'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
+import { cn } from '@/lib/utils'
 
 import {
   ROLE_GRAPH_BRANCH_SIZE,
@@ -15,123 +14,6 @@ import {
   type RolePermissionTarget,
 } from './role-permission.model'
 import { permissionNodeIcons } from './role-permission.icons'
-
-const VIEW = { width: 820, height: 550 }
-type Point = { x: number; y: number }
-
-function Edge({
-  from,
-  to,
-  direct,
-  enabled,
-}: {
-  from: Point
-  to: Point
-  direct: boolean
-  enabled: boolean
-}) {
-  const middle = (from.x + to.x) / 2
-  const target = {
-    d: `M ${from.x} ${from.y} C ${middle} ${from.y}, ${middle} ${to.y}, ${to.x} ${to.y}`,
-  }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.path
-      initial={target}
-      animate={controls}
-      className="role-graph-edge"
-      data-direct={direct}
-    />
-  )
-}
-
-function Ticks({ point, radius, enabled }: { point: Point; radius: number; enabled: boolean }) {
-  const target = { x: point.x, y: point.y }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.g initial={target} animate={controls} className="role-graph-ticks">
-      {Array.from({ length: 36 }, (_, index) => {
-        const angle = (index / 36) * Math.PI * 2
-        const inner = radius + (index % 3 === 0 ? 8 : 12)
-        const outer = radius + 16
-        return (
-          <line
-            key={index}
-            x1={Math.cos(angle) * inner}
-            y1={Math.sin(angle) * inner}
-            x2={Math.cos(angle) * outer}
-            y2={Math.sin(angle) * outer}
-          />
-        )
-      })}
-    </motion.g>
-  )
-}
-
-function Node({
-  point,
-  radius,
-  label,
-  description,
-  icon: Icon,
-  direct,
-  role = false,
-  active,
-  enabled,
-  ariaLabel,
-  onClick,
-  buttonRef,
-}: {
-  point: Point
-  radius: number
-  label: string
-  description: string
-  icon: LucideIcon
-  direct: boolean
-  role?: boolean
-  active: boolean
-  enabled: boolean
-  ariaLabel: string
-  onClick: (keyboard: boolean) => void
-  buttonRef?: Ref<HTMLButtonElement>
-}) {
-  const [hovered, setHovered] = useState(false)
-  const target = {
-    left: `${(point.x / VIEW.width) * 100}%`,
-    top: `${(point.y / VIEW.height) * 100}%`,
-    y: enabled && hovered ? -insightMotion.hoverLift : 0,
-  }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.button
-      ref={buttonRef}
-      type="button"
-      className="role-graph-node"
-      data-direct={direct}
-      data-role={role}
-      data-active={active}
-      aria-label={ariaLabel}
-      aria-pressed={active}
-      title={label}
-      style={{ width: `${((radius * 2) / VIEW.width) * 100}%` }}
-      initial={target}
-      animate={controls}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      onClick={(event) => onClick(event.detail === 0)}
-    >
-      <span className="role-graph-node-circle">
-        <Icon aria-hidden="true" className={active ? 'size-7' : 'size-5'} strokeWidth={1.5} />
-      </span>
-      <span className="role-graph-node-label">
-        <span className={`${active ? 'line-clamp-2' : 'block truncate'} text-sm font-medium`}>
-          {label}
-        </span>
-        <span className="mt-1 block text-xs text-muted-foreground">{description}</span>
-      </span>
-    </motion.button>
-  )
-}
 
 export function RoleGraphPagination({
   page,
@@ -188,7 +70,7 @@ export function RolePermissionGraph({
   onBranchPage: (page: number) => void
 }) {
   const { t } = useTranslation('system')
-  const enabled = useMotionPreference()
+  const stageRef = useRef<HTMLDivElement>(null)
   const centerButton = useRef<HTMLButtonElement>(null)
   const restoreKeyboardFocus = useRef(false)
   useLayoutEffect(() => {
@@ -208,119 +90,171 @@ export function RolePermissionGraph({
   const parent = selected?.pathIds.at(-2) ? model.byId.get(selected.pathIds.at(-2)!) : undefined
   const children = selected ? selected.children : model.roots
   const branch = rolePermissionPage(children, branchPage, ROLE_GRAPH_BRANCH_SIZE)
-  const center = { x: selected ? 365 : 180, y: 265 }
-  const source = { x: 110, y: 265 }
-  const points = branch.items.map((id, index) => ({
-    id,
-    point: {
-      x: selected ? 655 : 575,
-      y: branch.items.length === 1 ? 265 : 85 + (index / (branch.items.length - 1)) * 350,
-    },
-  }))
   const hasRoute = selected?.path !== null && selected?.path !== '' && selected?.path !== undefined
+  const CenterIcon = selected ? permissionNodeIcons[selected.type] : ShieldCheck
+  const ParentIcon = parent ? permissionNodeIcons[parent.type] : ShieldCheck
+
+  const conduitLinks = useMemo<ConduitLink[]>(() => {
+    const links: ConduitLink[] = []
+    if (selected) {
+      links.push({
+        id: 'branch-parent-to-current',
+        from: 'branch-parent-anchor',
+        to: 'branch-center-anchor',
+        enabled: selected.assigned,
+        scope: selected.assigned ? 'STANDARD' : 'BROKEN',
+      })
+    }
+    for (const id of branch.items) {
+      const node = model.byId.get(id)
+      links.push({
+        id: `branch-child-${id}`,
+        from: 'branch-center-anchor',
+        to: `branch-child-anchor-${id}`,
+        enabled: Boolean(node?.assigned),
+        scope: node?.assigned ? 'STANDARD' : 'BROKEN',
+      })
+    }
+    if (selected && children.length === 0 && hasRoute) {
+      links.push({
+        id: 'branch-leaf-route',
+        from: 'branch-center-anchor',
+        to: 'branch-leaf-anchor',
+        enabled: true,
+        scope: 'ALL',
+      })
+    }
+    return links
+  }, [branch.items, children.length, hasRoute, model.byId, selected])
 
   return (
     <div className="role-permission-visual">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 text-xs text-muted-foreground">
         <span>{t('roleGraph.nextLevel')}</span>
         <span>{t('roleGraph.branchCount', { count: children.length })}</span>
       </div>
+
       <div
-        className="role-permission-canvas relative mx-3"
+        ref={stageRef}
         role="group"
         aria-label={t('roleGraph.graph')}
+        className="relative p-4 sm:p-5"
       >
-        <svg
-          className="absolute inset-0 size-full"
-          viewBox={`0 0 ${VIEW.width} ${VIEW.height}`}
-          fill="none"
-          aria-hidden="true"
+        <FluidConduitOverlay
+          containerRef={stageRef}
+          links={conduitLinks}
+          flow="horizontal"
+          minContainerWidth={560}
+          pulseKey={`${selectedId ?? 'root'}-${branch.page}`}
+        />
+
+        <div
+          className={cn(
+            'relative z-[2] grid items-center gap-6 md:gap-11',
+            selected
+              ? 'md:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.25fr)]'
+              : 'md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]',
+          )}
         >
           {selected && (
-            <Edge from={source} to={center} direct={selected.assigned} enabled={enabled} />
+            <button
+              type="button"
+              data-conduit-anchor="branch-parent-anchor"
+              className="flex items-center gap-2.5 rounded-panel border border-border-subtle bg-card/90 p-3 text-left transition-colors hover:border-brand-text/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={t('roleGraph.returnTo', { name: parent?.name ?? role.roleName })}
+              onClick={(event) => navigate(parent?.id ?? null, event.detail === 0)}
+            >
+              <ParentIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  {parent?.name ?? role.roleName}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {parent ? t(`roleGraph.${parent.type}`) : t('roleGraph.configured')}
+                </span>
+              </span>
+            </button>
           )}
-          {points.map(({ id, point }) => (
-            <Edge
-              key={id}
-              from={center}
-              to={point}
-              direct={model.byId.get(id)!.assigned}
-              enabled={enabled}
-            />
-          ))}
-          {selected && children.length === 0 && hasRoute && (
-            <Edge from={center} to={{ x: 630, y: 265 }} direct enabled={enabled} />
-          )}
-          <Ticks point={center} radius={selected ? 44 : 56} enabled={enabled} />
-        </svg>
-        {selected && (
-          <Node
-            point={source}
-            radius={32}
-            label={parent?.name ?? role.roleName}
-            description={parent ? t(`roleGraph.${parent.type}`) : t('roleGraph.configured')}
-            icon={parent ? permissionNodeIcons[parent.type] : ShieldCheck}
-            direct={parent?.assigned ?? true}
-            role={!parent}
-            active={false}
-            enabled={enabled}
-            ariaLabel={t('roleGraph.returnTo', { name: parent?.name ?? role.roleName })}
-            onClick={(keyboard) => navigate(parent?.id ?? null, keyboard)}
-          />
-        )}
-        <Node
-          buttonRef={centerButton}
-          point={center}
-          radius={selected ? 44 : 56}
-          label={selected?.name ?? role.roleName}
-          description={
-            selected
-              ? t(selected.assigned ? 'roleGraph.direct' : 'roleGraph.context')
-              : `${model.assignedCount} · ${t('roleGraph.assignments')}`
-          }
-          icon={selected ? permissionNodeIcons[selected.type] : ShieldCheck}
-          direct={selected?.assigned ?? true}
-          role={!selected}
-          active
-          enabled={enabled}
-          ariaLabel={
-            selected ? t('roleGraph.inspect', { name: selected.name }) : t('roleGraph.reset')
-          }
-          onClick={(keyboard) => navigate(selected?.id ?? null, keyboard)}
-        />
-        {points.map(({ id, point }) => {
-          const node = model.byId.get(id)!
-          return (
-            <Node
-              key={id}
-              point={point}
-              radius={28}
-              label={node.name}
-              description={t(node.assigned ? 'roleGraph.direct' : 'roleGraph.context')}
-              icon={permissionNodeIcons[node.type]}
-              direct={node.assigned}
-              active={false}
-              enabled={enabled}
-              ariaLabel={t('roleGraph.inspect', { name: node.name })}
-              onClick={(keyboard) => navigate(node.id, keyboard)}
-            />
-          )
-        })}
-        {selected && children.length === 0 && (
-          <div className="role-graph-leaf absolute rounded-2xl border p-4">
-            <KeyRound aria-hidden="true" className="mb-3 size-5" />
-            <p className="text-xs text-muted-foreground">
-              {t(hasRoute ? 'roleGraph.identifier' : 'roleGraph.leaf')}
-            </p>
-            {hasRoute ? (
-              <code className="mt-2 block break-all font-mono text-sm">{selected.path}</code>
-            ) : (
-              <p className="mt-2 text-sm">{t('roleGraph.noIdentifier')}</p>
+
+          <button
+            ref={centerButton}
+            type="button"
+            data-conduit-anchor="branch-center-anchor"
+            aria-pressed
+            aria-label={
+              selected ? t('roleGraph.inspect', { name: selected.name }) : t('roleGraph.reset')
+            }
+            onClick={(event) => navigate(selected?.id ?? null, event.detail === 0)}
+            className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-panel"
+          >
+            <SketchBox seed={23} wash="normal" className="p-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-primary/14 text-brand-text">
+                  <CenterIcon className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {selected?.name ?? role.roleName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {selected
+                      ? t(selected.assigned ? 'roleGraph.direct' : 'roleGraph.context')
+                      : `${model.assignedCount} · ${t('roleGraph.assignments')}`}
+                  </p>
+                </div>
+              </div>
+            </SketchBox>
+          </button>
+
+          <div className="space-y-2">
+            {branch.items.map((id) => {
+              const node = model.byId.get(id)!
+              const NodeIcon = permissionNodeIcons[node.type]
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-conduit-anchor={`branch-child-anchor-${id}`}
+                  aria-label={t('roleGraph.inspect', { name: node.name })}
+                  aria-pressed={false}
+                  onClick={(event) => navigate(node.id, event.detail === 0)}
+                  className="flex w-full items-center gap-2.5 rounded-panel border border-border-subtle bg-card/90 p-3 text-left transition-colors hover:border-brand-text/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <NodeIcon className="size-4 shrink-0 text-brand-text" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{node.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t(node.assigned ? 'roleGraph.direct' : 'roleGraph.context')}
+                    </span>
+                  </span>
+                  <Badge variant="outline" className="text-[11px]">
+                    {t(`roleGraph.${node.type}`)}
+                  </Badge>
+                </button>
+              )
+            })}
+
+            {selected && children.length === 0 && (
+              <div
+                data-conduit-anchor="branch-leaf-anchor"
+                className="rounded-panel border border-border-subtle bg-card/90 p-4"
+              >
+                <KeyRound aria-hidden="true" className="mb-2 size-4 text-brand-text" />
+                <p className="text-xs text-muted-foreground">
+                  {t(hasRoute ? 'roleGraph.identifier' : 'roleGraph.leaf')}
+                </p>
+                {hasRoute ? (
+                  <code className="mt-1.5 block break-all font-mono text-sm">{selected.path}</code>
+                ) : (
+                  <p className="mt-1.5 text-sm">{t('roleGraph.noIdentifier')}</p>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
-      <div className="space-y-4 px-5 pb-5">
+
+      <div className="space-y-3 px-5 pb-5">
         <RoleGraphPagination page={branch.page} pages={branch.pageCount} onPage={onBranchPage} />
         <div
           className="flex flex-wrap justify-center gap-5 text-xs text-muted-foreground"

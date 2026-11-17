@@ -44,7 +44,7 @@ useAuthStore.setState({
   perms: permissions,
   allScopePerms: ['system:role:edit'],
 })
-useSettingsStore.setState({ motionEnabled: false, language: 'zh', theme: 'light' })
+useSettingsStore.setState({ motionEnabled: false, language: 'zh', themeWorld: 'fluid' })
 const role = {
   id: 'role-1',
   roleName: 'Resize role',
@@ -272,7 +272,9 @@ function Fixture() {
           Return narrower snapshot on next focus
         </button>
       )}
-      <RolePage />
+      <main className="spatial-main-container p-4 sm:p-6">
+        <RolePage />
+      </main>
     </>
   )
 }

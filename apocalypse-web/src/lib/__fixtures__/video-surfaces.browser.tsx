@@ -75,7 +75,7 @@ useAuthStore.setState({
 useSettingsStore.setState({
   motionEnabled: !params.has('motionOff'),
   language: 'zh',
-  theme: 'light',
+  themeWorld: 'fluid',
 })
 
 const configs = [
@@ -504,7 +504,7 @@ function Fixture() {
   const [paletteOpen, setPaletteOpen] = useState(true)
   return (
     <main
-      className={`min-h-screen bg-background p-6 text-foreground ${params.has('narrow') ? 'max-w-xl' : ''}`}
+      className={`spatial-main-container min-h-screen bg-background p-6 text-foreground ${params.has('narrow') ? 'max-w-xl' : ''}`}
     >
       <output
         data-testid="fixture-saves"

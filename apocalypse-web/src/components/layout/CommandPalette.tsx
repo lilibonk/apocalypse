@@ -7,14 +7,14 @@ import {
   Check,
   CircleHelp,
   Clock3,
+  Droplets,
   Gauge,
   Languages,
   LayoutDashboard,
-  Monitor,
-  Moon,
+  Palette,
   Rows3,
   Settings2,
-  Sun,
+  Sparkles,
   Zap,
   ZapOff,
   type LucideIcon,
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/command'
 import { MenuIcon } from '@/components/layout/MenuIcon'
 import { commandQuestionProviders } from '@/components/layout/command-extensions'
+import { ApoParticleOrb } from '@/components/motion'
 import { flattenMenuRoutes } from '@/routes/menu-routes'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { useAuthStore } from '@/stores/auth'
@@ -108,31 +109,31 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
   const preferences: PreferenceAction[] = (
     [
       {
-        key: 'theme-light',
-        capability: 'theme',
-        label: t('command.themeLight'),
-        keywords: 'light theme 浅色 外观',
-        icon: Sun,
-        active: settings.theme === 'light',
-        run: () => store.setTheme('light'),
+        key: 'world-fluid',
+        capability: 'themeWorld',
+        label: t('command.worldFluid'),
+        keywords: 'fluid glass world theme 风格 世界 清透 流体 活水',
+        icon: Droplets,
+        active: settings.themeWorld === 'fluid',
+        run: () => store.setThemeWorld('fluid'),
       },
       {
-        key: 'theme-dark',
-        capability: 'theme',
-        label: t('command.themeDark'),
-        keywords: 'dark theme 深色 暗色 外观',
-        icon: Moon,
-        active: settings.theme === 'dark',
-        run: () => store.setTheme('dark'),
+        key: 'world-sketchbook',
+        capability: 'themeWorld',
+        label: t('command.worldSketchbook'),
+        keywords: 'sketchbook watercolor world theme 风格 世界 手绘 水彩 手账',
+        icon: Palette,
+        active: settings.themeWorld === 'sketchbook',
+        run: () => store.setThemeWorld('sketchbook'),
       },
       {
-        key: 'theme-system',
-        capability: 'theme',
-        label: t('command.themeSystem'),
-        keywords: 'system theme 跟随系统 外观',
-        icon: Monitor,
-        active: settings.theme === 'system',
-        run: () => store.setTheme('system'),
+        key: 'world-obsidian',
+        capability: 'themeWorld',
+        label: t('command.worldObsidian'),
+        keywords: 'obsidian night aurora world theme 风格 世界 深邃 夜色 极光',
+        icon: Sparkles,
+        active: settings.themeWorld === 'obsidian',
+        run: () => store.setThemeWorld('obsidian'),
       },
       {
         key: 'density-comfortable',
@@ -213,6 +214,29 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
         value={search}
         onValueChange={setSearch}
       />
+      {open && question && (
+        <div
+          data-slot="command-question-oracle"
+          className="relative flex items-center gap-3 overflow-hidden border-b border-border-subtle bg-gradient-to-r from-primary/10 via-card to-muted/40 px-4 py-3 text-xs text-muted-foreground"
+        >
+          <div className="relative flex size-12 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-card/85 shadow-surface">
+            <ApoParticleOrb size={44} active={open && question} boostKey={search} />
+          </div>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">{t('command.askQuestion')}</span>
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] font-medium text-brand-text">
+                ORACLE
+              </span>
+            </div>
+            <p className="truncate text-xs text-muted-foreground">
+              {t('command.oracleHint', {
+                defaultValue: '实时追踪角色权限授权、未分配账号与孤立入口',
+              })}
+            </p>
+          </div>
+        </div>
+      )}
       <CommandList data-adaptive="">
         {question ? (
           providers.length ? (

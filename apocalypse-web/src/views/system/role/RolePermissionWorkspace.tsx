@@ -17,8 +17,9 @@ import {
   Users,
 } from 'lucide-react'
 
-import { EntityPill, LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
-import { FloatingHud, SpatialStage } from '@/components/spatial'
+import { SketchBox } from '@/components/motion'
+import { LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
+import { SpatialStage } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -462,10 +463,9 @@ export function RolePermissionWorkspace({
   return (
     <div ref={workspaceRef} className="role-permission-workspace-page min-w-0 p-3 sm:p-5">
       <SpatialStage backdrop="dots" className="min-h-[38rem] gap-3 p-3 sm:p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <FloatingHud
-            slot="top-left"
-            ariaLabel={t('roleManage.title', { defaultValue: '角色管理' })}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card/88 px-3.5 py-2.5 shadow-xs">
+          <div
+            aria-label={t('roleManage.title', { defaultValue: '角色管理' })}
             className="flex flex-wrap items-center gap-2.5"
           >
             <Button
@@ -531,11 +531,10 @@ export function RolePermissionWorkspace({
                 </p>
               </div>
             )}
-          </FloatingHud>
+          </div>
 
-          <FloatingHud
-            slot="top-right"
-            ariaLabel={t('roleManage.objectActions', { defaultValue: '所选角色操作' })}
+          <div
+            aria-label={t('roleManage.objectActions', { defaultValue: '所选角色操作' })}
             className="flex flex-wrap items-center gap-2"
           >
             {opening && (
@@ -570,7 +569,7 @@ export function RolePermissionWorkspace({
               </Button>
             )}
             {viewControl}
-          </FloatingHud>
+          </div>
         </div>
 
         {pendingMember && (
@@ -594,59 +593,43 @@ export function RolePermissionWorkspace({
           </div>
         )}
 
-        <div
-          className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)]"
-          style={
-            locatorExpanded
-              ? { gridTemplateColumns: 'minmax(15rem, 17.5rem) minmax(0, 1fr)' }
-              : undefined
-          }
-          data-locator={locatorExpanded ? 'inline' : 'hidden'}
-        >
+        <div className="role-workspace-shell" data-locator={locatorExpanded ? 'inline' : 'hidden'}>
           {locatorExpanded && roleLocator}
           {!denied && !mutationDenied && (
             <div className="min-w-0 space-y-3">
-              {opening ? (
-                <LivingContextBar source={entityIntent?.source}>
-                  <EntityPill
-                    kind="user"
-                    id={opening.role.id}
-                    label={relationLabel('members', t('authorization.members'))}
-                    source={{
-                      kind: 'role',
-                      id: opening.role.id,
-                      label: opening.role.roleName,
-                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
-                    }}
-                    size="sm"
-                  />
-                  <EntityPill
-                    kind="permission"
-                    id={opening.role.id}
-                    label={relationLabel('permissions', t('authorization.permissions'))}
-                    source={{
-                      kind: 'role',
-                      id: opening.role.id,
-                      label: opening.role.roleName,
-                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
-                    }}
-                    size="sm"
-                  />
-                  <EntityPill
-                    kind="menu"
-                    id={opening.role.id}
-                    label={relationLabel('navigation', t('authorization.navigation'))}
-                    source={{
-                      kind: 'role',
-                      id: opening.role.id,
-                      label: opening.role.roleName,
-                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
-                    }}
-                    size="sm"
-                  />
-                </LivingContextBar>
-              ) : (
-                entityIntent?.source && <LivingContextBar source={entityIntent.source} />
+              {entityIntent?.source && <LivingContextBar source={entityIntent.source} />}
+              {opening && (
+                <SketchBox seed={29} wash="normal" className="p-3.5 sm:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-primary/14 text-brand-text shadow-xs">
+                        <ShieldCheck className="size-5" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="truncate text-base font-semibold">
+                            {opening.role.roleName}
+                          </h2>
+                          <code className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                            @{opening.role.roleKey}
+                          </code>
+                          {opening.role.dataScope && (
+                            <Badge variant="outline" className="text-xs">
+                              {t(`authorization.${opening.role.dataScope}`, {
+                                defaultValue: opening.role.dataScope,
+                              })}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {relationLabel('permissions', t('authorization.permissions'))} ·{' '}
+                          {relationLabel('navigation', t('authorization.navigation'))} ·{' '}
+                          {relationLabel('members', t('authorization.members'))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </SketchBox>
               )}
               {created && (
                 <p
@@ -757,10 +740,10 @@ export function RolePermissionWorkspace({
                 />
               ) : opening ? (
                 <>
-                  <FloatingHud
-                    slot="bottom-left"
-                    ariaLabel={t('roleGraph.relations')}
-                    className="flex flex-wrap items-center justify-between gap-2"
+                  <div
+                    role="group"
+                    aria-label={t('roleGraph.relations')}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-border-subtle bg-card/88 px-3 py-2 shadow-xs"
                   >
                     <SegmentedControl
                       label={t('roleGraph.relations')}
@@ -808,7 +791,7 @@ export function RolePermissionWorkspace({
                       <CircleHelp className="size-3.5" aria-hidden="true" />
                       {t('commandQa.ruleBased')}
                     </span>
-                  </FloatingHud>
+                  </div>
 
                   {relation === 'chain' && presentation === 'graph' ? (
                     <RoleAuthorizationChain

@@ -22,8 +22,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
-import { PathPulse } from '@/components/motion'
-import { FloatingHud } from '@/components/spatial'
+import { PathPulse, buildTwinBankRiver } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,6 +40,7 @@ import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { ApiError } from '@/lib/api/client'
 import { flattenMenuRoutes } from '@/routes/menu-routes'
 import { useAuthStore } from '@/stores/auth'
+import { useSettings } from '@/stores/settings'
 
 import {
   getAuthorizationOverview,
@@ -132,10 +132,9 @@ export function RoleStageSplit({
         )}
       </div>
       {wide && (
-        <FloatingHud
-          slot="right-inspector"
-          ariaLabel={title}
-          className="role-workspace-inspector min-w-0 !p-0"
+        <aside
+          aria-label={title}
+          className="role-workspace-inspector sticky top-4 h-fit max-h-[calc(var(--shell-viewport-h)-2rem)] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-border-subtle bg-card text-card-foreground shadow-surface"
         >
           {context && (
             <div className="border-b border-border-subtle px-4 py-2 text-[11px] text-muted-foreground">
@@ -144,7 +143,7 @@ export function RoleStageSplit({
           )}
           <div className="role-workspace-inspector-content">{inspector}</div>
           {footer && <div className="border-t border-border-subtle p-3 xl:hidden">{footer}</div>}
-        </FloatingHud>
+        </aside>
       )}
       <Sheet open={!wide && open} onOpenChange={onOpenChange}>
         <SheetContent
@@ -186,9 +185,19 @@ function normalizeScopeKey(scope: string | null | undefined): string {
   return scope
 }
 
-function bezier(x1: number, y1: number, x2: number, y2: number): string {
+function bezierPoints(x1: number, y1: number, x2: number, y2: number) {
   const mid = (x1 + x2) / 2
-  return `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`
+  return {
+    x1,
+    y1,
+    cx1: mid,
+    cy1: y1,
+    cx2: mid,
+    cy2: y2,
+    x2,
+    y2,
+    d: `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`,
+  }
 }
 
 function slotY(index: number, total: number): number {
@@ -361,6 +370,7 @@ function PanoramaBody({
   const { t, i18n } = useTranslation('system')
   const navigate = useNavigate()
   const menus = useAuthStore((state) => state.menus)
+  const { themeWorld } = useSettings()
   const motionEnabled = useMotionPreference()
   const first = useFirstEntrance('role:panorama')
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -407,12 +417,15 @@ function PanoramaBody({
           midY: Math.round(r.top + r.height / 2 - cr.top),
         }
       }
-      setGeom({
-        width: Math.round(cr.width),
-        height: Math.round(cr.height),
-        holders,
-        roles: roleBoxes,
-        domains: domainBoxes,
+      setGeom((previous) => {
+        const next: TopologyGeometry = {
+          width: Math.round(cr.width),
+          height: Math.round(cr.height),
+          holders,
+          roles: roleBoxes,
+          domains: domainBoxes,
+        }
+        return JSON.stringify(previous) === JSON.stringify(next) ? previous : next
       })
     }
     measure()
@@ -556,13 +569,16 @@ function PanoramaBody({
 
       <div
         ref={canvasRef}
-        className="role-topology-canvas relative overflow-hidden rounded-panel border border-border-subtle bg-card p-3.5 sm:p-4"
+        data-theme-stage=""
+        className="role-topology-canvas sketch-surface relative overflow-hidden rounded-panel border border-border-subtle bg-card p-3.5 sm:p-4"
         data-focus-scope
         data-focus={hasFocus || undefined}
       >
         <svg
+          data-slot="role-topology-svg"
           viewBox={`0 0 ${geom?.width ?? SVG_VIEW.width} ${geom?.height ?? SVG_VIEW.height}`}
           preserveAspectRatio="none"
+          style={{ position: 'absolute', inset: 0 }}
           className="pointer-events-none absolute inset-0 size-full"
           aria-hidden="true"
         >
@@ -571,23 +587,67 @@ function PanoramaBody({
             const hBox = geom?.holders[roleId]
             const rBox = geom?.roles[roleId]
             const yFallback = slotY(rIdx, visibleNodes.length)
-            const holderD =
+            const holderPts =
               hBox && rBox
-                ? bezier(hBox.right, hBox.midY, rBox.left, rBox.midY)
-                : bezier(X_HOLDER_OUT, yFallback, X_ROLE_IN, yFallback)
+                ? bezierPoints(hBox.right, hBox.midY, rBox.left, rBox.midY)
+                : bezierPoints(X_HOLDER_OUT, yFallback, X_ROLE_IN, yFallback)
+            const holderD = holderPts.d
+            const isGovern = node.memberCount > 0
             const holderRelated = isRoleRelated(node)
+            const river =
+              themeWorld === 'sketchbook' && isGovern
+                ? buildTwinBankRiver(
+                    holderPts.x1,
+                    holderPts.y1,
+                    holderPts.cx1,
+                    holderPts.cy1,
+                    holderPts.cx2,
+                    holderPts.cy2,
+                    holderPts.x2,
+                    holderPts.y2,
+                    4.2,
+                  )
+                : null
             return (
               <g key={`holder-edge-${roleId}`}>
+                {river && (
+                  <path
+                    d={river.riverPoly}
+                    fill="url(#apo-river-grad)"
+                    filter="url(#watercolor-bleed)"
+                    opacity={0.68}
+                  />
+                )}
+                {themeWorld !== 'sketchbook' && isGovern && (
+                  <path
+                    d={holderD}
+                    fill="none"
+                    stroke="var(--conduit-shadow)"
+                    strokeWidth={8}
+                    strokeLinecap="round"
+                  />
+                )}
                 <motion.path
                   data-dim-member
                   data-related={holderRelated || undefined}
-                  data-access={node.memberCount > 0 ? 'GOVERN' : 'READ'}
+                  data-access={isGovern ? 'GOVERN' : 'READ'}
                   className="role-topology-edge"
                   d={holderD}
                   initial={grow ? { pathLength: 0, opacity: 0 } : false}
                   animate={{ pathLength: 1, opacity: 1 }}
                   transition={entranceTransition}
                 />
+                {themeWorld === 'fluid' && isGovern && (
+                  <path
+                    d={holderD}
+                    transform="translate(0, -1.6)"
+                    fill="none"
+                    stroke="var(--conduit-highlight)"
+                    strokeWidth={1.1}
+                    strokeLinecap="round"
+                    opacity={0.55}
+                  />
+                )}
                 {holderRelated && (
                   <PathPulse
                     d={holderD}
@@ -611,16 +671,49 @@ function PanoramaBody({
               if (!access) return null
               const dBox = geom?.domains[domain.domainKey]
               const yDomainFallback = slotY(dIdx, domains.length)
-              const edgeD =
+              const edgePts =
                 rBox && dBox
-                  ? bezier(rBox.right, rBox.midY, dBox.left, dBox.midY)
-                  : bezier(X_ROLE_OUT, yRoleFallback, X_DOMAIN_IN, yDomainFallback)
+                  ? bezierPoints(rBox.right, rBox.midY, dBox.left, dBox.midY)
+                  : bezierPoints(X_ROLE_OUT, yRoleFallback, X_DOMAIN_IN, yDomainFallback)
+              const edgeD = edgePts.d
+              const isGovern = access.accessLevel === 'GOVERN'
               const edgeRelated =
                 focusedRoleId === roleId ||
                 focusedDomainKey === domain.domainKey ||
                 (focusedRoleId === null && focusedDomainKey === null && false)
+              const river =
+                themeWorld === 'sketchbook' && isGovern
+                  ? buildTwinBankRiver(
+                      edgePts.x1,
+                      edgePts.y1,
+                      edgePts.cx1,
+                      edgePts.cy1,
+                      edgePts.cx2,
+                      edgePts.cy2,
+                      edgePts.x2,
+                      edgePts.y2,
+                      4.8,
+                    )
+                  : null
               return (
                 <g key={`domain-edge-${roleId}-${domain.domainKey}`}>
+                  {river && (
+                    <path
+                      d={river.riverPoly}
+                      fill="url(#apo-river-wide-grad)"
+                      filter="url(#watercolor-bleed)"
+                      opacity={0.72}
+                    />
+                  )}
+                  {themeWorld !== 'sketchbook' && isGovern && (
+                    <path
+                      d={edgeD}
+                      fill="none"
+                      stroke="var(--conduit-shadow)"
+                      strokeWidth={9}
+                      strokeLinecap="round"
+                    />
+                  )}
                   <motion.path
                     data-dim-member
                     data-related={edgeRelated || undefined}
@@ -631,12 +724,23 @@ function PanoramaBody({
                     animate={{ pathLength: 1, opacity: 1 }}
                     transition={entranceTransition}
                   />
+                  {themeWorld === 'fluid' && isGovern && (
+                    <path
+                      d={edgeD}
+                      transform="translate(0, -1.6)"
+                      fill="none"
+                      stroke="var(--conduit-highlight)"
+                      strokeWidth={1.1}
+                      strokeLinecap="round"
+                      opacity={0.55}
+                    />
+                  )}
                   {edgeRelated && (
                     <PathPulse
                       d={edgeD}
                       active
                       triggerKey={`edge-${roleId}-${domain.domainKey}-${focusedRoleId ?? 'none'}-${focusedDomainKey ?? 'none'}`}
-                      tone={access.accessLevel === 'GOVERN' ? 'gold' : 'mint'}
+                      tone={isGovern ? 'gold' : 'mint'}
                     />
                   )}
                 </g>
@@ -645,7 +749,7 @@ function PanoramaBody({
           })}
         </svg>
 
-        <div className="role-topology-grid relative z-10 grid gap-4 lg:grid-cols-[0.95fr_1.35fr_1.15fr] lg:gap-8">
+        <div className="role-topology-grid relative z-10 grid gap-5 lg:grid-cols-[0.95fr_1.35fr_1.15fr] lg:gap-11">
           {/* Column 1: Member Holders */}
           <div className="flex flex-col justify-between gap-2">
             <div className="flex items-center justify-between border-b border-border-subtle pb-1.5 text-xs font-medium text-muted-foreground">

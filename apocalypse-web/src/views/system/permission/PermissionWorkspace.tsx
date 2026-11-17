@@ -4,15 +4,15 @@
  * + 右侧顶置 LivingContextBar 与单一连贯 L1 动作契约与持有角色档案面板。
  */
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Clock, Inbox, SearchX, ShieldCheck, Users, X } from 'lucide-react'
+import { ChevronRight, Clock, Inbox, KeyRound, SearchX, ShieldCheck, Users, X } from 'lucide-react'
 import { LayoutGroup, motion } from 'motion/react'
-import { useId, type ReactNode } from 'react'
+import { useId, useMemo, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DynaQueryFeedback, type DynaController, type DynaTableProps } from '@/components/dyna'
 import { useDynaText } from '@/components/dyna/use-dyna'
-import { MetricValue } from '@/components/motion'
-import { EntityPill, LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
+import { FluidConduitOverlay, MetricValue, SketchBox, type ConduitLink } from '@/components/motion'
+import { EntityPeekLink, LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
 import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -90,6 +90,31 @@ export function PermissionWorkspace({
     queryFn: ({ signal }) => getPermissionHolders(selectedId, signal),
     enabled: canOverview && Boolean(selectedId),
   })
+  const holdersStageRef = useRef<HTMLDivElement>(null)
+  const holderConduitLinks = useMemo<ConduitLink[]>(() => {
+    const roles = (holdersQuery.data?.roles ?? []).slice(0, 6)
+    const links: ConduitLink[] = []
+    for (const role of roles) {
+      const active = role.state === 'ACTIVE'
+      links.push({
+        id: `perm-fanout-${role.roleId}`,
+        from: 'perm-selected',
+        to: `perm-role-${role.roleId}`,
+        enabled: active,
+        scope: role.effectiveScope === 'ALL' ? 'ALL' : 'STANDARD',
+      })
+      for (const member of role.members.slice(0, 4)) {
+        links.push({
+          id: `perm-role-user-${role.roleId}-${member.id}`,
+          from: `perm-role-${role.roleId}`,
+          to: `perm-member-${member.id}`,
+          enabled: active,
+          scope: role.effectiveScope === 'ALL' ? 'ALL' : 'STANDARD',
+        })
+      }
+    }
+    return links
+  }, [holdersQuery.data?.roles])
 
   return (
     <div className="space-y-4">
@@ -206,13 +231,6 @@ export function PermissionWorkspace({
             }
 
             const holdingRoles = holdersQuery.data?.roles ?? []
-            const uniqueMembers = Array.from(
-              new Map(
-                holdingRoles
-                  .flatMap((role) => role.members)
-                  .map((member) => [String(member.id), member]),
-              ).values(),
-            )
 
             return (
               <LayoutGroup id={layoutId}>
@@ -368,36 +386,11 @@ export function PermissionWorkspace({
                     transition={enabled ? motionTransition.standard : insightMotion.instant}
                     role="complementary"
                     aria-label={t('objectWorkspace.definitionDetails')}
-                    className="divide-y divide-border-subtle rounded-panel border border-border-subtle bg-card p-5 shadow-surface"
+                    className="sketch-surface divide-y divide-border-subtle rounded-panel border border-border-subtle bg-card p-5 shadow-surface"
                   >
-                    {/* 第一区：顶置 LivingContextBar + 动作契约头 */}
-                    <div className="space-y-3.5 pb-4">
-                      <LivingContextBar source={intent?.source}>
-                        {holdingRoles.map((role) => (
-                          <EntityPill
-                            key={`role-${role.roleId}`}
-                            kind="role"
-                            id={String(role.roleId)}
-                            label={role.roleName}
-                            sublabel={role.roleKey}
-                            relation="permissions"
-                            focusTargetId={selectedCode || selectedId}
-                            size="sm"
-                            source={sourceRef}
-                          />
-                        ))}
-                        {uniqueMembers.map((member) => (
-                          <EntityPill
-                            key={`user-${member.id}`}
-                            kind="user"
-                            id={String(member.id)}
-                            label={member.nickname || member.username}
-                            sublabel={member.username}
-                            size="sm"
-                            source={sourceRef}
-                          />
-                        ))}
-                      </LivingContextBar>
+                    {/* 第一区与第二区合并为紧凑 Action Contract 档案卡头 */}
+                    <div className="space-y-3 pb-4">
+                      {intent?.source && <LivingContextBar source={intent.source} />}
 
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0 space-y-1.5">
@@ -430,10 +423,16 @@ export function PermissionWorkspace({
                               )}
                             </Badge>
                           </div>
-                          <div>
-                            <code className="font-mono text-xs text-muted-foreground">
-                              {selectedCode}
-                            </code>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <code className="font-mono text-foreground">{selectedCode}</code>
+                            <span>·</span>
+                            <span>{value(selected, 'moduleKey') || t('objectWorkspace.core')}</span>
+                            <span>·</span>
+                            <span className="font-mono tabular-nums">
+                              {value(selected, 'referenceRoleCount') || '0'}{' '}
+                              {t('objectWorkspace.references')} · v
+                              {value(selected, 'version') || '0'}
+                            </span>
                           </div>
                         </div>
 
@@ -445,73 +444,42 @@ export function PermissionWorkspace({
                       <p className="break-words text-sm leading-relaxed text-muted-foreground">
                         {value(selected, 'description') || t('objectWorkspace.noDescription')}
                       </p>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-control bg-muted/40 px-3 py-2 text-xs">
+                        <span className="text-muted-foreground">
+                          <strong className="font-medium text-foreground">
+                            {t('objectWorkspace.supportedScopes')}:
+                          </strong>{' '}
+                          {scopes.length
+                            ? scopes.map((scope) => t(`authorization.${String(scope)}`)).join(' · ')
+                            : t('objectWorkspace.noScopes')}
+                        </span>
+                        <span className="font-mono text-muted-foreground">
+                          <strong className="font-sans font-medium text-foreground">
+                            {t('objectWorkspace.declaration')}:
+                          </strong>{' '}
+                          {value(selected, 'declarationSource') || '—'}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* 第二区：模块状态与数据范围支持契约（无边框清爽键值排版） */}
-                    <div className="py-4">
-                      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-                        <div>
-                          <dt className="text-xs text-muted-foreground">
-                            {t('objectWorkspace.modules')}
-                          </dt>
-                          <dd className="mt-0.5 font-medium text-foreground">
-                            {value(selected, 'moduleKey') || t('objectWorkspace.core')}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-muted-foreground">
-                            {t('objectWorkspace.moduleStatus')}
-                          </dt>
-                          <dd className="mt-0.5 font-medium text-foreground">
-                            {holdersQuery.data
-                              ? holdersQuery.data.moduleEnabled
-                                ? t('authorization.active')
-                                : t('listInsights.permissions.moduleDisabled')
-                              : t(
-                                  Number(selected.status) === 1
-                                    ? 'authorization.active'
-                                    : 'authorization.inactive',
-                                )}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-muted-foreground">
-                            {t('objectWorkspace.references')} / {t('objectWorkspace.version')}
-                          </dt>
-                          <dd className="mt-0.5 font-mono font-semibold tabular-nums">
-                            {value(selected, 'referenceRoleCount') || '0'} · v
-                            {value(selected, 'version') || '0'}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-muted-foreground">
-                            {t('objectWorkspace.supportedScopes')}
-                          </dt>
-                          <dd className="mt-0.5 text-xs leading-relaxed text-foreground">
-                            {scopes.length
-                              ? scopes
-                                  .map((scope) => t(`authorization.${String(scope)}`))
-                                  .join(' · ')
-                              : t('objectWorkspace.noScopes')}
-                          </dd>
-                        </div>
-                        <div className="sm:col-span-4">
-                          <dt className="text-xs text-muted-foreground">
-                            {t('objectWorkspace.declaration')}
-                          </dt>
-                          <dd className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
-                            {value(selected, 'declarationSource') || '—'}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    {/* 第三区：持有角色与生效范围纯文本明细表（零行内胶囊） */}
+                    {/* 第三区：CT-03 3列 SVG 扇出穿透舞台（Action Contract -> Holding Roles -> Covered Users） */}
                     {canOverview && (
-                      <div className="space-y-3 pt-4" data-testid="permission-holders-stage">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div
+                        ref={holdersStageRef}
+                        className="relative space-y-3 pt-4"
+                        data-testid="permission-holders-stage"
+                      >
+                        <FluidConduitOverlay
+                          containerRef={holdersStageRef}
+                          links={holderConduitLinks}
+                          flow="horizontal"
+                          minContainerWidth={560}
+                          pulseKey={selectedId}
+                        />
+                        <div className="relative z-[2] flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <Users className="size-4 text-violet-600 dark:text-violet-400" />
+                            <Users className="size-4 text-brand-text" aria-hidden="true" />
                             <h3 className="text-sm font-semibold text-foreground">
                               {t('commandQa.q.holders')}
                             </h3>
@@ -528,9 +496,11 @@ export function PermissionWorkspace({
                         </div>
 
                         {holdersQuery.isLoading ? (
-                          <p className="text-xs text-muted-foreground">{t('commandQa.querying')}</p>
+                          <p className="relative z-[2] text-xs text-muted-foreground">
+                            {t('commandQa.querying')}
+                          </p>
                         ) : holdersQuery.isError ? (
-                          <div className="flex items-center justify-between gap-2 text-xs text-destructive">
+                          <div className="relative z-[2] flex items-center justify-between gap-2 text-xs text-destructive">
                             <span>{t('commandQa.failed')}</span>
                             <Button
                               variant="outline"
@@ -541,82 +511,143 @@ export function PermissionWorkspace({
                             </Button>
                           </div>
                         ) : holdersQuery.data ? (
-                          holdersQuery.data.roles.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">
+                          holdingRoles.length === 0 ? (
+                            <p className="relative z-[2] text-xs text-muted-foreground">
                               {t('commandQa.noHolders')}
                             </p>
                           ) : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-xs">
-                                <thead>
-                                  <tr className="border-b border-border-subtle text-muted-foreground">
-                                    <th className="py-2 pr-3 font-medium">
-                                      {t('objectWorkspace.references')}
-                                    </th>
-                                    <th className="py-2 pr-3 font-medium">
-                                      {t('objectWorkspace.defaultScope')}
-                                    </th>
-                                    <th className="py-2 pr-3 font-medium">
-                                      {t('objectWorkspace.overrideScope')}
-                                    </th>
-                                    <th className="py-2 font-medium">
-                                      {t('objectWorkspace.validityStatus')}
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border-subtle/60">
-                                  {holdersQuery.data.roles.map((role) => (
-                                    <tr key={role.roleId}>
-                                      <td className="py-2.5 pr-3">
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                          <span className="font-medium text-foreground">
-                                            {role.roleName}
-                                          </span>
-                                          <code className="font-mono text-[11px] text-muted-foreground">
-                                            {role.roleKey}
-                                          </code>
-                                        </div>
-                                      </td>
-                                      <td className="py-2.5 pr-3 text-muted-foreground">
-                                        {role.roleDataScope
-                                          ? t(`authorization.${role.roleDataScope}`, {
-                                              defaultValue: role.roleDataScope,
-                                            })
-                                          : '—'}
-                                      </td>
-                                      <td className="py-2.5 pr-3">
+                            <div className="relative z-[2] grid items-center gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-11">
+                              {/* Col 1: Action Contract Anchor Node */}
+                              <div>
+                                <SketchBox
+                                  seed={37}
+                                  wash="normal"
+                                  data-conduit-anchor="perm-selected"
+                                  className="p-3.5"
+                                >
+                                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/14 text-brand-text">
+                                      <KeyRound className="size-3.5" aria-hidden="true" />
+                                    </span>
+                                    <span className="truncate">{value(selected, 'name')}</span>
+                                  </div>
+                                  <code className="mt-1.5 block truncate font-mono text-xs text-muted-foreground">
+                                    {selectedCode}
+                                  </code>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    {holdersQuery.data.moduleEnabled
+                                      ? t('authorization.active')
+                                      : t('listInsights.permissions.moduleDisabled')}
+                                  </p>
+                                </SketchBox>
+                              </div>
+
+                              {/* Col 2: Holding Roles */}
+                              <div className="space-y-2.5">
+                                {holdingRoles.map((role, index) => (
+                                  <SketchBox
+                                    key={role.roleId}
+                                    seed={role.roleId.length * 13 + index}
+                                    wash={role.state === 'ACTIVE' ? 'none' : 'wide'}
+                                    data-conduit-anchor={
+                                      index < 6 ? `perm-role-${role.roleId}` : undefined
+                                    }
+                                    className="p-3"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex min-w-0 items-center gap-1.5">
+                                        <ShieldCheck
+                                          className="size-3.5 shrink-0 text-brand-text"
+                                          aria-hidden="true"
+                                        />
+                                        <EntityPeekLink
+                                          kind="role"
+                                          id={String(role.roleId)}
+                                          label={role.roleName}
+                                          sublabel={role.roleKey}
+                                          relation="permissions"
+                                          focusTargetId={selectedCode || selectedId}
+                                          source={sourceRef}
+                                        />
+                                      </div>
+                                      <Badge
+                                        variant={role.state === 'ACTIVE' ? 'success' : 'secondary'}
+                                      >
+                                        {t(`commandQa.state.${role.state}`, {
+                                          defaultValue: role.state,
+                                        })}
+                                      </Badge>
+                                    </div>
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                      <code className="font-mono text-[11px]">{role.roleKey}</code>
+                                      <span>
                                         {role.effectiveScope
                                           ? t(`authorization.${role.effectiveScope}`, {
                                               defaultValue: role.effectiveScope,
                                             })
                                           : '—'}
-                                      </td>
-                                      <td className="py-2.5">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <Badge
-                                            variant={
-                                              role.state === 'ACTIVE' ? 'success' : 'secondary'
-                                            }
-                                          >
-                                            {t(`commandQa.state.${role.state}`, {
-                                              defaultValue: role.state,
-                                            })}
-                                          </Badge>
-                                          {(role.validFrom || role.validUntil) && (
-                                            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground tabular-nums">
-                                              <Clock className="size-3" aria-hidden="true" />
-                                              {t('commandQa.window', {
-                                                from: role.validFrom?.replace('T', ' ') ?? '∞',
-                                                until: role.validUntil?.replace('T', ' ') ?? '∞',
-                                              })}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                      </span>
+                                      {(role.validFrom || role.validUntil) && (
+                                        <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums">
+                                          <Clock className="size-3" aria-hidden="true" />
+                                          {t('commandQa.window', {
+                                            from: role.validFrom?.replace('T', ' ') ?? '∞',
+                                            until: role.validUntil?.replace('T', ' ') ?? '∞',
+                                          })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SketchBox>
+                                ))}
+                              </div>
+
+                              {/* Col 3: Covered Visible Users */}
+                              <div className="space-y-2">
+                                {(() => {
+                                  const uniqueMembers = Array.from(
+                                    new Map(
+                                      holdingRoles
+                                        .flatMap((r) => r.members)
+                                        .map((m) => [String(m.id), m]),
+                                    ).values(),
+                                  ).slice(0, 8)
+                                  if (!uniqueMembers.length) {
+                                    return (
+                                      <p className="rounded-control border border-dashed border-border-subtle p-3 text-xs text-muted-foreground">
+                                        {holdersQuery.data.membersVisible
+                                          ? t('commandQa.noHolders')
+                                          : t('commandQa.membersHidden')}
+                                      </p>
+                                    )
+                                  }
+                                  return uniqueMembers.map((member) => (
+                                    <div
+                                      key={member.id}
+                                      data-conduit-anchor={`perm-member-${member.id}`}
+                                      className="flex items-center gap-2.5 rounded-panel border border-border-subtle bg-card/90 px-3 py-2 shadow-xs"
+                                    >
+                                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/14 text-xs font-semibold text-brand-text">
+                                        {(member.nickname || member.username)
+                                          .slice(0, 1)
+                                          .toUpperCase()}
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <EntityPeekLink
+                                          kind="user"
+                                          id={String(member.id)}
+                                          label={member.nickname || member.username}
+                                          sublabel={member.username}
+                                          source={sourceRef}
+                                          className="text-xs font-medium"
+                                        />
+                                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                          @{member.username}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))
+                                })()}
+                              </div>
                             </div>
                           )
                         ) : null}

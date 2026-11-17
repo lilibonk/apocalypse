@@ -78,7 +78,7 @@ describe('MenuTreeWorkspace & MenuInspector V2', () => {
     Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
   })
 
-  it('mounts LivingContextBar at the top of MenuInspector with parent directory & role navigation EntityPills', () => {
+  it('mounts EntityPeekLink and live sidebar preview in MenuInspector while keeping return bar when source is present', () => {
     const childNode = sampleTree[0]!.children[0]!
     const html = renderToStaticMarkup(
       <MemoryRouter>
@@ -96,6 +96,8 @@ describe('MenuTreeWorkspace & MenuInspector V2', () => {
 
     expect(html).toContain('data-slot="living-context-bar"')
     expect(html).toContain('data-slot="entity-return-pill"')
+    expect(html).toContain('data-slot="entity-peek-link"')
+    expect(html).toContain('data-slot="menu-live-preview"')
     expect(html).toContain('超级管理员')
     expect(html).toContain('data-entity-kind="menu"')
     expect(html).toContain('系统管理')
@@ -122,7 +124,8 @@ describe('MenuTreeWorkspace & MenuInspector V2', () => {
         />
       </MemoryRouter>,
     )
-    expect(workspaceHtml).toContain('data-slot="living-context-bar"')
+    expect(workspaceHtml).toContain('data-slot="entity-peek-link"')
+    expect(workspaceHtml).toContain('data-slot="menu-live-preview"')
     expect(workspaceHtml).toContain('用户管理')
 
     const queryClient = new QueryClient({

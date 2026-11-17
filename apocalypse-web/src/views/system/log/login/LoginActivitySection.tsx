@@ -16,6 +16,7 @@ import { stateMotion } from '@/design/motion'
 import { useFirstEntrance } from '@/hooks/useFirstEntrance'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { ApiError } from '@/lib/api/client'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import {
   getLoginHeatmap,
@@ -325,11 +326,17 @@ function TrendBuckets({
             >
               <div className="flex w-full flex-1 items-end justify-center">
                 <div
-                  className=" flex w-full max-w-5 flex-col justify-end overflow-hidden rounded-t-xs bg-primary/25 transition-all"
+                  className={cn(
+                    'flex w-full max-w-5 flex-col justify-end overflow-hidden rounded-t-full transition-all',
+                    selected ? 'bg-primary' : 'bg-primary/35',
+                  )}
                   style={{ height: `${totalPct}%` }}
                 >
                   {failedPct > 0 && (
-                    <div className="w-full bg-danger" style={{ height: `${failedPct}%` }} />
+                    <div
+                      className="w-full rounded-t-full bg-warning"
+                      style={{ height: `${failedPct}%` }}
+                    />
                   )}
                 </div>
               </div>

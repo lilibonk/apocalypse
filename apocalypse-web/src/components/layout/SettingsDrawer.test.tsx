@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const selected = vi.hoisted(() => ({
-  theme: 'system',
+  themeWorld: 'fluid',
   density: 'comfortable',
   language: 'zh',
   motionEnabled: true,
@@ -32,6 +32,8 @@ import { CAPABILITY_META } from '@/stores/settings'
 
 const motionCapability = CAPABILITY_META.find(({ key }) => key === 'motion')!
 const originalMotionExposure = motionCapability.exposed
+const themeWorldCapability = CAPABILITY_META.find(({ key }) => key === 'themeWorld')!
+const originalThemeWorldExposure = themeWorldCapability.exposed
 
 const render = () => renderToStaticMarkup(<SettingsDrawer open onOpenChange={vi.fn()} />)
 const pressedLabels = (html: string) =>
@@ -41,7 +43,7 @@ const pressedLabels = (html: string) =>
   )
 
 beforeEach(() => {
-  selected.theme = 'system'
+  selected.themeWorld = 'fluid'
   selected.density = 'comfortable'
   selected.language = 'zh'
   selected.motionEnabled = true
@@ -50,6 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
   motionCapability.exposed = originalMotionExposure
+  themeWorldCapability.exposed = originalThemeWorldExposure
   vi.unstubAllEnvs()
 })
 
@@ -62,21 +65,24 @@ describe('settings option semantics', () => {
     )
     expect(groups).toHaveLength(3)
     expect(new Set(groups).size).toBe(3)
-    for (const [index, name] of ['主题', '密度', '语言'].entries()) {
+    for (const [index, name] of ['风格世界', '密度', '语言'].entries()) {
       expect(html).toContain(`id="${groups[index]}"`)
       expect(html).toContain(`>${name}</label>`)
     }
-    expect(pressedLabels(html)).toEqual(['跟随系统', '舒适', '中文'])
+    expect(html).not.toContain('>浅色<')
+    expect(html).not.toContain('>深色<')
+    expect(html).not.toContain('>跟随系统<')
+    expect(pressedLabels(html)).toEqual(['清透流体', '舒适', '中文'])
     expect(html.match(/aria-pressed="false"/g)).toHaveLength(4)
     expect(html.match(/type="button" aria-pressed=/g)).toHaveLength(7)
     expect(html).not.toMatch(/<button[^>]*tabindex="-1"/)
   })
 
   it('keeps the announced selection in sync with controlled settings', () => {
-    selected.theme = 'dark'
+    selected.themeWorld = 'sketchbook'
     selected.density = 'compact'
     selected.language = 'en'
-    expect(pressedLabels(render())).toEqual(['深色', '紧凑', 'English'])
+    expect(pressedLabels(render())).toEqual(['手绘手账', '紧凑', 'English'])
   })
 
   it.each([false, true])('exposes a named motion preference outside the lab when DEV=%s', (dev) => {
@@ -103,5 +109,12 @@ describe('settings option semantics', () => {
     const html = render()
     expect(html).not.toContain('role="switch"')
     expect(html).not.toContain('>界面动画</label>')
+  })
+
+  it('hides themeWorld group when trimmed by CAPABILITY_META', () => {
+    themeWorldCapability.exposed = false
+    const html = render()
+    expect(html).not.toContain('>风格世界</label>')
+    expect(html).not.toContain('清透流体')
   })
 })

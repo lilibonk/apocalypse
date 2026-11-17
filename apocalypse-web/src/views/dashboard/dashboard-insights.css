@@ -19,8 +19,8 @@
 
 .dashboard-trend-line {
   fill: none;
-  stroke: var(--foreground);
-  stroke-width: 2.4;
+  stroke: var(--brand-text);
+  stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -28,8 +28,8 @@
 
 .dashboard-trend-point {
   fill: var(--card);
-  stroke: var(--foreground);
-  stroke-width: 2;
+  stroke: var(--brand-text);
+  stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
 }
 
@@ -64,29 +64,21 @@
 }
 
 @media (min-width: 64rem) {
-  .dashboard-insight-bottom {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
-  }
-
   .dashboard-insight-top {
-    grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
   }
 }
 
 @container main (min-width: 52rem) {
-  .dashboard-insight-bottom {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
-  }
-
   .dashboard-insight-top {
-    grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
   }
 }
 
 .dashboard-trend-vertex {
   fill: var(--card);
-  stroke: var(--foreground);
-  stroke-width: 1.4;
+  stroke: var(--brand-text);
+  stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
 

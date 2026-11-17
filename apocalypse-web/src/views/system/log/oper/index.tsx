@@ -13,7 +13,7 @@ import { DictTag } from '@/components/DictTag'
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CoupledMotionGroup, MetricValue } from '@/components/motion'
-import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { EntityPeekLink, LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { ResponsiveInspector } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -272,7 +272,7 @@ function OperLogWorkspace() {
         {canViewInsights && insights && (
           <section
             aria-label="操作审计概览脉冲"
-            className="oper-insight-strip flex flex-wrap items-center justify-between gap-2.5 px-3 py-2"
+            className="oper-insight-strip sketch-surface flex flex-wrap items-center justify-between gap-2.5 px-3 py-2"
           >
             <div className="flex flex-wrap items-center gap-1.5">
               <Button
@@ -451,30 +451,27 @@ function OperLogWorkspace() {
         >
           {detail && (
             <div key={detail.id} className="space-y-4">
-              <LivingContextBar title="关联脉络">
-                {detail.operName && (
-                  <EntityPill
-                    kind="user"
-                    id={detail.operName}
-                    label={`操作人：${detail.operName}`}
-                  />
-                )}
-                {targetEntity && (
-                  <EntityPill
-                    kind={targetEntity.kind}
-                    id={targetEntity.id}
-                    label={targetEntity.label}
-                  />
-                )}
-              </LivingContextBar>
-
               {/* 紧凑 2×2 元信息头卡 */}
               <dl className="grid grid-cols-2 gap-2.5 rounded-control border border-border-subtle bg-muted/20 p-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     {t('common.操作人', { defaultValue: '操作人' })}
                   </dt>
-                  <dd className="mt-1 font-medium">{detail.operName ?? '-'}</dd>
+                  <dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">
+                    {detail.operName ? (
+                      <EntityPeekLink kind="user" id={detail.operName} label={detail.operName} />
+                    ) : (
+                      '-'
+                    )}
+                    {targetEntity && (
+                      <EntityPeekLink
+                        kind={targetEntity.kind}
+                        id={targetEntity.id}
+                        label={targetEntity.label}
+                        className="text-xs"
+                      />
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
@@ -513,7 +510,7 @@ function OperLogWorkspace() {
               </dl>
 
               {detail.errorMsg && (
-                <div className="rounded-control border border-destructive/30 p-3">
+                <div className="rounded-panel border border-destructive/40 bg-destructive/8 p-3">
                   <DetailBlock
                     label={t('common.异常信息', { defaultValue: '异常信息' })}
                     value={detail.errorMsg}
@@ -522,14 +519,16 @@ function OperLogWorkspace() {
               )}
 
               <DetailBlock label={systemT('operLog.invokedMethod')} value={detail.method} />
-              <DetailBlock
-                label={t('common.请求参数', { defaultValue: '请求参数' })}
-                value={detail.operParam}
-              />
-              <DetailBlock
-                label={t('common.返回结果', { defaultValue: '返回结果' })}
-                value={detail.operResult}
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DetailBlock
+                  label={t('common.请求参数', { defaultValue: '请求参数' })}
+                  value={detail.operParam}
+                />
+                <DetailBlock
+                  label={t('common.返回结果', { defaultValue: '返回结果' })}
+                  value={detail.operResult}
+                />
+              </div>
             </div>
           )}
         </ResponsiveInspector>

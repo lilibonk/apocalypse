@@ -89,7 +89,7 @@ describe('DeptOrgChart V2 topology stage', () => {
     Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
   })
 
-  it('uses widened node cards (240px), mounts LivingContextBar in right-inspector, and removes bottom-left HUD', () => {
+  it('uses widened node cards (240px), mounts EntityPeekLink in right-inspector, and removes bottom-left HUD', () => {
     expect(NODE_WIDTH).toBeGreaterThanOrEqual(236)
     expect(chartGeometry.nodeWidth).toBe(NODE_WIDTH)
 
@@ -128,7 +128,7 @@ describe('DeptOrgChart V2 topology stage', () => {
     expect(html).toContain('平台核心研发部')
     expect(html).toContain('IAM 与安全架构组')
     expect(html).toContain('data-slot="right-inspector"')
-    expect(html).toContain('data-slot="living-context-bar"')
+    expect(html).toContain('data-slot="entity-peek-link"')
     expect(html).toContain('data-entity-kind="dept"')
     expect(html).toContain('data-entity-kind="user"')
     expect(html).not.toContain('data-slot="bottom-left"')

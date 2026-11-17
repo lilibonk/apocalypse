@@ -1,16 +1,16 @@
 /**
- * 界面设置：主题 / accent / 密度 / 布局变体 / 多页签 / 内容宽度 / 固定顶栏 /
+ * 界面设置：风格世界 / accent / 密度 / 布局变体 / 多页签 / 内容宽度 / 固定顶栏 /
  * 灰度模式 / 动画 / 语言。
  *
  * 核心设计 ——「产品设置 + 开发态能力实验室」：
  * CAPABILITY_META 登记全部能力项及其默认 exposed；exposed=false 的能力
- * 不在设置面板渲染、也不生效（getter 回退默认值）。非开发构建允许主题、密度、
- * 动画、语言读取用户值；其它能力固定使用产品默认值。
+ * 不在设置面板渲染、也不生效（getter 回退默认值）。非开发构建允许风格世界、
+ * 密度、动画、语言读取用户值；其它能力固定使用产品默认值。
  * 下游项目裁剪方式：把对应 CAPABILITY_META 项的 exposed 改为 false（或删除该项），
  * 面板与逻辑自动收敛，无需改任何组件代码。
  *
- * DOM 生效点在 app/providers.tsx（dark class / data-accent / data-density /
- * data-gray / data-motion）。
+ * DOM 生效点在 app/providers.tsx（data-theme-world / dark class / data-accent / data-density /
+ * data-gray / data-motion）。深色模式由风格世界 `obsidian` 唯一决定，不再并存浅色/深色/跟随系统。
  */
 
 import { create } from 'zustand'
@@ -33,7 +33,10 @@ export const ACCENTS = [
 ] as const
 export type Accent = (typeof ACCENTS)[number]
 
-export type ThemeMode = 'light' | 'dark' | 'system'
+/** 正交风格世界：fluid（清透活水玻璃管，默认） / sketchbook（手绘水彩手账） / obsidian（深邃极光夜色）。 */
+export const THEME_WORLDS = ['fluid', 'sketchbook', 'obsidian'] as const
+export type ThemeWorld = (typeof THEME_WORLDS)[number]
+
 export type Density = 'compact' | 'comfortable'
 export type LayoutVariant = 'sidebar' | 'topbar' | 'mixed'
 /** 内容宽度：fluid=通栏，boxed=限宽居中。 */
@@ -42,7 +45,7 @@ export type Language = 'zh' | 'en'
 
 /** 能力项 key 全集。 */
 export type CapabilityKey =
-  | 'theme'
+  | 'themeWorld'
   | 'accent'
   | 'density'
   | 'layout'
@@ -62,7 +65,7 @@ interface CapabilityMeta {
 }
 
 export const CAPABILITY_META: CapabilityMeta[] = [
-  { key: 'theme', label: '主题', exposed: true },
+  { key: 'themeWorld', label: '风格世界', exposed: true },
   { key: 'accent', label: '强调色', exposed: true },
   { key: 'density', label: '密度', exposed: true },
   { key: 'layout', label: '布局', exposed: true },
@@ -80,7 +83,7 @@ export function isCapabilityExposed(key: CapabilityKey): boolean {
 }
 
 interface SettingsState {
-  theme: ThemeMode
+  themeWorld: ThemeWorld
   accent: Accent
   density: Density
   layout: LayoutVariant
@@ -92,7 +95,7 @@ interface SettingsState {
   pixelWaveEnabled: boolean
   language: Language
 
-  setTheme: (theme: ThemeMode) => void
+  setThemeWorld: (themeWorld: ThemeWorld) => void
   setAccent: (accent: Accent) => void
   setDensity: (density: Density) => void
   setLayout: (layout: LayoutVariant) => void
@@ -106,7 +109,7 @@ interface SettingsState {
 }
 
 export const DEFAULT_SETTINGS = {
-  theme: 'system' as ThemeMode,
+  themeWorld: 'fluid' as ThemeWorld,
   accent: 'mint' as Accent,
   density: 'comfortable' as Density,
   layout: 'sidebar' as LayoutVariant,
@@ -123,7 +126,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       ...DEFAULT_SETTINGS,
-      setTheme: (theme) => set({ theme }),
+      setThemeWorld: (themeWorld) => set({ themeWorld }),
       setAccent: (accent) => set({ accent }),
       setDensity: (density) => set({ density }),
       setLayout: (layout) => set({ layout }),
@@ -137,21 +140,26 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'apocalypse.settings',
-      version: 5,
-      // v5 退役皮肤字段；保留 v4 的用户偏好与更早版本已经约定的 mint 迁移。
+      version: 7,
+      // v7 收口至风格世界单一事实源，剥离遗留 theme 与 mascotSkin；保留早期用户的其余偏好与 mint 迁移。
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
           return DEFAULT_SETTINGS
         }
         const state = { ...DEFAULT_SETTINGS, ...persisted } as typeof DEFAULT_SETTINGS & {
           mascotSkin?: unknown
+          theme?: unknown
         }
         delete state.mascotSkin
+        delete state.theme
         if (version < 4) state.accent = 'mint'
+        if (!THEME_WORLDS.includes(state.themeWorld)) {
+          state.themeWorld = DEFAULT_SETTINGS.themeWorld
+        }
         return state
       },
       partialize: (state) => ({
-        theme: state.theme,
+        themeWorld: state.themeWorld,
         accent: state.accent,
         density: state.density,
         layout: state.layout,
@@ -172,7 +180,7 @@ export function useSettings() {
   const state = useSettingsStore()
   const labEnabled = import.meta.env.DEV
   return {
-    theme: isCapabilityExposed('theme') ? state.theme : DEFAULT_SETTINGS.theme,
+    themeWorld: isCapabilityExposed('themeWorld') ? state.themeWorld : DEFAULT_SETTINGS.themeWorld,
     accent: labEnabled && isCapabilityExposed('accent') ? state.accent : DEFAULT_SETTINGS.accent,
     density: isCapabilityExposed('density') ? state.density : DEFAULT_SETTINGS.density,
     layout: labEnabled && isCapabilityExposed('layout') ? state.layout : DEFAULT_SETTINGS.layout,

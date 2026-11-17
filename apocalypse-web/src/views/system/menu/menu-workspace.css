@@ -34,7 +34,8 @@
 }
 @container (min-width: 56rem) {
   .menu-workspace-grid {
-    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-columns: minmax(0, 1fr) 21rem;
+    gap: calc(var(--spacing) * 10);
   }
   .menu-workspace-aside {
     display: block;

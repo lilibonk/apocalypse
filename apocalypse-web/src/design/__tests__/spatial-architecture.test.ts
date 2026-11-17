@@ -147,6 +147,11 @@ describe('S5 top-anchored LivingContextBar and zero inline table EntityPill', ()
       .map(rel)
     expect(offenders).toEqual([])
   })
+
+  it('exports EntityPeekLink from components/navigation', () => {
+    const navIndex = read(join(SRC, 'components/navigation/index.ts'))
+    expect(navIndex).toContain('EntityPeekLink')
+  })
 })
 
 describe('S6 single primary lens per screen (LoginLog overview vs list)', () => {
@@ -221,5 +226,30 @@ describe('S8 container-query responsiveness and LivingContextBar primitive', () 
   it('exports LivingContextBar from components/navigation', () => {
     expect(navIndex).toContain('LivingContextBar')
     expect(spatialCss).toMatch(/\.living-context-bar/)
+  })
+})
+
+describe('S9 orthogonal theme worlds and zero-bitmap procedural primitives', () => {
+  const indexCss = read(join(SRC, 'index.css'))
+  const themeWorldsCss = read(join(SRC, 'design/theme-worlds.css'))
+  const motionIndex = read(join(SRC, 'components/motion/index.ts'))
+
+  it('imports design/theme-worlds.css from index.css and declares all three theme worlds', () => {
+    expect(indexCss).toContain("./design/theme-worlds.css'")
+    expect(themeWorldsCss).toContain("[data-theme-world='fluid']")
+    expect(themeWorldsCss).toContain("[data-theme-world='sketchbook']")
+    expect(themeWorldsCss).toContain("[data-theme-world='obsidian']")
+  })
+
+  it('exports all five procedural visual primitives from components/motion', () => {
+    for (const symbol of [
+      'SvgThemeFilters',
+      'SketchBox',
+      'FluidConduitOverlay',
+      'ApoParticleOrb',
+      'SketchApoPeeker',
+    ]) {
+      expect(motionIndex).toContain(symbol)
+    }
   })
 })

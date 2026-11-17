@@ -176,7 +176,7 @@ describe('UserWorkspace', () => {
 
     expect(html).toContain('data-slot="sticky-rail-layout"')
     expect(html).toContain('data-rail-width="locator"')
-    expect(html).toContain('data-slot="living-context-bar"')
+    expect(html).toContain('data-slot="entity-peek-link"')
     expect(html).toContain('data-entity-kind="dept"')
     expect(html).toContain('集团总部 / 研发中心 / 前端研发组')
     expect(html).toContain('data-entity-kind="role"')

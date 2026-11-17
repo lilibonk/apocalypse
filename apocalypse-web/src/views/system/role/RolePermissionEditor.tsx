@@ -1,7 +1,6 @@
 /** Desktop relationship builder. Menu definitions are immutable; only role links are drafted. */
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import {
   AlertCircle,
@@ -24,6 +23,8 @@ import {
 } from 'lucide-react'
 
 import { InsightCard } from '@/components/insights/InsightCard'
+import { FluidConduitOverlay, SketchBox, type ConduitLink } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -37,11 +38,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { insightMotion } from '@/design/motion'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
 import { ApiError } from '@/lib/api/client'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
+import { cn } from '@/lib/utils'
 import { isAuthorizationCurrent, useAuthStore } from '@/stores/auth'
 
 import { permissionNodeIcons } from './role-permission.icons'
@@ -94,152 +94,195 @@ interface DraftSession {
   draft: RolePermissionDraft
 }
 
-const GRAPH = { width: 780, height: 510, roleX: 150, roleY: 250, nodeX: 500 }
 const PAGE_SIZE = 4
 const requiredPerms = ['system:role:list', 'system:menu:list', 'system:role:edit'] as const
 
-function DraftEdge({
-  y,
-  state,
-  enabled,
-}: {
-  y: number
-  state: RolePermissionDraftState
-  enabled: boolean
-}) {
-  const target = {
-    d: `M ${GRAPH.roleX} ${GRAPH.roleY} C 335 ${GRAPH.roleY}, 335 ${y}, ${GRAPH.nodeX} ${y}`,
-  }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  return (
-    <motion.path
-      className="role-menu-editor-edge"
-      data-state={state}
-      initial={target}
-      animate={controls}
-    />
-  )
-}
-
-function CandidateNode({
-  node,
-  y,
-  state,
-  selected,
-  additions,
+function NavBusStage({
+  roleName,
+  draftCount,
+  visible,
+  catalog,
+  draft,
+  selectedId,
   disabled,
-  enabled,
+  onReturnRoot,
   onSelect,
   onExplore,
   onToggle,
 }: {
-  node: RolePermissionNode
-  y: number
-  state: RolePermissionDraftState
-  selected: boolean
-  additions: number
+  roleName: string
+  draftCount: number
+  visible: readonly RolePermissionNode[]
+  catalog: RolePermissionCatalog
+  draft: RolePermissionDraft
+  selectedId: string | null
   disabled: boolean
-  enabled: boolean
-  onSelect: () => void
-  onExplore: (keyboard: boolean) => void
-  onToggle: () => void
+  onReturnRoot: (keyboard: boolean) => void
+  onSelect: (id: string) => void
+  onExplore: (id: string, keyboard: boolean) => void
+  onToggle: (node: RolePermissionNode) => void
 }) {
   const { t } = useTranslation('system')
-  const [hovered, setHovered] = useState(false)
-  const Icon = permissionNodeIcons[node.type]
-  const linked = state === 'linked' || state === 'added'
-  const target = {
-    left: `${(GRAPH.nodeX / GRAPH.width) * 100}%`,
-    top: `${(y / GRAPH.height) * 100}%`,
-    y: enabled && hovered ? -insightMotion.hoverLift : 0,
-  }
-  const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
-  const labelTarget = {
-    left: `${((GRAPH.nodeX + 45) / GRAPH.width) * 100}%`,
-    top: `${(y / GRAPH.height) * 100}%`,
-  }
-  const labelControls = useSurfaceAnimation(labelTarget, enabled, insightMotion.layout)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const links = useMemo<ConduitLink[]>(
+    () =>
+      visible.map((node, index) => {
+        const state = rolePermissionDraftState(draft, node.id)
+        const linked = state === 'linked' || state === 'added'
+        return {
+          id: `nav-bus-${node.id}`,
+          from: index === 0 ? 'nav-bus-root' : `nav-bus-node-${visible[index - 1].id}`,
+          to: `nav-bus-node-${node.id}`,
+          enabled: linked,
+          scope: linked ? 'STANDARD' : 'BROKEN',
+        }
+      }),
+    [draft, visible],
+  )
+
   return (
-    <>
-      <motion.button
-        type="button"
-        className="role-menu-editor-node flex items-center justify-center"
-        data-state={state}
-        data-active={selected}
-        aria-pressed={selected}
-        aria-label={t('roleManage.inspectCandidate', {
-          defaultValue: '查看节点：{{name}}',
-          name: node.name,
-        })}
-        style={{ width: `${(56 / GRAPH.width) * 100}%` }}
-        initial={target}
-        animate={controls}
-        onHoverStart={() => setHovered(true)}
-        onHoverEnd={() => setHovered(false)}
-        onClick={onSelect}
-      >
-        <Icon className="size-5" aria-hidden="true" strokeWidth={1.5} />
-      </motion.button>
-      <motion.div
-        className="role-menu-editor-node-label space-y-2"
-        style={{ width: `${(205 / GRAPH.width) * 100}%` }}
-        initial={labelTarget}
-        animate={labelControls}
-      >
-        <button
-          type="button"
-          className="block w-full truncate text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={node.pathNames.join(' / ')}
-          onClick={onSelect}
-        >
-          {node.name}
-        </button>
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
+    <div
+      ref={stageRef}
+      role="group"
+      aria-label={t('roleManage.relationshipCanvas', {
+        defaultValue: '角色与候选菜单的关联图',
+      })}
+      className="relative p-3 sm:p-4"
+    >
+      <FluidConduitOverlay
+        containerRef={stageRef}
+        links={links}
+        flow="vertical"
+        minContainerWidth={260}
+        pulseKey={`${visible.map((v) => v.id).join(',')}-${draftCount}`}
+      />
+      <div className="relative z-[2] space-y-3 pl-1 sm:pl-2">
+        <div className="flex items-center gap-3.5">
+          <button
             type="button"
-            variant={linked ? 'ghost' : 'outline'}
-            size="xs"
-            disabled={disabled}
-            onClick={onToggle}
-            aria-label={
-              linked
-                ? t('roleManage.removeNamedLink', {
-                    defaultValue: '移除关联：{{name}}',
-                    name: node.name,
-                  })
-                : t('roleManage.addNamedLinks', {
-                    defaultValue: '添加关联：{{name}}，共 {{count}} 项（含上级）',
-                    name: node.name,
-                    count: additions,
-                  })
-            }
+            data-conduit-anchor="nav-bus-root"
+            onClick={(event) => onReturnRoot(event.detail === 0)}
+            aria-label={t('roleManage.returnToRoleRoot', {
+              defaultValue: '返回角色关联总览',
+            })}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-primary/14 text-brand-text shadow-xs transition-colors hover:border-brand-text/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {linked ? <Unlink aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            {linked
-              ? t('roleManage.removeLink', { defaultValue: '移除关联' })
-              : t('roleManage.addLinksCount', {
-                  defaultValue: '关联 +{{count}}',
-                  count: additions,
-                })}
-          </Button>
-          {node.children.length > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              disabled={disabled}
-              onClick={(event) => onExplore(event.detail === 0)}
-              aria-label={t('roleManage.exploreChildren', {
-                defaultValue: '展开下级：{{name}}',
-                name: node.name,
+            <ShieldCheck className="size-4" aria-hidden="true" />
+          </button>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{roleName}</span>
+            <span>·</span>
+            <span className="tabular-nums">
+              {t('roleManage.draftLinkCount', {
+                defaultValue: '草稿关联 {{count}} 项',
+                count: draftCount,
               })}
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          )}
+            </span>
+          </div>
         </div>
-      </motion.div>
-    </>
+
+        <ul className="space-y-3">
+          {visible.map((node) => {
+            const Icon = permissionNodeIcons[node.type]
+            const state = rolePermissionDraftState(draft, node.id)
+            const linked = state === 'linked' || state === 'added'
+            const additions = rolePermissionAdditions(catalog, draft, node.id).length
+            const active = selectedId === node.id
+            return (
+              <li key={node.id} className="relative flex items-center gap-3 sm:gap-3.5">
+                <button
+                  type="button"
+                  data-conduit-anchor={`nav-bus-node-${node.id}`}
+                  data-state={state}
+                  data-active={active}
+                  aria-pressed={active}
+                  aria-label={t('roleManage.inspectCandidate', {
+                    defaultValue: '查看节点：{{name}}',
+                    name: node.name,
+                  })}
+                  onClick={() => onSelect(node.id)}
+                  className={cn(
+                    'flex size-7 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    linked
+                      ? 'border-brand-text/50 bg-primary/15 text-brand-text'
+                      : 'border-border-subtle bg-muted text-muted-foreground',
+                    active && 'ring-2 ring-ring',
+                  )}
+                >
+                  <Icon className="size-3.5" aria-hidden="true" />
+                </button>
+                <SketchBox
+                  seed={node.id.length * 11 + 5}
+                  wash={active ? 'normal' : 'none'}
+                  className={cn('min-w-0 flex-1', active && 'border-brand-text/60')}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:px-3.5">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      title={node.pathNames.join(' / ')}
+                      onClick={() => onSelect(node.id)}
+                    >
+                      <span className="block truncate text-sm font-medium">{node.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {node.pathNames.join(' / ')}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[11px]">
+                        {t(`roleGraph.${node.type}`)}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant={linked ? 'ghost' : 'outline'}
+                        size="xs"
+                        disabled={disabled}
+                        onClick={() => onToggle(node)}
+                        aria-label={
+                          linked
+                            ? t('roleManage.removeNamedLink', {
+                                defaultValue: '移除关联：{{name}}',
+                                name: node.name,
+                              })
+                            : t('roleManage.addNamedLinks', {
+                                defaultValue: '添加关联：{{name}}，共 {{count}} 项（含上级）',
+                                name: node.name,
+                                count: additions,
+                              })
+                        }
+                      >
+                        {linked ? <Unlink aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                        {linked
+                          ? t('roleManage.removeLink', { defaultValue: '移除关联' })
+                          : t('roleManage.addLinksCount', {
+                              defaultValue: '关联 +{{count}}',
+                              count: additions,
+                            })}
+                      </Button>
+                      {node.children.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={disabled}
+                          onClick={(event) => onExplore(node.id, event.detail === 0)}
+                          aria-label={t('roleManage.exploreChildren', {
+                            defaultValue: '展开下级：{{name}}',
+                            name: node.name,
+                          })}
+                        >
+                          <ChevronRight aria-hidden="true" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </SketchBox>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
   )
 }
 
@@ -1049,80 +1092,22 @@ function RolePermissionEditorContent({
                 })}
               </ul>
             ) : (
-              <div
-                className="role-menu-editor-canvas"
-                role="group"
-                aria-label={t('roleManage.relationshipCanvas', {
-                  defaultValue: '角色与候选菜单的关联图',
-                })}
-              >
-                <svg
-                  viewBox={`0 0 ${GRAPH.width} ${GRAPH.height}`}
-                  className="absolute inset-0 size-full"
-                  aria-hidden="true"
-                >
-                  {visible.map((node, index) => (
-                    <DraftEdge
-                      key={node.id}
-                      y={
-                        visible.length === 1
-                          ? GRAPH.roleY
-                          : 75 + (index / (visible.length - 1)) * 360
-                      }
-                      state={rolePermissionDraftState(draft, node.id)}
-                      enabled={enabled}
-                    />
-                  ))}
-                </svg>
-                <button
-                  type="button"
-                  className="role-menu-editor-node flex items-center justify-center"
-                  data-role="true"
-                  style={{
-                    width: `${(104 / GRAPH.width) * 100}%`,
-                    left: `${(GRAPH.roleX / GRAPH.width) * 100}%`,
-                    top: `${(GRAPH.roleY / GRAPH.height) * 100}%`,
-                  }}
-                  onClick={(event) => navigate(null, event.detail === 0)}
-                  aria-label={t('roleManage.returnToRoleRoot', {
-                    defaultValue: '返回角色关联总览',
-                  })}
-                >
-                  <ShieldCheck className="size-8" strokeWidth={1.5} aria-hidden="true" />
-                </button>
-                <div
-                  className="absolute text-center"
-                  style={{ left: '4%', top: '64%', width: '31%' }}
-                >
-                  <p className="line-clamp-2 break-words text-sm font-semibold">{role.roleName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                    {t('roleManage.draftLinkCount', {
-                      defaultValue: '草稿关联 {{count}} 项',
-                      count: draft.selected.size,
-                    })}
-                  </p>
-                </div>
-                {visible.map((node, index) => (
-                  <CandidateNode
-                    key={node.id}
-                    node={node}
-                    y={
-                      visible.length === 1 ? GRAPH.roleY : 75 + (index / (visible.length - 1)) * 360
-                    }
-                    state={rolePermissionDraftState(draft, node.id)}
-                    selected={selectedId === node.id}
-                    additions={rolePermissionAdditions(catalog, draft, node.id).length}
-                    disabled={disabled}
-                    enabled={enabled}
-                    onSelect={() => {
-                      setSelectedId(node.id)
-                      setInspectorOpen(true)
-                    }}
-                    onExplore={(keyboard) => navigate(node.id, keyboard)}
-                    onToggle={() => toggle(node)}
-                  />
-                ))}
-              </div>
+              <NavBusStage
+                roleName={role.roleName}
+                draftCount={draft.selected.size}
+                visible={visible}
+                catalog={catalog}
+                draft={draft}
+                selectedId={selectedId}
+                disabled={disabled}
+                onReturnRoot={(keyboard) => navigate(null, keyboard)}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  setInspectorOpen(true)
+                }}
+                onExplore={(id, keyboard) => navigate(id, keyboard)}
+                onToggle={toggle}
+              />
             )
           ) : (
             <div

@@ -14,7 +14,7 @@ import { DynaTable, type DynaColumn } from '@/components/dyna'
 import { DynaQueryFeedback } from '@/components/dyna/DynaQueryFeedback'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CoupledMotionGroup, PulseIndicator } from '@/components/motion'
-import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { EntityPeekLink, LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { ResponsiveInspector } from '@/components/spatial'
 import {
   AlertDialog,
@@ -299,19 +299,24 @@ function OnlineUserWorkspace() {
           )}
           {inspected && (
             <div className="space-y-4">
-              <LivingContextBar source={intent?.source} title="关联脉络">
-                <EntityPill
-                  kind="user"
-                  id={inspected.username}
-                  label={`账号档案：${inspected.username}`}
-                />
-                <EntityPill kind="log-login" id={inspected.username} label="登录日志" />
-              </LivingContextBar>
+              {intent?.source && <LivingContextBar source={intent.source} />}
 
               <dl className="grid grid-cols-2 gap-3 rounded-control border border-border-subtle bg-muted/20 p-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">登录账号</dt>
-                  <dd className="mt-1 font-medium">{inspected.username}</dd>
+                  <dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">
+                    <EntityPeekLink
+                      kind="user"
+                      id={inspected.username}
+                      label={inspected.username}
+                    />
+                    <EntityPeekLink
+                      kind="log-login"
+                      id={inspected.username}
+                      label="登录日志"
+                      className="text-xs"
+                    />
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">

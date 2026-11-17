@@ -877,6 +877,7 @@ function RoleBusinessPermissionContent({
               <RoleGrantGraph
                 roleName={opening.role.roleName}
                 nodes={nodes}
+                grants={draft.current}
                 selectedId={selectedId}
                 editing={session !== null}
                 disabled={disabled}

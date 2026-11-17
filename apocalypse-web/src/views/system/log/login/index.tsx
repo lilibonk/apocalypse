@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CoupledMotionGroup } from '@/components/motion'
-import { EntityPill, LivingContextBar } from '@/components/navigation'
+import { EntityPeekLink, EntityPill, LivingContextBar } from '@/components/navigation'
 import { ResponsiveInspector } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -178,7 +178,7 @@ function LoginLogWorkspace() {
 
   return (
     <CoupledMotionGroup activeId={detail ? String(detail.id) : null}>
-      <div className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+      <div data-theme-stage="" className="w-full min-w-0 space-y-4 p-4 sm:p-6">
         <PageHeader
           title={t('common.登录日志', { defaultValue: '登录日志' })}
           view={
@@ -375,19 +375,18 @@ function LoginLogWorkspace() {
             >
               {detail && (
                 <div className="space-y-3">
-                  <LivingContextBar title="关联脉络">
-                    <EntityPill
-                      kind="user"
-                      id={detail.username}
-                      label={`用户档案：${detail.username}`}
-                    />
-                    <EntityPill kind="session" id={detail.username} label="在线会话" />
-                  </LivingContextBar>
-
                   <dl className="grid gap-2.5 text-sm sm:grid-cols-2">
                     <div className="rounded-control border border-border-subtle bg-muted/20 p-2.5">
                       <dt className="text-xs text-muted-foreground">登录账号</dt>
-                      <dd className="mt-0.5 font-medium">{detail.username}</dd>
+                      <dd className="mt-0.5 flex flex-wrap items-center gap-2 font-medium">
+                        <EntityPeekLink kind="user" id={detail.username} label={detail.username} />
+                        <EntityPeekLink
+                          kind="session"
+                          id={detail.username}
+                          label="在线会话"
+                          className="text-xs"
+                        />
+                      </dd>
                     </div>
                     <div className="rounded-control border border-border-subtle bg-muted/20 p-2.5">
                       <dt className="text-xs text-muted-foreground">

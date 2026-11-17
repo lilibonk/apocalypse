@@ -1,7 +1,33 @@
 /* Command palette authorization answers; colours from semantic tokens (light/dark paired). */
 .command-answer {
-  background: color-mix(in oklch, var(--muted) 60%, transparent);
-  border-inline-start: 2px solid var(--insight-blue);
+  background: color-mix(in oklch, var(--card) 82%, var(--muted) 18%);
+  border: 1px solid var(--border-subtle);
+  border-inline-start: 3px solid var(--brand-text);
+}
+
+.oracle-node-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  padding: 0.28rem 0.6rem;
+  font-size: var(--text-xs);
+  color: var(--foreground);
+  transition:
+    border-color var(--motion-duration-feedback) var(--motion-ease-enter),
+    background-color var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.oracle-node-btn:hover {
+  border-color: color-mix(in oklch, var(--brand) 48%, var(--border-subtle));
+  background: color-mix(in oklch, var(--brand) 8%, var(--card));
+}
+
+.oracle-node-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .command-grant-state {
