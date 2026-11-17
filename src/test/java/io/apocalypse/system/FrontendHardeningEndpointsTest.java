@@ -179,7 +179,15 @@ class FrontendHardeningEndpointsTest {
                 throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "用户名已存在");
               }
               return new UserResp(
-                  100L, req.username(), req.nickname(), 1, req.deptId(), null, LocalDateTime.now());
+                  100L,
+                  req.username(),
+                  req.nickname(),
+                  1,
+                  req.deptId(),
+                  null,
+                  List.of(),
+                  List.of(),
+                  LocalDateTime.now());
             })
         .when(proxy)
         .create(any(UserCreateReq.class));

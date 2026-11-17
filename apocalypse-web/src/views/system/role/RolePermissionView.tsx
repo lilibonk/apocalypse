@@ -29,7 +29,7 @@ import { useAuthStore } from '@/stores/auth'
 
 import { RoleGraphPagination, RolePermissionGraph } from './RolePermissionGraph'
 import { RolePermissionEditor } from './RolePermissionEditor'
-import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import { RoleStageSplit as RoleWorkspacePanels } from './RolePanorama'
 import { permissionNodeIcons } from './role-permission.icons'
 import { createRolePermissionQuery } from './role-permission.queries'
 import {
@@ -41,7 +41,7 @@ import {
   type RolePermissionOpening,
   type RolePermissionTarget,
 } from './role-permission.model'
-import './role-permission.css'
+import './role-stage.css'
 
 export function RolePermissionView({
   opening,

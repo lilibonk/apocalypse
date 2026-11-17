@@ -1,45 +1,41 @@
 /**
- * 菜单管理（手写树页）：菜单树（目录/菜单/按钮）的增删改查。
- *
- * 树形展示 + 上级树选择越出标准 CRUD 模式（DynaTable 无树能力），
- * 使用独立页面实现树交互；交互/视觉对齐现有手写页面（views/_dev/user-handwritten.tsx）。
- * 后端契约注意点集中在 ./menu.types.ts（响应字段是 type 而非 menuType；visible/status 已随树返回）。
+ * 菜单管理（V2 A3/A4 树账本 + 检视器）：菜单树（目录/菜单/按钮）的增删改查。
+ * 单行紧凑过滤工具栏 + 5 列清晰缩进树表 + 右侧 ResponsiveInspector 顶置 LivingContextBar。
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Plus,
-  Network,
-  Rows3,
-  Search,
-  TriangleAlert,
-} from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Network, Plus, Rows3, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 
 import { Perm } from '@/components/Perm'
 import { DynaQueryFeedback } from '@/components/dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { useEntityIntent } from '@/components/navigation'
+import { ResponsiveInspector } from '@/components/spatial'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import { usePageView } from '@/hooks/usePageView'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
-import { Label } from '@/components/ui/label'
+import { usePageView } from '@/hooks/usePageView'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
-import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
-import { getMenuTree } from './menu.api'
-import { ROOT_PARENT_ID, normalizeMenuTreeNode, type MenuNode, type MenuType } from './menu.types'
 import { MenuDeleteDialog } from './MenuDeleteDialog'
 import { MenuFormDialog, type MenuFormPayload } from './MenuFormDialog'
 import { MenuTreeTable } from './MenuTreeTable'
-import { MenuTreeWorkspace } from './MenuTreeWorkspace'
+import { MenuInspector, MenuTreeWorkspace } from './MenuTreeWorkspace'
 import { menuAncestorPath } from './menu-workspace.model'
+import { getMenuTree } from './menu.api'
+import {
+  ROOT_PARENT_ID,
+  collectSubtreeIds,
+  normalizeMenuTreeNode,
+  type MenuNode,
+  type MenuType,
+} from './menu.types'
 
 const MENU_VIEWS = ['workspace', 'table'] as const
 
@@ -68,17 +64,19 @@ export default function MenuPage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   return <MenuPageContent key={authorizationEpoch} />
 }
+
 function MenuPageContent() {
   const { t } = useTranslation()
+  const { intent: menuIntent, clearPulse } = useEntityIntent('menu')
   const queryClient = useQueryClient()
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(MENU_VIEWS, 'menuView')
   const view = desktop ? requestedView : 'workspace'
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [tableInspectorOpen, setTableInspectorOpen] = useState(false)
   const [focusAfterSave, setFocusAfterSave] = useState<{ id: string; sequence: number }>()
   const [lastResult, setLastResult] = useState('')
 
-  // 展开集合（默认空 = 只显示根节点）；formPayload 非空即打开新增/编辑对话框
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [formPayload, setFormPayload] = useState<MenuFormPayload | null>(null)
   const [deleting, setDeleting] = useState<MenuNode | null>(null)
@@ -118,22 +116,27 @@ function MenuPageContent() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'menus'] })
 
-  const toggle = (id: string) =>
+  const toggle = (id: string, recursive = false) => {
     setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
+      const target = allNodes.find((item) => item.id === id)
+      const shouldExpand = !next.has(id)
+      const ids =
+        recursive && target
+          ? [...collectSubtreeIds(target)].filter((subId) => expandableIds.includes(subId))
+          : [id]
+      for (const item of ids) {
+        if (shouldExpand) next.add(item)
+        else next.delete(item)
       }
       return next
     })
+  }
 
   const collapseAll = () => setExpanded(new Set())
 
-  // Deep link from the authorization overview: ?menuId= expands its ancestors once and focuses it.
   const [params] = useSearchParams()
-  const urlFocusMenuId = params.get('menuId')
+  const urlFocusMenuId = menuIntent?.focusTargetId ?? menuIntent?.id ?? params.get('menuId')
   const [seenUrlFocus, setSeenUrlFocus] = useState(urlFocusMenuId)
   if (seenUrlFocus !== urlFocusMenuId) {
     setSeenUrlFocus(urlFocusMenuId)
@@ -164,7 +167,8 @@ function MenuPageContent() {
     )
     row?.scrollIntoView({ block: 'center' })
     row?.focus({ preventScroll: true })
-  }, [appliedFocus, appliedSequence, view])
+    if (menuIntent?.triggerPulse) clearPulse()
+  }, [appliedFocus, appliedSequence, clearPulse, menuIntent?.triggerPulse, view])
 
   const selectNode = (id: string) => {
     setSelectedId(id)
@@ -176,12 +180,17 @@ function MenuPageContent() {
     selectedId && allNodes.some((node) => node.id === selectedId)
       ? selectedId
       : (tree[0]?.id ?? null)
+  const selectedNode = effectiveSelectedId
+    ? allNodes.find((node) => node.id === effectiveSelectedId)
+    : undefined
+  const selectedPath = effectiveSelectedId ? menuAncestorPath(tree, effectiveSelectedId) : []
+  const selectedHasChildren = Boolean(selectedNode && selectedNode.children.length > 0)
+  const selectedBranchExpanded = Boolean(selectedNode && expanded.has(selectedNode.id))
 
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t('common.菜单管理', { defaultValue: '菜单管理' })}
-        description={t('system:authorization.menuDescription')}
         view={
           desktop ? (
             <SegmentedControl
@@ -205,11 +214,6 @@ function MenuPageContent() {
         }
       />
 
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <TriangleAlert className="size-3.5 shrink-0" />
-        {t('system:authorization.menuHint')}
-      </p>
-
       {lastResult && (
         <p
           role="status"
@@ -230,52 +234,67 @@ function MenuPageContent() {
           className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
           aria-busy={isFetching}
         >
-          <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 xl:flex-row xl:items-end">
-            <div className="min-w-0 flex-1 space-y-2 xl:max-w-md">
-              <Label htmlFor="menu-search">{t('dyna.querySearch')}</Label>
-              <div className="relative">
+          {/* 单行紧凑过滤工具条 */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+              <div className="relative min-w-52 flex-1 sm:max-w-xs">
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="menu-search"
+                  aria-label={t('dyna.querySearch')}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={t('system:authorization.menuSearch')}
-                  className="pl-9"
+                  className="h-8 pl-9 text-xs"
                 />
               </div>
+              <div
+                role="group"
+                aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
+                className="flex items-center rounded-control bg-muted p-0.5"
+              >
+                {(
+                  [
+                    ['ALL', '全部'],
+                    ['C', '目录'],
+                    ['M', '菜单'],
+                    ['F', '历史按钮'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={typeFilter === value}
+                    onClick={() => setTypeFilter(value)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                      typeFilter === value
+                        ? 'bg-card font-medium text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    {value === 'F'
+                      ? t('system:authorization.legacyButton')
+                      : t(`dyna.${label}`, { defaultValue: label })}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div
-              role="group"
-              aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
-              className="flex items-center rounded-lg bg-muted p-1"
-            >
-              {(
-                [
-                  ['ALL', '全部'],
-                  ['C', '目录'],
-                  ['M', '菜单'],
-                  ['F', '历史按钮'],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={typeFilter === value}
-                  onClick={() => setTypeFilter(value)}
-                  className={cn(
-                    'rounded-md px-3 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                    typeFilter === value
-                      ? 'bg-card font-medium text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                  )}
+
+            <div className="flex flex-wrap items-center gap-1">
+              {selectedNode && selectedHasChildren && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={filtering}
+                  onClick={() => toggle(selectedNode.id, true)}
                 >
-                  {value === 'F'
-                    ? t('system:authorization.legacyButton')
-                    : t(`dyna.${label}`, { defaultValue: label })}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1">
+                  <ChevronsUpDown className="size-4" />
+                  {selectedBranchExpanded
+                    ? t('common.折叠当前分支', { defaultValue: '折叠当前分支' })
+                    : t('common.展开当前分支', { defaultValue: '展开当前分支' })}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -289,6 +308,15 @@ function MenuPageContent() {
                 <ChevronsDownUp className="size-4" />
                 {t('common.全部折叠', { defaultValue: '全部折叠' })}
               </Button>
+              {canShowTree && (
+                <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+                  {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
+                    defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
+                    visible: filteredNodes.length,
+                    total: allNodes.length,
+                  })}
+                </span>
+              )}
             </div>
           </div>
 
@@ -300,6 +328,7 @@ function MenuPageContent() {
               selectedId={effectiveSelectedId}
               loading={isLoading}
               filtering={filtering}
+              source={menuIntent?.source}
               onSelect={selectNode}
               onToggle={toggle}
               onResetFilters={() => {
@@ -311,38 +340,49 @@ function MenuPageContent() {
               onDelete={setDeleting}
             />
           ) : (
-            <MenuTreeTable
-              tree={filteredTree}
-              isLoading={isLoading}
-              collapsed={effectiveCollapsed}
-              onToggle={toggle}
-              highlightId={effectiveSelectedId}
-              onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-              onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-              onDelete={setDeleting}
-              filtering={filtering}
-              onResetFilters={() => {
-                setQuery('')
-                setTypeFilter('ALL')
-              }}
-            />
-          )}
-
-          {canShowTree && (
-            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
-              <span>
-                {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
-                  defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
-                  visible: filteredNodes.length,
-                  total: allNodes.length,
-                })}
-              </span>
-              <span>
-                {t('common.树形数据全量加载，不分页', {
-                  defaultValue: '树形数据全量加载，不分页',
-                })}
-              </span>
-            </footer>
+            <div className="menu-workspace p-4">
+              <div className="menu-workspace-grid">
+                <div className="min-w-0 overflow-hidden rounded-control border border-border-subtle">
+                  <MenuTreeTable
+                    tree={filteredTree}
+                    isLoading={isLoading}
+                    collapsed={effectiveCollapsed}
+                    onToggle={toggle}
+                    onSelect={(id) => {
+                      selectNode(id)
+                      setTableInspectorOpen(true)
+                    }}
+                    highlightId={effectiveSelectedId}
+                    onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+                    onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+                    onDelete={setDeleting}
+                    filtering={filtering}
+                    onResetFilters={() => {
+                      setQuery('')
+                      setTypeFilter('ALL')
+                    }}
+                  />
+                </div>
+                <ResponsiveInspector
+                  title={t('system:menuWorkspace.details')}
+                  context={selectedNode?.menuName}
+                  open={tableInspectorOpen}
+                  onOpenChange={setTableInspectorOpen}
+                  mode="auto"
+                  className="menu-workspace-aside min-w-0"
+                >
+                  <MenuInspector
+                    node={selectedNode}
+                    path={selectedPath}
+                    source={menuIntent?.source}
+                    onSelect={selectNode}
+                    onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+                    onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+                    onDelete={setDeleting}
+                  />
+                </ResponsiveInspector>
+              </div>
+            </div>
           )}
         </section>
       )}

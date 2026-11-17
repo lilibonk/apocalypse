@@ -63,7 +63,6 @@ function DictWorkspace() {
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
         title={t('common.字典管理', { defaultValue: '字典管理' })}
-        description={t('common.字典类型与取值', { defaultValue: '字典类型与取值' })}
         view={
           desktop ? (
             <SegmentedControl

@@ -15,21 +15,26 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { CalendarEvent, EventContentCommand } from '../calendar.api'
+import { toErrorMessage } from '../calendar.format'
 import {
   CalendarPageFrame,
-  CalendarTrace,
-  CalendarPicker,
   CalendarPagination,
+  CalendarPicker,
   CalendarQueryStatus,
-  ManageCalendarsLink,
+  CalendarTrace,
   DataEmpty,
   InlineError,
+  ManageCalendarsLink,
   StateBadge,
 } from '../calendar.ui'
-import { toErrorMessage } from '../calendar.format'
 import { EventEditor } from '../event-editor'
-import { CalendarConfirm } from '../calendar-confirm'
+import { useCalendarDenial } from '../use-calendar-denial'
+
+function resolveEventDateKey(event: CalendarEvent): string {
+  return event.content.startDate || event.content.startLocal?.slice(0, 10) || '—'
+}
 
 function ManagedEventsPage() {
   const { t } = useTranslation('calendar')
@@ -137,12 +142,26 @@ function ManagedEventsPage() {
     },
   })
 
+  const agendaGroups = useMemo(() => {
+    const groups = new Map<string, CalendarEvent[]>()
+    for (const event of eventsQuery.data?.list ?? []) {
+      const dateKey = resolveEventDateKey(event)
+      const bucket = groups.get(dateKey)
+      if (bucket) {
+        bucket.push(event)
+      } else {
+        groups.set(dateKey, [event])
+      }
+    }
+    return [...groups.entries()]
+  }, [eventsQuery.data?.list])
+
   return (
     <CalendarPageFrame
       title={t('managedEvents.title')}
       description={t('managedEvents.description')}
       actions={
-        <div className="flex w-full flex-wrap items-end gap-3">
+        <div className="flex w-full flex-wrap items-end gap-2.5">
           <CalendarPicker
             calendars={managedCalendars}
             value={calendarId}
@@ -153,7 +172,7 @@ function ManagedEventsPage() {
             roles={['EDITOR', 'PUBLISHER']}
           />
           {selectedCalendar?.currentUserRole && (
-            <Badge variant="outline" className="mb-2">
+            <Badge variant="outline" className="mb-1.5">
               {t(`roles.${selectedCalendar.currentUserRole}`)}
             </Badge>
           )}
@@ -172,132 +191,168 @@ function ManagedEventsPage() {
         loading={calendarsQuery.isLoading || eventsQuery.isLoading}
         fetching={eventsQuery.isFetching}
       />
-      <div className="space-y-3">
-        {(eventsQuery.data?.list ?? []).map((event) => (
-          <Card key={event.id} className="gap-4 py-4">
-            <CardHeader className="px-4 sm:px-6">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                <div className="min-w-0">
-                  <CardTitle className="truncate">{event.content.title}</CardTitle>
-                  <CardDescription>
-                    {eventTimeText(
-                      event,
-                      t('eventEditor.allDayRange', {
-                        start: event.content.startDate,
-                        end: event.content.endDateExclusive,
-                      }),
-                    )}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <StateBadge value={event.revisionState} />
-                  <span className="text-sm font-medium">
-                    {t('managedEvents.revision', { number: event.revisionNo })}
-                  </span>
-                  <StateBadge value={event.state} />
-                  <Badge variant="outline">{t(`sourceKinds.${event.sourceKind}`)}</Badge>
-                </div>
+
+      <div data-slot="calendar-agenda-stream" className="space-y-4">
+        {agendaGroups.map(([dateKey, dayEvents]) => (
+          <section
+            key={dateKey}
+            aria-label={dateKey}
+            className="grid items-start gap-3 md:grid-cols-[8.5rem_minmax(0,1fr)]"
+          >
+            <div className="sticky top-4 h-fit rounded-control border border-border-subtle bg-muted/35 px-3 py-2">
+              <div className="font-mono text-xs font-semibold text-foreground tabular-nums">
+                {dateKey}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 sm:px-6">
-              <div className="grid gap-3 text-sm sm:grid-cols-3">
-                <div>
-                  <div className="text-xs text-muted-foreground">{t('managedEvents.location')}</div>
-                  <div className="mt-1">{event.content.location || '—'}</div>
-                </div>
-                <div className="sm:col-span-2">
-                  <CalendarTrace>
-                    <div className="text-xs text-muted-foreground">
-                      {t('managedEvents.contentHash')}
+              <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                {dayEvents.length} 项托管日程
+              </div>
+            </div>
+            <div className="space-y-3">
+              {dayEvents.map((event) => (
+                <Card key={event.id} className="gap-3.5 py-3.5">
+                  <CardHeader className="px-4 sm:px-6">
+                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate">{event.content.title}</CardTitle>
+                        <CardDescription>
+                          {eventTimeText(
+                            event,
+                            t('eventEditor.allDayRange', {
+                              start: event.content.startDate,
+                              end: event.content.endDateExclusive,
+                            }),
+                          )}
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <StateBadge value={event.revisionState} />
+                        <span className="text-sm font-medium">
+                          {t('managedEvents.revision', { number: event.revisionNo })}
+                        </span>
+                        <StateBadge value={event.state} />
+                        <Badge variant="outline">{t(`sourceKinds.${event.sourceKind}`)}</Badge>
+                      </div>
                     </div>
-                    <div className="mt-1 truncate font-mono text-xs">{event.contentHash}</div>
-                    <p>
-                      {t('workspace.version', { version: event.version })} ·{' '}
-                      {t('managedEvents.revisionVersion', { version: event.revisionVersion })}
-                    </p>
-                  </CalendarTrace>
-                </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-                {event.sourceKind === 'USER' && event.state !== 'CANCELLED' && (
-                  <Perm perm="calendar:managed-event:edit">
-                    <Button variant="outline" size="sm" onClick={() => setEditor(event)}>
-                      <Pencil />
-                      {t('managedEvents.editDraft')}
-                    </Button>
-                  </Perm>
-                )}
-                {event.revisionState === 'DRAFT' && event.sourceKind === 'USER' && (
-                  <>
-                    <Perm perm="calendar:managed-event:edit">
-                      <EventActionConfirm
-                        event={event}
-                        calendarName={selectedCalendar?.name ?? ''}
-                        action="discard"
-                        pending={actionMutation.isPending}
-                        onConfirm={() => actionMutation.mutate({ event, action: 'discard' })}
-                        trigger={
-                          <Button variant="outline" size="sm" disabled={actionMutation.isPending}>
-                            <Trash2 />
-                            {t('managedEvents.discard')}
+                  </CardHeader>
+                  <CardContent className="space-y-3 px-4 sm:px-6">
+                    <div className="grid gap-3 text-sm sm:grid-cols-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          {t('managedEvents.location')}
+                        </div>
+                        <div className="mt-1">{event.content.location || '—'}</div>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <CalendarTrace>
+                          <div className="text-xs text-muted-foreground">
+                            {t('managedEvents.contentHash')}
+                          </div>
+                          <div className="mt-1 truncate font-mono text-xs">{event.contentHash}</div>
+                          <p>
+                            {t('workspace.version', { version: event.version })} ·{' '}
+                            {t('managedEvents.revisionVersion', {
+                              version: event.revisionVersion,
+                            })}
+                          </p>
+                        </CalendarTrace>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+                      {event.sourceKind === 'USER' && event.state !== 'CANCELLED' && (
+                        <Perm perm="calendar:managed-event:edit">
+                          <Button variant="outline" size="sm" onClick={() => setEditor(event)}>
+                            <Pencil />
+                            {t('managedEvents.editDraft')}
                           </Button>
-                        }
-                      />
-                    </Perm>
-                    {canPublish && (
-                      <Perm perm="calendar:managed-event:publish">
-                        <EventActionConfirm
-                          event={event}
-                          calendarName={selectedCalendar?.name ?? ''}
-                          action="publish"
-                          pending={publishMutation.isPending}
-                          onConfirm={() => publishMutation.mutate(event)}
-                          trigger={
-                            <Button size="sm" disabled={publishMutation.isPending}>
-                              <Send />
-                              {t('managedEvents.publish')}
-                            </Button>
-                          }
-                        />
-                      </Perm>
-                    )}
-                  </>
-                )}
-                {event.revisionState === 'PUBLISHED' && canPublish && (
-                  <Perm perm="calendar:managed-event:publish">
-                    <EventActionConfirm
-                      event={event}
-                      calendarName={selectedCalendar?.name ?? ''}
-                      action="withdraw"
-                      pending={actionMutation.isPending}
-                      onConfirm={() => actionMutation.mutate({ event, action: 'withdraw' })}
-                      trigger={
-                        <Button variant="outline" size="sm" disabled={actionMutation.isPending}>
-                          <Undo2 />
-                          {t('managedEvents.withdraw')}
-                        </Button>
-                      }
-                    />
-                    <EventActionConfirm
-                      event={event}
-                      calendarName={selectedCalendar?.name ?? ''}
-                      action="cancel"
-                      pending={actionMutation.isPending}
-                      onConfirm={() => actionMutation.mutate({ event, action: 'cancel' })}
-                      trigger={
-                        <Button variant="destructive" size="sm" disabled={actionMutation.isPending}>
-                          <Ban />
-                          {t('managedEvents.cancel')}
-                        </Button>
-                      }
-                    />
-                  </Perm>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                        </Perm>
+                      )}
+                      {event.revisionState === 'DRAFT' && event.sourceKind === 'USER' && (
+                        <>
+                          <Perm perm="calendar:managed-event:edit">
+                            <EventActionConfirm
+                              event={event}
+                              calendarName={selectedCalendar?.name ?? ''}
+                              action="discard"
+                              pending={actionMutation.isPending}
+                              onConfirm={() => actionMutation.mutate({ event, action: 'discard' })}
+                              trigger={
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={actionMutation.isPending}
+                                >
+                                  <Trash2 />
+                                  {t('managedEvents.discard')}
+                                </Button>
+                              }
+                            />
+                          </Perm>
+                          {canPublish && (
+                            <Perm perm="calendar:managed-event:publish">
+                              <EventActionConfirm
+                                event={event}
+                                calendarName={selectedCalendar?.name ?? ''}
+                                action="publish"
+                                pending={publishMutation.isPending}
+                                onConfirm={() => publishMutation.mutate(event)}
+                                trigger={
+                                  <Button size="sm" disabled={publishMutation.isPending}>
+                                    <Send />
+                                    {t('managedEvents.publish')}
+                                  </Button>
+                                }
+                              />
+                            </Perm>
+                          )}
+                        </>
+                      )}
+                      {event.revisionState === 'PUBLISHED' && canPublish && (
+                        <Perm perm="calendar:managed-event:publish">
+                          <EventActionConfirm
+                            event={event}
+                            calendarName={selectedCalendar?.name ?? ''}
+                            action="withdraw"
+                            pending={actionMutation.isPending}
+                            onConfirm={() => actionMutation.mutate({ event, action: 'withdraw' })}
+                            trigger={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={actionMutation.isPending}
+                              >
+                                <Undo2 />
+                                {t('managedEvents.withdraw')}
+                              </Button>
+                            }
+                          />
+                          <EventActionConfirm
+                            event={event}
+                            calendarName={selectedCalendar?.name ?? ''}
+                            action="cancel"
+                            pending={actionMutation.isPending}
+                            onConfirm={() => actionMutation.mutate({ event, action: 'cancel' })}
+                            trigger={
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={actionMutation.isPending}
+                              >
+                                <Ban />
+                                {t('managedEvents.cancel')}
+                              </Button>
+                            }
+                          />
+                        </Perm>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
+
       {calendarsQuery.isSuccess && managedCalendars.length === 0 && (
         <div className="space-y-3">
           <DataEmpty>{t('managedEvents.noEditableCalendar')}</DataEmpty>
@@ -401,4 +456,3 @@ function EventActionConfirm({
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={ManagedEventsPage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

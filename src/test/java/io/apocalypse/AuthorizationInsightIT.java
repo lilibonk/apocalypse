@@ -143,6 +143,23 @@ class AuthorizationInsightIT extends AbstractIntegrationTest {
     assertThat(overview.get("usersVisible").asBoolean()).isTrue();
     List<String> withoutRoles = names(overview.get("usersWithoutRoles"));
     assertThat(withoutRoles).contains(PREFIX + "no_role").doesNotContain(PREFIX + "member_b");
+
+    Map<Long, JsonNode> topologyByRole = new HashMap<>();
+    overview
+        .get("roleTopology")
+        .forEach(node -> topologyByRole.put(node.get("roleId").asLong(), node));
+    JsonNode activeNode = topologyByRole.get(R_ACTIVE);
+    assertThat(activeNode.get("roleId").isString()).isTrue();
+    assertThat(activeNode.get("memberCount").asLong()).isEqualTo(2);
+    assertThat(activeNode.get("visibleMemberCount").asLong()).isEqualTo(1);
+    assertThat(names(activeNode.get("sampleMembers"))).containsExactly(PREFIX + "member_a");
+    JsonNode operatorNode = topologyByRole.get(R_OPERATOR);
+    Map<String, JsonNode> operatorDomains = new HashMap<>();
+    operatorNode
+        .get("domainAccess")
+        .forEach(domain -> operatorDomains.put(domain.get("domainKey").asText(), domain));
+    assertThat(operatorDomains.get("identity_org").get("accessLevel").asText()).isEqualTo("READ");
+    assertThat(operatorDomains.get("rbac_nav").get("accessLevel").asText()).isEqualTo("READ");
   }
 
   @Test
@@ -153,6 +170,30 @@ class AuthorizationInsightIT extends AbstractIntegrationTest {
     assertThat(overview.get("roleCount").asLong()).isGreaterThanOrEqualTo(7);
     assertThat(overview.get("permissionCount").asLong()).isPositive();
     assertThat(overview.get("navigationCount").asLong()).isPositive();
+    Map<String, JsonNode> domains = new HashMap<>();
+    overview
+        .get("businessDomains")
+        .forEach(domain -> domains.put(domain.get("domainKey").asText(), domain));
+    assertThat(domains.keySet())
+        .contains("identity_org", "rbac_nav", "runtime_config", "security_audit", "calendar");
+    assertThat(domains.get("identity_org").get("totalPermissions").asLong()).isPositive();
+
+    Map<Long, JsonNode> topologyByRole = new HashMap<>();
+    overview
+        .get("roleTopology")
+        .forEach(node -> topologyByRole.put(node.get("roleId").asLong(), node));
+    JsonNode activeNode = topologyByRole.get(R_ACTIVE);
+    assertThat(activeNode.get("roleId").isString()).isTrue();
+    assertThat(activeNode.get("memberCount").asLong()).isEqualTo(2);
+    assertThat(activeNode.get("visibleMemberCount").asLong()).isEqualTo(2);
+    assertThat(names(activeNode.get("sampleMembers")))
+        .contains(PREFIX + "member_a", PREFIX + "member_b");
+    assertThat(activeNode.get("domainAccess")).hasSize(1);
+    assertThat(activeNode.get("domainAccess").get(0).get("domainKey").asText())
+        .isEqualTo("identity_org");
+    assertThat(activeNode.get("domainAccess").get(0).get("accessLevel").asText())
+        .isEqualTo("GOVERN");
+    assertThat(activeNode.get("domainAccess").get(0).get("writeGrantCount").asLong()).isEqualTo(1);
     Map<Long, String> idle = new HashMap<>();
     for (JsonNode role : overview.get("idleRoles")) {
       idle.put(role.get("roleId").asLong(), role.get("reason").asText());

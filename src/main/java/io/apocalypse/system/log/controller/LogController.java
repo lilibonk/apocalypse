@@ -13,6 +13,9 @@ import io.apocalypse.system.log.service.LogQueryService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
+import java.time.LocalDateTime;
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,7 +36,7 @@ public class LogController {
 
   private final LogInsightService logInsightService;
 
-  /** 登录日志分页。 */
+  /** 登录日志分页（支持热力格星期×小时、成败状态与时间窗口联动下钻）。 */
   @GetMapping("/login")
   @PreAuthorize("hasAuthority('system:log:login')")
   public PageResult<LoginLogResp> pageLoginLog(
@@ -42,8 +45,26 @@ public class LogController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String keyword) {
-    return logQueryService.pageLoginLog(page, size, keyword);
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "登录结果仅支持 0/1")
+          @Max(value = 1, message = "登录结果仅支持 0/1")
+          Integer success,
+      @RequestParam(required = false)
+          @Min(value = 1, message = "星期仅支持 1..7")
+          @Max(value = 7, message = "星期仅支持 1..7")
+          Integer isoWeekday,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "小时仅支持 0..23")
+          @Max(value = 23, message = "小时仅支持 0..23")
+          Integer hour,
+      @RequestParam(required = false) LogInsightRange range,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          LocalDateTime bucketFrom,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          LocalDateTime bucketTo) {
+    return logQueryService.pageLoginLog(
+        page, size, keyword, success, isoWeekday, hour, range, bucketFrom, bucketTo);
   }
 
   /** 登录日志周期统计（服务端全量聚合）。 */
@@ -67,7 +88,7 @@ public class LogController {
     return logInsightService.operInsights(range);
   }
 
-  /** 操作日志分页。 */
+  /** 操作日志分页（支持业务类型、成败状态与时间桶脉冲联动下钻）。 */
   @GetMapping("/oper")
   @PreAuthorize("hasAuthority('system:log:oper')")
   public PageResult<OperLogResp> pageOperLog(
@@ -76,7 +97,18 @@ public class LogController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String keyword) {
-    return logQueryService.pageOperLog(page, size, keyword);
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String businessType,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "操作状态仅支持 0/1")
+          @Max(value = 1, message = "操作状态仅支持 0/1")
+          Integer status,
+      @RequestParam(required = false) LogInsightRange range,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          LocalDateTime bucketFrom,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          LocalDateTime bucketTo) {
+    return logQueryService.pageOperLog(
+        page, size, keyword, businessType, status, range, bucketFrom, bucketTo);
   }
 }

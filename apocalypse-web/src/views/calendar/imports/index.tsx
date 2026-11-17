@@ -11,27 +11,29 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
-import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
+import { MetricValue } from '@/components/motion'
+import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 import type { DataImportRecord, DataImportState, DataImportTarget } from '../calendar.api'
+import { calendarValueText, toErrorMessage } from '../calendar.format'
 import {
   CalendarPageFrame,
-  CalendarTrace,
   CalendarPagination,
   CalendarQueryStatus,
+  CalendarTrace,
   DataEmpty,
   InlineError,
   StateBadge,
 } from '../calendar.ui'
-import { calendarValueText, toErrorMessage } from '../calendar.format'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 function nextYear(): number {
   return new Date().getFullYear() + 1
@@ -319,15 +321,13 @@ function DataImportPage() {
       {(importsQuery.error || calendarsQuery.error) && (
         <InlineError message={toErrorMessage(importsQuery.error ?? calendarsQuery.error)} />
       )}
+      <ImportStages state={workspace === 'history' ? selected?.state : undefined} />
       <Tabs value={workspace} onValueChange={setWorkspace} className="gap-4">
         <TabsList>
           <TabsTrigger value="new">{t('imports.newImport')}</TabsTrigger>
           <TabsTrigger value="history">{t('imports.history')}</TabsTrigger>
         </TabsList>
         <TabsContent value="new" className="max-w-3xl">
-          <div className="mb-4">
-            <ImportStages />
-          </div>
           <Card className="gap-4 py-4">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle>{t('imports.newImport')}</CardTitle>
@@ -549,13 +549,17 @@ function DataImportPage() {
               </Perm>
             </div>
           ) : (
-            <div className="grid items-start gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-              <Card className="gap-4 py-4">
-                <CardHeader className="px-4 sm:px-6">
-                  <CardTitle>{t('imports.history')}</CardTitle>
-                  <CardDescription>{t('imports.historyHint')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 px-4 sm:px-6">
+            <StickyCompactRailLayout
+              railLabel={t('imports.history')}
+              railWidth="locator"
+              railHeader={
+                <div className="px-1 pb-1">
+                  <h2 className="text-sm font-semibold">{t('imports.history')}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('imports.historyHint')}</p>
+                </div>
+              }
+              railContent={
+                <div className="space-y-1.5">
                   {(importsQuery.data?.list ?? []).map((value) => (
                     <button
                       key={value.id}
@@ -566,7 +570,7 @@ function DataImportPage() {
                         setSourceAttested(false)
                         setReviewNote('')
                       }}
-                      className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/40 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
+                      className="w-full rounded-md border border-border p-2.5 text-left transition-colors hover:bg-muted/40 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
                     >
                       <span className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium">{value.importKey}</span>
@@ -580,36 +584,39 @@ function DataImportPage() {
                   {importsQuery.isSuccess && importsQuery.data.list.length === 0 && (
                     <DataEmpty>{t('workspace.emptyPage')}</DataEmpty>
                   )}
-                  {importsQuery.data && (
-                    <CalendarPagination
-                      page={historyPage}
-                      size={20}
-                      total={importsQuery.data.total}
-                      fetching={
-                        importsQuery.isFetching ||
-                        uploadMutation.isPending ||
-                        validateMutation.isPending ||
-                        reviewMutation.isPending ||
-                        publishMutation.isPending ||
-                        rejectMutation.isPending
-                      }
-                      onPage={(page) => {
-                        setHistoryPage(page)
-                        setSelectedId('')
-                        setSourceAttested(false)
-                        setReviewNote('')
-                      }}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+              }
+              railFooter={
+                importsQuery.data ? (
+                  <CalendarPagination
+                    page={historyPage}
+                    size={20}
+                    total={importsQuery.data.total}
+                    fetching={
+                      importsQuery.isFetching ||
+                      uploadMutation.isPending ||
+                      validateMutation.isPending ||
+                      reviewMutation.isPending ||
+                      publishMutation.isPending ||
+                      rejectMutation.isPending
+                    }
+                    onPage={(page) => {
+                      setHistoryPage(page)
+                      setSelectedId('')
+                      setSourceAttested(false)
+                      setReviewNote('')
+                    }}
+                  />
+                ) : undefined
+              }
+              stageClassName="space-y-5"
+            >
               {!selected ? (
                 (importsQuery.data?.list.length ?? 0) > 0 && (
                   <DataEmpty>{t('imports.selectImport')}</DataEmpty>
                 )
               ) : (
                 <div className="space-y-5">
-                  <ImportStages state={selected.state} />
                   <Card className="gap-4 py-4">
                     <CardHeader className="px-4 sm:px-6">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -648,7 +655,7 @@ function DataImportPage() {
                         <div className="text-xs text-muted-foreground">
                           {t('imports.normalizedHash')}
                         </div>
-                        <div className="mt-1 break-all font-mono text-xs">
+                        <div className="mt-1 font-mono text-xs break-all">
                           {selected.normalizedPayloadHash ?? '—'}
                         </div>
                       </CalendarTrace>
@@ -781,7 +788,7 @@ function DataImportPage() {
                   )}
                 </div>
               )}
-            </div>
+            </StickyCompactRailLayout>
           )}
         </TabsContent>
       </Tabs>
@@ -810,14 +817,14 @@ function ImportStages({ state }: { state?: DataImportState }) {
               ? 4
               : -1
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <ol className="grid gap-2 sm:grid-cols-4" aria-label={t('imports.process')}>
         {stages.map((stage, index) => (
           <li
             key={stage}
             aria-current={index === active ? 'step' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-md border border-border p-3 text-sm transition-colors',
+              'flex items-center gap-2 rounded-md border border-border p-2.5 text-sm transition-colors',
               index === active && 'border-primary/40 bg-primary/5',
               index < active && 'bg-muted/40',
             )}
@@ -865,7 +872,7 @@ function FileSummary({
         </Button>
       </div>
       <CalendarTrace>
-        <div className="break-all font-mono text-xs">SHA-256: {file.sha256}</div>
+        <div className="font-mono text-xs break-all">SHA-256: {file.sha256}</div>
       </CalendarTrace>
     </div>
   )
@@ -886,7 +893,7 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
         {summaries.map(([label, count]) => (
           <div key={label} className="rounded-md border border-border p-2 text-center">
             <div className="text-lg font-semibold">
-              <AnimatedNumber value={count} />
+              <MetricValue value={count} variant="tabular" />
             </div>
             <div className="text-xs text-muted-foreground">{t(`changes.${label}`)}</div>
           </div>
@@ -903,34 +910,50 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
             </tr>
           </thead>
           <tbody>
-            {value.items.map((item) => (
-              <tr key={item.date} className="border-t border-border">
-                <td className="px-3 py-2 font-mono">{item.date}</td>
-                <td className="px-3 py-2">
-                  <Badge variant="outline">{t(`changes.${item.changeType}`)}</Badge>
-                </td>
-                <td className="px-3 py-2">
-                  {item.oldClassification
-                    ? calendarValueText(item.oldClassification)
-                    : item.oldAction
-                      ? t(`overrideActions.${item.oldAction}`)
-                      : '—'}{' '}
-                  {item.oldName ?? ''}
-                </td>
-                <td className="px-3 py-2">
-                  {item.newClassification
-                    ? calendarValueText(item.newClassification)
-                    : item.newAction
-                      ? t(`overrideActions.${item.newAction}`)
-                      : '—'}{' '}
-                  {item.newName ?? ''}
-                </td>
-              </tr>
-            ))}
+            {value.items.map((item) => {
+              const isModified = item.changeType === 'MODIFIED'
+              const isAdded = item.changeType === 'ADDED'
+              return (
+                <tr key={item.date} className="border-t border-border">
+                  <td className="px-3 py-2 font-mono">{item.date}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant={isAdded ? 'success' : isModified ? 'default' : 'outline'}>
+                      {t(`changes.${item.changeType}`)}
+                    </Badge>
+                  </td>
+                  <td
+                    className={cn(
+                      'px-3 py-2 text-muted-foreground',
+                      isModified && 'draft-original',
+                    )}
+                  >
+                    {item.oldClassification
+                      ? calendarValueText(item.oldClassification)
+                      : item.oldAction
+                        ? t(`overrideActions.${item.oldAction}`)
+                        : '—'}{' '}
+                    {item.oldName ?? ''}
+                  </td>
+                  <td
+                    className={cn(
+                      'px-3 py-2 font-medium',
+                      (isModified || isAdded) && 'text-brand-text',
+                    )}
+                  >
+                    {item.newClassification
+                      ? calendarValueText(item.newClassification)
+                      : item.newAction
+                        ? t(`overrideActions.${item.newAction}`)
+                        : '—'}{' '}
+                    {item.newName ?? ''}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      <div className="break-all font-mono text-xs text-muted-foreground">
+      <div className="font-mono text-xs break-all text-muted-foreground">
         {t('technicalDetails')}: {value.targetContentHash}
       </div>
     </>
@@ -940,4 +963,3 @@ function DiffPanel({ value }: { value: NonNullable<DataImportRecord['diff']> }) 
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={DataImportPage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

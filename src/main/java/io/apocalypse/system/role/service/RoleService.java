@@ -11,14 +11,20 @@ import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.role.dto.request.RoleSaveReq;
 import io.apocalypse.system.role.dto.response.RoleResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
+import io.apocalypse.system.role.dto.response.UserRoleSummaryResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 import io.apocalypse.system.role.mapper.SysRoleMapper;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
@@ -71,7 +77,9 @@ public class RoleService {
 
   /** 更新角色。 */
   @Transactional
-  @CacheEvict(cacheNames = "userPerms", allEntries = true)
+  @CacheEvict(
+      cacheNames = {"userPerms", "user"},
+      allEntries = true)
   public void update(Long id, RoleSaveReq req) {
     dataScopeService.requireGlobalWrite("system:role:edit");
     long beforeRevision =
@@ -95,9 +103,11 @@ public class RoleService {
         roleConvert.toResp(entity, afterRevision));
   }
 
-  /** 删除角色（逻辑删，同时清空角色-菜单关联）。 */
+  /** 删除角色（逻辑删，同时清空角色-成员关联）。 */
   @Transactional
-  @CacheEvict(cacheNames = "userPerms", allEntries = true)
+  @CacheEvict(
+      cacheNames = {"userPerms", "user"},
+      allEntries = true)
   public void delete(Long id) {
     dataScopeService.requireGlobalWrite("system:role:remove");
     SysRoleEntity entity = requireById(id);
@@ -115,18 +125,6 @@ public class RoleService {
         afterRevision,
         Map.of("role", before, "deleted", false, "members", beforeMembers),
         Map.of("role", before, "deleted", true, "members", List.of()));
-  }
-
-  /** 重置角色菜单（授权）。 */
-  @Transactional
-  @CacheEvict(cacheNames = "userPerms", allEntries = true)
-  public void assignMenus(Long roleId, List<Long> menuIds) {
-    throw legacyProtocolError();
-  }
-
-  /** 查询角色当前菜单授权，用于授权修改前的安全回显。 */
-  public List<Long> menuIds(Long roleId) {
-    throw legacyProtocolError();
   }
 
   /** 分页查询角色下的用户。 */
@@ -147,7 +145,9 @@ public class RoleService {
 
   /** 整体替换角色下的用户。用户角色变化影响权限串，清空 userPerms 缓存。 */
   @Transactional
-  @CacheEvict(cacheNames = "userPerms", allEntries = true)
+  @CacheEvict(
+      cacheNames = {"userPerms", "user"},
+      allEntries = true)
   public void assignUsers(Long roleId, List<Long> userIds) {
     dataScopeService.requireGlobalWrite("system:role:edit");
     requireById(roleId);
@@ -207,6 +207,33 @@ public class RoleService {
     return sysRoleMapper.selectByUserId(userId).stream().map(SysRoleEntity::getRoleKey).toList();
   }
 
+  /**
+   * 批量查询多个用户拥有的未删除角色摘要（单条 SQL 关联查询，消除逐行 N+1）。
+   *
+   * @param userIds 目标用户 ID 集合
+   * @return userId 到角色摘要列表的映射
+   */
+  public Map<Long, List<UserRoleSummaryResp>> mapRoleSummariesByUserIds(Collection<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return Map.of();
+    }
+    Set<Long> validIds = userIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+    if (validIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, List<UserRoleSummaryResp>> grouped = new HashMap<>();
+    for (SysRoleMapper.UserRoleRow row : sysRoleMapper.selectRoleSummariesByUserIds(validIds)) {
+      grouped
+          .computeIfAbsent(row.userId(), ignored -> new ArrayList<>())
+          .add(
+              new UserRoleSummaryResp(
+                  row.id(), row.roleName(), row.roleKey(), row.status(), row.dataScope()));
+    }
+    Map<Long, List<UserRoleSummaryResp>> result = new HashMap<>();
+    grouped.forEach((k, v) -> result.put(k, List.copyOf(v)));
+    return result;
+  }
+
   /** 用户授权前批量校验角色主键。 */
   public void requireValidRoleIds(List<Long> roleIds) {
     if (!roleIds.isEmpty() && sysRoleMapper.selectBatchIds(roleIds).size() != roleIds.size()) {
@@ -220,10 +247,6 @@ public class RoleService {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "角色不存在");
     }
     return entity;
-  }
-
-  private static BizException legacyProtocolError() {
-    return new BizException(ErrorCode.PARAM_INVALID.getCode(), "客户端需升级，请重新加载");
   }
 
   private static void applyReq(SysRoleEntity entity, RoleSaveReq req) {

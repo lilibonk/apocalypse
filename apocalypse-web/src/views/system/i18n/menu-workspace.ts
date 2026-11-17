@@ -35,6 +35,7 @@ export const menuWorkspaceCopy = {
     select: '选择 {{name}}',
     expand: '展开 {{name}}',
     collapse: '收起 {{name}}',
+    jumpToRoleNav: '角色导航分配',
   },
   en: {
     view: 'Menu view',
@@ -72,5 +73,6 @@ export const menuWorkspaceCopy = {
     select: 'Select {{name}}',
     expand: 'Expand {{name}}',
     collapse: 'Collapse {{name}}',
+    jumpToRoleNav: 'Role navigation grants',
   },
 }

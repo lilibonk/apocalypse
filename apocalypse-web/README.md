@@ -46,13 +46,7 @@ Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/�
 
 命令面板输入 `?` 进入规则查询（非 AI），结果可以携带对象 ID 与搜索条件进入合法页面。目标页重新读取当前授权范围，不信任路由中的业务数据或授权信息。模块可在 `src/views/**/command-questions.tsx` 默认导出 `CommandQuestionProvider` 注册问题，构建时自动发现；描述对象常驻，面板组件应懒加载。页面草稿经 `usePageDraft` 只保存在内存中，绑定当前身份与授权代次，关闭含草稿的页签前会确认。
 
-页面统一使用 `PageHeader`（标题、说明、视图切换、操作）；视图、关系与时间范围切换使用 `SegmentedControl`。DynaPage 的 `workspace` 入口将同一分页查询、筛选、选择和原生行操作交给页面组织对象视图，表单与写入仍由 DynaPage 管理；桌面可切换“工作区 | 列表”（URL `view=`），不清空当前查询和编辑态。原 `overview` 入口继续支持“列表 | 概览”；页内分区里的 DynaPage 用 `embedded` 只显示工具条。传给 DynaTable 的回调需保持稳定（`useCallback` / `useStableCallback`），打开弹层时只重渲被标记的来源行。
-
-## 本地交互样板
-
-运行 `pnpm dev` 后，可打开 `http://localhost:5173/test-fixtures/motion-studies.html`，体验工作台卡片和权限图谱。工作台支持时间范围切换与登录/活动明细；图谱支持角色选择、分组展开、权限搜索与列表视图。预览提供明暗主题、密度、语言和动画开关，并遵循系统减少动态设置。
-
-该入口仅用于开发预览，使用明确标注的本地示例数据，无需后端，也不读取或修改真实授权。它不注册生产菜单，不进入默认生产构建；实现位于 `src/views/_dev/motion-studies/`，使用既有 CSS 与 Motion。
+页面统一使用 `PageHeader`（标题、说明、视图切换、操作）；视图、关系与时间范围切换使用 `SegmentedControl`。空间工作台直接调用 `useDynaController`（headless：分页查询、筛选、选择、权限与原生行操作）并组合 `components/spatial` 骨架与 `DynaDialogs`；桌面可切换“工作区 | 列表”（URL `view=`），不清空当前查询和编辑态。跨页对象关联使用 `EntityPill`（`components/navigation/`）携带上下文直达目标工作区。标准表格页仍可用 `DynaPage`；页内分区里的 DynaPage 用 `embedded` 只显示工具条。传给 DynaTable 的回调需保持稳定（`useCallback` / `useStableCallback`），打开弹层时只重渲被标记的来源行。
 
 当前界面采用苹果应用式层级与 mint 品牌：中性内容底色、轻量导航材质、明暗主题、固定正文的两档密度与整层浮层动效。标准 CRUD 继续使用 DynaLayer，查询失败与成功空态分别表达；视觉和状态规则见[设计定义](src/design/DEFINITION.md)。
 

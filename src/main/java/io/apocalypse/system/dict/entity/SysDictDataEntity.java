@@ -19,6 +19,15 @@ public class SysDictDataEntity extends BaseEntity {
   /** 状态：停用。 */
   public static final int STATUS_DISABLED = 0;
 
+  /** 默认色卡令牌：中性。 */
+  public static final String DEFAULT_TAG_TONE = "NEUTRAL";
+
+  /** 默认项标记：是。 */
+  public static final int IS_DEFAULT_YES = 1;
+
+  /** 默认项标记：否。 */
+  public static final int IS_DEFAULT_NO = 0;
+
   private String dictType;
 
   private String dictLabel;
@@ -28,4 +37,8 @@ public class SysDictDataEntity extends BaseEntity {
   private Integer sort;
 
   private Integer status;
+
+  private String tagTone;
+
+  private Integer isDefault;
 }

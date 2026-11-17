@@ -1,17 +1,16 @@
 .dict-book-grid {
   display: grid;
   isolation: isolate;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-  gap: calc(var(--spacing) * 4);
-  /* Collapsed cards in a row share one height; an expanded card spans its own row. */
-  align-items: stretch;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  grid-auto-flow: dense;
+  gap: calc(var(--spacing) * 3.5);
+  align-items: start;
 }
 
 .dict-card {
   position: relative;
   min-width: 0;
-  overflow: clip;
-  container-type: inline-size;
+  overflow: hidden;
   padding: calc(var(--spacing) * 4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--insight-card-radius);
@@ -19,16 +18,18 @@
   box-shadow: var(--insight-card-shadow);
 }
 
-.dict-card-expanded {
+.dict-card[data-expanded='true'] {
   grid-column: 1 / -1;
-  /* Later siblings must yield behind the selected card, never cover its value editor. */
-  z-index: 1;
-  border-color: color-mix(in oklch, var(--brand) 35%, var(--border-subtle));
+  z-index: 3;
+  border-color: color-mix(in oklch, var(--brand) 38%, var(--border-subtle));
+}
+
+.dict-card[data-transitioning='true']:not([data-expanded='true']) {
+  z-index: 2;
 }
 
 /* A live preference change must not leave an in-flight layout projection on screen. */
-.dict-book-grid[data-dict-motion='off']
-  :is(.dict-card, .dict-card-heading, .dict-card-header, .dict-card-body, .dict-value-row) {
+.dict-book-grid[data-dict-motion='off'] :is(.dict-card, .dict-card-header, .dict-card-body) {
   transform: none !important;
 }
 
@@ -38,6 +39,7 @@
   min-width: 0;
   width: 100%;
   align-items: center;
+  justify-content: space-between;
   gap: calc(var(--spacing) * 2);
   border-radius: var(--radius-control);
   outline: none;
@@ -47,36 +49,135 @@
   box-shadow: 0 0 0 2px var(--ring);
 }
 
-.dict-chip {
+.dict-ratio-bar {
+  display: flex;
+  width: 100%;
+  height: calc(var(--spacing) * 1);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.dict-ratio-segment-enabled {
+  height: 100%;
+  background: var(--primary);
+  transition: width var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.dict-ratio-segment-disabled {
+  height: 100%;
+  background: color-mix(in oklch, var(--warning) 65%, var(--muted));
+  transition: width var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.dict-swatch-chip {
+  --swatch-color: var(--muted-foreground);
   display: inline-flex;
   align-items: center;
   gap: calc(var(--spacing) * 1.5);
-  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
-  border-radius: 999px;
-  background: var(--muted);
+  padding: calc(var(--spacing) * 0.75) calc(var(--spacing) * 2.25);
+  border-radius: var(--radius-control);
+  border: 1px solid color-mix(in oklch, var(--swatch-color) 24%, transparent);
+  background: color-mix(in oklch, var(--swatch-color) 11%, var(--card));
+  color: var(--foreground);
   font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.dict-swatch-chip[data-tone='BRAND'] {
+  --swatch-color: var(--primary);
+}
+
+.dict-swatch-chip[data-tone='INFO'] {
+  --swatch-color: var(--info);
+}
+
+.dict-swatch-chip[data-tone='SUCCESS'] {
+  --swatch-color: var(--success);
+}
+
+.dict-swatch-chip[data-tone='WARNING'] {
+  --swatch-color: var(--warning);
+}
+
+.dict-swatch-chip[data-tone='DANGER'] {
+  --swatch-color: var(--destructive);
+}
+
+.dict-swatch-chip[data-disabled='true'] {
+  opacity: 0.52;
+  border-style: dashed;
+}
+
+.dict-swatch-dot-indicator {
+  width: calc(var(--spacing) * 1.5);
+  height: calc(var(--spacing) * 1.5);
+  border-radius: 999px;
+  background: var(--swatch-color);
+  flex-shrink: 0;
+}
+
+.dict-swatch-default {
+  font-weight: 600;
+  color: var(--swatch-color);
+}
+
+.dict-swatch-code {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+.dict-tone-picker-dot {
+  --swatch-color: var(--muted-foreground);
+  width: calc(var(--spacing) * 3.5);
+  height: calc(var(--spacing) * 3.5);
+  border-radius: 999px;
+  background: var(--swatch-color);
+  border: 2px solid transparent;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.dict-tone-picker-dot[data-tone='BRAND'] {
+  --swatch-color: var(--primary);
+}
+
+.dict-tone-picker-dot[data-tone='INFO'] {
+  --swatch-color: var(--info);
+}
+
+.dict-tone-picker-dot[data-tone='SUCCESS'] {
+  --swatch-color: var(--success);
+}
+
+.dict-tone-picker-dot[data-tone='WARNING'] {
+  --swatch-color: var(--warning);
+}
+
+.dict-tone-picker-dot[data-tone='DANGER'] {
+  --swatch-color: var(--destructive);
+}
+
+.dict-tone-picker-dot[data-active='true'] {
+  transform: scale(1.15);
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 3.5px var(--swatch-color);
 }
 
 .dict-value-row {
-  display: grid;
-  grid-template-columns: minmax(6rem, 1fr) minmax(5rem, 0.8fr) 5rem minmax(0, 1.4fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: calc(var(--spacing) * 3);
-  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
   font-size: 0.875rem;
   transition: background-color var(--motion-duration-feedback) var(--motion-ease-enter);
 }
 
 .dict-value-row[data-value-result] {
   background: var(--accent);
-}
-
-@container (max-width: 36rem) {
-  .dict-value-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .dict-value-row > :last-child {
-    grid-column: 1 / -1;
-  }
 }

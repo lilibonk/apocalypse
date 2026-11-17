@@ -35,9 +35,9 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { PulseIndicator } from '@/components/motion'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 import type { SnowflakeId } from '@/lib/api/types'
 
@@ -419,7 +419,7 @@ export function MenuFormDialog({
                   {t('common.取消', { defaultValue: '取消' })}
                 </Button>
                 <Button type="submit" disabled={saveMutation.isPending}>
-                  {saveMutation.isPending && <PixelScale variant="inline" tone="current" />}
+                  {saveMutation.isPending && <PulseIndicator variant="inline" tone="current" />}
                   {saveMutation.isPending
                     ? t('common.保存中…', { defaultValue: '保存中…' })
                     : t('common.保存', { defaultValue: '保存' })}

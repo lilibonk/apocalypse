@@ -1,9 +1,9 @@
-import { useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { orbUnit, ORB_GRID } from '@/effects/PixelOrb/size'
 import type { OrbState, PixelOrbProps } from '@/effects/PixelOrb/types'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/stores/settings'
 
@@ -118,7 +118,7 @@ function RealtimeSlime({ state, gaze }: { state: OrbState; gaze: boolean }) {
 export function Slime({ state = 'idle', size = 64, gaze = false, className }: PixelOrbProps) {
   const { t } = useTranslation()
   const { motionEnabled } = useSettings()
-  const reducedMotion = useReducedMotion()
+  const reducedMotion = !useMotionPreference()
   const domMotion = useSyncExternalStore(subscribeMotion, getMotion, serverMotion)
   const rootRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)

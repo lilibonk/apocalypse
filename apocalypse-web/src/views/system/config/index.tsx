@@ -33,7 +33,6 @@ function ConfigPageContent() {
     <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
         title={t('common.参数设置', { defaultValue: '参数设置' })}
-        description={systemT('configWorkspace.hint')}
         view={
           <SegmentedControl
             label={t('dyna.pageView')}

@@ -1,35 +1,52 @@
 /**
- * 参数值工作区：多项草稿、逐项撤销、差异审阅、原子批量保存与并发冲突处理（桌面与移动共用）。
- * 新增、改键名与删除仍在“参数定义”的 DynaPage 中完成；本区只修改参数值。
+ * 参数值工作区：左粘性紧凑语义分组锚点导轨（fit-content）+ 右侧分组类型化参数卡片 +
+ * 行内蓝点/划线原值/单项撤销 + 40900 三方冲突对比恢复 + 底部居中深色胶囊未保存事务条。
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, RotateCcw, Search, TriangleAlert } from 'lucide-react'
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  Search,
+  TriangleAlert,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { DynaQueryFeedback } from '@/components/dyna'
-import type { PageResult } from '@/lib/api/types'
 import { DraftBar } from '@/components/draft/DraftBar'
 import { DraftDiffDialog } from '@/components/draft/DraftDiffDialog'
+import { LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { StickyCompactRailLayout, type CompactRailItem } from '@/components/spatial'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { usePageDraft } from '@/hooks/usePageDraft'
 import { ApiError } from '@/lib/api/client'
+import type { PageResult } from '@/lib/api/types'
 import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
-import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 import { getConfigByKey, pageConfigs, saveConfigValues, type ConfigRow } from './config.api'
 import {
-  configGroup,
   conflictedIds,
   editDraft,
+  inferConfigControl,
   normalizeValue,
   rebaseDraft,
+  resolveConfigGroupMeta,
+  resolveConflictUseMine,
+  resolveConflictUseServer,
   saveItems,
   undoDraft,
   type ConfigDraft,
@@ -40,6 +57,7 @@ import './config-workspace.css'
 const PAGE_SIZE = 20
 const MAX_DRAFT = 200
 const CONFLICT = 40900
+const ALL_GROUPS_KEY = '__all__'
 
 function isConfigQuery({ queryKey }: { queryKey: readonly unknown[] }) {
   return (
@@ -57,19 +75,39 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
   const [restoredNotice] = useState(() => Object.keys(pageDraft.restored ?? {}).length > 0)
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
+  const [activeGroupKey, setActiveGroupKey] = useState<string>(ALL_GROUPS_KEY)
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({})
+  const [highlightedConfigId, setHighlightedConfigId] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState<ConfigRow[]>([])
   const [reviewing, setReviewing] = useState(false)
   const [conflict, setConflict] = useState<string | null>(null)
+
+  const { intent } = useEntityIntent('config')
+  const intentKey = intent
+    ? `${intent.id}|${intent.focusTargetId ?? ''}|${intent.groupKey ?? ''}`
+    : ''
+  const [appliedIntentKey, setAppliedIntentKey] = useState('')
+  if (intentKey !== appliedIntentKey) {
+    setAppliedIntentKey(intentKey)
+    const target = intent?.focusTargetId || intent?.id
+    if (target) {
+      setHighlightedConfigId(target)
+      if (intent?.groupKey) setActiveGroupKey(intent.groupKey)
+    }
+  }
+
   const setDraft = (next: ConfigDraft) => {
     setDraftState(next)
     pageDraft.sync(next, Object.keys(next).length)
   }
+
   const configs = useQuery({
     queryKey: ['system', 'configs', 'workspace', keyword.trim(), page],
     queryFn: ({ signal }) => pageConfigs(page, PAGE_SIZE, keyword.trim(), signal),
     placeholderData: keepPreviousData,
     enabled: active,
   })
+
   const denial = useResourceDenial({
     errors: [configs.error],
     clear: { predicate: isConfigQuery },
@@ -79,12 +117,14 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
       setLastSaved([])
     },
   })
+
   const rows = useMemo(
     () => (isResourceDenied(configs.error) ? [] : (configs.data?.list ?? [])),
     [configs.data, configs.error],
   )
   const conflicts = useMemo(() => conflictedIds(draft, rows), [draft, rows])
   const count = Object.keys(draft).length
+
   const save = useModuleMutation(undefined, {
     localKey: 'config-values',
     onDenied: denial,
@@ -117,6 +157,7 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
       toast.error(error instanceof ApiError ? error.message : t('configWorkspace.saveFailed'))
     },
   })
+
   const reload = useModuleMutation(undefined, {
     localKey: JSON.stringify(draft),
     mutationFn: (run, snapshot: ConfigDraft) =>
@@ -169,16 +210,53 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : t('configWorkspace.failed')),
   })
+
   const filtered = rows
   const displayedPage = configs.data?.page ?? page
   const busy = save.isPending || reload.isPending
   const pages = Math.max(1, Math.ceil((configs.data?.total ?? 0) / PAGE_SIZE))
   if (!configs.isFetching && configs.data && page > pages) setPage(pages)
-  const groups = new Map<string, ConfigRow[]>()
-  for (const row of filtered) {
-    const group = configGroup(row.configKey)
-    groups.set(group, [...(groups.get(group) ?? []), row])
-  }
+
+  const groups = useMemo(() => {
+    const map = new Map<string, { label: string; rows: ConfigRow[] }>()
+    for (const row of filtered) {
+      const meta = resolveConfigGroupMeta(row.configKey)
+      const current = map.get(meta.key)
+      if (current) {
+        current.rows.push(row)
+      } else {
+        map.set(meta.key, { label: meta.label, rows: [row] })
+      }
+    }
+    return map
+  }, [filtered])
+
+  const railItems = useMemo<CompactRailItem[]>(() => {
+    const items: CompactRailItem[] = [
+      {
+        key: ALL_GROUPS_KEY,
+        label: '全部分组',
+        count: filtered.length,
+        dirty: count > 0,
+        dirtyCount: count,
+        conflict: conflicts.size > 0,
+      },
+    ]
+    for (const [groupKey, groupData] of groups.entries()) {
+      const groupDirtyCount = groupData.rows.filter((r) => Boolean(draft[r.id])).length
+      const groupHasConflict = groupData.rows.some((r) => conflicts.has(r.id))
+      items.push({
+        key: groupKey,
+        label: groupData.label,
+        count: groupData.rows.length,
+        dirty: groupDirtyCount > 0,
+        dirtyCount: groupDirtyCount,
+        conflict: groupHasConflict,
+      })
+    }
+    return items
+  }, [conflicts, count, draft, filtered.length, groups])
+
   const byId = new Map(rows.map((row) => [row.id, row]))
   const diffItems = Object.entries(draft).map(([id, item]) => ({
     key: item.configKey ?? byId.get(id)?.configKey ?? id,
@@ -187,30 +265,51 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
     after: item.value,
   }))
 
+  const handleSelectGroup = (groupKey: string) => {
+    setActiveGroupKey(groupKey)
+    if (groupKey !== ALL_GROUPS_KEY && typeof document !== 'undefined') {
+      const target = document.getElementById(`config-group-${groupKey}`)
+      if (target && typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+  }
+
   return (
     <div className="config-workspace space-y-4" aria-busy={configs.isFetching || busy}>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full max-w-xs">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            value={keyword}
-            disabled={busy}
-            onChange={(event) => {
-              setKeyword(event.target.value)
-              setPage(1)
-            }}
-            placeholder={t('configWorkspace.search')}
-            aria-label={t('configWorkspace.search')}
-            className="pl-9"
-          />
+      <LivingContextBar source={intent?.source} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full max-w-xs">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={keyword}
+              disabled={busy}
+              onChange={(event) => {
+                setKeyword(event.target.value)
+                setPage(1)
+              }}
+              placeholder={t('configWorkspace.search')}
+              aria-label={t('configWorkspace.search')}
+              className="pl-9"
+            />
+          </div>
+          {!canEdit && (
+            <p className="text-xs text-muted-foreground">{t('configWorkspace.readOnly')}</p>
+          )}
         </div>
-        {!canEdit && (
-          <p className="text-xs text-muted-foreground">{t('configWorkspace.readOnly')}</p>
+        {count > 0 && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="draft-marker" aria-hidden="true" />
+            <span>已改动 {count} 项参数</span>
+            {conflicts.size > 0 && <Badge variant="warning">冲突待决策 {conflicts.size}</Badge>}
+          </div>
         )}
       </div>
+
       <DynaQueryFeedback
         error={configs.error}
         hasData={configs.data !== undefined && !isResourceDenied(configs.error)}
@@ -256,6 +355,7 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
           </Button>
         </div>
       )}
+
       {configs.data !== undefined &&
         !isResourceDenied(configs.error) &&
         (filtered.length === 0 ? (
@@ -263,131 +363,327 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
             {keyword ? t('configWorkspace.noMatch') : t('configWorkspace.empty')}
           </p>
         ) : (
-          [...groups].map(([group, items]) => (
-            <section
-              key={group}
-              aria-labelledby={`config-group-${group}`}
-              className="config-group rounded-panel border border-border-subtle bg-card"
-            >
-              <h2
-                id={`config-group-${group}`}
-                className="border-b border-border-subtle px-4 py-3 font-mono text-xs text-muted-foreground"
-              >
-                {group}
-              </h2>
-              <ul className="divide-y divide-border-subtle">
-                {items.map((row) => {
-                  const item = draft[row.id]
-                  const value = item ? item.value : normalizeValue(row.configValue)
-                  const multiline = value.includes('\n') || value.length > 80
-                  const inputId = `config-value-${row.id}`
-                  const conflicted = conflicts.has(row.id)
-                  const rowSaved =
-                    !item &&
-                    lastSaved.some(
-                      (saved) =>
-                        saved.id === row.id &&
-                        saved.version === row.version &&
-                        saved.configValue === row.configValue,
-                    )
-                  return (
-                    <li
-                      key={row.id}
-                      className="config-row grid gap-3 p-4 md:grid-cols-[1fr_1.4fr]"
-                      data-saved={rowSaved || undefined}
-                    >
-                      <div className="min-w-0">
-                        <label htmlFor={inputId} className="flex items-center gap-2 font-medium">
-                          {item && (
-                            <span
-                              className="draft-marker"
-                              aria-label={t('draft.changed', { ns: 'translation' })}
-                            />
-                          )}
-                          <span className="break-words">{row.configName}</span>
-                        </label>
-                        <code className="mt-1 block font-mono text-xs break-all text-muted-foreground">
-                          {row.configKey}
-                        </code>
-                        {row.remark && (
-                          <p className="mt-1 text-xs break-words text-muted-foreground">
-                            {row.remark}
-                          </p>
-                        )}
-                      </div>
-                      <div className="min-w-0 space-y-1.5">
-                        {multiline ? (
-                          <Textarea
-                            id={inputId}
-                            value={value}
-                            maxLength={512}
-                            disabled={
-                              !canEdit ||
-                              busy ||
-                              configs.isPlaceholderData ||
-                              (!item && count >= MAX_DRAFT)
-                            }
-                            onChange={(event) =>
-                              setDraft(editDraft(draft, row, event.target.value))
-                            }
-                          />
-                        ) : (
-                          <Input
-                            id={inputId}
-                            value={value}
-                            maxLength={512}
-                            disabled={
-                              !canEdit ||
-                              busy ||
-                              configs.isPlaceholderData ||
-                              (!item && count >= MAX_DRAFT)
-                            }
-                            onChange={(event) =>
-                              setDraft(editDraft(draft, row, event.target.value))
-                            }
-                          />
-                        )}
-                        {item && (
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="text-muted-foreground">
-                              {t('configWorkspace.original')}
-                            </span>
-                            <span className={cn('draft-original')}>
-                              {item.baseValue ?? t('draft.emptyValue', { ns: 'translation' })}
-                            </span>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              disabled={busy}
-                              onClick={() => setDraft(undoDraft(draft, row.id))}
+          <StickyCompactRailLayout
+            railLabel="参数分组锚点"
+            railWidth="compact"
+            items={railItems}
+            activeKey={activeGroupKey}
+            onSelect={handleSelectGroup}
+            stageClassName="space-y-4"
+          >
+            {[...groups.entries()].map(([groupKey, groupData]) => {
+              const isGroupHighlighted = activeGroupKey === groupKey
+              const groupDirtyCount = groupData.rows.filter((r) => Boolean(draft[r.id])).length
+              return (
+                <section
+                  key={groupKey}
+                  id={`config-group-${groupKey}`}
+                  aria-labelledby={`config-group-heading-${groupKey}`}
+                  data-active={isGroupHighlighted ? 'true' : 'false'}
+                  className="config-group rounded-panel border border-border-subtle bg-card transition-colors"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <h2
+                        id={`config-group-heading-${groupKey}`}
+                        className="text-sm font-semibold text-foreground"
+                      >
+                        {groupData.label}
+                      </h2>
+                      <code className="font-mono text-xs text-muted-foreground">{groupKey}</code>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {groupDirtyCount > 0 && (
+                        <Badge variant="default">改动 {groupDirtyCount}</Badge>
+                      )}
+                      <span className="font-mono tabular-nums">{groupData.rows.length} 项</span>
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-border-subtle">
+                    {groupData.rows.map((row) => {
+                      const item = draft[row.id]
+                      const value = item ? item.value : normalizeValue(row.configValue)
+                      const control = inferConfigControl(row, value)
+                      const inputId = `config-value-${row.id}`
+                      const conflicted = conflicts.has(row.id)
+                      const hasThreeWayConflict = conflicted
+                      const serverLatestValue =
+                        item?.conflictServerValue !== undefined
+                          ? item.conflictServerValue
+                          : row.configValue
+                      const originBaselineValue =
+                        item?.conflictBaseValue !== undefined
+                          ? item.conflictBaseValue
+                          : item?.baseValue
+                      const isDisabled =
+                        !canEdit ||
+                        busy ||
+                        configs.isPlaceholderData ||
+                        (!item && count >= MAX_DRAFT)
+                      const rowSaved =
+                        !item &&
+                        lastSaved.some(
+                          (saved) =>
+                            saved.id === row.id &&
+                            saved.version === row.version &&
+                            saved.configValue === row.configValue,
+                        )
+                      const isIntentTarget =
+                        highlightedConfigId === row.id || highlightedConfigId === row.configKey
+
+                      return (
+                        <li
+                          key={row.id}
+                          className="config-row grid gap-3 p-4 md:grid-cols-[1fr_1.4fr]"
+                          data-saved={rowSaved || undefined}
+                          data-dirty={item ? 'true' : undefined}
+                          data-conflict={hasThreeWayConflict ? 'true' : undefined}
+                          data-intent-highlight={isIntentTarget ? 'true' : undefined}
+                        >
+                          <div className="min-w-0">
+                            <label
+                              htmlFor={inputId}
+                              className="flex items-center gap-2 font-medium"
                             >
-                              <RotateCcw aria-hidden="true" />
-                              {t('draft.undo', { ns: 'translation' })}
-                            </Button>
+                              {item && (
+                                <span
+                                  className="draft-marker"
+                                  aria-label={t('draft.changed', { ns: 'translation' })}
+                                />
+                              )}
+                              <span className="break-words">{row.configName}</span>
+                            </label>
+                            <code className="mt-1 block font-mono text-xs break-all text-muted-foreground">
+                              {row.configKey}
+                            </code>
+                            {row.remark && (
+                              <p className="mt-1 text-xs break-words text-muted-foreground">
+                                {row.remark}
+                              </p>
+                            )}
                           </div>
-                        )}
-                        {rowSaved && (
-                          <p className="flex items-center gap-1 text-xs text-success-foreground">
-                            <Check className="size-3" aria-hidden="true" />
-                            {t('configWorkspace.rowSaved')}
-                          </p>
-                        )}
-                        {conflicted && (
-                          <p className="text-xs text-warning-foreground">
-                            {t('configWorkspace.changedElsewhere', {
-                              value:
-                                row.configValue ?? t('draft.emptyValue', { ns: 'translation' }),
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          ))
+
+                          <div className="min-w-0 space-y-2">
+                            {control.kind === 'boolean' ? (
+                              <div className="flex items-center justify-between gap-3 rounded-control border border-border-subtle bg-muted/25 px-3 py-1.5">
+                                <span className="text-xs text-muted-foreground">
+                                  {value.toLowerCase() === 'true'
+                                    ? t('configWorkspace.booleanEnabled', {
+                                        defaultValue: '布尔开关（已启用 true）',
+                                      })
+                                    : t('configWorkspace.booleanDisabled', {
+                                        defaultValue: '布尔开关（已关闭 false）',
+                                      })}
+                                </span>
+                                <Switch
+                                  id={inputId}
+                                  aria-label={row.configName}
+                                  checked={value.toLowerCase() === 'true'}
+                                  disabled={isDisabled}
+                                  onCheckedChange={(checked) =>
+                                    setDraft(editDraft(draft, row, checked ? 'true' : 'false'))
+                                  }
+                                />
+                              </div>
+                            ) : control.kind === 'enum' ? (
+                              <SegmentedControl
+                                label={row.configName}
+                                value={value}
+                                onChange={(nextVal) => {
+                                  if (!isDisabled) {
+                                    setDraft(editDraft(draft, row, String(nextVal)))
+                                  }
+                                }}
+                                options={control.options.map((opt) => ({
+                                  value: opt.value,
+                                  label: opt.label,
+                                }))}
+                              />
+                            ) : control.kind === 'multiline' ? (
+                              <Textarea
+                                id={inputId}
+                                value={value}
+                                maxLength={512}
+                                disabled={isDisabled}
+                                onChange={(event) =>
+                                  setDraft(editDraft(draft, row, event.target.value))
+                                }
+                              />
+                            ) : control.kind === 'secret' ? (
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  id={inputId}
+                                  type={revealedSecrets[row.id] ? 'text' : 'password'}
+                                  value={value}
+                                  maxLength={512}
+                                  disabled={isDisabled}
+                                  onChange={(event) =>
+                                    setDraft(editDraft(draft, row, event.target.value))
+                                  }
+                                  className="flex-1 font-mono"
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={
+                                    revealedSecrets[row.id]
+                                      ? t('configWorkspace.hideSecret', {
+                                          defaultValue: '隐藏敏感值',
+                                        })
+                                      : t('configWorkspace.showSecret', {
+                                          defaultValue: '显示敏感值',
+                                        })
+                                  }
+                                  onClick={() =>
+                                    setRevealedSecrets((prev) => ({
+                                      ...prev,
+                                      [row.id]: !prev[row.id],
+                                    }))
+                                  }
+                                >
+                                  {revealedSecrets[row.id] ? (
+                                    <EyeOff className="size-4" aria-hidden="true" />
+                                  ) : (
+                                    <Eye className="size-4" aria-hidden="true" />
+                                  )}
+                                </Button>
+                              </div>
+                            ) : (
+                              <Input
+                                id={inputId}
+                                value={value}
+                                maxLength={512}
+                                disabled={isDisabled}
+                                onChange={(event) =>
+                                  setDraft(editDraft(draft, row, event.target.value))
+                                }
+                              />
+                            )}
+
+                            {item && (
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="text-muted-foreground">
+                                  {t('configWorkspace.original')}
+                                </span>
+                                <span className={cn('draft-original font-mono')}>
+                                  {item.baseValue ?? t('draft.emptyValue', { ns: 'translation' })}
+                                </span>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  onClick={() => setDraft(undoDraft(draft, row.id))}
+                                >
+                                  <RotateCcw aria-hidden="true" />
+                                  {t('draft.undo', { ns: 'translation' })}
+                                </Button>
+                              </div>
+                            )}
+
+                            {rowSaved && (
+                              <p className="flex items-center gap-1 text-xs text-success-foreground">
+                                <Check className="size-3" aria-hidden="true" />
+                                {t('configWorkspace.rowSaved')}
+                              </p>
+                            )}
+
+                            {hasThreeWayConflict && item && (
+                              <div
+                                role="group"
+                                aria-label={`${row.configName} 版本冲突对比`}
+                                className="space-y-2 rounded-control border border-warning/45 bg-warning/10 p-2.5 text-xs"
+                              >
+                                <p className="font-medium text-warning-foreground">
+                                  {t('configWorkspace.changedElsewhere', {
+                                    value:
+                                      serverLatestValue ??
+                                      t('draft.emptyValue', { ns: 'translation' }),
+                                  })}
+                                </p>
+                                <dl className="grid gap-2 sm:grid-cols-3">
+                                  <div className="rounded-sm bg-card/80 p-1.5">
+                                    <dt className="text-[11px] text-muted-foreground">
+                                      {t('configWorkspace.conflictBase', {
+                                        defaultValue: '原基线值',
+                                      })}
+                                    </dt>
+                                    <dd className="mt-0.5 font-mono break-all line-through opacity-75">
+                                      {originBaselineValue ??
+                                        t('draft.emptyValue', { ns: 'translation' })}
+                                    </dd>
+                                  </div>
+                                  <div className="rounded-sm bg-card/80 p-1.5">
+                                    <dt className="text-[11px] text-muted-foreground">
+                                      {t('configWorkspace.conflictServer', {
+                                        defaultValue: '服务端最新值',
+                                      })}
+                                    </dt>
+                                    <dd className="mt-0.5 font-mono font-medium break-all text-warning-foreground">
+                                      {serverLatestValue ??
+                                        t('draft.emptyValue', { ns: 'translation' })}
+                                    </dd>
+                                  </div>
+                                  <div className="rounded-sm bg-card/80 p-1.5">
+                                    <dt className="text-[11px] text-muted-foreground">
+                                      {t('configWorkspace.conflictMine', {
+                                        defaultValue: '我的拟改值',
+                                      })}
+                                    </dt>
+                                    <dd className="mt-0.5 font-mono font-medium break-all text-primary">
+                                      {item.value || t('draft.emptyValue', { ns: 'translation' })}
+                                    </dd>
+                                  </div>
+                                </dl>
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={busy}
+                                    onClick={() => {
+                                      const next = resolveConflictUseMine(draft, row.id, row)
+                                      setDraft(next)
+                                      if (conflictedIds(next, rows).size === 0) {
+                                        setConflict(null)
+                                      }
+                                    }}
+                                  >
+                                    {t('configWorkspace.adoptMine', {
+                                      defaultValue: '采用我的值',
+                                    })}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="ghost"
+                                    disabled={busy}
+                                    onClick={() => {
+                                      const next = resolveConflictUseServer(draft, row.id)
+                                      setDraft(next)
+                                      if (conflictedIds(next, rows).size === 0) {
+                                        setConflict(null)
+                                      }
+                                    }}
+                                  >
+                                    {t('configWorkspace.adoptServer', {
+                                      defaultValue: '采用服务端值',
+                                    })}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </section>
+              )
+            })}
+          </StickyCompactRailLayout>
         ))}
+
       {configs.data && (
         <nav
           aria-label={t('configWorkspace.pagination')}

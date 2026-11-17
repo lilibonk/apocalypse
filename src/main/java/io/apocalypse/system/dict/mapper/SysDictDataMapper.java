@@ -3,6 +3,7 @@ package io.apocalypse.system.dict.mapper;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.system.dict.entity.SysDictDataEntity;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Param;
@@ -31,6 +32,33 @@ public interface SysDictDataMapper extends BaseMapper<SysDictDataEntity> {
             .eq(SysDictDataEntity::getDictType, dictType)
             .eq(SysDictDataEntity::getStatus, SysDictDataEntity.STATUS_ENABLED)
             .orderByAsc(SysDictDataEntity::getSort));
+  }
+
+  /** 按多个类型批量查询全部未删除字典项（含启用与停用，按 dictType, sort, id 排序）。 */
+  default List<SysDictDataEntity> findAllByTypes(Collection<String> dictTypes) {
+    if (dictTypes == null || dictTypes.isEmpty()) {
+      return List.of();
+    }
+    return selectList(
+        new LambdaQueryWrapper<SysDictDataEntity>()
+            .in(SysDictDataEntity::getDictType, dictTypes)
+            .orderByAsc(SysDictDataEntity::getDictType)
+            .orderByAsc(SysDictDataEntity::getSort)
+            .orderByAsc(SysDictDataEntity::getId));
+  }
+
+  /** 将同一字典类型下其余字典项的默认标记重置为 0。 */
+  default void clearDefaultByType(String dictType, Long excludeId) {
+    SysDictDataEntity reset = new SysDictDataEntity();
+    reset.setIsDefault(SysDictDataEntity.IS_DEFAULT_NO);
+    LambdaQueryWrapper<SysDictDataEntity> wrapper =
+        new LambdaQueryWrapper<SysDictDataEntity>()
+            .eq(SysDictDataEntity::getDictType, dictType)
+            .eq(SysDictDataEntity::getIsDefault, SysDictDataEntity.IS_DEFAULT_YES);
+    if (excludeId != null) {
+      wrapper.ne(SysDictDataEntity::getId, excludeId);
+    }
+    update(reset, wrapper);
   }
 
   /** 按类型删除（逻辑删，字典类型删除时级联）。 */

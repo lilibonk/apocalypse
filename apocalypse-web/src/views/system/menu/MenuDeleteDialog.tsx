@@ -8,6 +8,7 @@ import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { PulseIndicator } from '@/components/motion'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +19,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { PixelScale } from '@/effects/PixelWave'
 import { ApiError } from '@/lib/api/client'
 
 import { deleteMenu } from './menu.api'
@@ -110,7 +110,7 @@ export function MenuDeleteDialog({
               if (node) deleteMutation.mutate(node.id)
             }}
           >
-            {deleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
+            {deleteMutation.isPending && <PulseIndicator variant="inline" tone="current" />}
             {deleteMutation.isPending
               ? t('common.删除中…', { defaultValue: '删除中…' })
               : t('common.确认删除', { defaultValue: '确认删除' })}

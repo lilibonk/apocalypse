@@ -1,6 +1,8 @@
 /**
- * 部门组织图（桌面）：组织图与树表是同一部门管理的两种完整方式，共用查询、表单与写操作。
- * 选择部门后根至目标的祖先路径点亮并一次性脉冲；侧栏同步资料与成员（遵守 system:user:list 数据范围）。
+ * 部门组织图（桌面全幅空间画布舞台 + 顶左搜索定位 HUD + 右侧一体检视器 HUD）：
+ * 组织图与树表是同一部门管理的两种完整方式，共用查询、表单与写操作。
+ * 选择部门后根至目标的祖先路径点亮并触发一次性金色脉冲；右侧检视器最顶部挂载 LivingContextBar
+ * 统一承载上级部门与「部门成员 N 人 → 用户管理」EntityPill，下方展示纯文本成员预览。
  */
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -8,30 +10,31 @@ import {
   ChevronRight,
   LocateFixed,
   Maximize2,
-  PanelRightOpen,
   Pencil,
   Plus,
+  Search,
   Trash2,
   Users,
 } from 'lucide-react'
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DictTag } from '@/components/DictTag'
 import { Perm } from '@/components/Perm'
-import { PathPulse } from '@/components/insights/graph/PathPulse'
 import { ZoomPanCanvas, type ZoomPanCanvasHandle } from '@/components/insights/graph/ZoomPanCanvas'
 import '@/components/insights/graph/graph.css'
+import { PathPulse } from '@/components/motion'
+import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { FloatingHud, SpatialStage } from '@/components/spatial'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ApiError } from '@/lib/api/client'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
-import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
-import { pageDeptMembers } from './dept-members.api'
 import {
   ancestorPath,
   chartGeometry,
@@ -40,8 +43,10 @@ import {
   layoutTree,
   nextFocus,
 } from './dept-chart.model'
-import type { DeptTreeNode, SnowflakeId } from './types'
 import './dept-chart.css'
+import { pageDeptMembers } from './dept-members.api'
+import { flattenDeptTree } from './tree-utils'
+import type { DeptTreeNode, SnowflakeId } from './types'
 
 const MEMBER_PAGE = 20
 
@@ -61,18 +66,23 @@ export function DeptOrgChart({
   onDelete: (node: DeptTreeNode) => void
 }) {
   const { t } = useTranslation('system')
+  const { intent: deptIntent, clearPulse } = useEntityIntent('dept')
+  const canListUsers = useAuthStore((state) => state.perms.includes('system:user:list'))
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => defaultExpanded(tree, 2))
   const [selected, setSelected] = useState<string | null>(tree[0]?.id ?? null)
   const [focusId, setFocusId] = useState<string | null>(tree[0]?.id ?? null)
   const [pulse, setPulse] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [includeChildren, setIncludeChildren] = useState(false)
+  const [memberPage, setMemberPage] = useState(1)
   const canvas = useRef<HTMLDivElement>(null)
-  const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<ZoomPanCanvasHandle>(null)
-  const [wide, setWide] = useState(true)
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const [overviewRequest, setOverviewRequest] = useState(0)
   const appliedOverviewRequest = useRef(0)
   const [appliedRequest, setAppliedRequest] = useState<number | null>(null)
+  const [appliedIntentId, setAppliedIntentId] = useState<string | null>(null)
+
   if (focusRequest && appliedRequest !== focusRequest.sequence && findNode(tree, focusRequest.id)) {
     setAppliedRequest(focusRequest.sequence)
     setSelected(focusRequest.id)
@@ -80,25 +90,27 @@ export function DeptOrgChart({
     setExpanded(new Set([...expanded, ...ancestorPath(tree, focusRequest.id)]))
     setPulse((value) => value + 1)
   }
+
+  const intentTargetId = deptIntent?.focusTargetId ?? deptIntent?.id ?? null
+  if (intentTargetId && appliedIntentId !== intentTargetId && findNode(tree, intentTargetId)) {
+    setAppliedIntentId(intentTargetId)
+    setSelected(intentTargetId)
+    setFocusId(intentTargetId)
+    setExpanded(new Set([...expanded, ...ancestorPath(tree, intentTargetId)]))
+    setPulse((value) => value + 1)
+  }
+
+  useEffect(() => {
+    if (deptIntent?.triggerPulse && appliedIntentId) {
+      clearPulse()
+    }
+  }, [appliedIntentId, clearPulse, deptIntent?.triggerPulse])
+
   if (selected && !findNode(tree, selected)) {
     setSelected(tree[0]?.id ?? null)
     setFocusId(tree[0]?.id ?? null)
   }
-  useLayoutEffect(() => {
-    const element = root.current
-    if (!element) return
-    const measure = () => {
-      if (element.clientWidth)
-        setWide(
-          element.clientWidth >=
-            60 * parseFloat(getComputedStyle(document.documentElement).fontSize),
-        )
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [tree.length])
+
   const layout = useMemo(() => layoutTree(tree, expanded), [tree, expanded])
   useLayoutEffect(() => {
     if (overviewRequest !== appliedOverviewRequest.current) {
@@ -106,16 +118,60 @@ export function DeptOrgChart({
       viewport.current?.overview()
     }
   }, [overviewRequest, layout])
+
   const selectedNode = selected ? findNode(tree, selected) : null
-  const path = useMemo(
-    () => new Set(selected ? ancestorPath(tree, selected) : []),
+  const ancestorIds = useMemo(
+    () => (selected ? ancestorPath(tree, selected) : []),
     [tree, selected],
   )
+  const parentNode = useMemo(() => {
+    if (ancestorIds.length < 2) return null
+    const parentId = ancestorIds[ancestorIds.length - 2]
+    return parentId ? findNode(tree, parentId) : null
+  }, [ancestorIds, tree])
+  const path = useMemo(() => new Set(ancestorIds), [ancestorIds])
+
+  const membersQuery = useQuery({
+    queryKey: [
+      'system',
+      'depts',
+      'members',
+      sessionEpoch,
+      selectedNode?.id ?? '',
+      includeChildren,
+      memberPage,
+    ],
+    queryFn: ({ signal }) =>
+      pageDeptMembers(selectedNode!.id, includeChildren, memberPage, MEMBER_PAGE, signal),
+    enabled: canListUsers && active && Boolean(selectedNode),
+  })
+  useResourceDenial({
+    errors: [membersQuery.error],
+    clear: { queryKey: ['system', 'depts', 'members'] },
+    reset: () => setMemberPage(1),
+  })
+
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+    return flattenDeptTree(tree as DeptTreeNode[], new Set())
+      .map((row) => row.node)
+      .filter(
+        (node) =>
+          node.deptName.toLowerCase().includes(q) ||
+          (node.leader && node.leader.toLowerCase().includes(q)),
+      )
+      .slice(0, 6)
+  }, [tree, searchQuery])
+
   const select = (id: string) => {
     setSelected(id)
     setFocusId(id)
+    setMemberPage(1)
+    setExpanded((current) => new Set([...current, ...ancestorPath(tree, id)]))
     setPulse((value) => value + 1)
   }
+
   const toggle = (id: string) =>
     setExpanded((current) => {
       const next = new Set(current)
@@ -123,6 +179,7 @@ export function DeptOrgChart({
       else next.add(id)
       return next
     })
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!focusId || !(event.target as HTMLElement).closest('[data-dept]')) return
     const item = layout.nodes.find((entry) => entry.node.id === focusId)
@@ -147,52 +204,51 @@ export function DeptOrgChart({
     setFocusId(next)
     canvas.current?.querySelector<HTMLElement>(`[data-dept="${next}"]`)?.focus()
   }
+
   const { nodeWidth, nodeHeight } = chartGeometry
   const revealed = layout.nodes.find((item) => item.node.id === (focusId ?? selected))
   const revealBox = revealed
     ? { x: revealed.x, y: revealed.y, width: nodeWidth, height: nodeHeight }
     : null
   const selectedBox = layout.nodes.find((item) => item.node.id === selected)
-  const details = (
-    <DeptSidePanel
-      node={selectedNode}
-      path={
-        selected ? ancestorPath(tree, selected).map((id) => findNode(tree, id)?.deptName ?? id) : []
-      }
-      onCreateChild={onCreateChild}
-      onEdit={onEdit}
-      onDelete={onDelete}
-      active={active && (wide || detailsOpen)}
-    />
-  )
-  return (
-    <div ref={root} className={cn('dept-chart grid gap-4', wide && 'dept-chart-wide')}>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card p-3 dept-chart-context">
-        <div className="min-w-0 text-sm">
-          <p className="font-medium break-words">{selectedNode?.deptName ?? t('deptChart.pick')}</p>
-          {selected && (
-            <p className="mt-1 text-xs break-words text-muted-foreground">
-              {ancestorPath(tree, selected)
-                .map((id) => findNode(tree, id)?.deptName ?? id)
-                .join(' / ')}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
+
+  const hud = (
+    <>
+      <FloatingHud
+        slot="top-left"
+        ariaLabel={t('deptChart.overview')}
+        className="w-72 space-y-2 p-2.5 sm:w-80"
+      >
+        <div className="flex items-center gap-1.5">
+          <div className="relative min-w-0 flex-1">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t('deptChart.pick')}
+              aria-label={t('deptChart.pick')}
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
           <Button
             size="sm"
             variant="outline"
+            className="h-8 px-2.5 text-xs"
             onClick={() => {
               setExpanded(defaultExpanded(tree, Number.POSITIVE_INFINITY))
               setOverviewRequest((value) => value + 1)
             }}
           >
-            <Maximize2 aria-hidden="true" />
+            <Maximize2 className="size-3.5" aria-hidden="true" />
             {t('deptChart.overview')}
           </Button>
           <Button
             size="sm"
             variant="outline"
+            className="h-8 px-2.5 text-xs"
             disabled={!selectedNode}
             onClick={() => {
               if (selected && !selectedBox) {
@@ -211,250 +267,333 @@ export function DeptOrgChart({
                 )
             }}
           >
-            <LocateFixed aria-hidden="true" />
+            <LocateFixed className="size-3.5" aria-hidden="true" />
             {t('deptChart.locate')}
           </Button>
-          {!wide && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!selectedNode}
-              onClick={() => setDetailsOpen(true)}
-            >
-              <PanelRightOpen aria-hidden="true" />
-              {t('deptChart.details')}
-            </Button>
-          )}
         </div>
-      </div>
-      <div ref={canvas} role="tree" aria-label={t('deptChart.tree')} onKeyDown={onKeyDown}>
-        <ZoomPanCanvas
-          ref={viewport}
-          fitLabel={t('deptChart.readableScale')}
-          width={layout.width}
-          height={layout.height}
-          label={t('deptChart.canvas')}
-          fitKey={`${tree.length}:${expanded.size}:${active}`}
-          minFitScale={0.8}
-          reveal={revealBox}
-        >
-          <svg
-            width={layout.width}
-            height={layout.height}
-            className="absolute inset-0 overflow-visible"
-            aria-hidden="true"
-          >
-            {layout.edges.map((edge) => (
-              <PathPulse
-                key={`${edge.from}-${edge.to}`}
-                d={edge.d}
-                active={path.has(edge.from) && path.has(edge.to)}
-                pulseKey={pulse}
-              />
-            ))}
-          </svg>
-          {layout.nodes.map((item) => {
-            const node = item.node
-            const onPath = path.has(node.id)
-            return (
-              <div
-                key={node.id}
-                className="dept-node"
-                data-selected={selected === node.id || undefined}
-                data-path={onPath || undefined}
-                data-disabled={node.status !== 1 || undefined}
-                style={{ left: item.x, top: item.y, width: nodeWidth, height: nodeHeight }}
-              >
+        {searchMatches.length > 0 && (
+          <ul className="max-h-36 divide-y divide-border-subtle overflow-y-auto rounded-control border border-border-subtle bg-background/90 text-xs">
+            {searchMatches.map((match) => (
+              <li key={match.id}>
                 <button
                   type="button"
-                  role="treeitem"
-                  data-dept={node.id}
-                  tabIndex={focusId === node.id ? 0 : -1}
-                  aria-level={item.depth + 1}
-                  aria-selected={selected === node.id}
-                  aria-expanded={item.hasChildren ? item.expanded : undefined}
-                  className="dept-node-main"
-                  onFocus={() => setFocusId(node.id)}
-                  onClick={() => select(node.id)}
+                  className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-accent"
+                  onClick={() => {
+                    select(match.id)
+                    setSearchQuery('')
+                  }}
                 >
-                  <span className="block truncate font-medium">{node.deptName}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {node.leader ?? t('deptChart.noLeader')}
-                    {node.status !== 1 && ` · ${t('deptChart.disabled')}`}
+                  <span className="truncate font-medium">{match.deptName}</span>
+                  <span className="truncate text-muted-foreground">
+                    {match.leader ?? t('deptChart.noLeader')}
                   </span>
                 </button>
-                {item.hasChildren && (
+              </li>
+            ))}
+          </ul>
+        )}
+      </FloatingHud>
+
+      <FloatingHud
+        slot="right-inspector"
+        ariaLabel={t('deptChart.details')}
+        className="space-y-4 p-4 text-sm"
+      >
+        <LivingContextBar source={deptIntent?.source}>
+          {parentNode && selectedNode && (
+            <EntityPill
+              key={`parent-${parentNode.id}`}
+              kind="dept"
+              id={parentNode.id}
+              label={parentNode.deptName}
+              size="sm"
+              source={{ kind: 'dept', id: selectedNode.id, label: selectedNode.deptName }}
+              onNavigate={() => select(parentNode.id)}
+            />
+          )}
+          {selectedNode && (
+            <EntityPill
+              key={`members-${selectedNode.id}`}
+              kind="user"
+              id={selectedNode.id}
+              label={
+                membersQuery.data
+                  ? t('deptChart.membersCount', { count: membersQuery.data.total })
+                  : t('deptChart.members')
+              }
+              size="sm"
+              intent={{
+                kind: 'user',
+                id: selectedNode.id,
+                deptId: selectedNode.id,
+                label: selectedNode.deptName,
+                triggerPulse: true,
+                source: { kind: 'dept', id: selectedNode.id, label: selectedNode.deptName },
+              }}
+            />
+          )}
+        </LivingContextBar>
+
+        <DeptIdentityHud
+          tree={tree}
+          node={selectedNode}
+          ancestorIds={ancestorIds}
+          onSelect={select}
+          onCreateChild={onCreateChild}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+
+        {selectedNode && (
+          <div className="border-t border-border-subtle pt-3">
+            <DeptMembers
+              canList={canListUsers}
+              includeChildren={includeChildren}
+              onIncludeChildrenChange={(value) => {
+                setIncludeChildren(value)
+                setMemberPage(1)
+              }}
+              page={memberPage}
+              onPageChange={setMemberPage}
+              members={membersQuery}
+            />
+          </div>
+        )}
+      </FloatingHud>
+    </>
+  )
+
+  return (
+    <div className="dept-chart">
+      <SpatialStage backdrop="dots" minHeight="36rem" hud={hud}>
+        <div
+          ref={canvas}
+          role="tree"
+          aria-label={t('deptChart.tree')}
+          onKeyDown={onKeyDown}
+          className="size-full"
+        >
+          <ZoomPanCanvas
+            ref={viewport}
+            fitLabel={t('deptChart.readableScale')}
+            width={layout.width}
+            height={layout.height}
+            label={t('deptChart.canvas')}
+            fitKey={`${tree.length}:${expanded.size}:${active}`}
+            minFitScale={0.8}
+            reveal={revealBox}
+          >
+            <svg
+              width={layout.width}
+              height={layout.height}
+              className="absolute inset-0 overflow-visible"
+              aria-hidden="true"
+            >
+              {layout.edges.map((edge) => (
+                <PathPulse
+                  key={`${edge.from}-${edge.to}`}
+                  d={edge.d}
+                  tone="gold"
+                  active={path.has(edge.from) && path.has(edge.to)}
+                  pulseKey={pulse}
+                />
+              ))}
+            </svg>
+            {layout.nodes.map((item) => {
+              const node = item.node
+              const onPath = path.has(node.id)
+              const childCount = node.children?.length ?? 0
+              return (
+                <div
+                  key={node.id}
+                  className="dept-node"
+                  data-selected={selected === node.id || undefined}
+                  data-path={onPath || undefined}
+                  data-disabled={node.status !== 1 || undefined}
+                  style={{ left: item.x, top: item.y, width: nodeWidth, height: nodeHeight }}
+                >
                   <button
                     type="button"
-                    tabIndex={-1}
-                    className="dept-node-toggle"
-                    aria-label={t(item.expanded ? 'deptChart.collapse' : 'deptChart.expand', {
-                      name: node.deptName,
-                    })}
-                    onClick={() => toggle(node.id)}
+                    role="treeitem"
+                    data-dept={node.id}
+                    tabIndex={focusId === node.id ? 0 : -1}
+                    aria-level={item.depth + 1}
+                    aria-selected={selected === node.id}
+                    aria-expanded={item.hasChildren ? item.expanded : undefined}
+                    className="dept-node-main"
+                    onFocus={() => setFocusId(node.id)}
+                    onClick={() => select(node.id)}
                   >
-                    {item.expanded ? (
-                      <ChevronDown className="size-3.5" aria-hidden="true" />
-                    ) : (
-                      <span className="flex items-center gap-0.5 text-xs">
-                        {node.children?.length}
-                        <ChevronRight className="size-3" aria-hidden="true" />
-                      </span>
-                    )}
+                    <span className="block text-sm leading-snug font-medium text-foreground">
+                      {node.deptName}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground tabular-nums">
+                      {node.leader ?? t('deptChart.noLeader')} ·{' '}
+                      {t('deptChart.childrenCount', { count: childCount })}
+                      {node.status !== 1 && ` · ${t('deptChart.disabled')}`}
+                    </span>
                   </button>
-                )}
-              </div>
-            )
-          })}
-        </ZoomPanCanvas>
-        <p className="mt-2 text-xs text-muted-foreground">{t('deptChart.keyboard')}</p>
-      </div>
-      {wide ? (
-        details
-      ) : (
-        <Sheet open={detailsOpen && active} onOpenChange={setDetailsOpen}>
-          <SheetContent aria-describedby={undefined}>
-            <SheetHeader>
-              <SheetTitle>
-                {t('deptChart.details')} · {selectedNode?.deptName}
-              </SheetTitle>
-            </SheetHeader>
-            <div className="px-4 pb-4">{details}</div>
-          </SheetContent>
-        </Sheet>
-      )}
+                  {item.hasChildren && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="dept-node-toggle"
+                      aria-label={t(item.expanded ? 'deptChart.collapse' : 'deptChart.expand', {
+                        name: node.deptName,
+                      })}
+                      onClick={() => toggle(node.id)}
+                    >
+                      {item.expanded ? (
+                        <ChevronDown className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        <span className="flex items-center gap-0.5 text-xs tabular-nums">
+                          {childCount}
+                          <ChevronRight className="size-3" aria-hidden="true" />
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </ZoomPanCanvas>
+        </div>
+      </SpatialStage>
     </div>
   )
 }
 
-function DeptSidePanel({
-  active,
+function DeptIdentityHud({
+  tree,
   node,
-  path,
+  ancestorIds,
+  onSelect,
   onCreateChild,
   onEdit,
   onDelete,
 }: {
-  active: boolean
+  tree: readonly DeptTreeNode[]
   node: DeptTreeNode | null
-  path: string[]
+  ancestorIds: string[]
+  onSelect: (id: string) => void
   onCreateChild: (parentId: SnowflakeId) => void
   onEdit: (node: DeptTreeNode) => void
   onDelete: (node: DeptTreeNode) => void
 }) {
   const { t } = useTranslation('system')
-  if (!node)
-    return (
-      <aside className="dept-panel rounded-panel p-4 text-sm text-muted-foreground">
-        {t('deptChart.pick')}
-      </aside>
-    )
+  if (!node) return <p className="text-sm text-muted-foreground">{t('deptChart.pick')}</p>
   return (
-    <aside
-      aria-labelledby="dept-panel-title"
-      className="dept-panel space-y-4 rounded-panel p-4 text-sm"
-    >
+    <div className="space-y-3">
       <div>
-        <p className="text-xs break-words text-muted-foreground">{path.join(' / ')}</p>
-        <h2 id="dept-panel-title" className="mt-1 text-lg font-semibold break-words">
+        <nav
+          aria-label={t('deptChart.tree')}
+          className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+        >
+          {ancestorIds.map((id, index) => {
+            const ancestor = findNode(tree, id)
+            return (
+              <span key={id} className="inline-flex items-center gap-1">
+                {index > 0 && <ChevronRight className="size-3 shrink-0" aria-hidden="true" />}
+                <button
+                  type="button"
+                  className="max-w-44 truncate rounded-sm px-1 py-0.5 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  onClick={() => onSelect(id)}
+                >
+                  {ancestor?.deptName ?? id}
+                </button>
+              </span>
+            )
+          })}
+        </nav>
+        <h2 id="dept-panel-title" className="mt-1 break-words text-base font-semibold">
           {node.deptName}
         </h2>
       </div>
-      <dl className="grid grid-cols-2 gap-3">
+      <dl className="grid grid-cols-2 gap-2.5 text-xs">
         <div>
-          <dt className="text-xs text-muted-foreground">{t('deptChart.leader')}</dt>
-          <dd className="mt-1 break-words">{node.leader ?? '—'}</dd>
+          <dt className="text-muted-foreground">{t('deptChart.leader')}</dt>
+          <dd className="mt-0.5 break-words font-medium">{node.leader ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">{t('deptChart.phone')}</dt>
-          <dd className="mt-1 break-all">{node.phone ?? '—'}</dd>
+          <dt className="text-muted-foreground">{t('deptChart.phone')}</dt>
+          <dd className="mt-0.5 break-all font-mono">{node.phone ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">{t('deptChart.status')}</dt>
-          <dd className="mt-1">
+          <dt className="text-muted-foreground">{t('deptChart.status')}</dt>
+          <dd className="mt-0.5">
             <DictTag type="sys_user_status" value={String(node.status)} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">{t('deptChart.children')}</dt>
-          <dd className="mt-1 tabular-nums">{node.children?.length ?? 0}</dd>
+          <dt className="text-muted-foreground">{t('deptChart.children')}</dt>
+          <dd className="mt-0.5 font-medium tabular-nums">{node.children?.length ?? 0}</dd>
         </div>
         {node.remark && (
           <div className="col-span-2">
-            <dt className="text-xs text-muted-foreground">{t('deptChart.remark')}</dt>
-            <dd className="mt-1 break-words">{node.remark}</dd>
+            <dt className="text-muted-foreground">{t('deptChart.remark')}</dt>
+            <dd className="mt-0.5 break-words">{node.remark}</dd>
           </div>
         )}
       </dl>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5 pt-1">
         <Perm perm="system:dept:add" requiresAllScope>
-          <Button size="sm" variant="outline" onClick={() => onCreateChild(node.id)}>
+          <Button size="xs" variant="outline" onClick={() => onCreateChild(node.id)}>
             <Plus aria-hidden="true" />
             {t('deptChart.addChild')}
           </Button>
         </Perm>
         <Perm perm="system:dept:edit" requiresAllScope>
-          <Button size="sm" variant="outline" onClick={() => onEdit(node)}>
+          <Button size="xs" variant="outline" onClick={() => onEdit(node)}>
             <Pencil aria-hidden="true" />
             {t('deptChart.edit')}
           </Button>
         </Perm>
         <Perm perm="system:dept:remove" requiresAllScope>
-          <Button size="sm" variant="outline" onClick={() => onDelete(node)}>
+          <Button size="xs" variant="outline" onClick={() => onDelete(node)}>
             <Trash2 aria-hidden="true" />
             {t('deptChart.delete')}
           </Button>
         </Perm>
       </div>
-      <DeptMembers deptId={node.id} key={node.id} active={active} />
-    </aside>
+    </div>
   )
 }
 
-function DeptMembers({ deptId, active }: { deptId: SnowflakeId; active: boolean }) {
+function DeptMembers({
+  canList,
+  includeChildren,
+  onIncludeChildrenChange,
+  page,
+  onPageChange,
+  members,
+}: {
+  canList: boolean
+  includeChildren: boolean
+  onIncludeChildrenChange: (value: boolean) => void
+  page: number
+  onPageChange: (page: number) => void
+  members: ReturnType<typeof useQuery<Awaited<ReturnType<typeof pageDeptMembers>>>>
+}) {
   const { t } = useTranslation('system')
-  const canList = useAuthStore((state) => state.perms.includes('system:user:list'))
-  const epoch = useAuthStore((state) => state.sessionEpoch)
-  const [includeChildren, setIncludeChildren] = useState(false)
-  const [page, setPage] = useState(1)
-  const members = useQuery({
-    queryKey: ['system', 'depts', 'members', epoch, deptId, includeChildren, page],
-    queryFn: ({ signal }) => pageDeptMembers(deptId, includeChildren, page, MEMBER_PAGE, signal),
-    enabled: canList && active,
-  })
-  useResourceDenial({
-    errors: [members.error],
-    clear: { queryKey: ['system', 'depts', 'members'] },
-    reset: () => setPage(1),
-  })
   const pages = members.data ? Math.max(1, Math.ceil(members.data.total / MEMBER_PAGE)) : 1
   return (
-    <section
-      aria-labelledby="dept-members-title"
-      className="space-y-3 border-t border-border-subtle pt-4"
-    >
+    <section aria-labelledby="dept-members-title" className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id="dept-members-title" className="flex items-center gap-2 font-medium">
-          <Users className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h3 id="dept-members-title" className="flex items-center gap-2 text-xs font-semibold">
+          <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
           {members.data
             ? t('deptChart.membersCount', { count: members.data.total })
             : t('deptChart.members')}
         </h3>
         {canList && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Switch
-              checked={includeChildren}
-              onCheckedChange={(value) => {
-                setIncludeChildren(value)
-                setPage(1)
-              }}
-            />
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch checked={includeChildren} onCheckedChange={onIncludeChildrenChange} />
             {t('deptChart.includeChildren')}
           </label>
         )}
       </div>
       {!canList && <p className="text-xs text-muted-foreground">{t('deptChart.membersDenied')}</p>}
-      {canList && members.isPending && <Skeleton className="h-20 w-full" />}
+      {canList && members.isPending && <Skeleton className="h-16 w-full" />}
       {canList && members.isError && (
         <div role="alert" className="flex items-center gap-2 rounded-control bg-muted p-2 text-xs">
           <span className="flex-1">
@@ -473,25 +612,31 @@ function DeptMembers({ deptId, active }: { deptId: SnowflakeId; active: boolean 
         </p>
       )}
       {members.data && members.data.list.length > 0 && (
-        <ul className="space-y-1.5">
+        <ul className="divide-y divide-border-subtle/60 text-xs">
           {members.data.list.map((member) => (
-            <li key={member.id} className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate">{member.nickname || member.username}</span>
-              <span
-                className={cn(
-                  'min-w-0 truncate text-xs text-muted-foreground',
-                  member.status !== 1 && 'line-through',
-                )}
-              >
-                {member.deptName ?? member.username}
+            <li
+              key={member.id}
+              className={cn(
+                'flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0',
+                member.status !== 1 && 'opacity-70',
+              )}
+            >
+              <span className="truncate font-medium text-foreground">
+                {member.nickname || member.username}
               </span>
+              <span className="truncate font-mono text-muted-foreground">@{member.username}</span>
             </li>
           ))}
         </ul>
       )}
       {members.data && pages > 1 && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <Button size="xs" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+        <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+          >
             {t('deptChart.previous')}
           </Button>
           <span className="tabular-nums">
@@ -501,7 +646,7 @@ function DeptMembers({ deptId, active }: { deptId: SnowflakeId; active: boolean 
             size="xs"
             variant="ghost"
             disabled={page >= pages}
-            onClick={() => setPage(page + 1)}
+            onClick={() => onPageChange(page + 1)}
           >
             {t('deptChart.next')}
           </Button>

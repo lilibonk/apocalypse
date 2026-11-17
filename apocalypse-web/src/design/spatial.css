@@ -1,0 +1,389 @@
+/**
+ * spatial.css — Three Standard Spatial Skeletons & Coupled Motion Surface Rules
+ *
+ * 1. Skeleton A: SpatialStage + FloatingHud (Full-Bleed Stage + Four-Corner Adaptive HUD)
+ * 2. Skeleton B: StickyCompactRailLayout + ResponsiveInspector (Sticky Compact Rail + Fluid Stage)
+ * 3. Skeleton C: FlipExpandGrid + FlipExpandCard (Single-Boundary FLIP Expand Grid)
+ */
+
+.spatial-main-container {
+  container-type: inline-size;
+  container-name: main;
+}
+
+/* ============================================================================
+ * 1. Skeleton A: SpatialStage + FloatingHud
+ * ============================================================================ */
+
+.spatial-stage {
+  position: relative;
+  width: 100%;
+  min-height: var(--spatial-stage-min-h, 36rem);
+  border-radius: var(--radius-stage, var(--radius-panel));
+  border: 1px solid var(--border-subtle);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.spatial-stage[data-full-viewport='true'] {
+  height: calc(var(--shell-viewport-h) - (var(--shell-stage-pad) * 2));
+}
+
+.spatial-stage[data-backdrop='dots'] {
+  background-image: radial-gradient(var(--insight-grid) 1px, transparent 1px);
+  background-size: 1.25rem 1.25rem;
+}
+
+.spatial-stage[data-backdrop='grid'] {
+  background-image:
+    linear-gradient(to right, var(--insight-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--insight-grid) 1px, transparent 1px);
+  background-size: 1.5rem 1.5rem;
+}
+
+.spatial-stage-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+}
+
+/* Pointer events pass through empty areas to the underlying pan/zoom stage */
+.spatial-stage-hud-layer {
+  position: absolute;
+  inset: calc(var(--spacing) * 4);
+  z-index: 10;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr) minmax(18rem, 24rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: calc(var(--spacing) * 3);
+}
+
+.floating-hud {
+  pointer-events: auto;
+  width: fit-content;
+  max-width: 100%;
+  height: fit-content;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  color: var(--card-foreground);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-floating);
+  padding: calc(var(--spacing) * 3.5);
+}
+
+.floating-hud[data-max-height='half-stage'] {
+  max-height: 16rem;
+}
+
+.floating-hud[data-slot='top-left'] {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  align-self: start;
+  justify-self: start;
+}
+
+.floating-hud[data-slot='bottom-left'] {
+  grid-column: 1 / 2;
+  grid-row: 3 / 4;
+  align-self: end;
+  justify-self: start;
+  max-height: 15.5rem;
+}
+
+.floating-hud[data-slot='top-right'] {
+  grid-column: 2 / 4;
+  grid-row: 1 / 2;
+  align-self: start;
+  justify-self: end;
+}
+
+.floating-hud[data-slot='bottom-right'] {
+  grid-column: 2 / 3;
+  grid-row: 3 / 4;
+  align-self: end;
+  justify-self: end;
+}
+
+.floating-hud[data-slot='right-inspector'] {
+  grid-column: 3 / 4;
+  grid-row: 1 / 4;
+  width: 100%;
+  align-self: start;
+  justify-self: end;
+  height: fit-content;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+@container main (max-width: 63.99rem) {
+  .spatial-stage-hud-layer {
+    grid-template-columns: minmax(13rem, 20rem) minmax(0, 1fr);
+  }
+
+  .floating-hud[data-slot='top-right'] {
+    grid-column: 2 / 3;
+  }
+
+  .floating-hud[data-slot='right-inspector'][data-collapsible-narrow='true'] {
+    display: none;
+  }
+}
+
+.floating-hud-narrow-trigger {
+  pointer-events: auto;
+  grid-column: 2 / 3;
+  grid-row: 3 / 4;
+  align-self: end;
+  justify-self: end;
+  display: none;
+}
+
+@container main (max-width: 63.99rem) {
+  .floating-hud-narrow-trigger {
+    display: inline-flex;
+  }
+}
+
+/* ============================================================================
+ * 2. Skeleton B: StickyCompactRailLayout + ResponsiveInspector
+ * ============================================================================ */
+
+.sticky-rail-layout {
+  display: grid;
+  gap: calc(var(--spacing) * 5);
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container main (min-width: 48rem) {
+  .sticky-rail-layout[data-rail-width='compact'] {
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+  }
+
+  .sticky-rail-layout[data-rail-width='locator'] {
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+  }
+}
+
+@container main (min-width: 68rem) {
+  .sticky-rail-layout[data-rail-width='compact'][data-has-inspector='true'] {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 21rem;
+  }
+
+  .sticky-rail-layout[data-rail-width='locator'][data-has-inspector='true'] {
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr) 21rem;
+  }
+}
+
+.sticky-compact-rail {
+  position: sticky;
+  top: calc(var(--spacing) * 4);
+  height: fit-content;
+  max-height: calc(var(--shell-viewport-h) - (var(--spacing) * 8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1.5);
+  padding: calc(var(--spacing) * 2.5);
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.sticky-rail-stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 4);
+}
+
+.sticky-rail-inspector {
+  position: sticky;
+  top: calc(var(--spacing) * 4);
+  height: fit-content;
+  max-height: calc(var(--shell-viewport-h) - (var(--spacing) * 8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+  color: var(--card-foreground);
+  padding: calc(var(--spacing) * 4);
+  box-shadow: var(--shadow-surface);
+}
+
+@container main (max-width: 67.99rem) {
+  .sticky-rail-inspector[data-responsive-mode='auto'] {
+    display: none;
+  }
+}
+
+/* ============================================================================
+ * 3. Skeleton C: FlipExpandGrid & FlipExpandCard (5 Strict Geometry Constraints)
+ * ============================================================================ */
+
+.flip-expand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: calc(var(--spacing) * 3.5);
+  align-items: start;
+  grid-auto-flow: dense;
+}
+
+/* Constraint 1 & 4 & 5: No container-type on card; z-index lock (1/2/3); overflow: hidden */
+.flip-expand-card {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.flip-expand-card[data-transitioning='true'] {
+  z-index: 2;
+}
+
+.flip-expand-card[data-expanded='true'] {
+  grid-column: 1 / -1;
+  z-index: 3;
+  border-color: var(--border);
+  box-shadow: var(--shadow-floating);
+}
+
+/* ============================================================================
+ * 4. Coupled Motion Channels (OriginAnchor, PathPulse, EntityPill)
+ * ============================================================================ */
+
+[data-origin-active='true'],
+[data-origin-active=''] {
+  background-color: var(--origin-active);
+  box-shadow: inset 3px 0 0 var(--origin-active-edge);
+}
+
+.path-pulse-base {
+  fill: none;
+  stroke: var(--insight-edge);
+  stroke-linecap: round;
+  transition:
+    stroke var(--motion-duration-standard) var(--motion-ease-enter),
+    opacity var(--motion-duration-standard) var(--motion-ease-enter);
+}
+
+.path-pulse-base[data-active='true'][data-tone='gold'] {
+  stroke: var(--pulse-gold);
+}
+
+.path-pulse-base[data-active='true'][data-tone='purple'] {
+  stroke: var(--pulse-purple);
+}
+
+.path-pulse-base[data-active='true'][data-tone='mint'] {
+  stroke: var(--pulse-mint);
+}
+
+.path-pulse-base[data-active='true'][data-tone='primary'] {
+  stroke: var(--pulse-primary);
+}
+
+.path-pulse-traveller {
+  fill: none;
+  stroke: var(--pulse-gold);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px var(--insight-path-glow));
+  pointer-events: none;
+}
+
+.path-pulse-traveller[data-tone='purple'] {
+  stroke: var(--pulse-purple);
+}
+
+.path-pulse-traveller[data-tone='mint'] {
+  stroke: var(--pulse-mint);
+}
+
+.path-pulse-traveller[data-tone='primary'] {
+  stroke: var(--pulse-primary);
+}
+
+/* EntityPill surface styling */
+.entity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1.5);
+  max-width: 100%;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in oklch, var(--muted) 65%, var(--card));
+  color: var(--foreground);
+  font-weight: 500;
+  line-height: 1.2;
+  transition:
+    background-color var(--motion-duration-feedback) var(--motion-ease-enter),
+    border-color var(--motion-duration-feedback) var(--motion-ease-enter),
+    transform var(--motion-duration-feedback) var(--motion-ease-enter);
+}
+
+.entity-pill[data-interactive='true'] {
+  cursor: pointer;
+}
+
+.entity-pill[data-interactive='true']:hover {
+  border-color: var(--border);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.entity-pill[data-size='sm'] {
+  height: 1.5rem;
+  padding-inline: calc(var(--spacing) * 2);
+  font-size: 0.75rem;
+}
+
+.entity-pill[data-size='md'] {
+  height: 1.75rem;
+  padding-inline: calc(var(--spacing) * 2.5);
+  font-size: 0.75rem;
+}
+
+/* LivingContextBar top-anchored flow bar */
+.living-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 2);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in oklch, var(--muted) 40%, var(--card));
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+}
+
+/* Command palette adaptive height wrapper */
+.command-adaptive-list {
+  transition: height 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: height;
+}
+
+html[data-motion='off'] .command-adaptive-list {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-adaptive-list {
+    transition: none;
+  }
+}

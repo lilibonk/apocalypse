@@ -151,7 +151,9 @@ export function DynaSearch({
     <form
       className={cn(
         'grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end',
-        presentation === 'panel' ? 'rounded-panel bg-muted/40 p-4' : 'object-workspace-search',
+        presentation === 'panel'
+          ? 'rounded-panel bg-muted/40 p-4'
+          : 'border-b border-border-subtle py-2',
       )}
       aria-label={t('queryFilters')}
       onSubmit={(event) => {

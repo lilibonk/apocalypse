@@ -18,9 +18,11 @@ import io.apocalypse.system.api.UserSummary;
 import io.apocalypse.system.authorization.dto.response.DataScopeResp;
 import io.apocalypse.system.authorization.service.AuthorizationReadService;
 import io.apocalypse.system.authorization.service.DataScopeService;
+import io.apocalypse.system.dept.dto.response.DeptPathNodeResp;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.service.DeptService;
 import io.apocalypse.system.menu.service.MenuService;
+import io.apocalypse.system.role.dto.response.UserRoleSummaryResp;
 import io.apocalypse.system.role.service.RoleService;
 import io.apocalypse.system.user.dto.request.SelfPasswordUpdateReq;
 import io.apocalypse.system.user.dto.request.SelfProfileUpdateReq;
@@ -38,10 +40,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -178,18 +183,20 @@ public class UserService implements UserApi, LoginUserQuery {
       boolean includeChildren,
       String sortField,
       String sortOrder) {
-    return sysUserMapper
-        .pageByKeyword(
-            page,
-            size,
-            keyword,
-            dataScopeService.resolve("system:user:list"),
-            deptId,
-            includeChildren,
-            sortField,
-            sortOrder)
-        .map(userConvert::toResp)
-        .map(this::withDeptName);
+    PageResult<UserResp> basePage =
+        sysUserMapper
+            .pageByKeyword(
+                page,
+                size,
+                keyword,
+                dataScopeService.resolve("system:user:list"),
+                deptId,
+                includeChildren,
+                sortField,
+                sortOrder)
+            .map(userConvert::toResp);
+    return new PageResult<>(
+        enrichUserResps(basePage.list()), basePage.total(), basePage.page(), basePage.size());
   }
 
   /** 按当前授权数据范围导出用户 CSV（UTF-8 BOM + 公式注入防护，单次上限 2000 行）。 */
@@ -199,12 +206,12 @@ public class UserService implements UserApi, LoginUserQuery {
     List<List<String>> rows = new java.util.ArrayList<>();
     int pageSize = 200;
     for (int pageNo = 1; pageNo <= 10; pageNo++) {
-      PageResult<UserResp> batch =
+      PageResult<UserResp> baseBatch =
           sysUserMapper
               .pageByKeyword(pageNo, pageSize, keyword, scope, deptId, includeChildren)
-              .map(userConvert::toResp)
-              .map(this::withDeptName);
-      for (UserResp u : batch.list()) {
+              .map(userConvert::toResp);
+      List<UserResp> batchList = enrichUserResps(baseBatch.list());
+      for (UserResp u : batchList) {
         rows.add(
             List.of(
                 u.id() == null ? "" : String.valueOf(u.id()),
@@ -214,7 +221,7 @@ public class UserService implements UserApi, LoginUserQuery {
                 u.status() != null && u.status() == SysUserEntity.STATUS_ENABLED ? "正常" : "停用",
                 u.createTime() == null ? "" : u.createTime().toString().replace('T', ' ')));
       }
-      if (batch.list().size() < pageSize || rows.size() >= batch.total()) {
+      if (batchList.size() < pageSize || rows.size() >= baseBatch.total()) {
         break;
       }
     }
@@ -404,9 +411,13 @@ public class UserService implements UserApi, LoginUserQuery {
     tokenVersionStore.invalidateCredential(entity.getUsername());
   }
 
-  /** 重置用户角色。权限缓存含能力指纹，整体失效覆盖不同实例的全部指纹变体。 */
+  /** 重置用户角色。权限缓存含能力指纹，整体失效覆盖不同实例的全部指纹变体；同时驱逐该用户的详情缓存。 */
   @Transactional
-  @CacheEvict(cacheNames = "userPerms", allEntries = true)
+  @Caching(
+      evict = {
+        @CacheEvict(cacheNames = "userPerms", allEntries = true),
+        @CacheEvict(cacheNames = "user", key = "#userId")
+      })
   public void assignRoles(Long userId, List<Long> roleIds) {
     dataScopeService.requireGlobalWrite("system:user:edit");
     SysUserEntity user = requireById(userId);
@@ -534,18 +545,69 @@ public class UserService implements UserApi, LoginUserQuery {
     return deptId;
   }
 
-  /** 装配 deptName（非实体字段，不在 MapStruct 映射内）。 */
+  /** 装配单条用户的部门路径、部门名与角色摘要（非实体字段，不在 MapStruct 映射内）。 */
   private UserResp withDeptName(UserResp resp) {
-    if (resp.deptId() == null) {
-      return resp;
+    if (resp == null) {
+      return null;
     }
-    return new UserResp(
-        resp.id(),
-        resp.username(),
-        resp.nickname(),
-        resp.status(),
-        resp.deptId(),
-        deptService.nameOf(resp.deptId()),
-        resp.createTime());
+    return enrichUserResps(List.of(resp)).getFirst();
+  }
+
+  /**
+   * 批量装配用户列表的部门路径（{@code deptPath}）、末端部门名称（{@code deptName}）与角色摘要（{@code roles}）。
+   *
+   * <p>无论分页条数多少，恒定最多调用 1 次 {@link DeptService#resolveDeptPaths} 与 1 次 {@link
+   * RoleService#mapRoleSummariesByUserIds}，彻底消除逐行 N+1 查询。
+   */
+  private List<UserResp> enrichUserResps(List<UserResp> baseResps) {
+    if (baseResps == null || baseResps.isEmpty()) {
+      return List.of();
+    }
+    Set<Long> deptIds =
+        baseResps.stream()
+            .filter(Objects::nonNull)
+            .map(UserResp::deptId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+    Set<Long> userIds =
+        baseResps.stream()
+            .filter(Objects::nonNull)
+            .map(UserResp::id)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+    Map<Long, List<DeptPathNodeResp>> pathsByDeptId =
+        deptIds.isEmpty()
+            ? Map.of()
+            : Objects.requireNonNullElse(deptService.resolveDeptPaths(deptIds), Map.of());
+    Map<Long, List<UserRoleSummaryResp>> rolesByUserId =
+        userIds.isEmpty()
+            ? Map.of()
+            : Objects.requireNonNullElse(roleService.mapRoleSummariesByUserIds(userIds), Map.of());
+    List<UserResp> result = new ArrayList<>(baseResps.size());
+    for (UserResp resp : baseResps) {
+      if (resp == null) {
+        continue;
+      }
+      List<DeptPathNodeResp> deptPath =
+          resp.deptId() == null ? List.of() : pathsByDeptId.getOrDefault(resp.deptId(), List.of());
+      String deptName =
+          !deptPath.isEmpty()
+              ? deptPath.getLast().deptName()
+              : (resp.deptId() == null ? null : deptService.nameOf(resp.deptId()));
+      List<UserRoleSummaryResp> roles =
+          resp.id() == null ? List.of() : rolesByUserId.getOrDefault(resp.id(), List.of());
+      result.add(
+          new UserResp(
+              resp.id(),
+              resp.username(),
+              resp.nickname(),
+              resp.status(),
+              resp.deptId(),
+              deptName,
+              deptPath,
+              roles,
+              resp.createTime()));
+    }
+    return result;
   }
 }

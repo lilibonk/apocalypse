@@ -70,36 +70,54 @@
   --slime-star: #ffc820;
   --slime-star-glow: #ffa200;
 
-  /* 控件与内容面板各有稳定尺度，兼容旧 --radius / --radius-brand 入口。 */
+  /* 三级圆角体系（Control / Panel / Stage），兼容旧 --radius / --radius-brand 入口。 */
   --radius: 0.625rem;
   --radius-control: 0.625rem;
   --radius-panel: 1rem;
+  --radius-stage: 1.25rem;
   --radius-brand: var(--radius-panel);
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC',
     'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
-  /* 与 motion.ts 同源：完整表面同步进入，内容不等待分段揭示。 */
+  /* 与 motion.ts unifiedMotion 单源同步：完整表面同步进入，内容不等待分段揭示。 */
   --motion-duration-feedback: 120ms;
+  --motion-duration-anchor: 150ms;
   /* Dialog surfaces become opaque this fast; movement continues on --motion-duration-layer. */
   --motion-duration-fade: 120ms;
+  --motion-duration-popover-exit: 140ms;
   --motion-duration-exit: 160ms;
   --motion-duration-enter: 180ms;
   --motion-duration-layer: 220ms;
   --motion-duration-standard: 200ms;
   --motion-duration-panel-exit: 180ms;
   --motion-duration-panel: 280ms;
+  --motion-duration-hud: 240ms;
+  --motion-duration-flip: 380ms;
+  --motion-duration-entrance: 320ms;
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
-  /* 2026-10-18 video adaptation; same values as stateMotion in motion.ts. */
+  --motion-ease-flip: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Causal coupled motion envelope (240ms–500ms); identical to unifiedMotion in motion.ts. */
   --motion-duration-morph: 240ms;
-  --motion-duration-odometer: 480ms;
-  --motion-duration-path-pulse: 520ms;
+  --motion-duration-odometer: 460ms;
+  --motion-duration-path-pulse: 420ms;
   --motion-duration-heat-cell: 180ms;
 
-  /* 2026-10-18: approved dashboard / role-insight surfaces; base product tokens stay independent. */
-  --insight-card-radius: 1.5rem;
+  /* Spatial shell viewport budget tokens (Slice 01). */
+  --shell-header-h: 3.5rem;
+  --shell-tabbar-h: 2.5rem;
+  --shell-chrome-h: var(--shell-header-h);
+  --shell-stage-pad: calc(var(--spacing) * 4);
+  --shell-viewport-h: calc(100dvh - var(--shell-chrome-h));
+
+  /* Ink-well dark slate surface for read-only payloads / stacktraces / JSON blocks. */
+  --ink-well: oklch(0.19 0.02 255);
+  --ink-well-foreground: oklch(0.93 0.01 255);
+
+  /* Approved dashboard / role-insight surfaces; unified on 3-tier radius tokens. */
+  --insight-card-radius: var(--radius-panel);
   --insight-card-shadow:
     0 8px 32px oklch(0.2 0.008 260 / 0.045), 0 1px 3px oklch(0.2 0.008 260 / 0.025);
   --insight-glow: color-mix(in oklch, var(--brand) 22%, transparent);
@@ -130,23 +148,21 @@
   /* Source row of an open detail Sheet stays marked until the Sheet closes. */
   --origin-active: color-mix(in oklch, var(--brand) 10%, var(--card));
   --origin-active-edge: var(--brand-text);
-
-  /* Compatibility for the standalone design study. */
-  --study-card-radius: var(--insight-card-radius);
-  --study-card-shadow: var(--insight-card-shadow);
-  --study-glow: var(--insight-glow);
-  --study-role: var(--insight-role);
-  --study-role-foreground: var(--insight-role-foreground);
-  --study-grid: var(--insight-grid);
-  --study-edge: var(--insight-edge);
-  --study-blue: var(--insight-blue);
-  --study-blue-foreground: var(--insight-blue-foreground);
-  --study-surface-raised: var(--insight-surface-raised);
+  --pulse-gold: var(--insight-path);
+  --pulse-purple: var(--insight-role-foreground);
+  --pulse-mint: var(--brand-text);
+  --pulse-primary: var(--primary);
 
   color-scheme: light;
 }
 
+[data-tabs-visible='true'] {
+  --shell-chrome-h: calc(var(--shell-header-h) + var(--shell-tabbar-h));
+}
+
 .dark {
+  --ink-well: oklch(0.16 0.018 255);
+  --ink-well-foreground: oklch(0.94 0.01 255);
   --insight-card-shadow: 0 8px 32px oklch(0.08 0 0 / 0.22), 0 1px 3px oklch(0.08 0 0 / 0.16);
   --insight-glow: color-mix(in oklch, var(--brand) 12%, transparent);
   --insight-role: oklch(0.3 0.045 295);
@@ -344,7 +360,7 @@ html[data-gray='on'] {
   filter: grayscale(1);
 }
 
-/* ---- 轻量等待反馈：保留 PixelScale 接口，连续圆润节奏 ---- */
+/* ---- 轻量等待反馈：PulseIndicator 连续圆润节奏 ---- */
 
 @keyframes loading-scale-pulse {
   0%,

@@ -7,13 +7,20 @@ import io.apocalypse.framework.security.TokenVersionStore;
 import io.apocalypse.system.authorization.dto.response.DataScopeResp;
 import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.dept.dto.request.DeptSaveReq;
+import io.apocalypse.system.dept.dto.response.DeptPathNodeResp;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.dept.entity.SysDeptEntity;
 import io.apocalypse.system.dept.mapper.SysDeptMapper;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -125,6 +132,42 @@ public class DeptService {
   public String nameOf(Long id) {
     SysDeptEntity entity = id == null ? null : sysDeptMapper.selectById(id);
     return entity == null ? null : entity.getDeptName();
+  }
+
+  /**
+   * 批量解析部门根到叶的祖先路径列表（单次查询活动部门树并在内存回溯，消除逐行 selectById 的 N+1 查询）。
+   *
+   * @param deptIds 目标部门 ID 集合
+   * @return deptId 到根→叶路径节点列表的映射
+   */
+  public Map<Long, List<DeptPathNodeResp>> resolveDeptPaths(Collection<Long> deptIds) {
+    if (deptIds == null || deptIds.isEmpty()) {
+      return Map.of();
+    }
+    Set<Long> targetIds = deptIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+    if (targetIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, SysDeptEntity> byId =
+        sysDeptMapper.selectList(null).stream()
+            .collect(Collectors.toMap(SysDeptEntity::getId, d -> d, (a, b) -> a));
+    Map<Long, List<DeptPathNodeResp>> result = new HashMap<>();
+    for (Long targetId : targetIds) {
+      SysDeptEntity current = byId.get(targetId);
+      if (current == null) {
+        continue;
+      }
+      List<DeptPathNodeResp> path = new ArrayList<>();
+      Set<Long> visited = new HashSet<>();
+      while (current != null && visited.add(current.getId())) {
+        path.add(new DeptPathNodeResp(current.getId(), current.getDeptName()));
+        Long parentId = current.getParentId();
+        current = (parentId == null || parentId == 0L) ? null : byId.get(parentId);
+      }
+      Collections.reverse(path);
+      result.put(targetId, List.copyOf(path));
+    }
+    return result;
   }
 
   /** 父部门存在性校验（parentId=0 为根，无需校验）。 */

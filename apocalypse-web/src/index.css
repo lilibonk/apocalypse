@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './design/tokens.css';
+@import './design/spatial.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -36,6 +37,8 @@
   --color-brand-text: var(--brand-text);
   --color-surface-navigation: var(--surface-navigation);
   --color-surface-navigation-glass: var(--surface-navigation-glass);
+  --color-ink-well: var(--ink-well);
+  --color-ink-well-foreground: var(--ink-well-foreground);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -43,6 +46,7 @@
   --radius-xl: calc(var(--radius) + 4px);
   --radius-control: var(--radius-control);
   --radius-panel: var(--radius-panel);
+  --radius-stage: var(--radius-stage);
 
   --shadow-surface: var(--shadow-surface);
   --shadow-floating: var(--shadow-floating);

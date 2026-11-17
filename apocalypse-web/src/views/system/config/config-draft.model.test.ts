@@ -4,15 +4,19 @@ import {
   configGroup,
   conflictedIds,
   editDraft,
+  inferConfigControl,
   rebaseDraft,
+  resolveConfigGroupMeta,
+  resolveConflictUseMine,
+  resolveConflictUseServer,
   saveItems,
   undoDraft,
 } from './config-draft.model'
 import type { ConfigRow } from './config.api'
 
-const row = (id: string, value: string | null, version = 0): ConfigRow => ({
+const row = (id: string, value: string | null, version = 0, key = `frame.${id}`): ConfigRow => ({
   id,
-  configKey: `frame.${id}`,
+  configKey: key,
   configName: id,
   configValue: value,
   remark: null,
@@ -44,7 +48,7 @@ describe('config draft model', () => {
     ])
   })
 
-  it('detects rows changed elsewhere and rebases without losing the user value', () => {
+  it('detects rows changed elsewhere, rebases onto latest server baseline while keeping 3-way history, and resolves conflicts', () => {
     const draft = editDraft({}, row('a', 'light', 1), 'dark')
     const latest = [row('a', 'system', 2)]
     expect(conflictedIds(draft, latest)).toEqual(new Set(['a']))
@@ -55,7 +59,19 @@ describe('config draft model', () => {
       baseVersion: 2,
       configKey: 'frame.a',
       configName: 'a',
+      conflictBaseValue: 'light',
+      conflictServerValue: 'system',
+      conflictServerVersion: 2,
     })
+    const adoptedMine = resolveConflictUseMine(draft, 'a', latest[0])
+    expect(adoptedMine.a).toEqual({
+      value: 'dark',
+      baseValue: 'system',
+      baseVersion: 2,
+      configKey: 'frame.a',
+      configName: 'a',
+    })
+    expect(resolveConflictUseServer(rebased, 'a')).toEqual({})
     expect(rebaseDraft(draft, [row('a', 'dark', 2)])).toEqual({})
   })
 
@@ -68,6 +84,8 @@ describe('config draft model', () => {
     const rebased = rebaseDraft(draft, [row('later', 'elsewhere', 13)])
     expect(rebased.one).toEqual(draft.one)
     expect(rebased.later.baseValue).toBe('elsewhere')
+    expect(rebased.later.conflictBaseValue).toBe('before')
+    expect(rebased.later.conflictServerValue).toBe('elsewhere')
     expect(saveItems(rebased)).toEqual([
       { id: 'one', configValue: 'changed', expectedVersion: 4 },
       { id: 'later', configValue: 'after', expectedVersion: 13 },
@@ -75,9 +93,35 @@ describe('config draft model', () => {
     expect(undoDraft(rebased, 'later')).toEqual({ one: draft.one })
   })
 
-  it('groups keys by their first segment', () => {
+  it('groups keys by their first segment and resolves 2-level semantic groups and control types', () => {
     expect(configGroup('frame.appearance.default')).toBe('frame')
     expect(configGroup('sys:captcha')).toBe('sys')
     expect(configGroup('plain')).toBe('plain')
+
+    expect(resolveConfigGroupMeta('sys.user.initPassword')).toEqual({
+      key: 'sys.user',
+      label: '用户管理',
+    })
+    expect(resolveConfigGroupMeta('sys.account.registerUser')).toEqual({
+      key: 'sys.account',
+      label: '账号自助',
+    })
+    expect(resolveConfigGroupMeta('sys.index.skinName')).toEqual({
+      key: 'sys.index',
+      label: '主框架',
+    })
+    expect(resolveConfigGroupMeta('sys.security.lockThreshold')).toEqual({
+      key: 'sys.security',
+      label: '安全策略',
+    })
+    expect(resolveConfigGroupMeta('demo.feature.flag')).toEqual({
+      key: 'demo',
+      label: '演示参数',
+    })
+
+    expect(inferConfigControl(row('p', '123456', 0, 'sys.user.initPassword')).kind).toBe('secret')
+    expect(inferConfigControl(row('b', 'true', 0, 'sys.account.registerUser')).kind).toBe('boolean')
+    expect(inferConfigControl(row('t', 'dark', 0, 'sys.index.skinMode')).kind).toBe('enum')
+    expect(inferConfigControl(row('theme', 'light', 0, 'frame.theme')).kind).toBe('text')
   })
 })

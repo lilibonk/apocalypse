@@ -8,7 +8,7 @@ import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
 import type { RoleGraphMember } from './role-permission.queries'
 import type { RoleMemberLinkState } from './role-member-draft.model'
-import './role-member-relations.css'
+import './role-stage.css'
 
 export interface RoleMemberGraphNode {
   id: string

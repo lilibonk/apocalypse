@@ -23,6 +23,7 @@ const harness = vi.hoisted(() => ({
     },
     sessionEpoch: 8,
     meLoaded: true,
+    menus: [],
     perms: ['system:role:list', 'system:menu:list', 'system:role:add'],
   },
 }))
@@ -70,6 +71,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('react-router', () => ({
   useSearchParams: () => [harness.params, vi.fn()],
   useLocation: () => ({ state: null }),
+  useNavigate: () => vi.fn(),
 }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -80,10 +82,14 @@ vi.mock('@/stores/auth', () => ({
   isAuthorizationCurrent: (epoch?: number) =>
     epoch === undefined || epoch === harness.auth.authorizationEpoch,
   assertAuthorizationCurrent: () => undefined,
-  useAuthStore: Object.assign(() => harness.auth, {
-    getState: () => harness.auth,
-    subscribe: () => () => {},
-  }),
+  useAuthStore: Object.assign(
+    (selector?: (state: typeof harness.auth) => unknown) =>
+      selector ? selector(harness.auth) : harness.auth,
+    {
+      getState: () => harness.auth,
+      subscribe: () => () => {},
+    },
+  ),
 }))
 vi.mock('@/lib/query/use-resource-denial', () => ({
   isResourceDenied: () => false,

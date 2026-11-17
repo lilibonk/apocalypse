@@ -1,6 +1,7 @@
 /**
- * DynaLayer 桶出口。页面侧通常只需要 DynaPage + definePageSchema；
- * 搜索/表格/表单/详情四个渲染器可独立使用（非 CRUD 组合场景）。
+ * DynaLayer 桶出口。
+ * - 空间工作台（Wave 2/3）直接消费 Headless `useDynaController` + `DynaToolbar` / `DynaToolbarActions` + `DynaDialogs`
+ * - 高密度流式记录页消费 `DynaPage` 或 `useDynaController` + `DynaTable`
  */
 
 export { definePageSchema, validatePageSchema } from './schema'
@@ -13,22 +14,42 @@ export type {
   DynaPageSchema,
   DynaRowAction,
   DynaSearchField,
+  DynaStatusToggleAction,
   DynaTreeNodeOption,
   DynaVisibleWhen,
   SchemaValidationResult,
 } from './schema'
 export { flattenTreeNodeOptions, isFieldVisible } from './form-model'
 export type { DynaSortState } from './use-dyna-url-state'
+export {
+  useDynaController,
+  rowIdOf,
+  type DynaCollectionState,
+  type DynaController,
+  type DynaControllerDialogsState,
+  type DynaDialogModeState,
+  type DynaRow,
+  type DynaToggleState,
+  type ScopedDynaAction,
+  type UseDynaControllerOptions,
+} from './use-dyna-controller'
+export {
+  DynaToolbar,
+  DynaToolbarActions,
+  type DynaToolbarActionsProps,
+  type DynaToolbarProps,
+} from './DynaToolbar'
+export { DynaDialogs, type DynaDialogsProps } from './DynaDialogs'
 export { DynaSearch } from './DynaSearch'
-export { DynaTable } from './DynaTable'
+export { DynaTable, type DynaTableProps } from './DynaTable'
 export {
   DynaForm,
   createAsyncFieldValidationController,
   type DynaAsyncFieldValidator,
+  type DynaFormProps,
 } from './DynaForm'
 export { DynaDetail } from './DynaDetail'
 export { DynaImportDialog } from './DynaImportDialog'
-export { DynaPage, type DynaOverviewControls, type DynaWorkspaceControls } from './DynaPage'
+export { DynaPage, type DynaPageProps } from './DynaPage'
 export { DynaQueryFeedback } from './DynaQueryFeedback'
-
 export { DynaPagination, type DynaPaginationProps } from './DynaPagination'

@@ -75,21 +75,6 @@ public class RoleController {
     roleService.delete(id);
   }
 
-  /** 重置角色菜单（授权）。 */
-  @PutMapping("/{id}/menus")
-  @PreAuthorize("hasAuthority('system:role:edit')")
-  @OperLog(title = "角色管理", businessType = "GRANT")
-  public void assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
-    roleService.assignMenus(id, menuIds);
-  }
-
-  /** 查询角色当前菜单授权。 */
-  @GetMapping("/{id}/menus")
-  @PreAuthorize("hasAuthority('system:role:list')")
-  public List<Long> menuIds(@PathVariable Long id) {
-    return roleService.menuIds(id);
-  }
-
   /** 分页查询角色下的用户。 */
   @GetMapping("/{id}/users")
   @PreAuthorize("hasAuthority('system:role:list')")

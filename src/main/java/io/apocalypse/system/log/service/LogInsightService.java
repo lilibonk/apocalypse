@@ -188,6 +188,15 @@ public class LogInsightService {
         types);
   }
 
+  /** 解析周期枚举对应的服务端本地时间半开区间 {@code [from, to)}。 */
+  public TimeWindow resolveTimeWindow(LogInsightRange range) {
+    Window window = window(range);
+    return new TimeWindow(window.from(), window.to());
+  }
+
+  /** 服务端时间窗口（半开区间 {@code [from, to)}）。 */
+  public record TimeWindow(LocalDateTime from, LocalDateTime to) {}
+
   private Window window(LogInsightRange range) {
     ZoneId zone = ZoneId.systemDefault();
     LocalDateTime now =

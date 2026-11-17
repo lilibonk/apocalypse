@@ -45,9 +45,6 @@ class SystemBaseIT extends AbstractIntegrationTest {
   void independentPermissionAndNavigationBaselinesReplaceLegacyMenuProtocol() {
     String token = loginAndGetToken("admin", ADMIN_PASSWORD);
 
-    assertThat(
-            exchangeRaw("/system/roles/1/menus", HttpMethod.GET, null, token).path("code").asInt())
-        .isEqualTo(40000);
     JsonNode grants = getForData("/system/roles/1/permissions", token).path("grants");
     int assignments =
         jdbcTemplate.queryForObject(
@@ -84,9 +81,19 @@ class SystemBaseIT extends AbstractIntegrationTest {
     JsonNode data = getForData("/system/dict/data/type/sys_user_status", token);
     assertThat(data).hasSize(2);
     assertThat(data.get(0).get("dictLabel").asText()).isEqualTo("正常");
+    assertThat(data.get(0).get("tagTone").asText()).isEqualTo("SUCCESS");
+    assertThat(data.get(0).get("isDefault").asInt()).isEqualTo(1);
+    assertThat(data.get(1).get("tagTone").asText()).isEqualTo("DANGER");
+    assertThat(data.get(1).get("isDefault").asInt()).isZero();
     Cache dictCache = cacheManager.getCache("dict");
     assertThat(dictCache).isNotNull();
     assertThat(dictCache.get("sys_user_status")).as("getByType 后应写入缓存").isNotNull();
+
+    // 批量查询：返回请求类型下的全部未删除项
+    JsonNode batch =
+        getForData("/system/dict/data/batch?dictTypes=sys_user_status,sys_user_sex", token);
+    assertThat(batch.get("sys_user_status")).hasSize(2);
+    assertThat(batch.get("sys_user_sex")).hasSize(3);
 
     // 更新该类型下的一条数据：缓存应被 evict
     putForData(
@@ -96,6 +103,8 @@ class SystemBaseIT extends AbstractIntegrationTest {
             "dictLabel", "正常",
             "dictValue", "1",
             "sort", 1,
+            "tagTone", "SUCCESS",
+            "isDefault", 1,
             "remark", "it"),
         token);
     assertThat(dictCache.get("sys_user_status")).as("更新后缓存应被 evict").isNull();

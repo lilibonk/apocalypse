@@ -24,4 +24,12 @@ public record AuthorizationOverviewResp(
     long unassignedNavigationCount,
     List<UnassignedNavigationResp> unassignedNavigation,
     List<InsightCountResp> roleScopeDistribution,
-    List<InsightCountResp> permissionModules) {}
+    List<InsightCountResp> permissionModules,
+    List<BusinessDomainSummaryResp> businessDomains,
+    List<RoleTopologyNodeResp> roleTopology) {
+
+  public AuthorizationOverviewResp {
+    businessDomains = businessDomains == null ? List.of() : List.copyOf(businessDomains);
+    roleTopology = roleTopology == null ? List.of() : List.copyOf(roleTopology);
+  }
+}

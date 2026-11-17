@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router'
 import {
+  CircleHelp,
   KeyRound,
   LayoutList,
   Network,
@@ -16,19 +17,13 @@ import {
   Users,
 } from 'lucide-react'
 
-import { PageHeader } from '@/components/layout/PageHeader'
+import { EntityPill, LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
+import { FloatingHud, SpatialStage } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { ApiError } from '@/lib/api/client'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
@@ -37,7 +32,7 @@ import { RoleGraphPagination, RolePermissionGraph } from './RolePermissionGraph'
 import { RolePermissionView } from './RolePermissionView'
 import { RoleMemberRelations } from './RoleMemberRelations'
 import { RoleBusinessPermissions } from './RoleBusinessPermissions'
-import { RolePanorama } from './RolePanorama'
+import { RolePanorama, type RoleInitialRelation } from './RolePanorama'
 import { RoleAuthorizationChain } from './RoleAuthorizationChain'
 import { canAskAuthorizationQuestions } from './authorization-questions.model'
 import { RoleGraphCrudPanel, RoleGraphObjectActions } from './role-graph-crud'
@@ -47,9 +42,7 @@ import {
   ROLE_MEMBERS_PAGE_SIZE,
   createRoleChoicesQuery,
 } from './role-permission.queries'
-import { useRolePanelWidth } from './useRolePanelWidth'
-import type { RoleMemberContext } from './role-member-context'
-import './role-workspace.css'
+import './role-stage.css'
 import {
   canReadRolePermissionGraph,
   canReadRoleWorkspace,
@@ -66,13 +59,13 @@ type RelationCounts = Partial<Record<'permissions' | 'navigation' | 'members', n
 export function RolePermissionWorkspace({
   principalEpoch,
   presentation = 'graph',
-  memberContext,
+  entityIntent,
   viewControl,
   onBusyChange,
 }: {
   principalEpoch: number
   presentation?: 'graph' | 'list'
-  memberContext?: RoleMemberContext
+  entityIntent?: EntityRouteIntent | null
   viewControl: ReactNode
   onBusyChange: (busy: boolean) => void
 }) {
@@ -82,13 +75,12 @@ export function RolePermissionWorkspace({
   const location = useLocation()
   const queryClient = useQueryClient()
   const workspaceRef = useRef<HTMLDivElement>(null)
-  const locatorWide = useRolePanelWidth(workspaceRef, 'locator')
   const [locatorExpanded, setLocatorExpanded] = useState(true)
-  const [locatorDrawerOpen, setLocatorDrawerOpen] = useState(false)
   const [workspaceId] = useState(() => crypto.randomUUID())
   const [page, setPage] = useState(1)
-  const [draft, setDraft] = useState(() => searchParams.get('roleKey') ?? '')
-  const [keyword, setKeyword] = useState(() => searchParams.get('roleKey') ?? '')
+  const initialKeyword = searchParams.get('roleKey') ?? searchParams.get('keyword') ?? ''
+  const [draft, setDraft] = useState(() => initialKeyword)
+  const [keyword, setKeyword] = useState(() => initialKeyword)
   const [selection, setSelection] = useState<RolePermissionOpening | null>(null)
   const [command, setCommand] = useState<RoleGraphCommand | null>(null)
   const [editingMenus, setEditingMenus] = useState(false)
@@ -100,9 +92,22 @@ export function RolePermissionWorkspace({
     index: number
   } | null>(null)
   const [relationCounts, setRelationCounts] = useState<RelationCounts & { roleId?: string }>({})
+  const [pendingMember] = useState(() =>
+    entityIntent?.relation === 'members' &&
+    entityIntent.focusTargetId &&
+    !searchParams.get('roleId') &&
+    entityIntent.id === entityIntent.focusTargetId
+      ? {
+          userId: entityIntent.focusTargetId,
+          keyword: entityIntent.label ?? entityIntent.focusTargetId,
+        }
+      : null,
+  )
   const [relation, setRelation] = useState<'chain' | 'permissions' | 'navigation' | 'members'>(
     () =>
-      memberContext || searchParams.get('roleRelation') === 'members'
+      pendingMember ||
+      entityIntent?.relation === 'members' ||
+      searchParams.get('roleRelation') === 'members'
         ? 'members'
         : searchParams.get('roleRelation') === 'chain'
           ? 'chain'
@@ -110,10 +115,14 @@ export function RolePermissionWorkspace({
             ? 'navigation'
             : 'permissions',
   )
+  const targetRoleId =
+    searchParams.get('roleId') ??
+    searchParams.get('focusId') ??
+    (pendingMember ? null : (entityIntent?.id ?? null))
   // L0 permission overview: graph presentation without a requested role, for readers of both the
   // role list and the permission catalog. Choosing a role leaves it; the breadcrumb returns.
   const canOverview = presentation === 'graph' && canAskAuthorizationQuestions(auth)
-  const [overview, setOverview] = useState(() => !memberContext && !searchParams.get('roleId'))
+  const [overview, setOverview] = useState(() => !pendingMember && !targetRoleId)
   const showOverview = overview && canOverview
   const [mutationDenied, setMutationDenied] = useState(false)
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -123,8 +132,7 @@ export function RolePermissionWorkspace({
     requestedAt: number
     unavailable?: boolean
   } | null>(() => {
-    const id = searchParams.get('roleId')
-    return id ? { id, keyword: searchParams.get('roleKey') ?? '', requestedAt: 0 } : null
+    return targetRoleId ? { id: targetRoleId, keyword: initialKeyword, requestedAt: 0 } : null
   })
   const busy = command !== null || editingMenus || editingMembers
   // A departing relationship view must not unlock a concurrently opening object editor.
@@ -166,22 +174,23 @@ export function RolePermissionWorkspace({
     }
   }, [resource, queryClient])
 
-  const chooseRole = (role: RolePermissionTarget) => {
+  const chooseRole = (role: RolePermissionTarget, nextRelation?: RoleInitialRelation) => {
     const current = useAuthStore.getState()
     if (busy || current.sessionEpoch !== principalEpoch || !canReadRoleWorkspace(current)) return
     setCreated(null)
+    const targetRel = nextRelation ?? (showOverview ? 'chain' : relation)
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous)
         next.set('roleId', role.id)
         next.set('roleKey', role.roleKey)
+        if (nextRelation) next.set('roleRelation', nextRelation)
         return next
       },
       { replace: true, state: location.state },
     )
-    if (showOverview) setRelation('chain')
+    setRelation(targetRel)
     setOverview(false)
-    setLocatorDrawerOpen(false)
     setSelection({ role, principalEpoch, openId: crypto.randomUUID() })
   }
   const returnToOverview = () => {
@@ -203,7 +212,11 @@ export function RolePermissionWorkspace({
   const acceptedSelection = synchronizeRolePermissionSelection(selection, denied ? [] : roles)
   if (acceptedSelection !== selection) setSelection(acceptedSelection)
   const opening =
-    denied || mutationDenied || created !== null || showOverview || (memberContext && !selection)
+    denied ||
+    mutationDenied ||
+    created !== null ||
+    showOverview ||
+    (pendingMember !== null && !selection)
       ? null
       : resolveRolePermissionOpening(selection, roles, principalEpoch, workspaceId)
 
@@ -447,40 +460,95 @@ export function RolePermissionWorkspace({
     </section>
   )
   return (
-    <div ref={workspaceRef} className="role-permission-workspace-page min-w-0 space-y-6 p-4 sm:p-6">
-      <PageHeader
-        title={t('roleManage.title', { defaultValue: '角色管理' })}
-        description={t('roleManage.description', {
-          defaultValue: '管理角色属性、业务权限、导航分配与成员关系。',
-        })}
-        view={viewControl}
-        actions={
-          <>
+    <div ref={workspaceRef} className="role-permission-workspace-page min-w-0 p-3 sm:p-5">
+      <SpatialStage backdrop="dots" className="min-h-[38rem] gap-3 p-3 sm:p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <FloatingHud
+            slot="top-left"
+            ariaLabel={t('roleManage.title', { defaultValue: '角色管理' })}
+            className="flex flex-wrap items-center gap-2.5"
+          >
             <Button
               data-role-locator-trigger
               type="button"
+              size="sm"
               variant="outline"
-              aria-expanded={locatorWide ? locatorExpanded : locatorDrawerOpen}
-              onClick={() => {
-                if (locatorWide) setLocatorExpanded((value) => !value)
-                else setLocatorDrawerOpen(true)
-              }}
+              aria-expanded={locatorExpanded}
+              onClick={() => setLocatorExpanded((value) => !value)}
             >
-              {locatorWide && locatorExpanded ? (
+              {locatorExpanded ? (
                 <PanelLeftClose className="size-4" />
               ) : (
                 <PanelLeftOpen className="size-4" />
               )}
-              {t(
-                locatorWide && locatorExpanded
-                  ? 'roleManage.hideLocator'
-                  : 'roleManage.showLocator',
-              )}
+              {t(locatorExpanded ? 'roleManage.hideLocator' : 'roleManage.showLocator')}
             </Button>
+            {canOverview && opening && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={returnToOverview}
+                aria-label={t('panorama.title')}
+                title={t('panorama.title')}
+              >
+                <Network aria-hidden="true" className="size-4" />
+                {t('panorama.title')}
+              </Button>
+            )}
+            {opening ? (
+              <div className="flex min-w-0 items-center gap-2 border-l border-border-subtle pl-2.5">
+                <span className="role-permission-role-icon flex size-8 shrink-0 items-center justify-center rounded-lg">
+                  <ShieldCheck className="size-4" strokeWidth={1.5} />
+                </span>
+                <div className="min-w-0">
+                  <h1 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                    <span className="truncate">{opening.role.roleName}</span>
+                    <Badge variant={opening.role.status === 1 ? 'success' : 'secondary'}>
+                      {t(
+                        opening.role.status === 1
+                          ? 'roleGraph.enabled'
+                          : opening.role.status === 0
+                            ? 'roleGraph.disabled'
+                            : 'roleGraph.unknown',
+                      )}
+                    </Badge>
+                  </h1>
+                  <p className="truncate font-mono text-[11px] text-muted-foreground">
+                    {opening.role.roleKey}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="px-1">
+                <h1 className="text-sm font-semibold">
+                  {t('roleManage.title', { defaultValue: '角色管理' })}
+                </h1>
+                <p className="text-[11px] text-muted-foreground">
+                  {t('roleManage.description', {
+                    defaultValue: '管理角色属性、业务权限、导航分配与成员关系。',
+                  })}
+                </p>
+              </div>
+            )}
+          </FloatingHud>
+
+          <FloatingHud
+            slot="top-right"
+            ariaLabel={t('roleManage.objectActions', { defaultValue: '所选角色操作' })}
+            className="flex flex-wrap items-center gap-2"
+          >
+            {opening && (
+              <RoleGraphObjectActions
+                role={opening.role}
+                disabled={busy}
+                onCommand={beginCommand}
+              />
+            )}
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="icon-sm"
               disabled={result.isFetching || busy}
               aria-label={t('roleGraph.refreshRoles')}
               onClick={() => {
@@ -488,11 +556,12 @@ export function RolePermissionWorkspace({
                 void result.refetch()
               }}
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className="size-3.5" />
             </Button>
             {auth.allScopePerms.includes('system:role:add') && (
               <Button
                 data-create-role
+                size="sm"
                 disabled={busy || mutationDenied}
                 onClick={() => beginCommand('create')}
               >
@@ -500,350 +569,363 @@ export function RolePermissionWorkspace({
                 {t('roleManage.create', { defaultValue: '新增角色' })}
               </Button>
             )}
-          </>
-        }
-      />
-      {memberContext && (
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-card px-4 py-3 text-sm"
-          role="status"
-        >
-          <div>
-            <p className="font-medium">
-              {t('roleManage.pendingMember', { name: memberContext.keyword })}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t('roleManage.pendingMemberHint', { id: memberContext.userId })}
-            </p>
-          </div>
-          {!opening && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (locatorWide) setLocatorExpanded(true)
-                else setLocatorDrawerOpen(true)
-              }}
-            >
-              {t('roleManage.showLocator')}
-            </Button>
-          )}
+            {viewControl}
+          </FloatingHud>
         </div>
-      )}
-      <div
-        className="role-permission-main-layout grid min-w-0 items-start gap-6"
-        data-locator={locatorWide && locatorExpanded ? 'inline' : 'hidden'}
-      >
-        {locatorWide && locatorExpanded && roleLocator}
-        {!denied && !mutationDenied && (
-          <div className="min-w-0 space-y-4">
-            {created && (
-              <p
-                className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm"
-                role="status"
-              >
-                {created.unavailable
-                  ? t('roleManage.createdUnavailable', {
-                      defaultValue: '当前可读结果中未找到所选角色，请刷新或选择其他角色。',
-                    })
-                  : t('roleManage.findingCreated', { defaultValue: '正在读取所选角色节点…' })}
+
+        {pendingMember && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-card px-4 py-3 text-sm"
+            role="status"
+          >
+            <div>
+              <p className="font-medium">
+                {t('roleManage.pendingMember', { name: pendingMember.keyword })}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('roleManage.pendingMemberHint', { id: pendingMember.userId })}
+              </p>
+            </div>
+            {!opening && !locatorExpanded && (
+              <Button variant="outline" size="sm" onClick={() => setLocatorExpanded(true)}>
+                {t('roleManage.showLocator')}
+              </Button>
             )}
-            {command ? (
-              <RoleGraphCrudPanel
-                key={command.id}
-                command={command}
-                clearQueries={{
-                  predicate: (query) => {
-                    const key = query.queryKey
-                    if (key[0] !== 'system' || key[1] !== 'roles') return false
-                    return (
-                      (key[2] === 'permission-graph-choices' &&
-                        key[3] === principalEpoch &&
-                        key[4] === workspaceId) ||
-                      (command.kind !== 'create' && key[2] === command.role.id)
-                    )
-                  },
-                }}
-                onDenied={() => {
-                  setMutationDenied(true)
-                  setCommand(null)
-                  setSelection(null)
-                  setCreated(null)
-                  setRelation('permissions')
-                  setSearchParams(
-                    (previous) => {
-                      const next = new URLSearchParams(previous)
-                      next.delete('roleId')
-                      next.delete('roleKey')
-                      return next
-                    },
-                    { replace: true, state: location.state },
-                  )
-                }}
-                onClose={closeCommand}
-                onCreated={(id, search) => {
-                  setOverview(false)
-                  setSearchParams(
-                    (previous) => {
-                      const next = new URLSearchParams(previous)
-                      next.set('roleId', id)
-                      next.set('roleKey', search)
-                      return next
-                    },
-                    { replace: true, state: location.state },
-                  )
-                  closeCommand()
-                  setSelection(null)
-                  setPage(1)
-                  setDraft(search)
-                  setKeyword(search)
-                  setCreated({ id, keyword: search, requestedAt: Date.now() })
-                }}
-                onUpdated={(id, search) => {
-                  setSearchParams(
-                    (previous) => {
-                      const next = new URLSearchParams(previous)
-                      next.set('roleId', id)
-                      next.set('roleKey', search)
-                      return next
-                    },
-                    { replace: true, state: location.state },
-                  )
-                  closeCommand()
-                  setPage(1)
-                  setDraft(search)
-                  setKeyword(search)
-                  setCreated({ id, keyword: search, requestedAt: Date.now() })
-                }}
-                onDeleted={(id) => {
-                  setSearchParams(
-                    (previous) => {
-                      const next = new URLSearchParams(previous)
-                      next.delete('roleId')
-                      next.delete('roleKey')
-                      return next
-                    },
-                    { replace: true, state: location.state },
-                  )
-                  closeCommand()
-                  setDeletedIds((previous) => new Set([...previous, id]))
-                  setSelection(null)
-                }}
-              />
-            ) : showOverview ? (
-              <RolePanorama
-                roles={roles}
-                rolePage={page}
-                rolePages={pageCount}
-                onRolePage={(next) => {
-                  if (!busy) {
-                    setCreated(null)
-                    setPage(next)
-                  }
-                }}
-                onChooseRole={chooseRole}
-              />
-            ) : opening ? (
-              <>
-                <div className="role-context-bar flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    {canOverview && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={returnToOverview}
-                        aria-label={t('panorama.title')}
-                        title={t('panorama.title')}
-                      >
-                        <Network aria-hidden="true" className="size-4" />
-                      </Button>
-                    )}
-                    <span className="role-permission-role-icon flex size-10 shrink-0 items-center justify-center rounded-control">
-                      <ShieldCheck className="size-5" strokeWidth={1.5} />
-                    </span>
-                    <div className="min-w-0">
-                      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold break-words">
-                        {opening.role.roleName}
-                        <Badge variant={opening.role.status === 1 ? 'success' : 'secondary'}>
-                          {t(
-                            opening.role.status === 1
-                              ? 'roleGraph.enabled'
-                              : opening.role.status === 0
-                                ? 'roleGraph.disabled'
-                                : 'roleGraph.unknown',
-                          )}
-                        </Badge>
-                      </h2>
-                      <p className="mt-0.5 font-mono text-xs break-all text-muted-foreground">
-                        {opening.role.roleKey}
-                      </p>
-                    </div>
-                  </div>
-                  <RoleGraphObjectActions
-                    role={opening.role}
-                    disabled={busy}
-                    onCommand={beginCommand}
+          </div>
+        )}
+
+        <div
+          className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)]"
+          style={
+            locatorExpanded
+              ? { gridTemplateColumns: 'minmax(15rem, 17.5rem) minmax(0, 1fr)' }
+              : undefined
+          }
+          data-locator={locatorExpanded ? 'inline' : 'hidden'}
+        >
+          {locatorExpanded && roleLocator}
+          {!denied && !mutationDenied && (
+            <div className="min-w-0 space-y-3">
+              {opening ? (
+                <LivingContextBar source={entityIntent?.source}>
+                  <EntityPill
+                    kind="user"
+                    id={opening.role.id}
+                    label={relationLabel('members', t('authorization.members'))}
+                    source={{
+                      kind: 'role',
+                      id: opening.role.id,
+                      label: opening.role.roleName,
+                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
+                    }}
+                    size="sm"
                   />
-                </div>
-                <SegmentedControl
-                  label={t('roleGraph.relations')}
-                  value={relation}
-                  disabled={busy}
-                  onChange={(target) => {
-                    setRelation(target)
+                  <EntityPill
+                    kind="permission"
+                    id={opening.role.id}
+                    label={relationLabel('permissions', t('authorization.permissions'))}
+                    source={{
+                      kind: 'role',
+                      id: opening.role.id,
+                      label: opening.role.roleName,
+                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
+                    }}
+                    size="sm"
+                  />
+                  <EntityPill
+                    kind="menu"
+                    id={opening.role.id}
+                    label={relationLabel('navigation', t('authorization.navigation'))}
+                    source={{
+                      kind: 'role',
+                      id: opening.role.id,
+                      label: opening.role.roleName,
+                      path: `/system/role?roleId=${encodeURIComponent(opening.role.id)}&roleKey=${encodeURIComponent(opening.role.roleKey)}`,
+                    }}
+                    size="sm"
+                  />
+                </LivingContextBar>
+              ) : (
+                entityIntent?.source && <LivingContextBar source={entityIntent.source} />
+              )}
+              {created && (
+                <p
+                  className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm"
+                  role="status"
+                >
+                  {created.unavailable
+                    ? t('roleManage.createdUnavailable', {
+                        defaultValue: '当前可读结果中未找到所选角色，请刷新或选择其他角色。',
+                      })
+                    : t('roleManage.findingCreated', { defaultValue: '正在读取所选角色节点…' })}
+                </p>
+              )}
+              {command ? (
+                <RoleGraphCrudPanel
+                  key={command.id}
+                  command={command}
+                  clearQueries={{
+                    predicate: (query) => {
+                      const key = query.queryKey
+                      if (key[0] !== 'system' || key[1] !== 'roles') return false
+                      return (
+                        (key[2] === 'permission-graph-choices' &&
+                          key[3] === principalEpoch &&
+                          key[4] === workspaceId) ||
+                        (command.kind !== 'create' && key[2] === command.role.id)
+                      )
+                    },
+                  }}
+                  onDenied={() => {
+                    setMutationDenied(true)
+                    setCommand(null)
+                    setSelection(null)
+                    setCreated(null)
+                    setRelation('permissions')
                     setSearchParams(
                       (previous) => {
                         const next = new URLSearchParams(previous)
-                        next.set('roleRelation', target)
+                        next.delete('roleId')
+                        next.delete('roleKey')
                         return next
                       },
                       { replace: true, state: location.state },
                     )
                   }}
-                  options={[
-                    ...(presentation === 'graph'
-                      ? [{ value: 'chain' as const, label: t('panorama.chain'), icon: Network }]
-                      : []),
-                    {
-                      value: 'permissions' as const,
-                      label: relationLabel('permissions', t('authorization.permissions')),
-                      icon: KeyRound,
-                    },
-                    {
-                      value: 'navigation' as const,
-                      label: relationLabel('navigation', t('authorization.navigation')),
-                      icon: LayoutList,
-                    },
-                    {
-                      value: 'members' as const,
-                      label: relationLabel('members', t('authorization.members')),
-                      icon: Users,
-                    },
-                  ]}
+                  onClose={closeCommand}
+                  onCreated={(id, search) => {
+                    setOverview(false)
+                    setSearchParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.set('roleId', id)
+                        next.set('roleKey', search)
+                        return next
+                      },
+                      { replace: true, state: location.state },
+                    )
+                    closeCommand()
+                    setSelection(null)
+                    setPage(1)
+                    setDraft(search)
+                    setKeyword(search)
+                    setCreated({ id, keyword: search, requestedAt: Date.now() })
+                  }}
+                  onUpdated={(id, search) => {
+                    setSearchParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.set('roleId', id)
+                        next.set('roleKey', search)
+                        return next
+                      },
+                      { replace: true, state: location.state },
+                    )
+                    closeCommand()
+                    setPage(1)
+                    setDraft(search)
+                    setKeyword(search)
+                    setCreated({ id, keyword: search, requestedAt: Date.now() })
+                  }}
+                  onDeleted={(id) => {
+                    setSearchParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.delete('roleId')
+                        next.delete('roleKey')
+                        return next
+                      },
+                      { replace: true, state: location.state },
+                    )
+                    closeCommand()
+                    setDeletedIds((previous) => new Set([...previous, id]))
+                    setSelection(null)
+                  }}
                 />
-                {relation === 'chain' && presentation === 'graph' ? (
-                  <RoleAuthorizationChain
-                    key={opening.openId}
-                    opening={opening}
-                    onCountsChange={updateRelationCounts}
-                    onEdit={(target, id, index) => {
-                      setRelationObject({ roleId: opening.role.id, relation: target, id, index })
-                      setRelation(target)
-                      setSearchParams(
-                        (previous) => {
-                          const next = new URLSearchParams(previous)
-                          next.set('roleRelation', target)
-                          return next
+              ) : showOverview ? (
+                <RolePanorama
+                  roles={roles}
+                  rolePage={page}
+                  rolePages={pageCount}
+                  onRolePage={(next) => {
+                    if (!busy) {
+                      setCreated(null)
+                      setPage(next)
+                    }
+                  }}
+                  onChooseRole={chooseRole}
+                />
+              ) : opening ? (
+                <>
+                  <FloatingHud
+                    slot="bottom-left"
+                    ariaLabel={t('roleGraph.relations')}
+                    className="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <SegmentedControl
+                      label={t('roleGraph.relations')}
+                      value={relation}
+                      disabled={busy}
+                      onChange={(target) => {
+                        setRelation(target)
+                        setSearchParams(
+                          (previous) => {
+                            const next = new URLSearchParams(previous)
+                            next.set('roleRelation', target)
+                            return next
+                          },
+                          { replace: true, state: location.state },
+                        )
+                      }}
+                      options={[
+                        ...(presentation === 'graph'
+                          ? [
+                              {
+                                value: 'chain' as const,
+                                label: t('panorama.chain'),
+                                icon: Network,
+                              },
+                            ]
+                          : []),
+                        {
+                          value: 'permissions' as const,
+                          label: relationLabel('permissions', t('authorization.permissions')),
+                          icon: KeyRound,
                         },
-                        { replace: true, state: location.state },
-                      )
-                    }}
-                  />
-                ) : relation === 'members' ? (
-                  <RoleMemberRelations
-                    key={opening.openId}
-                    opening={opening}
-                    presentation={presentation}
-                    candidateKeyword={memberContext?.keyword}
-                    initialSelectedId={
-                      relationObject?.roleId === opening.role.id &&
-                      relationObject.relation === 'members'
-                        ? relationObject.id
-                        : null
-                    }
-                    initialPage={
-                      relationObject?.roleId === opening.role.id &&
-                      relationObject.relation === 'members'
-                        ? Math.floor(relationObject.index / ROLE_MEMBERS_PAGE_SIZE) + 1
-                        : 1
-                    }
-                    onEditingChange={setEditingMembers}
-                    onCountChange={countCallbacks.members}
-                    onClose={() => {
-                      setRelation('permissions')
-                      setSearchParams(
-                        (previous) => {
-                          const next = new URLSearchParams(previous)
-                          next.set('roleRelation', 'permissions')
-                          return next
+                        {
+                          value: 'navigation' as const,
+                          label: relationLabel('navigation', t('authorization.navigation')),
+                          icon: LayoutList,
                         },
-                        { replace: true, state: location.state },
-                      )
-                    }}
-                  />
-                ) : relation === 'permissions' ? (
-                  <RoleBusinessPermissions
-                    initialSelectedId={
-                      relationObject?.roleId === opening.role.id &&
-                      relationObject.relation === 'permissions'
-                        ? relationObject.id
-                        : null
-                    }
-                    opening={opening}
-                    presentation={presentation}
-                    onEditingChange={setEditingMenus}
-                    onCountChange={countCallbacks.permissions}
-                  />
-                ) : canReadRolePermissionGraph(auth) ? (
-                  <RolePermissionView
-                    initialSelectedId={
-                      relationObject?.roleId === opening.role.id &&
-                      relationObject.relation === 'navigation'
-                        ? relationObject.id
-                        : null
-                    }
-                    opening={opening}
-                    presentation={presentation}
-                    onEditingChange={setEditingMenus}
-                    onCountChange={countCallbacks.navigation}
-                  />
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border bg-card">
-                    <RolePermissionGraph
-                      model={emptyModel}
-                      role={opening.role}
-                      selectedId={null}
-                      onSelect={() => undefined}
-                      branchPage={0}
-                      onBranchPage={() => undefined}
+                        {
+                          value: 'members' as const,
+                          label: relationLabel('members', t('authorization.members')),
+                          icon: Users,
+                        },
+                      ]}
                     />
-                    <p className="border-t p-4 text-sm text-muted-foreground">
-                      {t('roleManage.menuUnavailable', {
-                        defaultValue: '当前没有菜单读取权限，可继续管理角色属性与成员关系。',
-                      })}
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card p-6 text-center">
-                <ShieldCheck className="size-10 text-muted-foreground" strokeWidth={1.5} />
-                <p className="text-sm text-muted-foreground">
-                  {t('roleManage.chooseOrCreate', {
-                    defaultValue: '选择一个角色，或创建新的角色节点。',
-                  })}
-                </p>
-                {auth.allScopePerms.includes('system:role:add') && (
-                  <Button onClick={() => beginCommand('create')}>
-                    <Plus className="size-4" />
-                    {t('roleManage.create', { defaultValue: '新增角色' })}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <Sheet open={!locatorWide && locatorDrawerOpen} onOpenChange={setLocatorDrawerOpen}>
-        <SheetContent side="left" className="role-choice-drawer sm:max-w-sm">
-          <SheetHeader>
-            <SheetTitle>{t('roleGraph.rolePicker')}</SheetTitle>
-            <SheetDescription>{t('roleManage.locatorHint')}</SheetDescription>
-          </SheetHeader>
-          {roleLocator}
-        </SheetContent>
-      </Sheet>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <CircleHelp className="size-3.5" aria-hidden="true" />
+                      {t('commandQa.ruleBased')}
+                    </span>
+                  </FloatingHud>
+
+                  {relation === 'chain' && presentation === 'graph' ? (
+                    <RoleAuthorizationChain
+                      key={opening.openId}
+                      opening={opening}
+                      onCountsChange={updateRelationCounts}
+                      onEdit={(target, id, index) => {
+                        setRelationObject({ roleId: opening.role.id, relation: target, id, index })
+                        setRelation(target)
+                        setSearchParams(
+                          (previous) => {
+                            const next = new URLSearchParams(previous)
+                            next.set('roleRelation', target)
+                            return next
+                          },
+                          { replace: true, state: location.state },
+                        )
+                      }}
+                    />
+                  ) : relation === 'members' ? (
+                    <RoleMemberRelations
+                      key={opening.openId}
+                      opening={opening}
+                      presentation={presentation}
+                      candidateKeyword={
+                        pendingMember?.keyword ?? searchParams.get('keyword') ?? undefined
+                      }
+                      initialSelectedId={
+                        relationObject?.roleId === opening.role.id &&
+                        relationObject.relation === 'members'
+                          ? relationObject.id
+                          : null
+                      }
+                      initialPage={
+                        relationObject?.roleId === opening.role.id &&
+                        relationObject.relation === 'members'
+                          ? Math.floor(relationObject.index / ROLE_MEMBERS_PAGE_SIZE) + 1
+                          : 1
+                      }
+                      onEditingChange={setEditingMembers}
+                      onCountChange={countCallbacks.members}
+                      onClose={() => {
+                        setRelation('permissions')
+                        setSearchParams(
+                          (previous) => {
+                            const next = new URLSearchParams(previous)
+                            next.set('roleRelation', 'permissions')
+                            return next
+                          },
+                          { replace: true, state: location.state },
+                        )
+                      }}
+                    />
+                  ) : relation === 'permissions' ? (
+                    <RoleBusinessPermissions
+                      initialSelectedId={
+                        relationObject?.roleId === opening.role.id &&
+                        relationObject.relation === 'permissions'
+                          ? relationObject.id
+                          : null
+                      }
+                      opening={opening}
+                      presentation={presentation}
+                      onEditingChange={setEditingMenus}
+                      onCountChange={countCallbacks.permissions}
+                    />
+                  ) : canReadRolePermissionGraph(auth) ? (
+                    <RolePermissionView
+                      initialSelectedId={
+                        relationObject?.roleId === opening.role.id &&
+                        relationObject.relation === 'navigation'
+                          ? relationObject.id
+                          : null
+                      }
+                      opening={opening}
+                      presentation={presentation}
+                      onEditingChange={setEditingMenus}
+                      onCountChange={countCallbacks.navigation}
+                    />
+                  ) : (
+                    <div className="overflow-hidden rounded-2xl border bg-card">
+                      <RolePermissionGraph
+                        model={emptyModel}
+                        role={opening.role}
+                        selectedId={null}
+                        onSelect={() => undefined}
+                        branchPage={0}
+                        onBranchPage={() => undefined}
+                      />
+                      <p className="border-t p-4 text-sm text-muted-foreground">
+                        {t('roleManage.menuUnavailable', {
+                          defaultValue: '当前没有菜单读取权限，可继续管理角色属性与成员关系。',
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card p-6 text-center">
+                  <ShieldCheck className="size-10 text-muted-foreground" strokeWidth={1.5} />
+                  <p className="text-sm text-muted-foreground">
+                    {t('roleManage.chooseOrCreate', {
+                      defaultValue: '选择一个角色，或创建新的角色节点。',
+                    })}
+                  </p>
+                  {auth.allScopePerms.includes('system:role:add') && (
+                    <Button onClick={() => beginCommand('create')}>
+                      <Plus className="size-4" />
+                      {t('roleManage.create', { defaultValue: '新增角色' })}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </SpatialStage>
     </div>
   )
 }

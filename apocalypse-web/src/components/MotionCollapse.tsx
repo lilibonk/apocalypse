@@ -3,11 +3,11 @@
  * 同时尊重设置中的动画开关与 prefers-reduced-motion。
  */
 
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import type { ReactNode } from 'react'
 
 import { motionTransition } from '@/design/motion'
-import { useSettings } from '@/stores/settings'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 
 export function MotionCollapse({
   open,
@@ -20,12 +20,11 @@ export function MotionCollapse({
   className?: string
   id?: string
 }) {
-  const { motionEnabled } = useSettings()
-  const reducedMotion = useReducedMotion()
+  const motionEnabled = useMotionPreference()
 
-  if (!motionEnabled || reducedMotion) {
+  if (!motionEnabled) {
     return open ? (
-      <div id={id} className={className}>
+      <div id={id} data-state="open" className={className}>
         {children}
       </div>
     ) : null
@@ -36,6 +35,7 @@ export function MotionCollapse({
       {open && (
         <motion.div
           data-slot="motion-collapse"
+          data-state="open"
           key="content"
           id={id}
           initial="closed"

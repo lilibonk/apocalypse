@@ -23,12 +23,17 @@ public interface AuthorizationInsightMapper {
       Instant validFrom,
       Instant validUntil,
       int permissionStatus,
-      String moduleKey) {}
+      String moduleKey,
+      String permissionCode) {}
 
   record PermissionRow(
       Long id, String code, String name, String moduleKey, int status, String lifecycle) {}
 
+  record PermissionSummaryRow(String code, String moduleKey) {}
+
   record MemberRow(Long roleId, Long userId, String username, String nickname, Long deptId) {}
+
+  record RoleCountRow(Long roleId, long count) {}
 
   record UserRow(Long id, String username, String nickname) {}
 
@@ -51,7 +56,7 @@ public interface AuthorizationInsightMapper {
   @Select(
       """
       SELECT g.role_id, g.permission_id, g.enabled, g.scope_override, g.valid_from, g.valid_until,
-             p.status AS permission_status, p.module_key
+             p.status AS permission_status, p.module_key, p.code AS permission_code
       FROM sys_role_permission g
       JOIN sys_role r ON r.id = g.role_id AND r.deleted = 0
       JOIN sys_permission p ON p.id = g.permission_id AND p.deleted = 0
@@ -62,7 +67,7 @@ public interface AuthorizationInsightMapper {
   @Select(
       """
       SELECT g.role_id, g.permission_id, g.enabled, g.scope_override, g.valid_from, g.valid_until,
-             p.status AS permission_status, p.module_key
+             p.status AS permission_status, p.module_key, p.code AS permission_code
       FROM sys_role_permission g
       JOIN sys_role r ON r.id = g.role_id AND r.deleted = 0
       JOIN sys_permission p ON p.id = g.permission_id AND p.deleted = 0
@@ -70,6 +75,30 @@ public interface AuthorizationInsightMapper {
       ORDER BY r.sort, r.id
       """)
   List<GrantRow> grantsOf(@Param("permissionId") Long permissionId);
+
+  @Select("SELECT code, module_key FROM sys_permission WHERE deleted = 0 ORDER BY id")
+  List<PermissionSummaryRow> allPermissionSummaries();
+
+  @Select(
+      """
+      SELECT ur.role_id, u.id AS user_id, u.username, u.nickname, u.dept_id
+      FROM sys_user_role ur
+      JOIN sys_user u ON u.id = ur.user_id AND u.deleted = 0
+      JOIN sys_role r ON r.id = ur.role_id AND r.deleted = 0
+      ORDER BY ur.role_id, u.id
+      """)
+  List<MemberRow> allRoleMembers();
+
+  @Select(
+      """
+      SELECT n.role_id, count(*) AS count
+      FROM sys_role_navigation n
+      JOIN sys_role r ON r.id = n.role_id AND r.deleted = 0
+      JOIN sys_menu m ON m.id = n.menu_id AND m.deleted = 0 AND m.menu_type IN ('C', 'M')
+      GROUP BY n.role_id
+      ORDER BY n.role_id
+      """)
+  List<RoleCountRow> navigationCountsByRole();
 
   @Select(
       """

@@ -1,14 +1,32 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { LayoutDashboard, List } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation } from 'react-router'
-import { readWorkspaceContext } from '../shared/workspace-context'
-import { DynaPage } from '@/components/dyna'
-import { DynaForm, type DynaFormProps } from '@/components/dyna/DynaForm'
+
+import {
+  DynaDetail,
+  DynaDialogs,
+  DynaForm,
+  DynaTable,
+  DynaToolbar,
+  DynaToolbarActions,
+  useDynaController,
+  type DynaFormProps,
+} from '@/components/dyna'
+import { useDynaText } from '@/components/dyna/use-dyna'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { LivingContextBar, useEntityIntent, type EntityRouteIntent } from '@/components/navigation'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { usePageView } from '@/hooks/usePageView'
 import { useAuthStore } from '@/stores/auth'
-import schema from './permission.schema'
-import { DynaDetail } from '@/components/dyna/DynaDetail'
+
 import { permissionMetadataBody } from './permission.model'
+import schema from './permission.schema'
 import { PermissionWorkspace } from './PermissionWorkspace'
+
+type PermissionPageView = 'workspace' | 'list'
+const PERMISSION_PAGE_VIEWS = ['workspace', 'list'] as const
 
 function PermissionForm(props: DynaFormProps) {
   const { t } = useTranslation('system')
@@ -60,13 +78,45 @@ function PermissionForm(props: DynaFormProps) {
 }
 
 export default function PermissionPage() {
-  const epoch = useAuthStore((state) => state.authorizationEpoch)
-  return <PermissionPageContent key={epoch} />
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
+  const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
+  const { intent } = useEntityIntent('permission')
+  const desktop = useDesktopViewport()
+  const [view, setView] = usePageView<PermissionPageView>(PERMISSION_PAGE_VIEWS)
+  const activeView: PermissionPageView = desktop ? view : 'list'
+  const instanceKey = JSON.stringify([
+    sessionEpoch,
+    authorizationEpoch,
+    intent?.id,
+    intent?.label,
+    intent?.moduleKey,
+    intent?.resource,
+  ])
+
+  return (
+    <PermissionPageContent
+      key={instanceKey}
+      intent={intent ?? undefined}
+      view={activeView}
+      onViewChange={desktop ? setView : undefined}
+    />
+  )
 }
-function PermissionPageContent() {
-  const location = useLocation()
+
+function PermissionPageContent({
+  intent,
+  view,
+  onViewChange,
+}: {
+  intent?: EntityRouteIntent
+  view: PermissionPageView
+  onViewChange?: (view: PermissionPageView) => void
+}) {
   const { t } = useTranslation('system')
+  const dynaText = useDynaText()
+  const queryClient = useQueryClient()
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null)
+
   const localized = useMemo(() => {
     const fieldTitle = (key: string) =>
       key === 'description' ? t('permissionCatalog.descriptionField') : t(`authorization.${key}`)
@@ -139,8 +189,20 @@ function PermissionPageContent() {
       },
     }
   }, [t])
+
   // Stable so opening the detail does not re-render every catalog row.
   const customActions = useMemo(() => ({ 'permission-details': setDetail }), [])
+
+  const controller = useDynaController(localized, {
+    entityIntent: intent,
+    customActions,
+    onRefreshCompanion: (overviewKey) => {
+      if (overviewKey) {
+        void queryClient.invalidateQueries({ queryKey: overviewKey })
+      }
+    },
+  })
+
   const scopes = Array.isArray(detail?.supportedScopeOverrides)
     ? detail.supportedScopeOverrides
     : []
@@ -155,15 +217,59 @@ function PermissionPageContent() {
         ),
       }
     : null
+
+  const viewControl = onViewChange ? (
+    <SegmentedControl
+      label={dynaText('pageView')}
+      value={view}
+      onChange={onViewChange}
+      options={[
+        { value: 'workspace', label: dynaText('viewWorkspace'), icon: LayoutDashboard },
+        { value: 'list', label: dynaText('viewList'), icon: List },
+      ]}
+    />
+  ) : undefined
+
+  const searchControl = (
+    <DynaToolbar
+      controller={controller}
+      presentation={view === 'workspace' ? 'toolbar' : 'panel'}
+    />
+  )
+
   return (
     <>
-      <DynaPage
-        schema={localized}
-        entryContext={readWorkspaceContext(location.state, 'permission')}
-        formComponent={PermissionForm}
-        customActions={customActions}
-        workspace={(controls) => <PermissionWorkspace {...controls} />}
-      />
+      <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+        <PageHeader
+          title={dynaText(localized.title)}
+          description={localized.description ? dynaText(localized.description) : undefined}
+          view={viewControl}
+          actions={<DynaToolbarActions controller={controller} />}
+        />
+
+        {view === 'workspace' ? (
+          <PermissionWorkspace
+            controller={controller}
+            collection={controller.collection}
+            filters={controller.filters}
+            applyFilters={controller.applyFilters}
+            queryKey={controller.queryKey}
+            selectedRowKey={controller.selectedRowKey}
+            selectRow={controller.selectRow}
+            search={searchControl}
+            intent={intent}
+          />
+        ) : (
+          <>
+            {intent?.source && <LivingContextBar source={intent.source} />}
+            {searchControl}
+            <DynaTable {...controller.collection} />
+          </>
+        )}
+
+        <DynaDialogs controller={controller} formComponent={PermissionForm} />
+      </div>
+
       <DynaDetail
         title={localized.detail.title}
         description={t('permissionCatalog.metadata')}

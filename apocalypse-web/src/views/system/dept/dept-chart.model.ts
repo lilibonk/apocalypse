@@ -1,7 +1,18 @@
 import type { DeptTreeNode } from './types'
 
 /** Card size and spacing in canvas units (CSS px at scale 1). */
-export const chartGeometry = { nodeWidth: 176, nodeHeight: 68, gapX: 24, gapY: 72, padding: 32 }
+export const NODE_WIDTH = 240
+export const H_GAP = 28
+
+export const chartGeometry = {
+  nodeWidth: NODE_WIDTH,
+  nodeHeight: 72,
+  gapX: H_GAP,
+  gapY: 72,
+  hangarRowGap: 20,
+  hangarThreshold: 6,
+  padding: 32,
+}
 
 export interface ChartNode {
   node: DeptTreeNode
@@ -43,31 +54,72 @@ export function defaultExpanded(tree: readonly DeptTreeNode[], depth = 1): Set<s
 
 /**
  * Layered tidy layout: leaves take consecutive slots, parents centre over their visible children.
+ * When an open parent has > 6 children and all of them are leaves, they are arranged in a compact
+ * 2-column vertical bus hangar below the parent to prevent extreme horizontal canvas stretch.
  * O(n) in visible nodes; collapsed subtrees are not laid out.
  */
 export function layoutTree(
   tree: readonly DeptTreeNode[],
   expanded: ReadonlySet<string>,
 ): ChartLayout {
-  const { nodeWidth, nodeHeight, gapX, gapY, padding } = chartGeometry
+  const { nodeWidth, nodeHeight, gapX, gapY, hangarRowGap, hangarThreshold, padding } =
+    chartGeometry
   const nodes: ChartNode[] = []
   const edges: ChartEdge[] = []
   let slot = 0
   let maxDepth = 0
+  let maxBottom = padding + nodeHeight
   const place = (node: DeptTreeNode, depth: number, parentId: string | null): number => {
     maxDepth = Math.max(maxDepth, depth)
     const children = node.children ?? []
     const open = expanded.has(node.id) && children.length > 0
+    const useVerticalBusHangar =
+      open &&
+      children.length > hangarThreshold &&
+      children.every((child) => (child.children?.length ?? 0) === 0)
+    const y = padding + depth * (nodeHeight + gapY)
+    maxBottom = Math.max(maxBottom, y + nodeHeight)
     let x: number
     const childXs: number[] = []
-    if (open) {
+    if (useVerticalBusHangar) {
+      maxDepth = Math.max(maxDepth, depth + 1)
+      const leftX = padding + slot * (nodeWidth + gapX)
+      const rightX = padding + (slot + 1) * (nodeWidth + gapX)
+      slot += 2
+      x = (leftX + rightX) / 2
+      const fromX = x + nodeWidth / 2
+      const fromY = y + nodeHeight
+      const baseChildY = y + nodeHeight + gapY
+      children.forEach((child, index) => {
+        const col = index % 2
+        const row = Math.floor(index / 2)
+        const childX = col === 0 ? leftX : rightX
+        const childY = baseChildY + row * (nodeHeight + hangarRowGap)
+        maxBottom = Math.max(maxBottom, childY + nodeHeight)
+        nodes.push({
+          node: child,
+          x: childX,
+          y: childY,
+          depth: depth + 1,
+          parentId: node.id,
+          hasChildren: false,
+          expanded: false,
+        })
+        const childMidY = childY + nodeHeight / 2
+        const attachX = col === 0 ? childX + nodeWidth : childX
+        edges.push({
+          from: node.id,
+          to: child.id,
+          d: `M${fromX},${fromY} V${childMidY} H${attachX}`,
+        })
+      })
+    } else if (open) {
       for (const child of children) childXs.push(place(child, depth + 1, node.id))
       x = (childXs[0] + childXs[childXs.length - 1]) / 2
     } else {
       x = padding + slot * (nodeWidth + gapX)
       slot++
     }
-    const y = padding + depth * (nodeHeight + gapY)
     nodes.push({
       node,
       x,
@@ -77,7 +129,7 @@ export function layoutTree(
       hasChildren: children.length > 0,
       expanded: open,
     })
-    if (open) {
+    if (open && !useVerticalBusHangar) {
       const fromX = x + nodeWidth / 2
       const fromY = y + nodeHeight
       const midY = fromY + gapY / 2
@@ -94,11 +146,12 @@ export function layoutTree(
     return x
   }
   for (const root of tree) place(root, 0, null)
+  const standardHeight = (maxDepth + 1) * (nodeHeight + gapY) - gapY + padding * 2
   return {
     nodes,
     edges,
     width: Math.max(1, slot) * (nodeWidth + gapX) - gapX + padding * 2,
-    height: (maxDepth + 1) * (nodeHeight + gapY) - gapY + padding * 2,
+    height: Math.max(standardHeight, maxBottom + padding),
   }
 }
 
@@ -131,7 +184,7 @@ export function nextFocus(layout: ChartLayout, currentId: string, key: string): 
   if (!current) return null
   const siblings = layout.nodes
     .filter((item) => item.parentId === current.parentId)
-    .sort((a, b) => a.x - b.x)
+    .sort((a, b) => a.y - b.y || a.x - b.x)
   const index = siblings.findIndex((item) => item.node.id === currentId)
   switch (key) {
     case 'ArrowUp':
@@ -139,7 +192,7 @@ export function nextFocus(layout: ChartLayout, currentId: string, key: string): 
     case 'ArrowDown': {
       const children = layout.nodes
         .filter((item) => item.parentId === currentId)
-        .sort((a, b) => a.x - b.x)
+        .sort((a, b) => a.y - b.y || a.x - b.x)
       return children[0]?.node.id ?? null
     }
     case 'ArrowLeft':

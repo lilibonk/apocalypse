@@ -132,17 +132,20 @@ test('role page without a requested role opens the overview, drills into a chain
   page,
 }) => {
   await page.goto('/test-fixtures/role-resize.html?overview')
-  const roles = page.getByRole('button', { name: /^角色 1，/ })
-  await expect(roles).toBeVisible()
+  const roleButton = page.getByRole('button', { name: 'Resize role 启用', exact: true })
+  await expect(roleButton).toBeVisible()
+  await expect(page.locator('[data-topology-domain="identity_org"]')).toBeVisible()
   await expect(page.getByRole('button', { name: '编辑业务授权', exact: true })).toHaveCount(0)
-  await roles.focus()
-  await page.keyboard.press('Enter')
-  await expect(roles).toHaveAttribute('aria-expanded', 'true')
-  await page.getByRole('button', { name: 'Resize role 启用', exact: true }).click()
+  await roleButton.focus()
+  await expect(page.locator('[data-topology-role="role-1"]')).toHaveAttribute(
+    'data-related',
+    'true',
+  )
+  await roleButton.click()
   await expect(page.getByRole('group', { name: '「Resize role」的授权链' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^角色成员.*0$/ })).toBeVisible()
   await page.getByRole('button', { name: '权限全景', exact: true }).click()
-  await expect(page.getByRole('button', { name: /^角色 1，/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Resize role 启用', exact: true })).toBeVisible()
 })
 
 test('config workspace keeps a multi-item draft, refuses a stale batch and rebases on request', async ({
@@ -319,7 +322,10 @@ test('online accounts expand devices and retain the session list as a compatible
     0,
   )
   const figure = (label: string) =>
-    page.locator('dl > div').filter({ hasText: label }).locator('.sr-only')
+    page
+      .locator('dl > div')
+      .filter({ hasText: label })
+      .locator('.sr-only, [data-variant="tabular"]')
   await expect(figure('在线会话')).toHaveText('3')
   await expect(figure('在线账号')).toHaveText('2')
   await expect(figure('来源 IP')).toHaveText('2')
@@ -332,7 +338,7 @@ test('online accounts expand devices and retain the session list as a compatible
   await expect(sheet).toBeVisible()
   await expect(page.locator('tr[data-origin-active]')).toHaveCount(1)
   await expect(sheet.getByText('该账号在线会话')).toBeVisible()
-  await sheet.getByRole('button', { name: '强退该账号' }).click()
+  await sheet.getByRole('button', { name: /强退该账号/ }).click()
   await expect(page.getByRole('alertdialog')).toContainText('alice')
 })
 

@@ -247,6 +247,36 @@ class LogInsightIT extends AbstractIntegrationTest {
         .isEqualTo(1);
   }
 
+  @Test
+  void loginAndOperLogPageSupportHeatmapCellAndInsightDrillDownFilters() {
+    LocalDateTime slot = LocalDateTime.now().minusDays(2).withHour(14).withMinute(20).withSecond(0);
+    int isoWeekday = slot.getDayOfWeek().getValue();
+    String uniqueIp = "10.88." + (int) (Math.abs(System.nanoTime()) % 200) + ".77";
+    String user = "drill_" + UUID.randomUUID().toString().substring(0, 8);
+    insertLogin(user, uniqueIp, 0, slot);
+
+    JsonNode loginFiltered =
+        getForData(
+            "/system/logs/login?page=1&size=20&range=WEEK&isoWeekday="
+                + isoWeekday
+                + "&hour=14&success=0&keyword="
+                + uniqueIp,
+            token);
+    assertThat(loginFiltered.path("total").asLong()).isEqualTo(1L);
+    assertThat(loginFiltered.at("/list/0/username").asText()).isEqualTo(user);
+    assertThat(loginFiltered.at("/list/0/ip").asText()).isEqualTo(uniqueIp);
+    assertThat(loginFiltered.at("/list/0/success").asInt()).isZero();
+
+    insertOper("DRILL_TYPE", 0, slot);
+    JsonNode operFiltered =
+        getForData(
+            "/system/logs/oper?page=1&size=20&range=WEEK&businessType=DRILL_TYPE&status=0&keyword=统计测试",
+            token);
+    assertThat(operFiltered.path("total").asLong()).isGreaterThanOrEqualTo(1L);
+    assertThat(operFiltered.at("/list/0/businessType").asText()).isEqualTo("DRILL_TYPE");
+    assertThat(operFiltered.at("/list/0/status").asInt()).isZero();
+  }
+
   private void clearInsightCache() {
     org.springframework.cache.Cache cache = cacheManager.getCache(LogInsightService.INSIGHT_CACHE);
     assertThat(cache).isNotNull();

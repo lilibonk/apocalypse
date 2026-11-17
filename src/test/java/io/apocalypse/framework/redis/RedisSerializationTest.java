@@ -28,7 +28,8 @@ class RedisSerializationTest {
     OnlineUserRegistry.OnlineUser onlineUser =
         new OnlineUserRegistry.OnlineUser(
             "admin", LocalDateTime.of(2026, 8, 30, 12, 0), "127.0.0.1", "test", "refresh");
-    List<DictDataResp> responses = List.of(new DictDataResp(1L, "status", "启用", "1", 1, 1, null));
+    List<DictDataResp> responses =
+        List.of(new DictDataResp(1L, "status", "启用", "1", 1, 1, "SUCCESS", 1, null));
 
     assertThat(serializer.deserialize(serializer.serialize(onlineUser))).isEqualTo(onlineUser);
     assertThat(serializer.deserialize(serializer.serialize(responses))).isEqualTo(responses);

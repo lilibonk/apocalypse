@@ -5,7 +5,7 @@ test('account selection carries through list, edit readback and pagination', asy
   const views = page.getByRole('group', { name: '页面视图' })
   const selection = page.getByRole('button', { name: '选择账号：成员 2', exact: true })
   await selection.click()
-  const inspector = page.getByRole('complementary', { name: '账号上下文' })
+  const inspector = page.getByRole('region', { name: '账号上下文' })
   await expect(inspector).toContainText('account-2')
   await views.getByRole('button', { name: '列表', exact: true }).click()
   await expect(page.getByRole('table')).toBeVisible()
@@ -37,7 +37,7 @@ test('a denied account scope removes object data and does not claim an empty suc
   await page.getByRole('button', { name: 'Deny account scope' }).click()
   await page.getByRole('button', { name: '刷新数据', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('账号范围已撤回')
-  await expect(page.getByRole('complementary', { name: '账号上下文' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '账号上下文' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '选择账号：成员 2', exact: true })).toHaveCount(0)
   await expect(page.getByText('暂无数据', { exact: true })).toHaveCount(0)
 })
@@ -65,15 +65,15 @@ test('a command handoff searches the guarded source and keeps context across vie
   await expect(page.getByRole('button', { name: '选择账号：成员 1', exact: true })).toBeVisible()
 })
 
-test('a narrow object workspace opens a focused inspector and returns to its selected account', async ({
+test('a narrow object workspace stacks the selected account details without a modal', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=user&narrow')
   const trigger = page.getByRole('button', { name: '选择账号：成员 2', exact: true })
   await trigger.click()
-  const sheet = page.getByRole('dialog', { name: '账号上下文' })
-  await expect(sheet).toContainText('account-2')
-  await page.keyboard.press('Escape')
-  await expect(sheet).toHaveCount(0)
-  await expect(trigger).toBeFocused()
+  const details = page.getByRole('region', { name: '账号上下文' })
+  await expect(details).toContainText('account-2')
+  await expect(trigger).toHaveAttribute('aria-pressed', 'true')
+  const box = await details.boundingBox()
+  expect(box!.width).toBeLessThanOrEqual(520)
 })

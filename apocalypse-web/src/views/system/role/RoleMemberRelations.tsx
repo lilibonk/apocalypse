@@ -15,10 +15,9 @@ import { canReadRoleWorkspace, type RolePermissionOpening } from './role-permiss
 import { createRoleMembersQuery, ROLE_MEMBERS_PAGE_SIZE } from './role-permission.queries'
 import { RoleMemberGraph } from './RoleMemberGraph'
 import { RoleMemberEditor } from './RoleMemberEditor'
-import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import { RoleStageSplit as RoleWorkspacePanels } from './RolePanorama'
 import { validRoleMemberPage } from './role-member-draft.model'
-import './role-permission.css'
-import './role-member-relations.css'
+import './role-stage.css'
 
 export function RoleMemberRelations({
   opening,

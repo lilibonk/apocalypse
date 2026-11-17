@@ -18,35 +18,38 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { ConflictResolution } from '../calendar.api'
+import { dayValueText, toErrorMessage } from '../calendar.format'
 import {
-  CalendarPageFrame,
-  CalendarTrace,
-  CalendarPicker,
   CalendarContextChange,
+  CalendarPageFrame,
+  CalendarPicker,
   CalendarQueryStatus,
-  ManageCalendarsLink,
+  CalendarTrace,
   DataEmpty,
   InlineError,
+  ManageCalendarsLink,
   StateBadge,
 } from '../calendar.ui'
-import { dayValueText, toErrorMessage } from '../calendar.format'
-import { CalendarConfirm } from '../calendar-confirm'
+import { DayFieldDiffMatrix } from '../day-field-diff-matrix'
 import { DayOverrideEditor } from '../day-override-editor'
 import {
   buildDayOverride,
+  dayFieldLabels,
   emptyOverrideInput,
   underlayField,
-  dayFieldLabels,
 } from '../day-override-model'
 import { OverrideChangePreview } from '../override-change-preview'
 import { OverrideRevisionDiff } from '../override-revision-diff'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 function today(): string {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
@@ -121,8 +124,6 @@ function ManagedOverridePage() {
     (conflict) => conflict.state === 'OPEN',
   )
   const decisionsComplete = openConflicts.every((conflict) => decisions[conflict.id])
-  // Keep the existing publication baseline separate from presentation. A partial conflict page
-  // cannot establish that every required decision has been reviewed.
   const reviewDataComplete =
     conflictsQuery.data != null &&
     conflictsQuery.data.total <= conflictsQuery.data.list.length &&
@@ -249,8 +250,10 @@ function ManagedOverridePage() {
             roles={['EDITOR', 'PUBLISHER']}
           />
           {calendarId && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="managed-override-date">{t('managedOverrides.date')}</Label>
+            <div className="grid gap-1">
+              <Label htmlFor="managed-override-date" className="text-xs text-muted-foreground">
+                {t('managedOverrides.date')}
+              </Label>
               <DatePicker
                 id="managed-override-date"
                 mode="date"
@@ -261,7 +264,7 @@ function ManagedOverridePage() {
             </div>
           )}
           {draftQuery.data && (
-            <div className="flex items-center gap-2 pb-2">
+            <div className="flex items-center gap-2 pb-1.5">
               <StateBadge value={draftQuery.data.state} />
               <span className="text-sm">
                 {t('managedOverrides.revision', { number: draftQuery.data.revisionNo })}
@@ -298,119 +301,111 @@ function ManagedOverridePage() {
           </div>
         </div>
       ) : calendarId ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
-          <div className="space-y-5">
-            <Card className="gap-4 py-4">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle>{t('managedOverrides.draft')}</CardTitle>
-                <CardDescription>{t('managedOverrides.draftDescription')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 px-4 sm:px-6">
-                <DayOverrideEditor value={input} onChange={setInput} />
-                {dayQuery.isSuccess && (
-                  <OverrideChangePreview
-                    day={dayQuery.data}
-                    operation={operation}
-                    field={input.field}
-                    underlay={underlayField(dayQuery.data, input.field, 'MANAGED')}
-                    scope={t('overrideEditor.managedScope') + ' · ' + dayQuery.data.calendarKey}
-                    preview={JSON.stringify(input) !== acceptedInput}
-                  />
-                )}
-                <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span>{t('managedOverrides.targetRevision')}</span>
-                    <span className="font-mono">#{expectedRevisionNo || 1}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span>{t('managedOverrides.currentDraft')}</span>
-                    {draftQuery.data ? (
-                      <StateBadge value={draftQuery.data.state} />
-                    ) : (
-                      <span className="text-muted-foreground">
-                        {t('managedOverrides.notCreated')}
-                      </span>
-                    )}
-                  </div>
+        <StickyCompactRailLayout
+          railLabel={t('managedOverrides.draft')}
+          railWidth="locator"
+          railHeader={
+            <div className="px-1 pb-1">
+              <h2 className="text-sm font-semibold">{t('managedOverrides.draft')}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('managedOverrides.draftDescription')}
+              </p>
+            </div>
+          }
+          railContent={
+            <div className="space-y-4">
+              <DayOverrideEditor value={input} onChange={setInput} />
+              <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{t('managedOverrides.targetRevision')}</span>
+                  <span className="font-mono">#{expectedRevisionNo || 1}</span>
                 </div>
-                <Perm perm="calendar:managed-override:edit">
-                  <div className="grid grid-cols-2 gap-2">
-                    <CalendarConfirm
-                      reviewKey={JSON.stringify([
-                        calendarId,
-                        date,
-                        operation,
-                        draftQuery.data?.contentHash,
-                        expectedRevisionNo,
-                        dayQuery.data?.resolutions,
-                      ])}
-                      title={t('managedOverrides.saveDraft')}
-                      description={t('overrideEditor.managedWarning')}
-                      onConfirm={() => saveMutation.mutate()}
-                      disabled={
-                        !operation || !dayQuery.data || !!dayQuery.error || saveMutation.isPending
-                      }
-                      trigger={
-                        <Button
-                          disabled={
-                            !calendarId ||
-                            !operation ||
-                            !dayQuery.data ||
-                            !!dayQuery.error ||
-                            saveMutation.isPending
-                          }
-                        >
-                          {input.action === 'INHERIT' ? <RotateCcw /> : <Save />}
-                          {t('managedOverrides.saveDraft')}
-                        </Button>
-                      }
-                    >
-                      {dayQuery.data && operation && (
-                        <OverrideChangePreview
-                          day={dayQuery.data}
-                          operation={operation}
-                          underlay={underlayField(dayQuery.data, input.field, 'MANAGED')}
-                          scope={
-                            t('overrideEditor.managedScope') + ' · ' + dayQuery.data.calendarKey
-                          }
-                        />
-                      )}
-                    </CalendarConfirm>
-                    <CalendarConfirm
-                      reviewKey={JSON.stringify([
-                        calendarId,
-                        draftQuery.data?.version,
-                        draftQuery.data?.contentHash,
-                      ])}
-                      title={t('managedOverrides.discardDraft')}
-                      description={t('overrideEditor.discardWarning')}
-                      onConfirm={() => discardMutation.mutate()}
-                      trigger={
-                        <Button
-                          variant="outline"
-                          disabled={!draftQuery.data || discardMutation.isPending}
-                        >
-                          <Trash2 />
-                          {t('managedOverrides.discardDraft')}
-                        </Button>
-                      }
-                    />
-                  </div>
-                </Perm>
-              </CardContent>
-            </Card>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span>{t('managedOverrides.currentDraft')}</span>
+                  {draftQuery.data ? (
+                    <StateBadge value={draftQuery.data.state} />
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t('managedOverrides.notCreated')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Perm perm="calendar:managed-override:edit">
+                <div className="grid grid-cols-2 gap-2">
+                  <CalendarConfirm
+                    reviewKey={JSON.stringify([
+                      calendarId,
+                      date,
+                      operation,
+                      draftQuery.data?.contentHash,
+                      expectedRevisionNo,
+                      dayQuery.data?.resolutions,
+                    ])}
+                    title={t('managedOverrides.saveDraft')}
+                    description={t('overrideEditor.managedWarning')}
+                    onConfirm={() => saveMutation.mutate()}
+                    disabled={
+                      !operation || !dayQuery.data || !!dayQuery.error || saveMutation.isPending
+                    }
+                    trigger={
+                      <Button
+                        disabled={
+                          !calendarId ||
+                          !operation ||
+                          !dayQuery.data ||
+                          !!dayQuery.error ||
+                          saveMutation.isPending
+                        }
+                      >
+                        {input.action === 'INHERIT' ? <RotateCcw /> : <Save />}
+                        {t('managedOverrides.saveDraft')}
+                      </Button>
+                    }
+                  >
+                    {dayQuery.data && operation && (
+                      <OverrideChangePreview
+                        day={dayQuery.data}
+                        operation={operation}
+                        underlay={underlayField(dayQuery.data, input.field, 'MANAGED')}
+                        scope={t('overrideEditor.managedScope') + ' · ' + dayQuery.data.calendarKey}
+                      />
+                    )}
+                  </CalendarConfirm>
+                  <CalendarConfirm
+                    reviewKey={JSON.stringify([
+                      calendarId,
+                      draftQuery.data?.version,
+                      draftQuery.data?.contentHash,
+                    ])}
+                    title={t('managedOverrides.discardDraft')}
+                    description={t('overrideEditor.discardWarning')}
+                    onConfirm={() => discardMutation.mutate()}
+                    trigger={
+                      <Button
+                        variant="outline"
+                        disabled={!draftQuery.data || discardMutation.isPending}
+                      >
+                        <Trash2 />
+                        {t('managedOverrides.discardDraft')}
+                      </Button>
+                    }
+                  />
+                </div>
+              </Perm>
 
-            <Card className="gap-4 py-4">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle>{t('managedOverrides.publishGate')}</CardTitle>
-                <CardDescription>{t('managedOverrides.publishGateDescription')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 px-4 sm:px-6">
+              <div className="space-y-3 border-t border-border-subtle pt-3">
+                <div>
+                  <h3 className="text-xs font-semibold">{t('managedOverrides.publishGate')}</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t('managedOverrides.publishGateDescription')}
+                  </p>
+                </div>
                 <CalendarTrace>
                   <div className="text-xs text-muted-foreground">
                     {t('managedOverrides.contentHash')}
                   </div>
-                  <div className="mt-1 break-all font-mono text-xs">
+                  <div className="mt-1 font-mono text-xs break-all">
                     {draftQuery.data?.contentHash ?? '—'}
                   </div>
                 </CalendarTrace>
@@ -498,13 +493,41 @@ function ManagedOverridePage() {
                       </Button>
                     </div>
                   )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
+          }
+          stageClassName="space-y-4"
+        >
+          {dayQuery.isSuccess && dayQuery.data && (
+            <div className="space-y-3">
+              <DayFieldDiffMatrix
+                day={dayQuery.data}
+                scope="MANAGED"
+                activeField={input.field}
+                operation={operation}
+                onSelectField={(field) => setInput((prev) => ({ ...prev, field }))}
+              />
+              <OverrideChangePreview
+                day={dayQuery.data}
+                operation={operation}
+                field={input.field}
+                underlay={underlayField(dayQuery.data, input.field, 'MANAGED')}
+                scope={t('overrideEditor.managedScope') + ' · ' + dayQuery.data.calendarKey}
+                preview={JSON.stringify(input) !== acceptedInput}
+              />
+            </div>
+          )}
 
           <Tabs defaultValue="review" className="min-w-0 gap-4">
             <TabsList>
-              <TabsTrigger value="review">{t('workspace.review')}</TabsTrigger>
+              <TabsTrigger value="review">
+                {t('workspace.review')}
+                {openConflicts.length > 0 && (
+                  <Badge variant="warning" className="ml-1.5">
+                    {openConflicts.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="history">{t('workspace.history')}</TabsTrigger>
             </TabsList>
             <TabsContent value="review">
@@ -527,13 +550,17 @@ function ManagedOverridePage() {
                           <div className="text-xs text-muted-foreground">
                             {t('managedOverrides.previousUnderlay')}
                           </div>
-                          <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
+                          <div className="draft-original mt-1">
+                            {dayValueText(conflict.previousUnderlay)}
+                          </div>
                         </div>
                         <div className="rounded-md bg-muted/40 p-2">
                           <div className="text-xs text-muted-foreground">
                             {t('managedOverrides.currentUnderlay')}
                           </div>
-                          <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
+                          <div className="mt-1 font-medium">
+                            {dayValueText(conflict.currentUnderlay)}
+                          </div>
                         </div>
                       </div>
                       {conflict.state === 'OPEN' && (
@@ -657,7 +684,7 @@ function ManagedOverridePage() {
               </Card>
             </TabsContent>
           </Tabs>
-        </div>
+        </StickyCompactRailLayout>
       ) : null}
       <CalendarContextChange
         open={pendingContext !== null}
@@ -671,4 +698,3 @@ function ManagedOverridePage() {
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={ManagedOverridePage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

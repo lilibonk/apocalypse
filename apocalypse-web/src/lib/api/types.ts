@@ -69,6 +69,24 @@ export interface RawMenuNode {
   children?: RawMenuNode[] | null
 }
 
+/** 部门根到叶路径节点（对应后端 DeptPathNodeResp）。 */
+export interface DeptPathNode {
+  id: SnowflakeId
+  deptName: string
+}
+
+/** 用户授予的角色摘要（对应后端 UserRoleSummaryResp）。 */
+export interface UserRoleSummary {
+  id: SnowflakeId
+  roleName: string
+  roleKey: string
+  status: number
+  dataScope: string
+}
+
+/** 字典项语义色调令牌（对应后端 sys_dict_data.tag_tone）。 */
+export type DictTone = 'NEUTRAL' | 'BRAND' | 'INFO' | 'SUCCESS' | 'WARNING' | 'DANGER'
+
 /** 用户信息。 */
 export interface UserInfo {
   id: SnowflakeId
@@ -77,6 +95,8 @@ export interface UserInfo {
   status?: number
   deptId?: SnowflakeId | null
   deptName?: string | null
+  deptPath?: DeptPathNode[]
+  roles?: UserRoleSummary[]
   createTime?: string
 }
 
@@ -109,6 +129,8 @@ export interface DictData {
   dictValue: string
   sort: number
   status: number
+  tagTone?: DictTone | null
+  isDefault?: number | null
   remark: string | null
 }
 

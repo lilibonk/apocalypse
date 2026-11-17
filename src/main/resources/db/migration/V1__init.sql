@@ -322,6 +322,8 @@ CREATE TABLE sys_dict_data (
     dict_value  VARCHAR(64) NOT NULL,
     sort        INT         NOT NULL DEFAULT 0,
     status      SMALLINT    NOT NULL DEFAULT 1,
+    tag_tone    VARCHAR(16) NOT NULL DEFAULT 'NEUTRAL',
+    is_default  SMALLINT    NOT NULL DEFAULT 0,
     remark      VARCHAR(255),
     create_time TIMESTAMP   NOT NULL DEFAULT now(),
     update_time TIMESTAMP   NOT NULL DEFAULT now(),
@@ -330,6 +332,10 @@ CREATE TABLE sys_dict_data (
     version     INT         NOT NULL DEFAULT 0,
     deleted     INT         NOT NULL DEFAULT 0,
     CONSTRAINT ck_sys_dict_data_status CHECK (status IN (0, 1)),
+    CONSTRAINT ck_sys_dict_data_tag_tone CHECK (
+        tag_tone IN ('NEUTRAL', 'BRAND', 'INFO', 'SUCCESS', 'WARNING', 'DANGER')
+    ),
+    CONSTRAINT ck_sys_dict_data_is_default CHECK (is_default IN (0, 1)),
     CONSTRAINT ck_sys_dict_data_deleted CHECK (deleted IN (0, 1))
 );
 COMMENT ON TABLE  sys_dict_data IS '字典数据';
@@ -339,6 +345,8 @@ COMMENT ON COLUMN sys_dict_data.dict_label IS '展示文本';
 COMMENT ON COLUMN sys_dict_data.dict_value IS '实际值';
 COMMENT ON COLUMN sys_dict_data.sort IS '显示顺序';
 COMMENT ON COLUMN sys_dict_data.status IS '状态：1=正常 0=停用';
+COMMENT ON COLUMN sys_dict_data.tag_tone IS '语义色卡令牌：NEUTRAL/BRAND/INFO/SUCCESS/WARNING/DANGER';
+COMMENT ON COLUMN sys_dict_data.is_default IS '是否默认项：1=默认 0=否';
 COMMENT ON COLUMN sys_dict_data.remark IS '备注';
 COMMENT ON COLUMN sys_dict_data.create_time IS '创建时间';
 COMMENT ON COLUMN sys_dict_data.update_time IS '更新时间';
@@ -1026,12 +1034,12 @@ INSERT INTO sys_dict_type (id, dict_type, dict_name, status, remark, create_by, 
 VALUES (1, 'sys_user_status', '用户状态', 1, NULL, 'system', 'system'),
        (2, 'sys_user_sex', '用户性别', 1, NULL, 'system', 'system');
 
-INSERT INTO sys_dict_data (id, dict_type, dict_label, dict_value, sort, status, create_by, update_by)
-VALUES (1, 'sys_user_status', '正常', '1', 1, 1, 'system', 'system'),
-       (2, 'sys_user_status', '停用', '0', 2, 1, 'system', 'system'),
-       (3, 'sys_user_sex', '男', '1', 1, 1, 'system', 'system'),
-       (4, 'sys_user_sex', '女', '2', 2, 1, 'system', 'system'),
-       (5, 'sys_user_sex', '未知', '0', 3, 1, 'system', 'system');
+INSERT INTO sys_dict_data (id, dict_type, dict_label, dict_value, sort, status, tag_tone, is_default, create_by, update_by)
+VALUES (1, 'sys_user_status', '正常', '1', 1, 1, 'SUCCESS', 1, 'system', 'system'),
+       (2, 'sys_user_status', '停用', '0', 2, 1, 'DANGER', 0, 'system', 'system'),
+       (3, 'sys_user_sex', '男', '1', 1, 1, 'BRAND', 0, 'system', 'system'),
+       (4, 'sys_user_sex', '女', '2', 2, 1, 'INFO', 0, 'system', 'system'),
+       (5, 'sys_user_sex', '未知', '0', 3, 1, 'NEUTRAL', 1, 'system', 'system');
 
 -- 参数：仅业务可调参数入库（技术装配参数走 application-*.yml，不入本表）
 INSERT INTO sys_config (id, config_key, config_name, config_value, remark, create_by, update_by)
@@ -1072,9 +1080,9 @@ VALUES (150, 102, '角色新增', 'F', NULL, NULL, 'system:role:add', NULL, 1, '
 INSERT INTO sys_dict_type (id, dict_type, dict_name, status, remark, create_by, update_by)
 VALUES (3, 'sys_common_status', '通用状态', 1, '登录/操作日志成败状态', 'system', 'system');
 
-INSERT INTO sys_dict_data (id, dict_type, dict_label, dict_value, sort, status, create_by, update_by)
-VALUES (6, 'sys_common_status', '成功', '1', 1, 1, 'system', 'system'),
-       (7, 'sys_common_status', '失败', '0', 2, 1, 'system', 'system');
+INSERT INTO sys_dict_data (id, dict_type, dict_label, dict_value, sort, status, tag_tone, is_default, create_by, update_by)
+VALUES (6, 'sys_common_status', '成功', '1', 1, 1, 'SUCCESS', 1, 'system', 'system'),
+       (7, 'sys_common_status', '失败', '0', 2, 1, 'DANGER', 0, 'system', 'system');
 
 -- order 暂无前端菜单页；隐藏目录仅作为统一权限树中的权限归属节点。
 INSERT INTO sys_menu

@@ -1,7 +1,5 @@
 export { PixelWave } from './PixelWave'
 export type { PixelWaveProps } from './PixelWave'
-export { PixelScale } from './PixelScale'
-export type { PixelScaleProps, PixelScaleTone, PixelScaleVariant } from './PixelScale'
 export {
   cellHash,
   cellLit,

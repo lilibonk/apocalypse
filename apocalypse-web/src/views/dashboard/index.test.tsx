@@ -252,7 +252,9 @@ describe('dashboard truthful source states', () => {
   it('renders both locales without leaking semantic keys or Chinese UI copy into English', async () => {
     const english = await render()
     expect(english).toContain('Common tasks')
+    expect(english).toContain('data-slot="living-context-bar"')
     expect(english).toContain('Recent activity')
+    expect(english).not.toContain('not derived from the recent activity rows')
     expect(english).not.toMatch(/近期|常用任务|在线会话|暂无|dashboard\./)
     const chinese = await render('zh')
     expect(chinese).toContain('常用任务')

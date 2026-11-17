@@ -4,10 +4,11 @@
  * Registered through command-questions.tsx; data stays in this module.
  */
 import type { UseQueryResult } from '@tanstack/react-query'
-import { CircleHelp, KeyRound, ShieldCheck } from 'lucide-react'
+import { CircleHelp, KeyRound } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { buildEntityRouteTarget, EntityPill, type EntityRouteIntent } from '@/components/navigation'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import type { CommandQuestionPanelProps } from '@/components/layout/command-extensions'
@@ -158,6 +159,39 @@ function HoldersAnswer({
   )
 }
 
+const ENTITY_COMPONENT_MAP: Partial<Record<EntityRouteIntent['kind'], string>> = {
+  user: 'system/user',
+  role: 'system/role',
+  dept: 'system/dept',
+  permission: 'system/permission',
+  menu: 'system/menu',
+  dict: 'system/dict',
+  config: 'system/config',
+  session: 'system/online',
+}
+
+function navigateEntityFromQuestion(
+  routes: readonly FlatRoute[],
+  navigate: CommandQuestionPanelProps['navigate'],
+  intent: EntityRouteIntent,
+  extraParams?: Record<string, string>,
+) {
+  const component = ENTITY_COMPONENT_MAP[intent.kind]
+  const path = component ? routeFor(routes, component) : undefined
+  if (!path) return
+  const target = buildEntityRouteTarget(path, intent)
+  const searchParams = new URLSearchParams(target.search)
+  if (extraParams) {
+    for (const [k, v] of Object.entries(extraParams)) {
+      if (v) searchParams.set(k, v)
+    }
+  }
+  const search = searchParams.toString()
+  navigate(`${target.pathname}${search ? `?${search}` : ''}`, {
+    state: target.state,
+  })
+}
+
 function HoldersResult({
   query,
   question,
@@ -170,40 +204,50 @@ function HoldersResult({
   navigate: CommandQuestionPanelProps['navigate']
 }) {
   const { t } = useTranslation('system')
-  const rolePath = routeFor(routes, 'system/role')
   if (query.isPending) return <Loading active />
   if (query.isError) return <Failure error={query.error} onRetry={() => void query.refetch()} />
   const data = query.data
-  const userPath = data.membersVisible ? routeFor(routes, 'system/user') : undefined
   const permissionPath = routeFor(routes, 'system/permission')
   return (
     <AnswerFrame question={question} evaluatedAt={data.evaluatedAt}>
-      <p className="mb-2 text-muted-foreground">
-        <code className="font-mono text-xs text-foreground">{data.code}</code> · {data.name}
-        {!data.moduleEnabled && ` · ${t('commandQa.moduleDisabled')}`}
-      </p>
-      {permissionPath && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="mb-3"
-          onClick={() =>
-            navigate(permissionPath, {
-              state: {
-                workspaceContext: {
-                  kind: 'permission',
-                  permissionId: data.permissionId,
-                  keyword: data.code,
-                  moduleKey: data.moduleKey ?? undefined,
-                  resource: data.code.split(':')[1],
-                },
-              },
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <EntityPill
+          kind="permission"
+          id={data.permissionId}
+          label={data.name}
+          sublabel={data.code}
+          moduleKey={data.moduleKey ?? '__core__'}
+          onNavigate={(intent) =>
+            navigateEntityFromQuestion(routes, navigate, intent, {
+              keyword: data.code,
             })
           }
-        >
-          {t('commandQa.openPermission')}
-        </Button>
-      )}
+        />
+        {!data.moduleEnabled && (
+          <span className="text-xs text-muted-foreground">{t('commandQa.moduleDisabled')}</span>
+        )}
+        {permissionPath && (
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() =>
+              navigateEntityFromQuestion(
+                routes,
+                navigate,
+                {
+                  kind: 'permission',
+                  id: data.permissionId,
+                  label: data.name,
+                  moduleKey: data.moduleKey ?? '__core__',
+                },
+                { keyword: data.code },
+              )
+            }
+          >
+            {t('commandQa.openPermission')}
+          </Button>
+        )}
+      </div>
       {data.roles.length === 0 ? (
         <p role="status">{t('commandQa.noHolders')}</p>
       ) : (
@@ -219,22 +263,18 @@ function HoldersResult({
             {data.roles.map((role) => (
               <li key={role.roleId} className="rounded-control bg-card p-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <ShieldCheck className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  {rolePath ? (
-                    <button
-                      type="button"
-                      className="font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      onClick={() =>
-                        navigate(
-                          `${rolePath}?roleId=${encodeURIComponent(role.roleId)}&roleKey=${encodeURIComponent(role.roleKey)}`,
-                        )
-                      }
-                    >
-                      {role.roleName}
-                    </button>
-                  ) : (
-                    <span className="font-medium">{role.roleName}</span>
-                  )}
+                  <EntityPill
+                    kind="role"
+                    id={role.roleId}
+                    label={role.roleName}
+                    sublabel={role.roleKey}
+                    onNavigate={(intent) =>
+                      navigateEntityFromQuestion(routes, navigate, intent, {
+                        roleId: role.roleId,
+                        roleKey: role.roleKey,
+                      })
+                    }
+                  />
                   <span
                     className="command-grant-state rounded-full px-2 py-0.5 text-xs"
                     data-state={role.state}
@@ -255,27 +295,21 @@ function HoldersResult({
                     })}
                   </p>
                 )}
-                <div className="mt-1 flex flex-wrap gap-1">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {role.members.map((member) =>
-                    userPath ? (
-                      <button
+                    data.membersVisible ? (
+                      <EntityPill
                         key={member.id}
-                        type="button"
-                        className="rounded-full bg-muted px-2 py-0.5 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() =>
-                          navigate(userPath, {
-                            state: {
-                              workspaceContext: {
-                                kind: 'user',
-                                userId: member.id,
-                                keyword: member.username,
-                              },
-                            },
+                        kind="user"
+                        id={member.id}
+                        label={member.nickname || member.username}
+                        sublabel={member.username}
+                        onNavigate={(intent) =>
+                          navigateEntityFromQuestion(routes, navigate, intent, {
+                            keyword: member.username,
                           })
                         }
-                      >
-                        {member.nickname || member.username}
-                      </button>
+                      />
                     ) : (
                       <span key={member.id} className="rounded-full bg-muted px-2 py-0.5 text-xs">
                         {member.nickname || member.username}
@@ -358,29 +392,26 @@ function OverviewResult({
   if (query.isPending) return <Loading active />
   if (query.isError) return <Failure error={query.error} onRetry={() => void query.refetch()} />
   const data = query.data
-  const rolePath = routeFor(routes, 'system/role')
-  const menuPath = routeFor(routes, 'system/menu')
   const userPath = routeFor(routes, 'system/user')
   if (template === 'idle')
     return (
       <AnswerFrame question={question} evaluatedAt={data.evaluatedAt}>
         <p className="mb-2">{t('commandQa.idleSummary', { count: data.idleRoleCount })}</p>
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {data.idleRoles.map((role) => (
             <li key={role.roleId} className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={!rolePath}
-                className="font-medium underline-offset-2 hover:underline disabled:no-underline"
-                onClick={() =>
-                  rolePath &&
-                  navigate(
-                    `${rolePath}?roleId=${encodeURIComponent(role.roleId)}&roleKey=${encodeURIComponent(role.roleKey)}`,
-                  )
+              <EntityPill
+                kind="role"
+                id={role.roleId}
+                label={role.roleName}
+                sublabel={role.roleKey}
+                onNavigate={(intent) =>
+                  navigateEntityFromQuestion(routes, navigate, intent, {
+                    roleId: role.roleId,
+                    roleKey: role.roleKey,
+                  })
                 }
-              >
-                {role.roleName}
-              </button>
+              />
               <span className="text-xs text-muted-foreground">
                 {t(`commandQa.idleReason.${role.reason}`)}
               </span>
@@ -404,33 +435,21 @@ function OverviewResult({
             <p className="mb-2">
               {t('commandQa.usersWithoutRolesSummary', { count: data.usersWithoutRolesCount })}
             </p>
-            <div className="flex flex-wrap gap-1">
-              {data.usersWithoutRoles.map((user) =>
-                userPath ? (
-                  <button
-                    key={user.id}
-                    type="button"
-                    className="rounded-full bg-card px-2 py-0.5 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() =>
-                      navigate(userPath, {
-                        state: {
-                          workspaceContext: {
-                            kind: 'user',
-                            userId: user.id,
-                            keyword: user.username,
-                          },
-                        },
-                      })
-                    }
-                  >
-                    {user.nickname || user.username}
-                  </button>
-                ) : (
-                  <span key={user.id} className="rounded-full bg-card px-2 py-0.5 text-xs">
-                    {user.nickname || user.username}
-                  </span>
-                ),
-              )}
+            <div className="flex flex-wrap gap-1.5">
+              {data.usersWithoutRoles.map((user) => (
+                <EntityPill
+                  key={user.id}
+                  kind="user"
+                  id={user.id}
+                  label={user.nickname || user.username}
+                  sublabel={user.username}
+                  onNavigate={(intent) =>
+                    navigateEntityFromQuestion(routes, navigate, intent, {
+                      keyword: user.username,
+                    })
+                  }
+                />
+              ))}
             </div>
             {userPath && data.usersWithoutRolesCount > 0 && (
               <Button
@@ -454,19 +473,20 @@ function OverviewResult({
           total: data.navigationCount,
         })}
       </p>
-      <ul className="space-y-1">
+      <ul className="space-y-1.5">
         {data.unassignedNavigation.map((menu) => (
           <li key={menu.menuId} className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={!menuPath}
-              className="font-medium underline-offset-2 hover:underline disabled:no-underline"
-              onClick={() =>
-                menuPath && navigate(`${menuPath}?menuId=${encodeURIComponent(menu.menuId)}`)
+            <EntityPill
+              kind="menu"
+              id={menu.menuId}
+              label={menu.menuName}
+              focusTargetId={menu.menuId}
+              onNavigate={(intent) =>
+                navigateEntityFromQuestion(routes, navigate, intent, {
+                  menuId: menu.menuId,
+                })
               }
-            >
-              {menu.menuName}
-            </button>
+            />
             <span className="text-xs text-muted-foreground">
               {menu.menuType === 'C' ? t('commandQa.directory') : t('commandQa.page')}
               {!menu.moduleEnabled && ` · ${t('commandQa.moduleDisabled')}`}

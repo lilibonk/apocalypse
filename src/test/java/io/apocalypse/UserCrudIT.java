@@ -33,15 +33,24 @@ class UserCrudIT extends AbstractIntegrationTest {
     JsonNode created =
         postForData(
             "/system/users",
-            Map.of("username", "ituser", "password", "ituser123", "nickname", "集成测试用户"),
+            Map.of(
+                "username", "ituser", "password", "ituser123", "nickname", "集成测试用户", "deptId", 11),
             token);
     assertThat(created.get("id").isTextual()).as("id 应为 String 类型").isTrue();
     long userId = Long.parseLong(created.get("id").asText());
+    assertThat(created.get("deptName").asText()).isEqualTo("研发部");
+    assertThat(created.get("deptPath")).hasSize(2);
+    assertThat(created.at("/deptPath/0/id").asText()).isEqualTo("1");
+    assertThat(created.at("/deptPath/0/deptName").asText()).isEqualTo("总公司");
+    assertThat(created.at("/deptPath/1/id").asText()).isEqualTo("11");
+    assertThat(created.at("/deptPath/1/deptName").asText()).isEqualTo("研发部");
 
     // 详情：触发 user 缓存写入
     JsonNode detail = getForData("/system/users/" + userId, token);
     assertThat(detail.get("username").asText()).isEqualTo("ituser");
     assertThat(detail.get("id").isTextual()).isTrue();
+    assertThat(detail.get("deptPath")).hasSize(2);
+    assertThat(detail.get("roles")).isEmpty();
     Cache userCache = cacheManager.getCache("user");
     assertThat(userCache).isNotNull();
     assertThat(userCache.get(userId)).as("get 后 user 缓存应包含该 key").isNotNull();
@@ -51,10 +60,14 @@ class UserCrudIT extends AbstractIntegrationTest {
     assertThat(updated.get("nickname").asText()).isEqualTo("集成测试用户2");
     assertThat(userCache.get(userId)).as("update 后缓存应被 evict").isNull();
 
-    // 分页：按关键字能查到
-    JsonNode page = getForData("/system/users/page?page=1&size=10&keyword=ituser", token);
+    // 分页：按关键字能查到，且包含管理员的 deptPath 与 roles 摘要
+    JsonNode page = getForData("/system/users/page?page=1&size=10&keyword=admin", token);
     assertThat(page.get("total").asLong()).isGreaterThanOrEqualTo(1);
-    assertThat(page.at("/list/0/username").asText()).isEqualTo("ituser");
+    assertThat(page.at("/list/0/username").asText()).isEqualTo("admin");
+    assertThat(page.at("/list/0/deptPath")).hasSize(2);
+    assertThat(page.at("/list/0/roles")).hasSize(1);
+    assertThat(page.at("/list/0/roles/0/roleKey").asText()).isEqualTo("admin");
+    assertThat(page.at("/list/0/roles/0/dataScope").asText()).isEqualTo("ALL");
 
     // 逻辑删除：删除后再查应报 40400
     deleteForData("/system/users/" + userId, token);

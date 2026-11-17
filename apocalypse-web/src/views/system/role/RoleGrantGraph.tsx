@@ -7,7 +7,7 @@ import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useSurfaceAnimation } from '@/hooks/useSurfaceAnimation'
 import { Button } from '@/components/ui/button'
 import type { PermissionDefinition } from '../permission/permission.types'
-import './role-permission-editor.css'
+import './role-stage.css'
 
 export interface GrantNode {
   id: string

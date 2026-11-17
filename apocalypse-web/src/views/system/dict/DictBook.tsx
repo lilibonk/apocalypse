@@ -1,18 +1,21 @@
 /**
- * 字典卡片册（桌面）：每个字典类型一张卡片，原地展开为整行，邻卡以布局弹簧让位。
- * 逃逸 DynaLayer 原因：类型与值的同屏关系浏览和原地展开超出标准列表；数据与写操作仍复用
- * 既有字典接口与 dict-data schema 的 DynaForm，列表视图保留原双页签 DynaPage。
+ * 字典样本册（桌面，对照 0999.jpg）：
+ * - 四层紧凑样本册卡片：类型编码头 + 启停双色比例细条 + 6 色语义色卡胶囊流（默认项带 ✓）+ 状态底栏
+ * - 严格 FLIP 几何让位：复用 `@/components/motion` 的 `<FlipExpandGrid>` + `<FlipExpandCard>`，
+ *   无卡片级 `container-type: inline-size`、无子级嵌套 `layout`，支持过渡期动态 `z-index` 层级锁
+ * - 展开区内原地全闭环编辑：字典值增删改、6 色调色圆点、默认项切换、启停开关与类型原地编辑
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { LayoutGroup, motion } from 'motion/react'
-import { ChevronDown, Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { motion } from 'motion/react'
+import { Check, ChevronDown, Pencil, Plus, Power, Search, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
-import { DynaForm } from '@/components/dyna/DynaForm'
 import { DynaQueryFeedback } from '@/components/dyna/DynaQueryFeedback'
+import { FlipExpandCard, FlipExpandGrid } from '@/components/motion'
+import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,48 +30,50 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { insightMotion, motionTransition, stateMotion } from '@/design/motion'
+import { insightMotion, motionTransition } from '@/design/motion'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { ApiError } from '@/lib/api/client'
-import type { PageResult } from '@/lib/api/types'
+import type { DictTone, PageResult } from '@/lib/api/types'
 import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
-import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
-import dataSchema from './dict-data.schema'
 import {
   DICT_BOOK_PAGE_SIZE,
   DICT_VALUE_PAGE_SIZE,
+  batchDictValues,
   createDictValue,
+  deleteDictType,
   deleteDictValue,
-  enabledDictValues,
   pageDictTypes,
   pageDictValues,
+  updateDictType,
   updateDictValue,
   type DictTypeRow,
   type DictValueRow,
 } from './dict-book.api'
-import { isDictionaryQuery, lastDictionaryPage, type DictTypeChange } from './dict-book.model'
+import {
+  DICT_TONES,
+  computeDictRatio,
+  isDictionaryQuery,
+  lastDictionaryPage,
+  resolveDictSwatchTone,
+  type DictTypeChange,
+} from './dict-book.model'
 import { DictPagination } from './DictPagination'
 import { DictTypeControls } from './DictTypeControls'
 import './dict-book.css'
 
-const CHIP_LIMIT = 4
+const CHIP_LIMIT = 6
 
-function useInView<T extends Element>() {
-  const ref = useRef<T>(null)
-  const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined')
-  useEffect(() => {
-    const node = ref.current
-    if (!node || visible) return
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) setVisible(true)
-    })
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [visible])
-  return { ref, visible }
+const TONE_LABELS: Record<DictTone, string> = {
+  BRAND: '品牌主色',
+  INFO: '信息青色',
+  SUCCESS: '成功绿色',
+  WARNING: '警示琥珀',
+  DANGER: '危险红色',
+  NEUTRAL: '中性灰阶',
 }
 
 export function DictBook({
@@ -85,22 +90,26 @@ export function DictBook({
   const { t } = useTranslation('system')
   const client = useQueryClient()
   const motionEnabled = useMotionPreference()
-  const [draft, setDraft] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const { intent, clearPulse } = useEntityIntent('dict')
+  const [draft, setDraft] = useState(() => intent?.id ?? '')
+  const [keyword, setKeyword] = useState(() => intent?.id ?? '')
   const [page, setPage] = useState(1)
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null | 'none'>(null)
   const [busyTypes, setBusyTypes] = useState<ReadonlySet<string>>(new Set())
   const [creatingBusy, setCreatingBusy] = useState(false)
   const [lastChange, setLastChange] = useState<(DictTypeChange & { sequence: number }) | null>(null)
   const result = useRef<HTMLDivElement>(null)
   const busy = creatingBusy || busyTypes.size > 0
+
   useEffect(() => {
     onBusyChange?.(busy)
     return () => onBusyChange?.(false)
   }, [busy, onBusyChange])
+
   useEffect(() => {
     if (lastChange?.action === 'deleted') result.current?.focus({ preventScroll: true })
   }, [lastChange])
+
   const onCardBusyChange = useCallback((id: string, value: boolean) => {
     setBusyTypes((previous) => {
       if (previous.has(id) === value) return previous
@@ -110,6 +119,7 @@ export function DictBook({
       return next
     })
   }, [])
+
   const onTypeChanged = useCallback(
     (change: DictTypeChange) => {
       setLastChange((previous) => ({ ...change, sequence: (previous?.sequence ?? 0) + 1 }))
@@ -132,14 +142,41 @@ export function DictBook({
     },
     [client],
   )
+
   const types = useQuery({
     queryKey: ['system', 'dict', 'book', 'types', keyword, page],
     queryFn: ({ signal }) => pageDictTypes(keyword, page, signal),
     placeholderData: keepPreviousData,
     enabled: active,
   })
+
+  const list = isResourceDenied(types.error) ? undefined : types.data?.list
+  const pageTypeCodes = useMemo(() => (list ?? []).map((item) => item.dictType), [list])
+
+  const batchPreview = useQuery({
+    queryKey: ['system', 'dict', 'book', 'batch', pageTypeCodes],
+    queryFn: ({ signal }) => batchDictValues(pageTypeCodes, signal),
+    placeholderData: keepPreviousData,
+    enabled: active && pageTypeCodes.length > 0,
+  })
+
+  // Support EntityPill deep-link focus (`?dictType=...` or `?focusId=...`)
+  const resolvedExpanded =
+    expanded === 'none'
+      ? null
+      : (expanded ??
+        (intent?.id
+          ? (list?.find((item) => item.dictType === intent.id || item.id === intent.id)?.id ?? null)
+          : null))
+
+  useEffect(() => {
+    if (intent?.triggerPulse && resolvedExpanded) {
+      clearPulse()
+    }
+  }, [clearPulse, intent?.triggerPulse, resolvedExpanded])
+
   useResourceDenial({
-    errors: [types.error],
+    errors: [types.error, batchPreview.error],
     clear: { queryKey: ['system', 'dict', 'book'] },
     reset: () => {
       setExpanded(null)
@@ -147,11 +184,13 @@ export function DictBook({
       onCreateOpenChange?.(false)
     },
   })
-  const list = isResourceDenied(types.error) ? undefined : types.data?.list
+
   const pages = lastDictionaryPage(types.data?.total ?? 0, DICT_BOOK_PAGE_SIZE)
   if (types.data && !types.isPlaceholderData && page > pages) setPage(pages)
+
   return (
     <div className="space-y-4">
+      <LivingContextBar source={intent?.source} />
       <form
         className="flex flex-wrap items-center gap-2"
         role="search"
@@ -229,30 +268,30 @@ export function DictBook({
         </p>
       )}
       {list && list.length > 0 && (
-        <LayoutGroup>
-          <div
-            className="dict-book-grid"
-            data-dict-motion={motionEnabled ? 'on' : 'off'}
-            aria-busy={types.isFetching}
-          >
-            {list.map((type) => (
-              <DictCard
-                key={type.id}
-                type={type}
-                expanded={expanded === type.id}
-                motionEnabled={motionEnabled}
-                active={active}
-                disabled={busy || types.isPlaceholderData}
-                changed={lastChange?.id === type.id ? lastChange : undefined}
-                onBusyChange={onCardBusyChange}
-                onTypeChanged={onTypeChanged}
-                onToggle={() => {
-                  if (!busy) setExpanded((current) => (current === type.id ? null : type.id))
-                }}
-              />
-            ))}
-          </div>
-        </LayoutGroup>
+        <FlipExpandGrid
+          groupId="system-dict-sample-book"
+          className="dict-book-grid"
+          data-dict-motion={motionEnabled ? 'on' : 'off'}
+          aria-busy={types.isFetching}
+        >
+          {list.map((type) => (
+            <DictCard
+              key={type.id}
+              type={type}
+              batchItems={batchPreview.data?.[type.dictType]}
+              expanded={resolvedExpanded === type.id}
+              motionEnabled={motionEnabled}
+              active={active}
+              disabled={busy || types.isPlaceholderData}
+              changed={lastChange?.id === type.id ? lastChange : undefined}
+              onBusyChange={onCardBusyChange}
+              onTypeChanged={onTypeChanged}
+              onToggle={() => {
+                if (!busy) setExpanded(resolvedExpanded === type.id ? 'none' : type.id)
+              }}
+            />
+          ))}
+        </FlipExpandGrid>
       )}
       {list && types.data && (
         <DictPagination
@@ -273,6 +312,7 @@ export function DictBook({
 
 function DictCard({
   type,
+  batchItems,
   expanded,
   motionEnabled,
   active,
@@ -283,6 +323,7 @@ function DictCard({
   onToggle,
 }: {
   type: DictTypeRow
+  batchItems?: readonly DictValueRow[]
   expanded: boolean
   motionEnabled: boolean
   active: boolean
@@ -295,79 +336,92 @@ function DictCard({
   const { t } = useTranslation('system')
   const bodyId = useId()
   const header = useRef<HTMLButtonElement>(null)
-  const { ref, visible } = useInView<HTMLDivElement>()
   const [valueBusy, setValueBusy] = useState(false)
   const [typeBusy, setTypeBusy] = useState(false)
   const busy = valueBusy || typeBusy
+
   useEffect(() => {
     onBusyChange(type.id, busy)
     return () => onBusyChange(type.id, false)
   }, [busy, onBusyChange, type.id])
-  const preview = useQuery({
-    queryKey: ['system', 'dict', 'book', 'preview', type.dictType],
-    queryFn: ({ signal }) => enabledDictValues(type.dictType, signal),
-    enabled: active && visible && !expanded,
-  })
+
+  const previewItems = batchItems ?? []
+  const ratio = useMemo(() => computeDictRatio(batchItems ?? []), [batchItems])
+
   const collapse = () => {
     if (busy || disabled) return
     onToggle()
     header.current?.focus()
   }
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (expanded && event.key === 'Escape' && !busy) {
       event.stopPropagation()
       collapse()
     }
   }
-  return (
-    <motion.div
-      ref={ref}
-      layout={motionEnabled}
-      transition={stateMotion.yieldLayout}
-      className={cn('dict-card', expanded && 'dict-card-expanded')}
-      data-expanded={expanded || undefined}
-      onKeyDown={onKeyDown}
-    >
-      <motion.div
-        layout={motionEnabled ? 'position' : false}
-        transition={stateMotion.yieldLayout}
-        className="dict-card-heading flex items-start gap-2"
+
+  const summaryNode = (
+    <div onKeyDown={onKeyDown}>
+      <button
+        ref={header}
+        type="button"
+        className="dict-card-header"
+        aria-expanded={expanded}
+        aria-controls={bodyId}
+        disabled={busy || disabled}
+        onClick={expanded ? collapse : onToggle}
       >
-        <motion.button
-          ref={header}
-          layout={motionEnabled ? 'position' : false}
-          transition={stateMotion.yieldLayout}
-          type="button"
-          className="dict-card-header"
-          aria-expanded={expanded}
-          aria-controls={bodyId}
-          disabled={busy || disabled}
-          onClick={expanded ? collapse : onToggle}
-        >
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate font-medium">{type.dictName}</span>
-            <code className="block truncate font-mono text-xs text-muted-foreground">
-              {type.dictType}
-            </code>
+        <span className="min-w-0 flex-1 text-left">
+          <code className="block truncate font-mono text-sm font-semibold text-foreground">
+            {type.dictType}
+          </code>
+          <span className="block truncate text-xs text-muted-foreground">{type.dictName}</span>
+        </span>
+        {type.status !== 1 && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {t('dictBook.typeDisabled')}
           </span>
-          {type.status !== 1 && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-              {t('dictBook.typeDisabled')}
-            </span>
+        )}
+        <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+          {t('dictBook.itemCountSummary', {
+            count: ratio.total,
+            defaultValue: `${ratio.total} 项`,
+          })}
+        </span>
+        <ChevronDown
+          data-slot="motion-disclosure-indicator"
+          className={cn(
+            'size-4 shrink-0 text-muted-foreground transition-transform',
+            expanded && 'rotate-180',
           )}
-          <ChevronDown
-            data-slot="motion-disclosure-indicator"
-            className={cn('size-4 text-muted-foreground', expanded && 'rotate-180')}
-            aria-hidden="true"
-          />
-        </motion.button>
-        <DictTypeControls
-          type={type}
-          disabled={disabled || valueBusy}
-          onBusyChange={setTypeBusy}
-          onChanged={onTypeChanged}
+          aria-hidden="true"
         />
-      </motion.div>
+      </button>
+
+      {/* Enabled / Disabled ratio thin bar (frame 0999.jpg) */}
+      <div
+        data-slot="dict-ratio-bar"
+        className="dict-ratio-bar mt-2.5"
+        title={t('dictBook.ratioSummary', {
+          enabled: ratio.enabled,
+          disabled: ratio.disabled,
+          defaultValue: `启用 ${ratio.enabled} / 停用 ${ratio.disabled}`,
+        })}
+        aria-hidden="true"
+      >
+        <span
+          data-slot="dict-ratio-enabled"
+          className="dict-ratio-segment-enabled"
+          style={{ width: `${ratio.enabledPercent}%` }}
+        />
+        <span
+          data-slot="dict-ratio-disabled"
+          className="dict-ratio-segment-disabled"
+          style={{ width: `${ratio.disabledPercent}%` }}
+        />
+      </div>
+
       {changed && (
         <motion.p
           key={changed.sequence}
@@ -379,52 +433,103 @@ function DictCard({
           {t(`dictBook.result.${changed.action}`, { name: type.dictName })}
         </motion.p>
       )}
+
       {!expanded && (
-        <motion.div
-          layout={motionEnabled ? 'position' : false}
-          transition={stateMotion.yieldLayout}
+        <div
           className="dict-card-body mt-3 flex flex-wrap gap-1.5"
           aria-label={t('dictBook.enabledValues')}
         >
-          {preview.data?.slice(0, CHIP_LIMIT).map((value) => (
-            <span key={value.id} className="dict-chip">
-              {value.dictLabel}
-              <code className="font-mono text-muted-foreground">
-                {t('dictBook.storedValue', { value: value.dictValue })}
-              </code>
-            </span>
-          ))}
-          {preview.data && preview.data.length > CHIP_LIMIT && (
-            <span className="text-xs text-muted-foreground">
-              {t('dictBook.moreValues', { count: preview.data.length - CHIP_LIMIT })}
+          {previewItems.slice(0, CHIP_LIMIT).map((value) => {
+            const tone = resolveDictSwatchTone(type.dictType, value)
+            return (
+              <span
+                key={value.id}
+                data-slot="dict-swatch-chip"
+                data-tone={tone}
+                data-disabled={value.status !== 1 ? 'true' : undefined}
+                className="dict-swatch-chip"
+              >
+                <span className="dict-swatch-dot-indicator" aria-hidden="true" />
+                <span>{value.dictLabel}</span>
+                {value.isDefault === 1 && (
+                  <span
+                    className="dict-swatch-default"
+                    aria-label={t('dictBook.defaultBadge', { defaultValue: '默认' })}
+                  >
+                    ✓
+                  </span>
+                )}
+                <code className="dict-swatch-code">{value.dictValue}</code>
+              </span>
+            )
+          })}
+          {previewItems.length > CHIP_LIMIT && (
+            <span className="self-center text-xs text-muted-foreground">
+              {t('dictBook.moreValues', { count: previewItems.length - CHIP_LIMIT })}
             </span>
           )}
-          {preview.data?.length === 0 && (
+          {previewItems.length === 0 && (
             <span className="text-xs text-muted-foreground">{t('dictBook.noEnabledValues')}</span>
           )}
-          {type.remark && (
-            <p className="w-full truncate text-xs text-muted-foreground">{type.remark}</p>
-          )}
-        </motion.div>
+        </div>
       )}
-      {expanded && (
-        <motion.div
-          id={bodyId}
-          layout={motionEnabled ? 'position' : false}
-          transition={stateMotion.yieldLayout}
-          className="dict-card-body mt-4"
-        >
-          <DictValues
-            key={type.dictType}
-            type={type}
-            active={active}
-            motionEnabled={motionEnabled}
-            onBusyChange={setValueBusy}
-          />
-        </motion.div>
-      )}
-    </motion.div>
+    </div>
   )
+
+  const footerNode = !expanded ? (
+    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+        <span
+          className={cn(
+            'size-1.5 rounded-full',
+            type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
+          )}
+          aria-hidden="true"
+        />
+        {type.status === 1
+          ? t('dictBook.statusEnabled', { defaultValue: '正常' })
+          : t('dictBook.typeDisabled')}
+      </span>
+      {type.remark && <span className="truncate">{type.remark}</span>}
+    </div>
+  ) : undefined
+
+  const expandedNode = (
+    <div id={bodyId} className="dict-card-body mt-4" onKeyDown={onKeyDown}>
+      <DictValues
+        key={type.dictType}
+        type={type}
+        active={active}
+        motionEnabled={motionEnabled}
+        onBusyChange={setValueBusy}
+        onTypeBusyChange={setTypeBusy}
+        onTypeChanged={onTypeChanged}
+      />
+    </div>
+  )
+
+  return (
+    <FlipExpandCard
+      id={type.id}
+      expanded={expanded}
+      className={cn('dict-card', expanded && 'dict-card-expanded')}
+      summary={summaryNode}
+      expandedContent={expandedNode}
+      footer={footerNode}
+    />
+  )
+}
+
+interface ValueDraftState {
+  mode: 'create' | 'edit'
+  rowId: string | null
+  dictLabel: string
+  dictValue: string
+  sort: number
+  status: number
+  tagTone: DictTone
+  isDefault: number
+  remark: string
 }
 
 function DictValues({
@@ -432,19 +537,29 @@ function DictValues({
   active,
   motionEnabled,
   onBusyChange,
+  onTypeBusyChange,
+  onTypeChanged,
 }: {
   type: DictTypeRow
   active: boolean
   motionEnabled: boolean
   onBusyChange: (busy: boolean) => void
+  onTypeBusyChange: (busy: boolean) => void
+  onTypeChanged: (change: DictTypeChange) => void
 }) {
   const { t } = useTranslation('system')
   const client = useQueryClient()
   const canEdit = useAuthStore((state) => state.perms.includes('system:dict:edit'))
-  const [form, setForm] = useState<{ mode: 'create' | 'edit'; row: DictValueRow | null } | null>(
-    null,
-  )
+  const [inlineDraft, setInlineDraft] = useState<ValueDraftState | null>(null)
   const [deleting, setDeleting] = useState<DictValueRow | null>(null)
+  const [editingType, setEditingType] = useState(false)
+  const [typeDraft, setTypeDraft] = useState(() => ({
+    dictName: type.dictName,
+    dictType: type.dictType,
+    status: type.status,
+    remark: type.remark ?? '',
+  }))
+  const [deletingType, setDeletingType] = useState(false)
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<{
     id: string
@@ -452,23 +567,29 @@ function DictValues({
     action: 'saved' | 'enabled' | 'disabled' | 'deleted'
     sequence: number
   } | null>(null)
+
   const values = useQuery({
     queryKey: ['system', 'dict', 'book', 'values', type.dictType, page],
     queryFn: ({ signal }) => pageDictValues(type.dictType, page, signal),
     placeholderData: keepPreviousData,
     enabled: active,
   })
+
   const denial = useResourceDenial({
     errors: [values.error],
     clear: { queryKey: ['system', 'dict', 'book', 'values', type.dictType] },
     reset: () => {
-      setForm(null)
+      setInlineDraft(null)
       setDeleting(null)
+      setEditingType(false)
+      setDeletingType(false)
       setResult(null)
     },
   })
+
   const refresh = () =>
     client.invalidateQueries({ predicate: (query) => isDictionaryQuery(query.queryKey) })
+
   const updateCachedRow = (id: string, update: (row: DictValueRow) => DictValueRow | null) => {
     client.setQueriesData<PageResult<DictValueRow>>(
       { queryKey: ['system', 'dict', 'book', 'values', type.dictType] },
@@ -482,71 +603,115 @@ function DictValues({
       },
     )
   }
+
   const showResult = (id: string, label: string, action: NonNullable<typeof result>['action']) =>
     setResult((previous) => ({ id, label, action, sequence: (previous?.sequence ?? 0) + 1 }))
-  const localKey = JSON.stringify([type.id, type.dictType, form?.mode, form?.row?.id, deleting?.id])
+
+  const localKey = JSON.stringify([
+    type.id,
+    type.dictType,
+    inlineDraft?.mode,
+    inlineDraft?.rowId,
+    deleting?.id,
+    editingType,
+    deletingType,
+  ])
+
   const save = useModuleMutation(undefined, {
     localKey,
     onDenied: denial,
-    mutationFn: (run, body: Record<string, unknown>) =>
+    mutationFn: (run, draftPayload: ValueDraftState) =>
       run({
         scope: undefined,
-        requiredPerms: [form?.mode === 'edit' ? 'system:dict:edit' : 'system:dict:add'],
+        requiredPerms: [draftPayload.mode === 'edit' ? 'system:dict:edit' : 'system:dict:add'],
         execute: async (transport) => {
-          const payload = { ...body, dictType: type.dictType }
-          if (form?.mode === 'edit' && form.row) {
-            await updateDictValue(form.row.id, payload, transport)
-            return form.row.id
+          const payload = {
+            dictType: type.dictType,
+            dictLabel: draftPayload.dictLabel.trim(),
+            dictValue: draftPayload.dictValue.trim(),
+            sort: draftPayload.sort,
+            status: draftPayload.status,
+            tagTone: draftPayload.tagTone,
+            isDefault: draftPayload.isDefault,
+            remark: draftPayload.remark.trim() || null,
+          }
+          if (draftPayload.mode === 'edit' && draftPayload.rowId) {
+            await updateDictValue(draftPayload.rowId, payload, transport)
+            return draftPayload.rowId
           }
           return createDictValue(payload, transport)
         },
       }),
-    onSuccess: (id, body) => {
+    onSuccess: (id, draftPayload) => {
       toast.success(t('dictBook.saved'))
-      showResult(id, String(body.dictLabel), 'saved')
+      showResult(id, draftPayload.dictLabel.trim(), 'saved')
       updateCachedRow(id, (row) => ({
         ...row,
-        dictLabel: String(body.dictLabel),
-        dictValue: String(body.dictValue),
-        sort: typeof body.sort === 'number' ? body.sort : 0,
-        status: typeof body.status === 'number' ? body.status : row.status,
-        remark: typeof body.remark === 'string' ? body.remark : null,
+        dictLabel: draftPayload.dictLabel.trim(),
+        dictValue: draftPayload.dictValue.trim(),
+        sort: draftPayload.sort,
+        status: draftPayload.status,
+        tagTone: draftPayload.tagTone,
+        isDefault: draftPayload.isDefault,
+        remark: draftPayload.remark.trim() || null,
       }))
-      setForm(null)
+      setInlineDraft(null)
       void refresh()
     },
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : t('dictBook.saveFailed')),
   })
-  const toggle = useModuleMutation(undefined, {
-    localKey: JSON.stringify([type.id, type.dictType, 'toggle']),
+
+  const patchRowMeta = useModuleMutation(undefined, {
+    localKey: JSON.stringify([type.id, type.dictType, 'patch-meta']),
     onDenied: denial,
-    mutationFn: (run, row: DictValueRow) =>
+    mutationFn: (
+      run,
+      input: {
+        row: DictValueRow
+        status?: number
+        tagTone?: DictTone
+        isDefault?: number
+      },
+    ) =>
       run({
         scope: undefined,
         requiredPerms: ['system:dict:edit'],
         execute: (transport) =>
           updateDictValue(
-            row.id,
+            input.row.id,
             {
-              dictType: row.dictType,
-              dictLabel: row.dictLabel,
-              dictValue: row.dictValue,
-              sort: row.sort,
-              remark: row.remark,
-              status: row.status === 1 ? 0 : 1,
+              dictType: input.row.dictType,
+              dictLabel: input.row.dictLabel,
+              dictValue: input.row.dictValue,
+              sort: input.row.sort ?? 0,
+              remark: input.row.remark,
+              status: input.status ?? input.row.status,
+              tagTone: input.tagTone ?? input.row.tagTone ?? 'NEUTRAL',
+              isDefault: input.isDefault ?? input.row.isDefault ?? 0,
             },
             transport,
           ),
       }),
-    onSuccess: (_data, row) => {
-      updateCachedRow(row.id, (current) => ({ ...current, status: row.status === 1 ? 0 : 1 }))
-      showResult(row.id, row.dictLabel, row.status === 1 ? 'disabled' : 'enabled')
+    onSuccess: (_data, input) => {
+      const nextStatus = input.status ?? input.row.status
+      const nextTone = input.tagTone ?? input.row.tagTone ?? 'NEUTRAL'
+      const nextDefault = input.isDefault ?? input.row.isDefault ?? 0
+      updateCachedRow(input.row.id, (current) => ({
+        ...current,
+        status: nextStatus,
+        tagTone: nextTone,
+        isDefault: nextDefault,
+      }))
+      const action =
+        input.status !== undefined ? (nextStatus === 1 ? 'enabled' : 'disabled') : 'saved'
+      showResult(input.row.id, input.row.dictLabel, action)
       void refresh()
     },
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : t('dictBook.saveFailed')),
   })
+
   const remove = useModuleMutation(undefined, {
     localKey,
     onDenied: denial,
@@ -566,20 +731,114 @@ function DictValues({
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : t('dictBook.deleteFailed')),
   })
-  const pending = save.isPending || toggle.isPending || remove.isPending
-  const busy = form !== null || deleting !== null || pending
+
+  const saveTypeInline = useModuleMutation(undefined, {
+    localKey,
+    onDenied: denial,
+    mutationFn: (run) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dict:edit'],
+        execute: (transport) =>
+          updateDictType(
+            type.id,
+            {
+              dictName: typeDraft.dictName.trim(),
+              dictType: typeDraft.dictType.trim(),
+              status: typeDraft.status,
+              remark: typeDraft.remark.trim() || null,
+            },
+            transport,
+          ),
+      }),
+    onSuccess: () => {
+      toast.success(t('dictBook.typeSaved'))
+      setEditingType(false)
+      onTypeChanged({
+        id: type.id,
+        dictType: typeDraft.dictType.trim(),
+        name: typeDraft.dictName.trim(),
+        action: 'updated',
+        row: {
+          id: type.id,
+          dictType: typeDraft.dictType.trim(),
+          dictName: typeDraft.dictName.trim(),
+          status: typeDraft.status,
+          remark: typeDraft.remark.trim() || null,
+        },
+      })
+      void refresh()
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('dictBook.saveFailed')),
+  })
+
+  const toggleTypeStatus = useModuleMutation(undefined, {
+    localKey,
+    onDenied: denial,
+    mutationFn: (run) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dict:edit'],
+        execute: (transport) =>
+          updateDictType(type.id, { ...type, status: type.status === 1 ? 0 : 1 }, transport),
+      }),
+    onSuccess: () => {
+      onTypeChanged({
+        id: type.id,
+        dictType: type.dictType,
+        name: type.dictName,
+        action: type.status === 1 ? 'disabled' : 'enabled',
+        row: { ...type, status: type.status === 1 ? 0 : 1 },
+      })
+      void refresh()
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('dictBook.saveFailed')),
+  })
+
+  const removeType = useModuleMutation(undefined, {
+    localKey,
+    onDenied: denial,
+    mutationFn: (run) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dict:remove'],
+        execute: (transport) => deleteDictType(type.id, transport),
+      }),
+    onSuccess: () => {
+      toast.success(t('dictBook.typeDeleted'))
+      setDeletingType(false)
+      onTypeChanged({
+        id: type.id,
+        dictType: type.dictType,
+        name: type.dictName,
+        action: 'deleted',
+      })
+      void refresh()
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('dictBook.deleteFailed')),
+  })
+
+  const valuePending = save.isPending || patchRowMeta.isPending || remove.isPending
+  const typePending = saveTypeInline.isPending || toggleTypeStatus.isPending || removeType.isPending
+  const busy = inlineDraft !== null || deleting !== null || valuePending
+  const typeBusy = editingType || deletingType || typePending
+
   useEffect(() => {
     onBusyChange(busy)
     return () => onBusyChange(false)
   }, [busy, onBusyChange])
+
+  useEffect(() => {
+    onTypeBusyChange(typeBusy)
+    return () => onTypeBusyChange(false)
+  }, [typeBusy, onTypeBusyChange])
+
   const pages = lastDictionaryPage(values.data?.total ?? 0, DICT_VALUE_PAGE_SIZE)
   if (values.data && !values.isPlaceholderData && page > pages) setPage(pages)
-  const formConfig = {
-    ...dataSchema.form!,
-    fields: dataSchema.form!.fields.map((field) =>
-      field.name === 'dictType' ? { ...field, disabledInEdit: true, hideInCreate: true } : field,
-    ),
-  }
+
   if (values.isPending) return <Skeleton className="h-24" />
   if ((values.isError && !values.data) || isResourceDenied(values.error))
     return (
@@ -592,7 +851,37 @@ function DictValues({
         </Button>
       </div>
     )
+
   const rows = values.data?.list ?? []
+
+  const startCreateInline = () => {
+    setInlineDraft({
+      mode: 'create',
+      rowId: null,
+      dictLabel: '',
+      dictValue: '',
+      sort: (rows.length + 1) * 10,
+      status: 1,
+      tagTone: 'NEUTRAL',
+      isDefault: 0,
+      remark: '',
+    })
+  }
+
+  const startEditInline = (row: DictValueRow) => {
+    setInlineDraft({
+      mode: 'edit',
+      rowId: row.id,
+      dictLabel: row.dictLabel,
+      dictValue: row.dictValue,
+      sort: row.sort ?? 0,
+      status: row.status,
+      tagTone: resolveDictSwatchTone(type.dictType, row),
+      isDefault: row.isDefault ?? 0,
+      remark: row.remark ?? '',
+    })
+  }
+
   return (
     <div className="space-y-3">
       <DynaQueryFeedback
@@ -621,96 +910,317 @@ function DictValues({
           <Button
             size="sm"
             variant="outline"
-            disabled={busy || values.isPlaceholderData}
-            onClick={() => setForm({ mode: 'create', row: null })}
+            disabled={busy || typeBusy || values.isPlaceholderData}
+            onClick={startCreateInline}
           >
             <Plus aria-hidden="true" />
             {t('dictBook.addValue')}
           </Button>
         </Perm>
       </div>
+
+      {/* Inline create row inside the expanded card */}
+      {inlineDraft?.mode === 'create' && (
+        <InlineValueEditorRow
+          draft={inlineDraft}
+          submitting={save.isPending}
+          onChange={setInlineDraft}
+          onCancel={() => setInlineDraft(null)}
+          onSubmit={() => {
+            if (!inlineDraft.dictLabel.trim() || !inlineDraft.dictValue.trim()) {
+              toast.error(t('dictBook.requiredFields', { defaultValue: '请填写字典标签与编码值' }))
+              return
+            }
+            save.mutate(inlineDraft)
+          }}
+        />
+      )}
+
       {rows.length === 0 && !values.isError ? (
         <p role="status" className="py-4 text-sm text-muted-foreground">
           {t('dictBook.noValues')}
         </p>
       ) : (
         <ul className="divide-y divide-border-subtle rounded-control border border-border-subtle">
-          {rows.map((row) => (
-            <motion.li
-              key={row.id}
-              layout={motionEnabled ? 'position' : false}
-              transition={stateMotion.yieldLayout}
-              className="dict-value-row"
-              data-value-result={result?.id === row.id || undefined}
-            >
-              <span className="min-w-0 font-medium break-words">{row.dictLabel}</span>
-              <code className="min-w-0 font-mono text-xs break-all text-muted-foreground">
-                {row.dictValue}
-              </code>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {t('dictBook.sort', { sort: row.sort ?? 0 })}
-              </span>
-              <span
-                className="min-w-0 truncate text-xs text-muted-foreground"
-                title={row.remark ?? ''}
+          {rows.map((row) => {
+            const isEditingRow = inlineDraft?.mode === 'edit' && inlineDraft.rowId === row.id
+            if (isEditingRow && inlineDraft) {
+              return (
+                <li key={row.id} className="p-2.5">
+                  <InlineValueEditorRow
+                    draft={inlineDraft}
+                    submitting={save.isPending}
+                    onChange={setInlineDraft}
+                    onCancel={() => setInlineDraft(null)}
+                    onSubmit={() => {
+                      if (!inlineDraft.dictLabel.trim() || !inlineDraft.dictValue.trim()) {
+                        toast.error(
+                          t('dictBook.requiredFields', { defaultValue: '请填写字典标签与编码值' }),
+                        )
+                        return
+                      }
+                      save.mutate(inlineDraft)
+                    }}
+                  />
+                </li>
+              )
+            }
+            const tone = resolveDictSwatchTone(type.dictType, row)
+            return (
+              <li
+                key={row.id}
+                className="dict-value-row"
+                data-value-result={result?.id === row.id || undefined}
               >
-                {row.remark ?? ''}
-              </span>
-              <span className="flex items-center justify-end gap-1">
-                <Switch
-                  checked={row.status === 1}
-                  disabled={!canEdit || busy || values.isPlaceholderData}
-                  aria-label={t('dictBook.toggle', { label: row.dictLabel })}
-                  onCheckedChange={() => toggle.mutate(row)}
-                />
-                <Perm perm="system:dict:edit">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t('dictBook.edit', { label: row.dictLabel })}
-                    disabled={busy || values.isPlaceholderData}
-                    onClick={() => setForm({ mode: 'edit', row })}
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+                  <span
+                    className="dict-swatch-chip"
+                    data-tone={tone}
+                    data-disabled={row.status !== 1 ? 'true' : undefined}
                   >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                </Perm>
-                <Perm perm="system:dict:remove">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t('dictBook.delete', { label: row.dictLabel })}
-                    disabled={busy || values.isPlaceholderData}
-                    onClick={() => setDeleting(row)}
+                    <span className="dict-swatch-dot-indicator" aria-hidden="true" />
+                    <span className="font-medium">{row.dictLabel}</span>
+                    {row.isDefault === 1 && <span className="dict-swatch-default">✓</span>}
+                  </span>
+                  <code className="rounded-sm bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                    {row.dictValue}
+                  </code>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {t('dictBook.sort', { sort: row.sort ?? 0 })}
+                  </span>
+                  {row.remark && (
+                    <span
+                      className="min-w-0 truncate text-xs text-muted-foreground"
+                      title={row.remark}
+                    >
+                      {row.remark}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2.5">
+                  {/* 6-color semantic swatch picker (frame 0999.jpg) */}
+                  <div
+                    role="group"
+                    aria-label={t('dictBook.toneGroup', {
+                      label: row.dictLabel,
+                      defaultValue: `${row.dictLabel} 语义色值`,
+                    })}
+                    className="flex items-center gap-1"
                   >
-                    <Trash2 aria-hidden="true" />
+                    {DICT_TONES.map((swatchTone) => (
+                      <button
+                        key={swatchTone}
+                        type="button"
+                        data-slot="dict-tone-dot"
+                        data-tone={swatchTone}
+                        data-active={tone === swatchTone ? 'true' : undefined}
+                        aria-label={`${row.dictLabel}: ${TONE_LABELS[swatchTone]}`}
+                        aria-pressed={tone === swatchTone}
+                        disabled={!canEdit || busy || typeBusy || values.isPlaceholderData}
+                        onClick={() => patchRowMeta.mutate({ row, tagTone: swatchTone })}
+                        className="dict-tone-picker-dot disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    ))}
+                  </div>
+
+                  {/* Default item toggle button */}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={row.isDefault === 1 ? 'secondary' : 'ghost'}
+                    disabled={!canEdit || busy || typeBusy || values.isPlaceholderData}
+                    onClick={() =>
+                      patchRowMeta.mutate({
+                        row,
+                        isDefault: row.isDefault === 1 ? 0 : 1,
+                      })
+                    }
+                    className="h-7 px-2 text-xs"
+                  >
+                    {row.isDefault === 1
+                      ? t('dictBook.defaultActive', { defaultValue: '默认 ✓' })
+                      : t('dictBook.setDefault', { defaultValue: '设为默认' })}
                   </Button>
-                </Perm>
-              </span>
-            </motion.li>
-          ))}
+
+                  <Switch
+                    checked={row.status === 1}
+                    disabled={!canEdit || busy || typeBusy || values.isPlaceholderData}
+                    aria-label={t('dictBook.toggle', { label: row.dictLabel })}
+                    onCheckedChange={() =>
+                      patchRowMeta.mutate({ row, status: row.status === 1 ? 0 : 1 })
+                    }
+                  />
+
+                  <Perm perm="system:dict:edit">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t('dictBook.edit', { label: row.dictLabel })}
+                      disabled={busy || typeBusy || values.isPlaceholderData}
+                      onClick={() => startEditInline(row)}
+                    >
+                      <Pencil aria-hidden="true" />
+                    </Button>
+                  </Perm>
+                  <Perm perm="system:dict:remove">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t('dictBook.delete', { label: row.dictLabel })}
+                      disabled={busy || typeBusy || values.isPlaceholderData}
+                      onClick={() => setDeleting(row)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </Perm>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
+
       {values.data && (
         <DictPagination
           page={page}
           total={values.data.total}
           size={DICT_VALUE_PAGE_SIZE}
           label={t('dictBook.valuePages', { name: type.dictName })}
-          disabled={busy || values.isFetching}
+          disabled={busy || typeBusy || values.isFetching}
           onChange={setPage}
         />
       )}
-      {form && (
-        <DynaForm
-          config={formConfig}
-          mode={form.mode}
-          open
-          initialRow={form.row as Record<string, unknown> | null}
-          submitting={save.isPending}
-          onOpenChange={(open) => !open && !save.isPending && setForm(null)}
-          onSubmit={(body) => save.mutate(body)}
-        />
-      )}
+
+      {/* Expanded card bottom bar: Type status + In-place Type Edit / Toggle / Delete (frame 0999.jpg) */}
+      <div className="border-t border-border-subtle pt-3">
+        {editingType ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-control bg-muted/60 p-2.5">
+            <Input
+              value={typeDraft.dictName}
+              onChange={(event) =>
+                setTypeDraft((prev) => ({ ...prev, dictName: event.target.value }))
+              }
+              placeholder={t('dictBook.typeNamePlaceholder', { defaultValue: '字典名称' })}
+              aria-label={t('dictBook.typeNamePlaceholder', { defaultValue: '字典名称' })}
+              className="h-8 max-w-44 text-xs"
+              disabled={saveTypeInline.isPending}
+            />
+            <Input
+              value={typeDraft.dictType}
+              onChange={(event) =>
+                setTypeDraft((prev) => ({ ...prev, dictType: event.target.value }))
+              }
+              placeholder={t('dictBook.typeCodePlaceholder', { defaultValue: '字典类型编码' })}
+              aria-label={t('dictBook.typeCodePlaceholder', { defaultValue: '字典类型编码' })}
+              className="h-8 max-w-48 font-mono text-xs"
+              disabled={saveTypeInline.isPending}
+            />
+            <Input
+              value={typeDraft.remark}
+              onChange={(event) =>
+                setTypeDraft((prev) => ({ ...prev, remark: event.target.value }))
+              }
+              placeholder={t('dictBook.remarkPlaceholder', { defaultValue: '备注说明' })}
+              aria-label={t('dictBook.remarkPlaceholder', { defaultValue: '备注说明' })}
+              className="h-8 min-w-40 flex-1 text-xs"
+              disabled={saveTypeInline.isPending}
+            />
+            <Button
+              size="sm"
+              disabled={
+                saveTypeInline.isPending || !typeDraft.dictName.trim() || !typeDraft.dictType.trim()
+              }
+              onClick={() => saveTypeInline.mutate(undefined)}
+            >
+              <Check aria-hidden="true" />
+              {t('dictBook.saveInline', { defaultValue: '保存类型' })}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={saveTypeInline.isPending}
+              onClick={() => setEditingType(false)}
+            >
+              <X aria-hidden="true" />
+              {t('dictBook.cancel')}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
+                  )}
+                  aria-hidden="true"
+                />
+                {type.status === 1
+                  ? t('dictBook.statusEnabled', { defaultValue: '正常' })
+                  : t('dictBook.typeDisabled')}
+              </span>
+              {type.remark && <span>· {type.remark}</span>}
+            </div>
+            <div className="flex items-center gap-1">
+              <Perm perm="system:dict:edit">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  aria-label={t('dictBook.editType', { name: type.dictName })}
+                  disabled={busy || typeBusy}
+                  onClick={() => {
+                    setTypeDraft({
+                      dictName: type.dictName,
+                      dictType: type.dictType,
+                      status: type.status,
+                      remark: type.remark ?? '',
+                    })
+                    setEditingType(true)
+                  }}
+                >
+                  <Pencil aria-hidden="true" />
+                  {t('dictBook.editTypeShort', { defaultValue: '编辑类型' })}
+                </Button>
+              </Perm>
+              <Perm perm="system:dict:edit">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  aria-label={t(
+                    type.status === 1 ? 'dictBook.disableType' : 'dictBook.enableType',
+                    { name: type.dictName },
+                  )}
+                  disabled={busy || typeBusy}
+                  onClick={() => toggleTypeStatus.mutate(undefined)}
+                >
+                  <Power aria-hidden="true" />
+                  {type.status === 1
+                    ? t('dictBook.disableShort', { defaultValue: '停用类型' })
+                    : t('dictBook.enableShort', { defaultValue: '启用类型' })}
+                </Button>
+              </Perm>
+              <Perm perm="system:dict:remove">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-destructive"
+                  aria-label={t('dictBook.deleteType', { name: type.dictName })}
+                  disabled={busy || typeBusy}
+                  onClick={() => setDeletingType(true)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </Perm>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Delete dictionary value confirmation */}
       <AlertDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && !remove.isPending && setDeleting(null)}
@@ -738,6 +1248,132 @@ function DictValues({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete dictionary type confirmation */}
+      <AlertDialog
+        open={deletingType}
+        onOpenChange={(open) => !open && !removeType.isPending && setDeletingType(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dictBook.deleteTypeTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dictBook.deleteTypeHint', { name: type.dictName })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeType.isPending}>
+              {t('dictBook.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={removeType.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                removeType.mutate(undefined)
+              }}
+            >
+              {t('dictBook.confirmDelete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+function InlineValueEditorRow({
+  draft,
+  submitting,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  draft: ValueDraftState
+  submitting: boolean
+  onChange: (next: ValueDraftState) => void
+  onCancel: () => void
+  onSubmit: () => void
+}) {
+  const { t } = useTranslation('system')
+  return (
+    <div
+      data-slot="dict-inline-editor"
+      className="flex flex-wrap items-center gap-2 rounded-control border border-border bg-muted/50 p-2.5"
+    >
+      <Input
+        value={draft.dictLabel}
+        onChange={(event) => onChange({ ...draft, dictLabel: event.target.value })}
+        placeholder={t('dictBook.labelPlaceholder', { defaultValue: '显示标签（如：男）' })}
+        aria-label={t('dictBook.labelPlaceholder', { defaultValue: '显示标签' })}
+        className="h-8 max-w-36 text-xs"
+        disabled={submitting}
+      />
+      <Input
+        value={draft.dictValue}
+        onChange={(event) => onChange({ ...draft, dictValue: event.target.value })}
+        placeholder={t('dictBook.valuePlaceholder', { defaultValue: '编码值（如：1）' })}
+        aria-label={t('dictBook.valuePlaceholder', { defaultValue: '编码值' })}
+        className="h-8 max-w-32 font-mono text-xs"
+        disabled={submitting}
+      />
+      <Input
+        type="number"
+        value={String(draft.sort)}
+        onChange={(event) => onChange({ ...draft, sort: Number(event.target.value) || 0 })}
+        placeholder={t('dictBook.sortPlaceholder', { defaultValue: '排序' })}
+        aria-label={t('dictBook.sortPlaceholder', { defaultValue: '排序' })}
+        className="h-8 w-20 font-mono text-xs"
+        disabled={submitting}
+      />
+      <Input
+        value={draft.remark}
+        onChange={(event) => onChange({ ...draft, remark: event.target.value })}
+        placeholder={t('dictBook.remarkPlaceholder', { defaultValue: '备注说明（可选）' })}
+        aria-label={t('dictBook.remarkPlaceholder', { defaultValue: '备注说明' })}
+        className="h-8 min-w-32 flex-1 text-xs"
+        disabled={submitting}
+      />
+      <div className="flex items-center gap-1" role="group" aria-label="选择语义色">
+        {DICT_TONES.map((swatchTone) => (
+          <button
+            key={swatchTone}
+            type="button"
+            data-tone={swatchTone}
+            data-active={draft.tagTone === swatchTone ? 'true' : undefined}
+            aria-label={TONE_LABELS[swatchTone]}
+            aria-pressed={draft.tagTone === swatchTone}
+            disabled={submitting}
+            onClick={() => onChange({ ...draft, tagTone: swatchTone })}
+            className="dict-tone-picker-dot"
+          />
+        ))}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={draft.isDefault === 1 ? 'secondary' : 'ghost'}
+        className="h-7 px-2 text-xs"
+        disabled={submitting}
+        onClick={() => onChange({ ...draft, isDefault: draft.isDefault === 1 ? 0 : 1 })}
+      >
+        {draft.isDefault === 1 ? '默认 ✓' : '设为默认'}
+      </Button>
+      <Button type="button" size="sm" className="h-8" disabled={submitting} onClick={onSubmit}>
+        <Check aria-hidden="true" />
+        {t('dictBook.saveInlineValue', { defaultValue: '保存' })}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-8"
+        disabled={submitting}
+        onClick={onCancel}
+      >
+        <X aria-hidden="true" />
+        {t('dictBook.cancel')}
+      </Button>
     </div>
   )
 }

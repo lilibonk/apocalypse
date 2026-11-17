@@ -10,4 +10,12 @@ public record DictDataResp(
     String dictValue,
     Integer sort,
     Integer status,
-    @Schema(nullable = true) String remark) {}
+    String tagTone,
+    Integer isDefault,
+    @Schema(nullable = true) String remark) {
+
+  public DictDataResp {
+    tagTone = (tagTone == null || tagTone.isBlank()) ? "NEUTRAL" : tagTone;
+    isDefault = isDefault == null ? 0 : isDefault;
+  }
+}

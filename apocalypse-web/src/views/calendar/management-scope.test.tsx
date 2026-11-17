@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CalendarRecord, CalendarRole } from './calendar.api'
@@ -142,8 +143,16 @@ describe('calendar scoped management controls', () => {
 
   it.each(['EDITOR', 'PUBLISHER'] as const)('limits draft publishing for %s', (role) => {
     state.role = role
-    const eventHtml = renderToStaticMarkup(<ManagedEventsPage />)
-    const overrideHtml = renderToStaticMarkup(<ManagedOverridePage />)
+    const eventHtml = renderToStaticMarkup(
+      <MemoryRouter>
+        <ManagedEventsPage />
+      </MemoryRouter>,
+    )
+    const overrideHtml = renderToStaticMarkup(
+      <MemoryRouter>
+        <ManagedOverridePage />
+      </MemoryRouter>,
+    )
     expect(eventHtml).toContain('managedEvents.editDraft')
     expect(eventHtml.includes('>managedEvents.publish<')).toBe(role === 'PUBLISHER')
     expect(overrideHtml.includes('>managedOverrides.publishRevision<')).toBe(role === 'PUBLISHER')
@@ -153,14 +162,22 @@ describe('calendar scoped management controls', () => {
   it.each(['EDITOR', 'PUBLISHER'] as const)('limits published event actions for %s', (role) => {
     state.role = role
     state.revision = 'PUBLISHED'
-    const html = renderToStaticMarkup(<ManagedEventsPage />)
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ManagedEventsPage />
+      </MemoryRouter>,
+    )
     expect(html.includes('>managedEvents.withdraw<')).toBe(role === 'PUBLISHER')
     expect(html.includes('>managedEvents.cancel<')).toBe(role === 'PUBLISHER')
   })
 
   it.each(['READER', 'EDITOR', 'PUBLISHER'] as const)('scopes member access for %s', (role) => {
     state.role = role
-    const html = renderToStaticMarkup(<CalendarManagementPage />)
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <CalendarManagementPage />
+      </MemoryRouter>,
+    )
     expect(html.includes('>calendars.edit<')).toBe(role === 'PUBLISHER')
     expect(html.includes('>calendars.archive<')).toBe(role === 'PUBLISHER')
     expect(html.includes('>calendars.addMember<')).toBe(role === 'PUBLISHER')
@@ -171,15 +188,27 @@ describe('calendar scoped management controls', () => {
 
   it('does not query editor workbenches for a reader', () => {
     state.role = 'READER'
-    renderToStaticMarkup(<ManagedEventsPage />)
-    renderToStaticMarkup(<ManagedOverridePage />)
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <ManagedEventsPage />
+      </MemoryRouter>,
+    )
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <ManagedOverridePage />
+      </MemoryRouter>,
+    )
     for (const [config] of query.mock.calls) {
       if (config.meta.resource !== 'contexts') expect(config.enabled).toBe(false)
     }
   })
 
   it('does not offer private edit or delete actions on a published managed event', () => {
-    const html = renderToStaticMarkup(<PrivateEventsPage />)
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <PrivateEventsPage />
+      </MemoryRouter>,
+    )
     expect(html.match(/>privateEvents.edit</g)).toHaveLength(1)
     expect(html.match(/>privateEvents.delete</g)).toHaveLength(1)
     expect(html).toContain('eventKinds.MANAGED')
@@ -188,7 +217,11 @@ describe('calendar scoped management controls', () => {
   it.each([ManagedEventsPage, ManagedOverridePage, CalendarManagementPage])(
     'refreshes authoritative queries after a failed command without changing the backend message',
     (Page) => {
-      renderToStaticMarkup(<Page />)
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <Page />
+        </MemoryRouter>,
+      )
       const error = new Error('版本冲突，请刷新后重试')
       expect(mutations.length).toBeGreaterThan(0)
       for (const options of mutations) {

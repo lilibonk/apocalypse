@@ -8,6 +8,7 @@ import { KeyRound, LayoutList, ShieldCheck, Users } from 'lucide-react'
 import { useLayoutEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { PathPulse } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { insightMotion } from '@/design/motion'
@@ -23,7 +24,7 @@ import {
   type RawRoleMenu,
   type RolePermissionOpening,
 } from './role-permission.model'
-import './role-panorama.css'
+import './role-stage.css'
 
 const LIMIT = 8
 const VIEW = { width: 820, height: 440 }
@@ -53,17 +54,28 @@ function flatten(nodes: readonly RawRoleMenu[]): RawRoleMenu[] {
   return nodes.flatMap((node) => [node, ...flatten(node.children ?? [])])
 }
 
-function ChainEdge({ d, related }: { d: string; related: boolean }) {
+function ChainEdge({
+  d,
+  related,
+  tone,
+}: {
+  d: string
+  related: boolean
+  tone: 'gold' | 'purple' | 'mint'
+}) {
   const enabled = useMotionPreference()
   const target = { d, pathLength: 1 }
   const controls = useSurfaceAnimation(target, enabled, insightMotion.layout)
   return (
-    <motion.path
-      className="role-panorama-edge"
-      data-related={related || undefined}
-      initial={enabled ? { ...target, pathLength: 0 } : target}
-      animate={controls}
-    />
+    <g>
+      <motion.path
+        className="role-panorama-edge"
+        data-related={related || undefined}
+        initial={enabled ? { ...target, pathLength: 0 } : target}
+        animate={controls}
+      />
+      {related && <PathPulse d={d} active triggerKey={d} tone={tone} />}
+    </g>
   )
 }
 
@@ -203,6 +215,7 @@ function ChainBody({
             <ChainEdge
               key={item.key}
               related={hovered === item.key}
+              tone="gold"
               d={curve({ x: LEFT_X, y: y(index, left.length) }, CENTER)}
             />
           ))}
@@ -210,6 +223,7 @@ function ChainBody({
             <ChainEdge
               key={item.key}
               related={hovered === item.key}
+              tone={item.relation === 'permissions' ? 'purple' : 'mint'}
               d={curve(CENTER, { x: RIGHT_X, y: y(index, right.length) })}
             />
           ))}

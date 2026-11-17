@@ -13,7 +13,11 @@ import io.apocalypse.system.dict.entity.SysDictTypeEntity;
 import io.apocalypse.system.dict.mapper.SysDictDataMapper;
 import io.apocalypse.system.dict.mapper.SysDictTypeMapper;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -40,6 +44,34 @@ public class DictService {
   @Cacheable(cacheNames = "dict", key = "#type", sync = true)
   public List<DictDataResp> getByType(String type) {
     return sysDictDataMapper.findEnabledByType(type).stream().map(dictConvert::toDataResp).toList();
+  }
+
+  /** 按多个字典类型批量取全部未删除字典项（含启用与停用，供字典样本册一次拉取）。 */
+  public Map<String, List<DictDataResp>> getBatchByTypes(Collection<String> dictTypes) {
+    if (dictTypes == null || dictTypes.isEmpty()) {
+      return Map.of();
+    }
+    List<String> normalized =
+        dictTypes.stream()
+            .filter(t -> t != null && !t.isBlank())
+            .map(String::trim)
+            .distinct()
+            .toList();
+    if (normalized.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, List<DictDataResp>> grouped = new LinkedHashMap<>();
+    for (String type : normalized) {
+      grouped.put(type, new ArrayList<>());
+    }
+    for (SysDictDataEntity entity : sysDictDataMapper.findAllByTypes(normalized)) {
+      grouped
+          .computeIfAbsent(entity.getDictType(), ignored -> new ArrayList<>())
+          .add(dictConvert.toDataResp(entity));
+    }
+    Map<String, List<DictDataResp>> result = new LinkedHashMap<>();
+    grouped.forEach((k, v) -> result.put(k, List.copyOf(v)));
+    return result;
   }
 
   /** 字典类型分页。 */
@@ -95,6 +127,9 @@ public class DictService {
     requireType(req.dictType());
     SysDictDataEntity entity = new SysDictDataEntity();
     applyDataReq(entity, req);
+    if (Integer.valueOf(SysDictDataEntity.IS_DEFAULT_YES).equals(entity.getIsDefault())) {
+      sysDictDataMapper.clearDefaultByType(entity.getDictType(), null);
+    }
     sysDictDataMapper.insert(entity);
     return entity.getId();
   }
@@ -105,6 +140,9 @@ public class DictService {
   public void updateData(Long id, DictDataSaveReq req) {
     SysDictDataEntity entity = requireDataById(id);
     applyDataReq(entity, req);
+    if (Integer.valueOf(SysDictDataEntity.IS_DEFAULT_YES).equals(entity.getIsDefault())) {
+      sysDictDataMapper.clearDefaultByType(entity.getDictType(), id);
+    }
     ConcurrencyGuard.requireSingleRow(sysDictDataMapper.updateById(entity));
   }
 
@@ -152,6 +190,12 @@ public class DictService {
     entity.setDictValue(req.dictValue());
     entity.setSort(req.sort() == null ? 0 : req.sort());
     entity.setStatus(req.status() == null ? SysDictDataEntity.STATUS_ENABLED : req.status());
+    entity.setTagTone(
+        (req.tagTone() == null || req.tagTone().isBlank())
+            ? SysDictDataEntity.DEFAULT_TAG_TONE
+            : req.tagTone());
+    entity.setIsDefault(
+        req.isDefault() == null ? SysDictDataEntity.IS_DEFAULT_NO : req.isDefault());
     entity.setRemark(req.remark());
   }
 }

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { failureConcentrated, heatLevel, heatmapRows, moveCell } from './login-heatmap.model'
+import {
+  buildLoginStreamQuery,
+  computeBucketWindow,
+  failureConcentrated,
+  hasActiveCausalFilter,
+  heatLevel,
+  heatmapRows,
+  moveCell,
+} from './login-heatmap.model'
 
 describe('login heatmap model', () => {
   it('keeps recorded zero distinct and scales the busiest cell to the top level', () => {
@@ -30,5 +38,29 @@ describe('login heatmap model', () => {
     expect(moveCell({ row: 6, column: 23 }, 'ArrowRight')).toEqual({ row: 6, column: 23 })
     expect(moveCell({ row: 2, column: 5 }, 'End')).toEqual({ row: 2, column: 23 })
     expect(moveCell({ row: 2, column: 5 }, 'x')).toBeNull()
+  })
+
+  it('builds causal drilldown queries for heatmap cells, trend buckets, and failure status', () => {
+    expect(hasActiveCausalFilter({ range: 'WEEK' })).toBe(false)
+    const cellQuery = buildLoginStreamQuery('admin', {
+      range: 'WEEK',
+      cell: { isoWeekday: 3, hour: 14 },
+      success: 0,
+    })
+    expect(cellQuery).toEqual({
+      keyword: 'admin',
+      success: 0,
+      isoWeekday: 3,
+      hour: 14,
+      range: 'WEEK',
+      bucketFrom: undefined,
+      bucketTo: undefined,
+    })
+
+    const window = computeBucketWindow('2026-10-18 14:00:00', '2026-10-18 15:00:00')
+    expect(window).toEqual({
+      bucketFrom: '2026-10-18T14:00:00',
+      bucketTo: '2026-10-18T15:00:00',
+    })
   })
 })

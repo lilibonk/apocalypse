@@ -12,8 +12,8 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import { AnimatedNumber } from '@/components/insights/AnimatedNumber'
 import { InsightCard } from '@/components/insights/InsightCard'
+import { MetricValue } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { insightMotion } from '@/design/motion'
@@ -146,7 +146,7 @@ function RangeControl({
         <button
           key={option}
           type="button"
-          className="rounded-full px-3 py-2 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-pressed={option === range}
           onClick={() => onRange(option)}
         >
@@ -160,9 +160,9 @@ function RangeControl({
 function WindowNote({ insight }: { insight: LoginInsights | OperInsights }) {
   const { t } = useTranslation('dashboard')
   return (
-    <div className="text-xs leading-relaxed text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
       <p className="tabular-nums">{t('windowSpan', { from: insight.from, to: insight.to })}</p>
-      <p className="mt-1">{t('windowZone', { zone: insight.zone, offset: insight.utcOffset })}</p>
+      <p>{t('windowZone', { zone: insight.zone, offset: insight.utcOffset })}</p>
     </div>
   )
 }
@@ -231,22 +231,22 @@ function PeriodTrend({
     setSelected(Math.max(0, Math.min(counts.length - 1, index + delta)))
   }
   const labels = [0, Math.floor((counts.length - 1) / 2), counts.length - 1]
-  // A new range redraws its curve once; same-range refreshes keep the drawn path.
-  const drawKey = `${insight.range}-${counts.length}`
+  // Same bucket count interpolates `d` smoothly across range switches without remounting path.
+  const drawKey = String(counts.length)
   return (
     <div className="min-w-0">
       <div
-        className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+        className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
         aria-live="polite"
       >
         <span className="tabular-nums">{bucket.start.slice(5, 16)}</span>
-        <span className="rounded-full bg-card/70 px-2 py-1 font-medium text-foreground">
+        <span className="rounded-full bg-card/70 px-2 py-0.5 font-medium text-foreground">
           {t('bucketReadout', { total: bucket.total, failed: bucket.failed })}
         </span>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full overflow-visible rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-24 w-full overflow-visible rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring"
         role="img"
         tabIndex={0}
         aria-label={t('trendLabel', { total: insight.total })}
@@ -329,8 +329,9 @@ function PeriodTrend({
 
 function SuccessGauge({ value, language }: { value: number | null; language: 'zh' | 'en' }) {
   const { t } = useTranslation('dashboard')
+  const locale = language === 'zh' ? 'zh-CN' : 'en-US'
   return (
-    <div className="relative mx-auto my-4 aspect-square w-44 max-w-full">
+    <div className="relative aspect-square w-24 max-w-full shrink-0">
       <svg viewBox="0 0 200 200" className="size-full -rotate-90" aria-hidden="true">
         {Array.from({ length: 60 }, (_, index) => {
           const angle = (index / 60) * Math.PI * 2
@@ -347,25 +348,29 @@ function SuccessGauge({ value, language }: { value: number | null; language: 'zh
           )
         })}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-        <CircleCheck className="mb-1 size-5 text-brand-text" aria-hidden="true" />
-        <div className="insight-metric text-4xl font-medium">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+        <CircleCheck className="size-3.5 text-brand-text" aria-hidden="true" />
+        <div className="insight-metric text-2xl font-medium">
           {value === null ? (
             <span>—</span>
           ) : (
             <>
-              <AnimatedNumber
+              <MetricValue
                 value={value}
                 language={language}
-                motionEnabled={false}
-                decimals={1}
-                variant="odometer"
+                variant="tabular"
+                format={(v) =>
+                  new Intl.NumberFormat(locale, {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  }).format(v)
+                }
               />
-              <span className="ml-0.5 text-xl text-muted-foreground">%</span>
+              <span className="ml-0.5 text-xs text-muted-foreground">%</span>
             </>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground">
           {t(value === null ? 'rateUnavailable' : 'succeeded')}
         </span>
       </div>
@@ -409,18 +414,26 @@ function Stat({
   decimals?: number
   tone?: 'brand'
 }) {
+  const locale = language === 'zh' ? 'zh-CN' : 'en-US'
   return (
     <div>
       <dt className="text-muted-foreground">{label}</dt>
       <dd
-        className={`mt-1.5 text-lg font-medium tabular-nums ${tone === 'brand' ? 'text-brand-text' : ''}`}
+        className={`mt-0.5 text-base font-medium tabular-nums ${tone === 'brand' ? 'text-brand-text' : ''}`}
       >
-        <AnimatedNumber
+        <MetricValue
           value={value}
           language={language}
-          motionEnabled={false}
-          decimals={decimals}
-          variant="odometer"
+          variant="tabular"
+          format={
+            decimals > 0
+              ? (v) =>
+                  new Intl.NumberFormat(locale, {
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals,
+                  }).format(v)
+              : undefined
+          }
         />
       </dd>
     </div>
@@ -478,52 +491,52 @@ export function DashboardInsights({
         ? t('unavailable')
         : t('noOperationRecords')
   return (
-    <div className="space-y-4">
-      <div className="dashboard-insight-top grid gap-4">
+    <div className="space-y-2.5">
+      <div className="dashboard-insight-top grid gap-2.5">
         <InsightCard
-          className="dashboard-insight-hero flex flex-col p-5"
+          className="dashboard-insight-hero flex flex-col p-3 sm:p-3.5"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:login"
           order={0}
           aria-labelledby="dashboard-logins-title"
         >
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 id="dashboard-logins-title" className="font-semibold">
+              <h2 id="dashboard-logins-title" className="text-sm font-semibold">
                 {t('loginOverview')}
               </h2>
-              <p className="mt-1 text-xs text-muted-foreground">{t('loginOverviewHint')}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t('loginOverviewHint')}</p>
             </div>
             <RangeControl range={range} onRange={onRange} />
           </div>
-          <div className="mt-5">
+          <div className="mt-2">
             <SourceFeedback state={login} source={t('loginSource')} denied={t('noLoginAccess')} />
           </div>
           {insight && (
             <>
-              <div className="grid items-start gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+              <div className="grid items-center gap-4 lg:grid-cols-[0.78fr_1.22fr]">
                 <div>
                   <div>
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="insight-metric text-5xl font-medium sm:text-6xl">
-                        <AnimatedNumber
+                      <span className="insight-metric text-4xl font-medium sm:text-5xl">
+                        <MetricValue
                           value={insight.total}
                           language={language}
                           motionEnabled={motionEnabled}
-                          variant="odometer"
+                          variant="hero-odometer"
                         />
                       </span>
                       <span className="text-xs text-muted-foreground">{t('times')}</span>
                       <Comparison insight={insight} />
                     </div>
-                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       {t(`rangeTotal${insight.range}`)}
                     </p>
                   </div>
                 </div>
                 <PeriodTrend insight={insight} motionEnabled={motionEnabled} />
               </div>
-              <dl className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3 border-t border-border-subtle pt-4 text-xs sm:grid-cols-6">
+              <dl className="mt-2.5 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2.5 text-xs sm:grid-cols-6">
                 <Stat
                   label={t('succeeded')}
                   value={insight.succeeded}
@@ -549,10 +562,10 @@ export function DashboardInsights({
                   decimals={1}
                 />
               </dl>
-              <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                 <WindowNote insight={insight} />
                 {loginHref && (
-                  <Button variant="outline" asChild>
+                  <Button variant="outline" size="sm" asChild>
                     <Link to={loginHref}>
                       {t('viewLogin')}
                       <ArrowUpRight aria-hidden="true" />
@@ -563,9 +576,9 @@ export function DashboardInsights({
             </>
           )}
         </InsightCard>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
           <InsightCard
-            className="flex flex-col justify-between gap-3 p-4 sm:p-5"
+            className="flex flex-col justify-between gap-1.5 p-3 sm:p-3.5"
             motionEnabled={motionEnabled}
             entranceKey="dashboard:online"
             order={1}
@@ -576,40 +589,42 @@ export function DashboardInsights({
                 <h2 id="dashboard-sessions-title" className="text-sm font-medium">
                   {t('online')}
                 </h2>
-                <p className="mt-1 text-xs text-muted-foreground">{t('onlineHint')}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{t('onlineHint')}</p>
               </div>
               <MonitorDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </div>
             <SourceFeedback state={online} source={t('online')} denied={t('noOnlineAccess')} />
             {online.data !== undefined && (
-              <div data-slot="session-count">
-                <p className="insight-metric text-4xl font-medium sm:text-5xl">
-                  <AnimatedNumber
+              <div data-slot="session-count" className="flex items-baseline gap-2">
+                <p className="insight-metric text-3xl font-medium sm:text-4xl">
+                  <MetricValue
                     value={online.data.length}
                     language={language}
                     motionEnabled={motionEnabled}
-                    variant="odometer"
+                    variant="tabular"
                   />
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {online.data.length
                     ? t('sessions', { count: online.data.length })
                     : t('noSessions')}
                 </p>
               </div>
             )}
-            <p className="text-xs leading-relaxed text-muted-foreground">{t('onlineDefinition')}</p>
-            {onlineHref && online.allowed && (
-              <Button variant="ghost" size="sm" className="self-start" asChild>
-                <Link to={onlineHref}>
-                  {t('manageSessions')}
-                  <ArrowUpRight aria-hidden="true" />
-                </Link>
-              </Button>
-            )}
+            <div className="flex items-center justify-between gap-2">
+              <p className="line-clamp-1 text-xs text-muted-foreground">{t('onlineDefinition')}</p>
+              {onlineHref && online.allowed && (
+                <Button variant="ghost" size="xs" className="shrink-0" asChild>
+                  <Link to={onlineHref}>
+                    {t('manageSessions')}
+                    <ArrowUpRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              )}
+            </div>
           </InsightCard>
           <InsightCard
-            className="flex flex-col justify-between gap-3 p-4 sm:p-5"
+            className="flex flex-col justify-between gap-1.5 p-3 sm:p-3.5"
             motionEnabled={motionEnabled}
             entranceKey="dashboard:operations"
             order={2}
@@ -629,23 +644,33 @@ export function DashboardInsights({
             {operations && (
               <>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="insight-metric text-4xl font-medium sm:text-5xl">
-                    <AnimatedNumber
+                  <span className="insight-metric text-3xl font-medium sm:text-4xl">
+                    <MetricValue
                       value={operations.total}
                       language={language}
                       motionEnabled={false}
-                      variant="odometer"
+                      variant="tabular"
                     />
                   </span>
                   <Comparison insight={operations} />
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {t(`operationsTotal${operations.range}`)}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                    {t(`operationsTotal${operations.range}`)}
+                  </p>
+                  {operationHref && operation.allowed && (
+                    <Button variant="ghost" size="xs" className="shrink-0" asChild>
+                      <Link to={operationHref}>
+                        {t('viewOperations')}
+                        <ArrowUpRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </>
             )}
-            {operationHref && operation.allowed && (
-              <Button variant="ghost" size="sm" className="self-start" asChild>
+            {!operations && operationHref && operation.allowed && (
+              <Button variant="ghost" size="xs" className="self-start" asChild>
                 <Link to={operationHref}>
                   {t('viewOperations')}
                   <ArrowUpRight aria-hidden="true" />
@@ -655,44 +680,46 @@ export function DashboardInsights({
           </InsightCard>
         </div>
       </div>
-      <div className="dashboard-insight-bottom grid items-start gap-4 md:grid-cols-2">
+      <div className="dashboard-insight-bottom grid items-start gap-2.5 md:grid-cols-2">
         <InsightCard
-          className="p-5 sm:p-6"
+          className="max-h-52 overflow-hidden p-3 sm:p-3.5"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:success"
           order={3}
         >
-          <h2 className="font-semibold">{t('operationSuccess')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t('operationSuccessHint')}</p>
+          <h2 className="text-sm font-semibold">{t('operationSuccess')}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('operationSuccessHint')}</p>
           {operations && operations.total > 0 ? (
-            <>
+            <div className="mt-2 flex items-center gap-4">
               <SuccessGauge value={operations.successRate} language={language} />
-              <dl className="grid grid-cols-2 gap-4 border-t border-border-subtle pt-4 text-xs">
-                <Stat label={t('succeeded')} value={operations.succeeded} language={language} />
-                <Stat label={t('failed')} value={operations.failed} language={language} />
-              </dl>
-              {operations.unknown > 0 && (
-                <p className="mt-2 text-xs text-warning-foreground">
-                  {t('unknownResults', { count: operations.unknown })}
-                </p>
-              )}
-            </>
+              <div className="min-w-0 flex-1 space-y-2">
+                <dl className="grid grid-cols-2 gap-3 text-xs">
+                  <Stat label={t('succeeded')} value={operations.succeeded} language={language} />
+                  <Stat label={t('failed')} value={operations.failed} language={language} />
+                </dl>
+                {operations.unknown > 0 && (
+                  <p className="text-xs text-warning-foreground">
+                    {t('unknownResults', { count: operations.unknown })}
+                  </p>
+                )}
+              </div>
+            </div>
           ) : (
-            <p role="status" className="py-10 text-sm text-muted-foreground">
+            <p role="status" className="py-6 text-sm text-muted-foreground">
               {noOperation}
             </p>
           )}
         </InsightCard>
         <InsightCard
-          className="flex flex-col p-5 sm:p-6"
+          className="flex flex-col overflow-hidden p-3 sm:p-3.5"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:distribution"
           order={4}
         >
-          <h2 className="font-semibold">{t('distribution')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t('distributionHint')}</p>
+          <h2 className="text-sm font-semibold">{t('distribution')}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('distributionHint')}</p>
           {operations && operations.total > 0 ? (
-            <div className="mt-5 flex flex-col gap-5">
+            <div className="mt-1.5 flex flex-col gap-1.5">
               {distributionRows.map((item, index) => {
                 const knownKey = operationTypeKey(item.type)
                 const label =
@@ -703,9 +730,9 @@ export function DashboardInsights({
                       : (item.type ?? t('typeUnknown'))
                 return (
                   <div key={item.kind === 'remaining' ? 'remaining' : `type-${item.type}`}>
-                    <div className="mb-2 flex items-start justify-between gap-3 text-xs">
+                    <div className="mb-0.5 flex items-start justify-between gap-2 text-xs">
                       <span
-                        className="min-w-0 break-all"
+                        className="min-w-0 truncate"
                         title={
                           item.kind === 'remaining'
                             ? remainder.map((entry) => entry.type ?? t('typeUnknown')).join(', ')
@@ -739,14 +766,13 @@ export function DashboardInsights({
               })}
             </div>
           ) : (
-            <p role="status" className="py-10 text-sm text-muted-foreground">
+            <p role="status" className="py-6 text-sm text-muted-foreground">
               {noOperation}
             </p>
           )}
         </InsightCard>
-        <div className="min-w-0 md:col-span-2 xl:col-span-1">{children}</div>
+        <div className="min-w-0 md:col-span-2 lg:col-span-1">{children}</div>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">{t('rangeExplanation')}</p>
     </div>
   )
 }

@@ -24,7 +24,7 @@ import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-de
 import { isAuthorizationCurrent, useAuthStore } from '@/stores/auth'
 
 import { RoleGraphPagination } from './RolePermissionGraph'
-import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import { RoleStageSplit as RoleWorkspacePanels } from './RolePanorama'
 import { RoleMemberGraph, type RoleMemberGraphNode } from './RoleMemberGraph'
 import {
   canReadRoleWorkspace,

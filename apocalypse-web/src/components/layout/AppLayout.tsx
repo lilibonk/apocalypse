@@ -50,11 +50,35 @@ export function AppLayout() {
   const location = useLocation()
   const openTab = useTabsStore((state) => state.open)
 
-  const [collapsed, setCollapsed] = useState(false)
+  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(null)
+  const [narrowDesktop, setNarrowDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 && window.innerWidth < 1280 : false,
+  )
   const [commandOpen, setCommandOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const syncViewport = () => {
+      setNarrowDesktop(window.innerWidth >= 1024 && window.innerWidth < 1280)
+    }
+    syncViewport()
+    window.addEventListener('resize', syncViewport)
+    return () => window.removeEventListener('resize', syncViewport)
+  }, [])
+
+  const isStageRoute = useMemo(() => {
+    if (location.pathname === '/system/role' || location.pathname === '/system/dept') {
+      return true
+    }
+    const matched = flattenMenuRoutes(menus).find((route) => route.path === location.pathname)
+    const comp = matched?.component?.replace(/^\/+|\/+$/g, '').replace(/\/index$/, '')
+    return comp === 'system/role' || comp === 'system/dept'
+  }, [location.pathname, menus])
+
+  const collapsed = userCollapsed ?? (narrowDesktop && isStageRoute)
 
   // 路由 → 页签同步；页签存菜单原文，翻译在 TabBar 渲染层实时完成（切语言自动跟随）
   useEffect(() => {
@@ -105,7 +129,10 @@ export function AppLayout() {
 
   return (
     // fixedHeader=on：壳固定、仅内容区滚动；off：整页随窗口滚动（侧栏 sticky 保持可见）
-    <div className={cn('flex bg-background', fixedHeader ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
+    <div
+      data-tabs-visible={tabsEnabled ? 'true' : 'false'}
+      className={cn('flex bg-background', fixedHeader ? 'h-dvh overflow-hidden' : 'min-h-dvh')}
+    >
       <a
         href="#main-content"
         className="fixed top-2 left-2 z-[60] -translate-y-16 rounded-md bg-background px-3 py-2 text-sm font-medium shadow-md transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-ring"
@@ -138,7 +165,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
           collapsed={collapsed}
-          onToggleSidebar={() => setCollapsed((value) => !value)}
+          onToggleSidebar={() => setUserCollapsed(!collapsed)}
           onOpenMobileNav={() => setMobileNavOpen(true)}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -154,7 +181,10 @@ export function AppLayout() {
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn('min-h-0 flex-1 overflow-x-hidden', fixedHeader && 'overflow-y-auto')}
+          className={cn(
+            'spatial-main-container min-h-0 flex-1 overflow-x-hidden',
+            fixedHeader && 'overflow-y-auto',
+          )}
         >
           {/* contentWidth=boxed：内容限宽居中；fluid：通栏 */}
           <div className={cn(contentWidth === 'boxed' && 'mx-auto w-full max-w-7xl')}>

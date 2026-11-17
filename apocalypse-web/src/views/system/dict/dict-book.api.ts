@@ -1,13 +1,14 @@
 /**
- * 字典卡片册端点（页面局部，复用既有字典接口，不新增契约）。
+ * 字典卡片册端点：
  * - GET /system/dict/types/page（system:dict:list）
- * - GET /system/dict/data/type/{type}（启用值，用于折叠卡片的值预览）
- * - GET /system/dict/data/page?dictType=（含停用值，用于展开卡片）
+ * - GET /system/dict/data/batch?dictTypes=（批量拉取当前页字典类型的启用+停用全量项，计算启停比例与色卡）
+ * - GET /system/dict/data/type/{type}（启用值）
+ * - GET /system/dict/data/page?dictType=（含停用值分页，用于展开卡片）
  * - POST/PUT/DELETE /system/dict/data（system:dict:add/edit/remove）
  */
 
 import { request, type RequestOptions } from '@/lib/api/client'
-import type { PageResult, SnowflakeId } from '@/lib/api/types'
+import type { DictTone, PageResult, SnowflakeId } from '@/lib/api/types'
 
 export const DICT_BOOK_PAGE_SIZE = 12
 export const DICT_VALUE_PAGE_SIZE = 20
@@ -27,6 +28,8 @@ export interface DictValueRow {
   dictValue: string
   sort: number | null
   status: number
+  tagTone?: DictTone | null
+  isDefault?: number | null
   remark: string | null
 }
 
@@ -35,6 +38,17 @@ type Transport = Pick<RequestOptions, 'signal' | 'context'>
 export function pageDictTypes(keyword: string, page: number, signal?: AbortSignal) {
   return request<PageResult<DictTypeRow>>('/system/dict/types/page', {
     query: { page, size: DICT_BOOK_PAGE_SIZE, keyword: keyword || undefined },
+    signal,
+  })
+}
+
+export function batchDictValues(dictTypes: readonly string[], signal?: AbortSignal) {
+  const normalized = Array.from(new Set(dictTypes.map((item) => item.trim()).filter(Boolean)))
+  if (normalized.length === 0) {
+    return Promise.resolve<Record<string, DictValueRow[]>>({})
+  }
+  return request<Record<string, DictValueRow[]>>('/system/dict/data/batch', {
+    query: { dictTypes: normalized.join(',') },
     signal,
   })
 }

@@ -1,7 +1,6 @@
 /**
  * 部门管理：手写树页（树形表格 + 展开折叠 + 行内「新增下级」）。
  * 越出标准 CRUD 模式（树结构、非分页端点），按 DynaLayer 逃逸舱原则手写；
- * 视觉/交互以 views/_dev/user-handwritten.tsx（golden sample）为底本。
  *
  * 端点对照（后端 DeptController）：
  * - 树     GET    /system/depts/tree（system:dept:list）
@@ -29,8 +28,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { PulseIndicator } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { PixelScale } from '@/effects/PixelWave'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -50,10 +49,12 @@ import { Network, Rows3 } from 'lucide-react'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { usePageView } from '@/hooks/usePageView'
 import { useWindowedRows } from '@/hooks/useWindowedRows'
+import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 
 import { createDept, deleteDept, getDeptTree, updateDept } from './api'
+import { ancestorPath, findNode } from './dept-chart.model'
 import { DeptOrgChart } from './DeptOrgChart'
 import { DeptFormDialog, type DeptFormValues } from './DeptFormDialog'
 import { flattenDeptTree } from './tree-utils'
@@ -69,6 +70,7 @@ export default function DeptPage() {
 function DeptWorkspace() {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
+  const { intent: deptIntent } = useEntityIntent('dept')
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(DEPT_VIEWS, 'deptView')
   // The organisation chart is a desktop workspace; narrow screens keep the tree table.
@@ -82,6 +84,7 @@ function DeptWorkspace() {
   const [defaultParentId, setDefaultParentId] = useState<SnowflakeId>(ROOT_DEPT_ID)
   const [deleting, setDeleting] = useState<DeptTreeNode | null>(null)
   const [focusRequest, setFocusRequest] = useState<{ id: string; sequence: number }>()
+  const [appliedIntentId, setAppliedIntentId] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState('')
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
@@ -100,6 +103,17 @@ function DeptWorkspace() {
     },
   })
   const tree = isResourceDenied(error) ? undefined : data
+
+  const intentTargetId = deptIntent?.focusTargetId ?? deptIntent?.id ?? null
+  if (
+    tree &&
+    intentTargetId &&
+    appliedIntentId !== intentTargetId &&
+    findNode(tree, intentTargetId)
+  ) {
+    setAppliedIntentId(intentTargetId)
+    setExpanded((prev) => new Set([...prev, ...ancestorPath(tree, intentTargetId)]))
+  }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'depts'] })
 
@@ -247,14 +261,18 @@ function DeptWorkspace() {
           ) : undefined
         }
         actions={
-          <Perm perm="system:dept:add" requiresAllScope>
-            <Button onClick={() => openCreate(ROOT_DEPT_ID)}>
-              <Plus className="size-4" />
-              {t('common.新增部门', { defaultValue: '新增部门' })}
-            </Button>
-          </Perm>
+          <div className="flex flex-wrap items-center gap-2">
+            <Perm perm="system:dept:add" requiresAllScope>
+              <Button onClick={() => openCreate(ROOT_DEPT_ID)}>
+                <Plus className="size-4" />
+                {t('common.新增部门', { defaultValue: '新增部门' })}
+              </Button>
+            </Perm>
+          </div>
         }
       />
+
+      {view === 'table' && deptIntent?.source && <LivingContextBar source={deptIntent.source} />}
 
       <DynaQueryFeedback
         error={error}
@@ -437,11 +455,6 @@ function DeptWorkspace() {
                   total: totalDepartments,
                 })}
               </span>
-              <span>
-                {t('common.树形数据全量加载，不分页', {
-                  defaultValue: '树形数据全量加载，不分页',
-                })}
-              </span>
             </div>
           )}
         </div>
@@ -495,7 +508,7 @@ function DeptWorkspace() {
                 if (deleting) deleteMutation.mutate(deleting.id)
               }}
             >
-              {deleteMutation.isPending && <PixelScale variant="inline" tone="current" />}
+              {deleteMutation.isPending && <PulseIndicator variant="inline" tone="current" />}
               {deleteMutation.isPending
                 ? t('common.删除中…', { defaultValue: '删除中…' })
                 : t('common.确认删除', { defaultValue: '确认删除' })}

@@ -23,9 +23,9 @@
  * （<30fps 达 2s，见 ../perf.ts）→ 清空画布定格纯背景、停 rAF、console.info 一次。
  */
 
-import { useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/stores/settings'
 
@@ -95,7 +95,7 @@ export function PixelWave({
   className,
 }: PixelWaveProps) {
   const { motionEnabled } = useSettings()
-  const reducedMotion = useReducedMotion()
+  const reducedMotion = !useMotionPreference()
   const domMotion = useSyncExternalStore(subscribeDomMotion, readDomMotion, serverDomMotion)
   const staticMode = !motionEnabled || reducedMotion === true || !domMotion
 

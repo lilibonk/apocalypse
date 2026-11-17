@@ -61,6 +61,22 @@ describe('department chart model', () => {
     expect(nextFocus(layout, 'a2', 'Home')).toBe('a1')
   })
 
+  it('folds > 6 leaf children into a 2-column vertical bus hangar', () => {
+    const manyLeaves = [
+      dept(
+        'hq',
+        Array.from({ length: 8 }, (_, idx) => dept(`leaf-${idx}`)),
+      ),
+    ]
+    const layout = layoutTree(manyLeaves, new Set(['hq']))
+    const leaves = layout.nodes.filter((item) => item.parentId === 'hq')
+    expect(leaves).toHaveLength(8)
+    const distinctX = new Set(leaves.map((item) => item.x))
+    const distinctY = new Set(leaves.map((item) => item.y))
+    expect(distinctX.size).toBe(2)
+    expect(distinctY.size).toBe(4)
+  })
+
   it('lays out a 500-department tree quickly', () => {
     const big = [
       dept(

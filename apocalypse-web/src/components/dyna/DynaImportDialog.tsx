@@ -19,8 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { PulseIndicator } from '@/components/motion'
 import { validateUploadFile } from '@/components/ui/file-upload'
-import { PixelScale } from '@/effects/PixelWave'
 import { http, rawRequest } from '@/lib/api/client'
 import { toastApiError } from '@/lib/api/error-toast'
 
@@ -237,7 +237,7 @@ export function DynaImportDialog({
             onClick={() => void handleImport()}
           >
             {submitting ? (
-              <PixelScale variant="inline" tone="current" />
+              <PulseIndicator variant="inline" tone="current" />
             ) : (
               <Upload className="size-4" />
             )}

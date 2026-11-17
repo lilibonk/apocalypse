@@ -5,13 +5,14 @@
  * 渲染目标是本仓库自己的 token 组件，样式永远由 design token 决定。
  *
  * 逃逸舱原则：越出标准 CRUD 模式的页面（自定义布局、联动逻辑、非 RESTful 端点）
- * 不要硬塞进 schema —— 直接手写 React 页面组件（参照 src/views/_dev/user-handwritten.tsx）。
+ * 不要硬塞进 schema —— 直接手写 React 页面组件，或组合 useDynaController 与空间骨架。
  * DynaLayer 不是低代码平台，收敛比通用重要。
  *
  * 机器可验证性：schema 是 AI Agent 的主要产出物，views 下全部 *.schema.ts
  * 由 vitest（components/dyna/__tests__/schema.test.ts）自动收集并过 validatePageSchema。
  */
 
+import type { ReactNode } from 'react'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,8 @@ export interface DynaColumn {
   sortable?: boolean
   /** 是否提供一键复制按钮（适用于雪花 ID、编码、流水号等）。 */
   copyable?: boolean
+  /** Runtime-only cell renderer for hand-written pages (e.g. EntityPill); never serialized into schemas. */
+  render?: (value: unknown, row: Record<string, unknown>) => ReactNode
 }
 
 /** 行操作：编辑（打开 DynaForm）。 */

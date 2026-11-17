@@ -7,6 +7,7 @@ import { useLocation, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { DynaPage } from '@/components/dyna'
+import { useEntityIntent } from '@/components/navigation'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
   Dialog,
@@ -21,7 +22,6 @@ import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
 import schema from './role.schema'
 import { localizeRoleSchema, RoleForm } from './RoleForm'
 import { RolePermissionWorkspace } from './RolePermissionWorkspace'
-import { readRoleMemberContext } from './role-member-context'
 import { RolePermissionEditor } from './RolePermissionEditor'
 import { RoleMemberEditor } from './RoleMemberEditor'
 import { RoleBusinessPermissions } from './RoleBusinessPermissions'
@@ -123,7 +123,7 @@ function RolePageContent() {
   )
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
-  const memberContext = readRoleMemberContext(location.state)
+  const { intent } = useEntityIntent('role')
   const view = searchParams.get('roleView') === 'list' ? 'list' : 'graph'
   const setView = useCallback(
     (nextView: 'graph' | 'list') =>
@@ -192,10 +192,10 @@ function RolePageContent() {
     <>
       {canReadRoleWorkspace(auth) &&
       view === 'graph' &&
-      (desktop || workspaceOpened || graphBusy || memberContext) ? (
+      (desktop || workspaceOpened || graphBusy || Boolean(intent)) ? (
         <RolePermissionWorkspace
           principalEpoch={auth.sessionEpoch}
-          memberContext={memberContext}
+          entityIntent={intent}
           presentation={desktop ? 'graph' : 'list'}
           viewControl={viewControl}
           onBusyChange={setGraphBusy}

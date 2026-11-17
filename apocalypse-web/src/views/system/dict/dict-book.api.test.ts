@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { pageDictTypes, pageDictValues } from './dict-book.api'
+import { batchDictValues, pageDictTypes, pageDictValues } from './dict-book.api'
 
 const request = vi.hoisted(() => vi.fn(async () => ({ list: [], total: 0 })))
 vi.mock('@/lib/api/client', () => ({ request }))
@@ -22,6 +22,16 @@ describe('dictionary complete page access', () => {
     expect(request).toHaveBeenCalledWith('/system/dict/data/page', {
       query: { page: 11, size: expect.any(Number), dictType: 'custom_status' },
       signal: undefined,
+    })
+  })
+
+  it('fetches batch dictionary values in one request for sample book cards', async () => {
+    request.mockResolvedValueOnce({ sys_normal_disable: [] } as never)
+    const signal = new AbortController().signal
+    await batchDictValues(['sys_normal_disable', 'sys_user_sex'], signal)
+    expect(request).toHaveBeenCalledWith('/system/dict/data/batch', {
+      query: { dictTypes: 'sys_normal_disable,sys_user_sex' },
+      signal,
     })
   })
 })

@@ -33,7 +33,7 @@ import { FieldOption, FieldSelect } from '@/components/ui/field-select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { PixelScale } from '@/effects/PixelWave'
+import { PulseIndicator } from '@/components/motion'
 import { submitForm } from '@/lib/form-submit'
 
 import {
@@ -592,7 +592,7 @@ export function DynaForm({
                   {t('取消')}
                 </Button>
                 <Button type="submit" disabled={submitting || submitDisabled}>
-                  {submitting && <PixelScale variant="inline" tone="current" />}
+                  {submitting && <PulseIndicator variant="inline" tone="current" />}
                   {submitting ? t('保存中…') : t('保存')}
                 </Button>
               </DialogFooter>

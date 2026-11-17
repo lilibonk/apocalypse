@@ -7,7 +7,7 @@ import { useModuleMutation } from '@/lib/query/use-module-mutation'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -17,24 +17,29 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { CalendarEvent, EventContentCommand } from '../calendar.api'
+import { toErrorMessage } from '../calendar.format'
 import {
   CalendarPageFrame,
-  CalendarPicker,
   CalendarPagination,
+  CalendarPicker,
   CalendarQueryStatus,
   DataEmpty,
   InlineError,
   StateBadge,
 } from '../calendar.ui'
-import { toErrorMessage } from '../calendar.format'
 import { EventEditor } from '../event-editor'
-import { CalendarConfirm } from '../calendar-confirm'
 import { monthRange } from '../month-grid'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 function currentMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function resolveEventDateKey(event: CalendarEvent): string {
+  return event.content.startDate || event.content.startLocal?.slice(0, 10) || '—'
 }
 
 function PrivateEventsPage() {
@@ -98,12 +103,26 @@ function PrivateEventsPage() {
     onError: (error) => toast.error(toErrorMessage(error)),
   })
 
+  const agendaGroups = useMemo(() => {
+    const groups = new Map<string, CalendarEvent[]>()
+    for (const event of eventsQuery.data?.list ?? []) {
+      const dateKey = resolveEventDateKey(event)
+      const bucket = groups.get(dateKey)
+      if (bucket) {
+        bucket.push(event)
+      } else {
+        groups.set(dateKey, [event])
+      }
+    }
+    return [...groups.entries()]
+  }, [eventsQuery.data?.list])
+
   return (
     <CalendarPageFrame
       title={t('privateEvents.title')}
       description={t('privateEvents.description')}
       actions={
-        <div className="flex w-full flex-wrap items-end gap-3">
+        <div className="flex w-full flex-wrap items-end gap-2.5">
           <CalendarPicker
             calendars={calendarsQuery.data ?? []}
             value={calendarId}
@@ -150,71 +169,92 @@ function PrivateEventsPage() {
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {(eventsQuery.data?.list ?? []).map((event) => (
-          <Card key={event.id} className="gap-4 py-4">
-            <CardHeader className="px-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <CardTitle className="truncate">{event.content.title}</CardTitle>
-                  <CardDescription>
-                    {eventTimeText(
-                      event,
-                      t('eventEditor.allDayRange', {
-                        start: event.content.startDate,
-                        end: event.content.endDateExclusive,
-                      }),
+      <div data-slot="calendar-agenda-stream" className="space-y-4">
+        {agendaGroups.map(([dateKey, dayEvents]) => (
+          <section
+            key={dateKey}
+            aria-label={dateKey}
+            className="grid items-start gap-3 md:grid-cols-[8.5rem_minmax(0,1fr)]"
+          >
+            <div className="sticky top-4 h-fit rounded-control border border-border-subtle bg-muted/35 px-3 py-2">
+              <div className="font-mono text-xs font-semibold text-foreground tabular-nums">
+                {dateKey}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                {dayEvents.length} 项日程
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {dayEvents.map((event) => (
+                <Card key={event.id} className="gap-3 py-3">
+                  <CardHeader className="px-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate">{event.content.title}</CardTitle>
+                        <CardDescription>
+                          {eventTimeText(
+                            event,
+                            t('eventEditor.allDayRange', {
+                              start: event.content.startDate,
+                              end: event.content.endDateExclusive,
+                            }),
+                          )}
+                        </CardDescription>
+                      </div>
+                      <StateBadge value={event.state} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2.5 px-4 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{t(`timeKinds.${event.content.timeKind}`)}</Badge>
+                      <Badge variant="outline">{t(`eventKinds.${event.eventKind}`)}</Badge>
+                      {event.content.zoneId && (
+                        <Badge variant="outline">{event.content.zoneId}</Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {event.content.location || t('privateEvents.noLocation')}
+                      </span>
+                    </div>
+                    {event.content.description && <p>{event.content.description}</p>}
+                    {event.eventKind === 'PRIVATE' ? (
+                      <div className="flex justify-end gap-1 border-t border-border pt-2.5">
+                        <Perm perm="calendar:event:edit">
+                          <Button variant="ghost" size="sm" onClick={() => setEditor(event)}>
+                            <Pencil />
+                            {t('privateEvents.edit')}
+                          </Button>
+                        </Perm>
+                        <Perm perm="calendar:event:remove">
+                          <CalendarConfirm
+                            title={t('privateEvents.delete')}
+                            description={t('privateEvents.deleteWarning')}
+                            reviewKey={JSON.stringify([event.id, event.version])}
+                            disabled={deleteMutation.isPending}
+                            onConfirm={() => deleteMutation.mutate(event.id)}
+                            trigger={
+                              <Button variant="ghost" size="sm" disabled={deleteMutation.isPending}>
+                                <Trash2 className="text-destructive" />
+                                {t('privateEvents.delete')}
+                              </Button>
+                            }
+                          >
+                            <p>{event.content.title}</p>
+                          </CalendarConfirm>
+                        </Perm>
+                      </div>
+                    ) : (
+                      <p className="border-t border-border pt-2.5 text-xs text-muted-foreground">
+                        {t('privateEvents.managedReadOnly')}
+                      </p>
                     )}
-                  </CardDescription>
-                </div>
-                <StateBadge value={event.state} />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 text-sm">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{t(`timeKinds.${event.content.timeKind}`)}</Badge>
-                <Badge variant="outline">{t(`eventKinds.${event.eventKind}`)}</Badge>
-                {event.content.zoneId && <Badge variant="outline">{event.content.zoneId}</Badge>}
-              </div>
-              <div className="text-muted-foreground">
-                {event.content.location || t('privateEvents.noLocation')}
-              </div>
-              {event.content.description && <p>{event.content.description}</p>}
-              {event.eventKind === 'PRIVATE' ? (
-                <div className="flex justify-end gap-1 border-t border-border pt-3">
-                  <Perm perm="calendar:event:edit">
-                    <Button variant="ghost" size="sm" onClick={() => setEditor(event)}>
-                      <Pencil />
-                      {t('privateEvents.edit')}
-                    </Button>
-                  </Perm>
-                  <Perm perm="calendar:event:remove">
-                    <CalendarConfirm
-                      title={t('privateEvents.delete')}
-                      description={t('privateEvents.deleteWarning')}
-                      reviewKey={JSON.stringify([event.id, event.version])}
-                      disabled={deleteMutation.isPending}
-                      onConfirm={() => deleteMutation.mutate(event.id)}
-                      trigger={
-                        <Button variant="ghost" size="sm" disabled={deleteMutation.isPending}>
-                          <Trash2 className="text-destructive" />
-                          {t('privateEvents.delete')}
-                        </Button>
-                      }
-                    >
-                      <p>{event.content.title}</p>
-                    </CalendarConfirm>
-                  </Perm>
-                </div>
-              ) : (
-                <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-                  {t('privateEvents.managedReadOnly')}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
+
       {calendarsQuery.isSuccess && eventsQuery.isSuccess && eventsQuery.data.list.length === 0 && (
         <DataEmpty>
           {t(eventsQuery.data.total > 0 ? 'workspace.emptyPage' : 'privateEvents.empty')}
@@ -260,8 +300,10 @@ function DateInput({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="grid min-w-0 flex-1 gap-1.5 sm:max-w-48">
-      <Label htmlFor={id}>{label}</Label>
+    <div className="grid min-w-0 flex-1 gap-1 sm:max-w-44">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
       <DatePicker id={id} mode="date" value={value} allowClear={false} onValueChange={onChange} />
     </div>
   )
@@ -276,4 +318,3 @@ function eventTimeText(event: CalendarEvent, allDayRange: string): string {
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={PrivateEventsPage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

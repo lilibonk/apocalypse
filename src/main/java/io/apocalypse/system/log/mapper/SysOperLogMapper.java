@@ -61,11 +61,42 @@ public interface SysOperLogMapper extends BaseMapper<SysOperLogEntity> {
 
   /** 按操作人关键字分页（按操作时间倒序）。 */
   default PageResult<SysOperLogEntity> pageByKeyword(int page, int size, String keyword) {
+    return pageByFilters(page, size, keyword, null, null, null, null);
+  }
+
+  /** 按多维条件分页查询操作日志（关键字匹配 title / operName / method，支持业务类型、成败状态与半开时间区间下钻）。 */
+  default PageResult<SysOperLogEntity> pageByFilters(
+      int page,
+      int size,
+      String keyword,
+      String businessType,
+      Integer status,
+      LocalDateTime from,
+      LocalDateTime to) {
     LambdaQueryWrapper<SysOperLogEntity> wrapper = new LambdaQueryWrapper<>();
     if (StringUtils.hasText(keyword)) {
-      wrapper.like(SysOperLogEntity::getOperName, keyword);
+      String kw = keyword.trim();
+      wrapper.and(
+          w ->
+              w.like(SysOperLogEntity::getTitle, kw)
+                  .or()
+                  .like(SysOperLogEntity::getOperName, kw)
+                  .or()
+                  .like(SysOperLogEntity::getMethod, kw));
     }
-    wrapper.orderByDesc(SysOperLogEntity::getOperTime);
+    if (StringUtils.hasText(businessType)) {
+      wrapper.eq(SysOperLogEntity::getBusinessType, businessType.trim());
+    }
+    if (status != null) {
+      wrapper.eq(SysOperLogEntity::getStatus, status);
+    }
+    if (from != null) {
+      wrapper.ge(SysOperLogEntity::getOperTime, from);
+    }
+    if (to != null) {
+      wrapper.lt(SysOperLogEntity::getOperTime, to);
+    }
+    wrapper.orderByDesc(SysOperLogEntity::getOperTime).orderByDesc(SysOperLogEntity::getId);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));
   }
 

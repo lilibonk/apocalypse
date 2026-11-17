@@ -1,7 +1,7 @@
 /**
- * 菜单树表格（页面局部）：DynaTable 无树能力，这里手写缩进 + 展开/折叠。
- * 折叠状态用 collapsed 集合表达，页面默认折叠，行在其任一祖先被折叠时隐藏。
- * 类型徽标三色区分：C 目录 default / M 菜单 secondary / F 按钮 outline。
+ * 菜单树表格（页面局部）：5 列高信噪比树表（菜单层级、路由与模块契约、显示与状态、排序、操作）。
+ * 组件路径与历史 F 权限标识收拢至右侧/抽屉 Inspector，保持主表清爽。
+ * 支持 Alt+Click 递归展开/折叠整支子树与缩进引导线。
  */
 
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -22,10 +22,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
-import type { MenuNode, MenuType } from './menu.types'
+import { collectSubtreeIds, type MenuNode, type MenuType } from './menu.types'
 
-const COLUMN_COUNT = 6
+const COLUMN_COUNT = 5
 
 const TYPE_META: Record<MenuType, { label: string; variant: 'default' | 'secondary' | 'outline' }> =
   {
@@ -52,6 +53,7 @@ export function MenuTreeTable({
   isLoading,
   collapsed,
   onToggle,
+  onSelect,
   onCreateChild,
   onEdit,
   onDelete,
@@ -63,7 +65,8 @@ export function MenuTreeTable({
   highlightId?: string | null
   isLoading: boolean
   collapsed: Set<string>
-  onToggle: (id: string) => void
+  onToggle: (id: string, recursive?: boolean) => void
+  onSelect?: (id: string) => void
   onCreateChild: (node: MenuNode) => void
   onEdit: (node: MenuNode) => void
   onDelete: (node: MenuNode) => void
@@ -81,14 +84,13 @@ export function MenuTreeTable({
             <TableHead className="min-w-64">
               {t('common.菜单层级', { defaultValue: '菜单层级' })}
             </TableHead>
-            <TableHead className="min-w-64">
+            <TableHead className="min-w-52">
               {t('common.路由定义', { defaultValue: '路由定义' })}
             </TableHead>
-            <TableHead>{t('system:authorization.legacyTrace')}</TableHead>
             <TableHead className="w-36">
               {t('common.显示与状态', { defaultValue: '显示与状态' })}
             </TableHead>
-            <TableHead className="w-16">{t('common.排序', { defaultValue: '排序' })}</TableHead>
+            <TableHead className="w-20">{t('common.排序', { defaultValue: '排序' })}</TableHead>
             <TableHead className="w-32 text-right">
               {t('common.操作', { defaultValue: '操作' })}
             </TableHead>
@@ -126,6 +128,7 @@ export function MenuTreeTable({
           {rows.map(({ node, depth }) => {
             const isCollapsed = collapsed.has(node.id)
             const hasChildren = node.children.length > 0
+            const subtreeCount = hasChildren ? collectSubtreeIds(node).size - 1 : 0
             const typeMeta = TYPE_META[node.menuType]
             return (
               <TableRow
@@ -133,13 +136,23 @@ export function MenuTreeTable({
                 id={`menu-row-${node.id}`}
                 tabIndex={highlightId === node.id ? -1 : undefined}
                 data-highlight={highlightId === node.id || undefined}
-                className="group data-[highlight]:bg-accent data-[highlight]:outline-2 data-[highlight]:outline-ring"
+                onClick={() => onSelect?.(node.id)}
+                className={cn(
+                  'group cursor-pointer data-[highlight]:bg-accent data-[highlight]:outline-2 data-[highlight]:outline-ring',
+                )}
               >
                 <TableCell>
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ paddingLeft: `calc(var(--spacing) * ${depth * 5})` }}
-                  >
+                  <div className="flex items-center gap-2">
+                    {depth > 0 && (
+                      <span aria-hidden="true" className="flex shrink-0 items-center self-stretch">
+                        {Array.from({ length: Math.min(depth, 6) }).map((_, guideIdx) => (
+                          <span
+                            key={guideIdx}
+                            className="inline-block h-6 w-5 border-l border-border-subtle/80"
+                          />
+                        ))}
+                      </span>
+                    )}
                     {hasChildren ? (
                       <Button
                         variant="ghost"
@@ -151,7 +164,10 @@ export function MenuTreeTable({
                             ? t('common.展开', { defaultValue: '展开' })
                             : t('common.折叠', { defaultValue: '折叠' })
                         }
-                        onClick={() => onToggle(node.id)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onToggle(node.id, event.altKey)
+                        }}
                       >
                         {isCollapsed ? (
                           <ChevronRight className="size-3.5" />
@@ -165,7 +181,6 @@ export function MenuTreeTable({
                     <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
                       <MenuIcon name={node.icon} className="size-4" />
                     </span>
-                    {/* The icon identifier is edit-time detail (icon picker); the row shows the icon. */}
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{node.menuName}</span>
                       <Badge variant={typeMeta.variant} className="shrink-0">
@@ -173,17 +188,23 @@ export function MenuTreeTable({
                           ? t('system:authorization.legacyButton')
                           : t(`dyna.${typeMeta.label}`, { defaultValue: typeMeta.label })}
                       </Badge>
+                      {isCollapsed && subtreeCount > 0 && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+                          +{subtreeCount}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="space-y-1 font-mono text-xs">
-                    <div className="truncate text-foreground">{node.path ?? '-'}</div>
-                    <div className="truncate text-muted-foreground">{node.component ?? '-'}</div>
+                  <div className="space-y-0.5 font-mono text-xs">
+                    <div className="truncate text-foreground">{node.path ?? '—'}</div>
+                    {node.component && (
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {node.component}
+                      </div>
+                    )}
                   </div>
-                </TableCell>
-                <TableCell className="max-w-64 truncate font-mono text-xs text-muted-foreground">
-                  {node.perms ?? '-'}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -195,8 +216,11 @@ export function MenuTreeTable({
                     <DictTag type="sys_user_status" value={node.status} />
                   </div>
                 </TableCell>
-                <TableCell className="font-mono">{node.sort}</TableCell>
-                <TableCell className="text-right whitespace-nowrap">
+                <TableCell className="font-mono tabular-nums">{node.sort}</TableCell>
+                <TableCell
+                  className="text-right whitespace-nowrap"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   {node.menuType !== 'F' && (
                     <Perm perm="system:menu:add" requiresAllScope>
                       <Tooltip>

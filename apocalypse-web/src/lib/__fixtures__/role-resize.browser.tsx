@@ -284,10 +284,13 @@ createRoot(document.getElementById('root')!).render(
           ? {
               pathname: '/system/role',
               state: {
-                workspaceContext: {
-                  kind: 'member',
-                  userId: candidate.id,
-                  keyword: candidate.username,
+                entityIntent: {
+                  kind: 'role',
+                  id: candidate.id,
+                  label: candidate.username,
+                  relation: 'members',
+                  focusTargetId: candidate.id,
+                  triggerPulse: true,
                 },
               },
             }

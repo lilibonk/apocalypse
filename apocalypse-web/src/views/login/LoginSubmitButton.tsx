@@ -1,8 +1,8 @@
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { PulseIndicator } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { PixelScale } from '@/effects/PixelWave'
 import { cn } from '@/lib/utils'
 
 import './login-submit.css'
@@ -40,7 +40,7 @@ export function LoginSubmitButton({ phase, morph }: { phase: SubmitPhase; morph:
         {phase === 'success' ? (
           <Check className="login-submit-check size-5" aria-hidden="true" />
         ) : phase === 'waiting' ? (
-          <PixelScale variant="inline" tone="current" />
+          <PulseIndicator variant="inline" tone="current" />
         ) : null}
         {!collapsed && <span>{label}</span>}
       </Button>

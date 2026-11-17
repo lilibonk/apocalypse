@@ -11,6 +11,7 @@ import { Link } from 'react-router'
 import { BrandHero } from '@/components/BrandHero'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { resolveMenuIcon } from '@/components/layout/menu-icons'
+import { LivingContextBar } from '@/components/navigation'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -193,39 +194,47 @@ function DesktopDashboard() {
       : item.row.title || t('operation')
 
   return (
-    <div className="min-w-0 space-y-6 p-4 sm:p-6">
-      <PageHeader
-        title={name ? t('welcome', { name }) : t('welcomeAnonymous')}
-        description={t('subtitle')}
-        actions={
-          (login.allowed || operation.allowed || online.allowed) && (
-            <Button
-              variant="outline"
-              disabled={
-                login.isFetching ||
-                operation.isFetching ||
-                online.isFetching ||
-                loginInsights.isFetching ||
-                operationInsights.isFetching
-              }
-              onClick={() => {
-                if (login.allowed) {
-                  login.retry()
-                  loginInsights.retry()
-                }
-                if (operation.allowed) {
-                  operation.retry()
-                  operationInsights.retry()
-                }
-                if (online.allowed) online.retry()
-              }}
-            >
-              <RefreshCw className="size-4" aria-hidden="true" />
-              {t('refresh')}
-            </Button>
-          )
-        }
-      />
+    <div className="min-w-0 space-y-2.5 px-4 py-2.5 sm:px-5 sm:py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <PageHeader
+            title={name ? t('welcome', { name }) : t('welcomeAnonymous')}
+            description={t('subtitle')}
+            actions={
+              (login.allowed || operation.allowed || online.allowed) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    login.isFetching ||
+                    operation.isFetching ||
+                    online.isFetching ||
+                    loginInsights.isFetching ||
+                    operationInsights.isFetching
+                  }
+                  onClick={() => {
+                    if (login.allowed) {
+                      login.retry()
+                      loginInsights.retry()
+                    }
+                    if (operation.allowed) {
+                      operation.retry()
+                      operationInsights.retry()
+                    }
+                    if (online.allowed) online.retry()
+                  }}
+                >
+                  <RefreshCw className="size-4" aria-hidden="true" />
+                  {t('refresh')}
+                </Button>
+              )
+            }
+          />
+        </div>
+        <div className="hidden h-12 w-48 shrink-0 overflow-hidden rounded-control border border-border-subtle xl:block">
+          <BrandHero alt={t('brandHeroAlt')} />
+        </div>
+      </div>
 
       <DashboardInsights
         login={loginInsights}
@@ -240,20 +249,18 @@ function DesktopDashboard() {
         onlineHref={online.allowed ? onlineRoute?.path : undefined}
       >
         <InsightCard
-          className="flex h-full min-w-0 flex-col p-5 sm:p-6"
+          className="flex h-full max-h-52 min-w-0 flex-col p-3 sm:p-3.5"
           motionEnabled={motionEnabled}
           entranceKey="dashboard:activity"
           order={5}
           aria-labelledby="dashboard-activity-title"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 id="dashboard-activity-title" className="font-semibold">
+              <h2 id="dashboard-activity-title" className="text-sm font-semibold">
                 {t('activity')}
               </h2>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                {t('activityHint')}
-              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t('activityHint')}</p>
             </div>
             {auditRoute && hasAuditAccess && (
               <Button variant="ghost" size="xs" asChild>
@@ -265,13 +272,13 @@ function DesktopDashboard() {
             )}
           </div>
           {!hasAuditAccess && (
-            <p role="status" className="py-8 text-sm text-muted-foreground">
+            <p role="status" className="py-4 text-sm text-muted-foreground">
               {t('noAuditAccess')}
             </p>
           )}
           {loadingActivity && <SectionSkeleton />}
           {hasAuditAccess && !loadingActivity && !activityFailed && activity.length === 0 && (
-            <div role="status" className="space-y-1 py-8 text-center">
+            <div role="status" className="space-y-1 py-4 text-center">
               <p className="text-sm font-medium">{t('noActivity')}</p>
               <p className="text-xs text-muted-foreground">{t('noActivityHint')}</p>
             </div>
@@ -285,7 +292,7 @@ function DesktopDashboard() {
             ([source, label]) =>
               source.allowed &&
               source.isError && (
-                <div key={label} className="mt-3">
+                <div key={label} className="mt-1.5">
                   <SourceFailure
                     source={label}
                     error={source.error}
@@ -296,7 +303,7 @@ function DesktopDashboard() {
                 </div>
               ),
           )}
-          <ul className="mt-3 flex-1 divide-y divide-border-subtle">
+          <ul className="mt-1.5 max-h-32 flex-1 divide-y divide-border-subtle overflow-y-auto overscroll-contain">
             {activity.map((item) => {
               const success = item.kind === 'login' ? item.row.success === 1 : item.row.status === 1
               const Icon = item.kind === 'login' ? LogIn : ScrollText
@@ -308,7 +315,7 @@ function DesktopDashboard() {
                 <li key={item.id}>
                   <button
                     type="button"
-                    className="flex w-full items-start gap-3 rounded-control py-3 text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex w-full items-start gap-2 rounded-control py-1.5 text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={t('inspectActivity', { title })}
                     onClick={() =>
                       setDetail({
@@ -318,10 +325,10 @@ function DesktopDashboard() {
                       })
                     }
                   >
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-control bg-muted text-brand-text">
-                      <Icon className="size-4" aria-hidden="true" />
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-control bg-muted text-brand-text">
+                      <Icon className="size-3.5" aria-hidden="true" />
                     </span>
-                    <span className="min-w-0 flex-1 space-y-1">
+                    <span className="min-w-0 flex-1 space-y-0.5">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="min-w-0 break-words text-xs font-medium">{title}</span>
                         <Badge
@@ -335,68 +342,46 @@ function DesktopDashboard() {
                         </Badge>
                       </span>
                       <span className="block break-words text-xs text-muted-foreground">
-                        {actor} · {ip || t('unknownIp')}
+                        {actor} · {ip || t('unknownIp')} ·{' '}
+                        <time dateTime={item.time.replace(' ', 'T')} className="tabular-nums">
+                          {item.time.replace('T', ' ').slice(0, 16)}
+                        </time>
                       </span>
-                      <time
-                        dateTime={item.time.replace(' ', 'T')}
-                        className="block text-xs text-muted-foreground tabular-nums"
-                      >
-                        {item.time.replace('T', ' ').slice(0, 16)}
-                      </time>
                     </span>
                   </button>
                 </li>
               )
             })}
           </ul>
-          {hasAuditAccess && (
-            <p className="mt-3 border-t border-border-subtle pt-3 text-xs leading-relaxed text-muted-foreground">
-              {t('activityScope')}
-            </p>
-          )}
         </InsightCard>
       </DashboardInsights>
 
-      <section aria-labelledby="dashboard-tasks-title" className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="dashboard-tasks-title" className="text-base font-semibold">
-            {t('commonTasks')}
-          </h2>
-          <p className="text-xs text-muted-foreground">{t('commonTasksHint')}</p>
-        </div>
-        <div data-slot="dashboard-tasks" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {tasks.map((route) => {
+      <LivingContextBar title={t('commonTasks')} ariaLabel={t('commonTasks')}>
+        {tasks.length > 0 ? (
+          tasks.map((route) => {
             const Icon = resolveMenuIcon(route.icon)
             return (
               <Link
                 key={route.path}
                 to={route.path}
                 data-slot="interactive-card"
-                className="flex min-w-0 items-center gap-3 rounded-panel border border-border bg-card p-4 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="entity-pill h-6 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-brand-text">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1 text-sm font-medium">{menuTitle(route.title)}</span>
+                <Icon className="size-3.5 shrink-0 text-brand-text" aria-hidden="true" />
+                <span className="min-w-0 truncate">{menuTitle(route.title)}</span>
                 <ArrowUpRight
-                  className="size-4 shrink-0 text-muted-foreground"
+                  className="size-3 shrink-0 text-muted-foreground opacity-75"
                   aria-hidden="true"
                 />
               </Link>
             )
-          })}
-        </div>
-        {tasks.length === 0 && (
-          <p
-            role="status"
-            className="rounded-panel border border-border bg-card p-5 text-sm text-muted-foreground"
-          >
+          })
+        ) : (
+          <span role="status" className="text-xs text-muted-foreground">
             {t('noTasks')}
-          </p>
+          </span>
         )}
-      </section>
-
-      <BrandHero alt={t('brandHeroAlt')} />
+      </LivingContextBar>
 
       {selectedActivity && (
         <Dialog

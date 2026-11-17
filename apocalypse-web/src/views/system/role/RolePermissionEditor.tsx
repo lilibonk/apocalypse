@@ -58,7 +58,7 @@ import {
   saveRoleMenus,
 } from './role-graph.operations'
 import { useRoleGraphMutation } from './use-role-graph-mutation'
-import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import { RoleStageSplit as RoleWorkspacePanels } from './RolePanorama'
 import {
   buildRolePermissionCatalog,
   createRolePermissionDraft,
@@ -76,7 +76,7 @@ import {
   type RolePermissionDraft,
   type RolePermissionDraftState,
 } from './role-permission-draft.model'
-import './role-permission-editor.css'
+import './role-stage.css'
 
 interface RolePermissionEditorProps {
   opening: RolePermissionOpening

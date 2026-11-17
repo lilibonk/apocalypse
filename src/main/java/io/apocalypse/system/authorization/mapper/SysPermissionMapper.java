@@ -26,7 +26,7 @@ public interface SysPermissionMapper extends BaseMapper<SysPermissionEntity> {
                   .like(SysPermissionEntity::getName, keyword));
     }
     if (moduleKey != null) {
-      if (moduleKey.isEmpty()) {
+      if (moduleKey.isEmpty() || "__core__".equals(moduleKey)) {
         query.isNull(SysPermissionEntity::getModuleKey);
       } else {
         query.eq(SysPermissionEntity::getModuleKey, moduleKey);

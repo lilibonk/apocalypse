@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -87,11 +88,50 @@ function CommandInput({
   )
 }
 
-function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
+function CommandList({
+  className,
+  style,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.List>) {
+  const motionEnabled = useMotionPreference()
+  const listRef = React.useRef<HTMLDivElement | null>(null)
+  const isAdaptive = 'data-adaptive' in props && props['data-adaptive'] !== 'false'
+
+  React.useLayoutEffect(() => {
+    const listEl = listRef.current
+    if (!listEl) return
+    if (!isAdaptive || !motionEnabled || typeof ResizeObserver === 'undefined') {
+      listEl.style.removeProperty('height')
+      return
+    }
+    const sizer = (listEl.querySelector('[cmdk-list-sizer]') as HTMLElement | null) ?? listEl
+
+    const measure = () => {
+      const rawHeight = sizer.scrollHeight || sizer.getBoundingClientRect().height
+      if (rawHeight > 0) {
+        listEl.style.height = `${Math.min(rawHeight, 420)}px`
+      }
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(sizer)
+    return () => {
+      observer.disconnect()
+      listEl.style.removeProperty('height')
+    }
+  }, [isAdaptive, motionEnabled])
+
   return (
     <CommandPrimitive.List
+      ref={listRef}
       data-slot="command-list"
-      className={cn('max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto', className)}
+      style={style}
+      className={cn(
+        'max-h-[min(420px,68dvh)] scroll-py-1 overflow-x-hidden overflow-y-auto',
+        isAdaptive && 'command-adaptive-list',
+        className,
+      )}
       {...props}
     />
   )

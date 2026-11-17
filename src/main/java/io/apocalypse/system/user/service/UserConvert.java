@@ -12,8 +12,10 @@ import org.mapstruct.MappingConstants;
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface UserConvert {
 
-  /** deptName 非实体字段，由 Service 装配。 */
+  /** deptName / deptPath / roles 非实体字段，由 Service 装配。 */
   @Mapping(target = "deptName", ignore = true)
+  @Mapping(target = "deptPath", ignore = true)
+  @Mapping(target = "roles", ignore = true)
   UserResp toResp(SysUserEntity entity);
 
   UserSummary toSummary(SysUserEntity entity);

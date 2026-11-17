@@ -5,6 +5,7 @@ import io.apocalypse.system.authorization.dto.response.DataScopeResp;
 import io.apocalypse.system.role.dto.response.RoleUserResp;
 import io.apocalypse.system.role.entity.SysRoleEntity;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Delete;
@@ -49,6 +50,27 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
       ORDER BY r.sort
       """)
   List<SysRoleEntity> selectByUserId(@Param("userId") Long userId);
+
+  /** 用户-角色摘要联表投影行。 */
+  record UserRoleRow(
+      Long userId, Long id, String roleName, String roleKey, Integer status, String dataScope) {}
+
+  /** 批量查询多个用户关联的全部未删除角色摘要（按角色 sort, id 升序）。 */
+  @Select(
+      """
+      <script>
+      SELECT ur.user_id AS userId, r.id, r.role_name AS roleName, r.role_key AS roleKey,
+             r.status, r.data_scope AS dataScope
+      FROM sys_user_role ur
+      JOIN sys_role r ON r.id = ur.role_id AND r.deleted = 0
+      WHERE ur.user_id IN
+      <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+        #{userId}
+      </foreach>
+      ORDER BY r.sort ASC, r.id ASC
+      </script>
+      """)
+  List<UserRoleRow> selectRoleSummariesByUserIds(@Param("userIds") Collection<Long> userIds);
 
   /** 清空角色下的全部用户关联（角色-用户整体替换前调用）。 */
   @Delete("DELETE FROM sys_user_role WHERE role_id = #{roleId}")

@@ -12,24 +12,26 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { ProjectionGrant } from '../calendar.api'
+import { toErrorMessage } from '../calendar.format'
 import {
   CalendarPageFrame,
   CalendarPicker,
   CalendarQueryStatus,
-  ManageCalendarsLink,
   DataEmpty,
   InlineError,
+  ManageCalendarsLink,
   StateBadge,
 } from '../calendar.ui'
-import { toErrorMessage } from '../calendar.format'
-import { CalendarConfirm } from '../calendar-confirm'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 function ProjectionGrantPage() {
   const { t } = useTranslation('calendar')
@@ -131,13 +133,19 @@ function ProjectionGrantPage() {
           </div>
         </div>
       ) : calendarId ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
-          <Card className="gap-4 py-4">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle>{t('projections.addSource')}</CardTitle>
-              <CardDescription>{t('projections.addSourceDescription')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 px-4 sm:px-6">
+        <StickyCompactRailLayout
+          railLabel={t('projections.addSource')}
+          railWidth="locator"
+          railHeader={
+            <div className="px-1 pb-1">
+              <h2 className="text-sm font-semibold">{t('projections.addSource')}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('projections.addSourceDescription')}
+              </p>
+            </div>
+          }
+          railContent={
+            <div className="space-y-3.5">
               <div className="grid gap-1.5">
                 <Label htmlFor="projection-source">{t('projections.sourceSystem')}</Label>
                 <Input
@@ -165,7 +173,7 @@ function ProjectionGrantPage() {
                   </FieldOption>
                 </FieldSelect>
                 <p
-                  className="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                  className="rounded-md border border-border bg-muted/30 p-2.5 text-xs"
                   aria-live="polite"
                 >
                   {t(
@@ -175,7 +183,7 @@ function ProjectionGrantPage() {
                   )}
                 </p>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {t('projections.destination')}:{' '}
                 <span className="font-medium text-foreground">
                   {publisherCalendars.find((calendar) => calendar.id === calendarId)?.name}
@@ -201,9 +209,10 @@ function ProjectionGrantPage() {
                   {t('projections.save')}
                 </Button>
               </Perm>
-            </CardContent>
-          </Card>
-
+            </div>
+          }
+          stageClassName="space-y-4"
+        >
           <Card className="gap-4 py-4">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle>{t('projections.configured')}</CardTitle>
@@ -293,7 +302,7 @@ function ProjectionGrantPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </StickyCompactRailLayout>
       ) : null}
     </CalendarPageFrame>
   )
@@ -302,4 +311,3 @@ function ProjectionGrantPage() {
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={ProjectionGrantPage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

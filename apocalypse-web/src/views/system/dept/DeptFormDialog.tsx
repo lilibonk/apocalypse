@@ -37,9 +37,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PulseIndicator } from '@/components/motion'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { PixelScale } from '@/effects/PixelWave'
 
 import { collectSubTreeIds, flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptTreeNode, type SnowflakeId } from './types'
@@ -303,7 +303,7 @@ export function DeptFormDialog({
                     {t('common.取消', { defaultValue: '取消' })}
                   </Button>
                   <Button type="submit" disabled={isPending}>
-                    {isPending && <PixelScale variant="inline" tone="current" />}
+                    {isPending && <PulseIndicator variant="inline" tone="current" />}
                     {isPending
                       ? t('common.保存中…', { defaultValue: '保存中…' })
                       : t('common.保存', { defaultValue: '保存' })}

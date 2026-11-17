@@ -62,11 +62,46 @@ public interface SysLoginLogMapper extends BaseMapper<SysLoginLogEntity> {
 
   /** 按登录名关键字分页（按登录时间倒序）。 */
   default PageResult<SysLoginLogEntity> pageByKeyword(int page, int size, String keyword) {
+    return pageByFilters(page, size, keyword, null, null, null, null, null);
+  }
+
+  /** 按多维条件分页查询登录日志（关键字匹配 username / ip / message，支持成败状态、半开时间区间与星期×小时热力格下钻）。 */
+  default PageResult<SysLoginLogEntity> pageByFilters(
+      int page,
+      int size,
+      String keyword,
+      Integer success,
+      LocalDateTime from,
+      LocalDateTime to,
+      Integer isoWeekday,
+      Integer hour) {
     LambdaQueryWrapper<SysLoginLogEntity> wrapper = new LambdaQueryWrapper<>();
     if (StringUtils.hasText(keyword)) {
-      wrapper.like(SysLoginLogEntity::getUsername, keyword);
+      String kw = keyword.trim();
+      wrapper.and(
+          w ->
+              w.like(SysLoginLogEntity::getUsername, kw)
+                  .or()
+                  .like(SysLoginLogEntity::getIp, kw)
+                  .or()
+                  .like(SysLoginLogEntity::getMessage, kw));
     }
-    wrapper.orderByDesc(SysLoginLogEntity::getLoginTime);
+    if (success != null) {
+      wrapper.eq(SysLoginLogEntity::getSuccess, success);
+    }
+    if (from != null) {
+      wrapper.ge(SysLoginLogEntity::getLoginTime, from);
+    }
+    if (to != null) {
+      wrapper.lt(SysLoginLogEntity::getLoginTime, to);
+    }
+    if (isoWeekday != null) {
+      wrapper.apply("extract(isodow FROM login_time) = {0}", isoWeekday);
+    }
+    if (hour != null) {
+      wrapper.apply("extract(hour FROM login_time) = {0}", hour);
+    }
+    wrapper.orderByDesc(SysLoginLogEntity::getLoginTime).orderByDesc(SysLoginLogEntity::getId);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));
   }
 

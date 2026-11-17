@@ -12,34 +12,35 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { ConflictResolution, OverrideConflict } from '../calendar.api'
+import { dayValueText, toErrorMessage } from '../calendar.format'
 import {
+  CalendarContextChange,
   CalendarPageFrame,
   CalendarPicker,
-  CalendarContextChange,
   CalendarQueryStatus,
   DataEmpty,
-  FieldPair,
   InlineError,
   StateBadge,
 } from '../calendar.ui'
-import { dayValueText, toErrorMessage } from '../calendar.format'
-import { CalendarConfirm } from '../calendar-confirm'
+import { DayFieldDiffMatrix } from '../day-field-diff-matrix'
 import { DayOverrideEditor } from '../day-override-editor'
 import {
   buildDayOverride,
-  emptyOverrideInput,
   dayFieldLabels,
+  emptyOverrideInput,
   underlayField,
-  snapshotField,
 } from '../day-override-model'
 import { OverrideChangePreview } from '../override-change-preview'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 function today(): string {
   const date = new Date()
@@ -157,8 +158,10 @@ function PersonalOverridePage() {
             value={calendarId}
             onChange={(value) => changeContext({ calendarId: value, date })}
           />
-          <div className="grid gap-1.5">
-            <Label htmlFor="personal-override-date">{t('personalOverrides.date')}</Label>
+          <div className="grid gap-1">
+            <Label htmlFor="personal-override-date" className="text-xs text-muted-foreground">
+              {t('personalOverrides.date')}
+            </Label>
             <DatePicker
               id="personal-override-date"
               mode="date"
@@ -181,13 +184,20 @@ function PersonalOverridePage() {
         loading={calendarsQuery.isLoading || dayQuery.isLoading}
         fetching={dayQuery.isFetching}
       />
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
-        <Card className="gap-4 py-4">
-          <CardHeader className="px-4 sm:px-6">
-            <CardTitle>{t('personalOverrides.editLabel')}</CardTitle>
-            <CardDescription>{t('personalOverrides.editDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 px-4 sm:px-6">
+
+      <StickyCompactRailLayout
+        railLabel={t('personalOverrides.editLabel')}
+        railWidth="locator"
+        railHeader={
+          <div className="px-1 pb-1">
+            <h2 className="text-sm font-semibold">{t('personalOverrides.editLabel')}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('personalOverrides.editDescription')}
+            </p>
+          </div>
+        }
+        railContent={
+          <div className="space-y-4">
             <DayOverrideEditor value={input} onChange={setInput} />
             <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
               <div className="text-xs text-muted-foreground">
@@ -255,13 +265,21 @@ function PersonalOverridePage() {
                 )}
               </CalendarConfirm>
             </Perm>
-          </CardContent>
-        </Card>
-
+          </div>
+        }
+        stageClassName="space-y-4"
+      >
         <Tabs defaultValue="preview" className="min-w-0 gap-4">
           <TabsList>
             <TabsTrigger value="preview">{t('workspace.preview')}</TabsTrigger>
-            <TabsTrigger value="review">{t('workspace.review')}</TabsTrigger>
+            <TabsTrigger value="review">
+              {t('workspace.review')}
+              {(conflictsQuery.data?.list.length ?? 0) > 0 && (
+                <Badge variant="warning" className="ml-1.5">
+                  {conflictsQuery.data?.list.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="preview">
             <Card className="gap-4 py-4">
@@ -269,9 +287,16 @@ function PersonalOverridePage() {
                 <CardTitle>{t('personalOverrides.comparison', { date })}</CardTitle>
                 <CardDescription>{t('personalOverrides.baselineDescription')}</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 px-4 sm:px-6">
+              <CardContent className="space-y-4 px-4 sm:px-6">
                 {dayQuery.data ? (
                   <>
+                    <DayFieldDiffMatrix
+                      day={dayQuery.data}
+                      scope="PERSONAL"
+                      activeField={input.field}
+                      operation={operation}
+                      onSelectField={(field) => setInput((prev) => ({ ...prev, field }))}
+                    />
                     <OverrideChangePreview
                       day={dayQuery.data}
                       operation={operation}
@@ -280,41 +305,6 @@ function PersonalOverridePage() {
                       scope={t('overrideEditor.personalScope') + ' · ' + dayQuery.data.calendarKey}
                       preview={JSON.stringify(input) !== acceptedInput}
                     />
-                    <details className="rounded-md border border-border p-3">
-                      <summary className="cursor-pointer text-sm font-medium">
-                        {t('workspace.allFields')}
-                      </summary>
-                      <div className="mt-3">
-                        {Object.entries(dayFieldLabels).map(([field, label]) => (
-                          <FieldPair
-                            key={field}
-                            label={t(label)}
-                            baseline={dayValueText(
-                              snapshotField(
-                                dayQuery.data!.baseline,
-                                field as keyof typeof dayFieldLabels,
-                              ),
-                            )}
-                            effective={dayValueText(
-                              snapshotField(
-                                dayQuery.data!.effective,
-                                field as keyof typeof dayFieldLabels,
-                                dayQuery.data!.resolutions.find((item) => item.field === field)
-                                  ?.state,
-                              ),
-                            )}
-                          />
-                        ))}
-                        <div className="flex flex-wrap gap-2 pt-2">
-                          {dayQuery.data.resolutions.map((resolution) => (
-                            <Badge key={resolution.field} variant="outline">
-                              {t(dayFieldLabels[resolution.field])} ·{' '}
-                              {t(`layers.${resolution.source.layer}`)}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </details>
                   </>
                 ) : dayQuery.isSuccess ? (
                   <DataEmpty>{t('personalOverrides.chooseDate')}</DataEmpty>
@@ -342,13 +332,17 @@ function PersonalOverridePage() {
                         <div className="text-xs text-muted-foreground">
                           {t('personalOverrides.previousUnderlay')}
                         </div>
-                        <div className="mt-1">{dayValueText(conflict.previousUnderlay)}</div>
+                        <div className="draft-original mt-1">
+                          {dayValueText(conflict.previousUnderlay)}
+                        </div>
                       </div>
                       <div className="rounded-md bg-muted/40 p-2">
                         <div className="text-xs text-muted-foreground">
                           {t('personalOverrides.currentUnderlay')}
                         </div>
-                        <div className="mt-1">{dayValueText(conflict.currentUnderlay)}</div>
+                        <div className="mt-1 font-medium">
+                          {dayValueText(conflict.currentUnderlay)}
+                        </div>
                       </div>
                     </div>
                     {conflict.state === 'OPEN' && (
@@ -379,7 +373,8 @@ function PersonalOverridePage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+      </StickyCompactRailLayout>
+
       <CalendarContextChange
         open={pendingContext !== null}
         onCancel={() => setPendingContext(null)}
@@ -484,4 +479,3 @@ function PersonalConflictActions({
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={PersonalOverridePage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

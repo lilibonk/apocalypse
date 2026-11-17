@@ -1,9 +1,29 @@
 .config-row[data-saved] {
   border-left: calc(var(--spacing)) solid var(--success-foreground);
 }
+
+.config-row[data-dirty='true'] {
+  background-color: color-mix(in oklch, var(--primary) 4%, transparent);
+}
+
+.config-row[data-conflict='true'] {
+  border-left: calc(var(--spacing)) solid var(--warning);
+  background-color: color-mix(in oklch, var(--warning) 8%, transparent);
+}
+
+.config-row[data-intent-highlight='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.config-group[data-active='true'] {
+  border-color: color-mix(in oklch, var(--primary) 42%, var(--border-subtle));
+}
+
 .config-save-result {
   animation: config-save-enter var(--motion-duration-standard) var(--motion-ease-enter);
 }
+
 @keyframes config-save-enter {
   from {
     opacity: 0.5;
@@ -12,9 +32,11 @@
     opacity: 1;
   }
 }
+
 html[data-motion='off'] .config-save-result {
   animation: none;
 }
+
 @media (prefers-reduced-motion: reduce) {
   .config-save-result {
     animation: none;

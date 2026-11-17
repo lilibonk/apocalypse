@@ -1,5 +1,9 @@
 .dept-chart .graph-canvas-frame {
-  min-height: 34rem;
+  height: 100%;
+  min-height: 36rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .dept-node {
@@ -33,7 +37,10 @@
 .dept-node-main {
   min-width: 0;
   flex: 1;
-  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 3);
   text-align: left;
   border-radius: var(--radius-panel);
   outline: none;
@@ -47,7 +54,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: calc(var(--spacing) * 9);
+  min-width: calc(var(--spacing) * 8);
   border-left: 1px solid var(--border-subtle);
   color: var(--muted-foreground);
   border-radius: 0 var(--radius-panel) var(--radius-panel) 0;

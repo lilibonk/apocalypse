@@ -1,65 +1,66 @@
 /**
- * 操作日志（只读页，逃逸舱手写）：DynaSearch + DynaTable + 长审计详情 Sheet。
- * 端点 GET /system/logs/oper?page&size&keyword（直接拼 query，无 /page 后缀）。
- * 状态列走字典 sys_common_status（成功 1 / 失败 0）；耗时列在行数据侧格式化为 `xx ms`。
+ * 操作日志（只读页）：顶部紧凑业务类型脉冲条（getOperInsights）+ 40px 高密度结构化事件表 +
+ * 来源行锚定高亮（data-origin-active）+ 右侧同步滑入的审计证据抽屉（4 宫格摘要、↑/↓ 邻行快速检视、
+ * 操作人/目标域 EntityPill、深色格式化 JSON 块与 "******" 脱敏字段视觉标识）。
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Check, Copy, Eye, RefreshCw } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Copy, Eye, FilterX, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
-import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
-import { useResourceDenial } from '@/lib/query/use-resource-denial'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { DictTag } from '@/components/DictTag'
+import { DynaSearch, DynaTable, type DynaColumn, type DynaSearchField } from '@/components/dyna'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { CoupledMotionGroup, MetricValue } from '@/components/motion'
+import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { ResponsiveInspector } from '@/components/spatial'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
-import './oper-log.css'
+import {
+  getOperInsights,
+  logInsightRanges,
+  type LogInsightRange,
+} from '@/views/system/log/log-insight.api'
 
+import './oper-log.css'
 import { pageOperLogs, type OperLogRow } from './oper-log.api'
-import { formatPayload, operTypeLabel } from './oper-log.model'
+import {
+  buildOperStreamQuery,
+  formatPayload,
+  hasActiveOperFilter,
+  operTypeLabel,
+  resolveOperTargetEntity,
+  tokenizePayloadSegments,
+  type OperCausalFilter,
+} from './oper-log.model'
 
 const DEFAULT_PAGE_SIZE = 10
-
-const columns: DynaColumn[] = [
-  { key: 'eventSummary', title: '事件' },
-  { key: 'operName', title: '操作人' },
-  { key: 'operIp', title: '操作 IP' },
-  { key: 'costTimeText', title: '耗时' },
-  {
-    key: 'status',
-    title: '操作状态',
-    type: 'dict',
-    dictType: 'sys_common_status',
-    sticky: 'right',
-  },
-  { key: 'operTime', title: '操作时间', type: 'datetime', sticky: 'right' },
-]
 
 const searchFields: DynaSearchField[] = [
   { name: 'keyword', label: '模块 / 操作人', type: 'input', placeholder: '模块 / 操作人' },
 ]
 
-/** 详情字段块：长内容在块内滚动，空值显示 -，可复制原文。 */
+/** 详情字段块：长内容在块内滚动，空值显示 -，可复制原文，并对 `"******"` 脱敏值作视觉标识。 */
 function DetailBlock({ label, value }: { label: string; value: string | null }) {
   const { t } = useTranslation()
   const { t: systemT } = useTranslation('system')
   const formatted = formatPayload(value)
+  const segments = useMemo(() => (formatted ? tokenizePayloadSegments(formatted) : []), [formatted])
+  const hasMasked = useMemo(() => segments.some((s) => s.masked), [segments])
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
+
   useEffect(() => {
     if (!copied) return
     const timer = window.setTimeout(() => setCopied(false), 1800)
     return () => window.clearTimeout(timer)
   }, [copied])
+
   const copy = async () => {
     try {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable')
@@ -70,10 +71,14 @@ function DetailBlock({ label, value }: { label: string; value: string | null }) 
       setCopyFailed(true)
     }
   }
+
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">{label}</div>
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span>{label}</span>
+          {hasMasked && <Badge variant="warning">含脱敏字段 ******</Badge>}
+        </div>
         {formatted && (
           <Button variant="ghost" size="xs" onClick={() => void copy()}>
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
@@ -86,8 +91,23 @@ function DetailBlock({ label, value }: { label: string; value: string | null }) 
           {systemT('operLog.copyFailed')}
         </p>
       )}
-      <pre className="oper-log-payload max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap break-all">
-        {formatted ?? '-'}
+      <pre className="oper-log-payload max-h-64 overflow-auto rounded-md p-3 text-xs break-all whitespace-pre-wrap">
+        {!formatted
+          ? '-'
+          : segments.map((seg, idx) =>
+              seg.masked ? (
+                <mark key={idx} data-masked="true" className="oper-log-mask">
+                  {seg.text}
+                </mark>
+              ) : (
+                <span
+                  key={idx}
+                  className={seg.kind !== 'plain' ? `oper-log-token-${seg.kind}` : undefined}
+                >
+                  {seg.text}
+                </span>
+              ),
+            )}
       </pre>
     </div>
   )
@@ -99,26 +119,54 @@ export default function OperLogPage() {
 }
 
 function OperLogWorkspace() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { t: systemT } = useTranslation('system')
+  const language = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'zh'
+  const motionEnabled = useMotionPreference()
+  const { intent } = useEntityIntent()
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
+  const canViewInsights = useAuthStore((state) => state.perms.includes('system:log:oper'))
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [draftSearch, setDraftSearch] = useState<Record<string, string>>({})
   const [appliedSearch, setAppliedSearch] = useState<Record<string, string>>({})
+  const [causalFilter, setCausalFilter] = useState<OperCausalFilter>({ range: 'WEEK' })
   const [detail, setDetail] = useState<OperLogRow | null>(null)
 
   const keyword = appliedSearch.keyword ?? ''
-  const displayColumns = useMemo(
-    () =>
-      columns.map((column) =>
-        column.key === 'eventSummary' ? { ...column, title: systemT('operLog.event') } : column,
-      ),
+  const streamQuery = useMemo(
+    () => buildOperStreamQuery(keyword, causalFilter),
+    [causalFilter, keyword],
+  )
+  const causalActive = hasActiveOperFilter(causalFilter)
+
+  const insightsQuery = useQuery({
+    queryKey: ['system', 'logs', 'oper', 'insights', sessionEpoch, causalFilter.range],
+    queryFn: ({ signal }) => getOperInsights(causalFilter.range, signal),
+    enabled: canViewInsights,
+  })
+
+  const displayColumns = useMemo<DynaColumn[]>(
+    () => [
+      { key: 'eventSummary', title: systemT('operLog.event') },
+      { key: 'operName', title: '操作人' },
+      { key: 'operIp', title: '操作 IP' },
+      { key: 'costTimeText', title: '耗时' },
+      {
+        key: 'status',
+        title: '操作状态',
+        type: 'dict',
+        dictType: 'sys_common_status',
+        sticky: 'right',
+      },
+      { key: 'operTime', title: '操作时间', type: 'datetime', sticky: 'right' },
+    ],
     [systemT],
   )
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ['system', 'logs', 'oper', page, pageSize, keyword],
-    queryFn: ({ signal }) => pageOperLogs(page, pageSize, keyword, signal),
+    queryKey: ['system', 'logs', 'oper', page, pageSize, streamQuery],
+    queryFn: ({ signal }) => pageOperLogs(page, pageSize, streamQuery, signal),
   })
   useResourceDenial({
     errors: [error],
@@ -126,7 +174,6 @@ function OperLogWorkspace() {
     reset: () => setDetail(null),
   })
 
-  // DynaTable 文本列只做 String()，耗时 `xx ms` 的格式化在行数据侧完成（costTime → costTimeText）
   const rows = useMemo(
     () =>
       data?.list.map((row) => ({
@@ -137,22 +184,59 @@ function OperLogWorkspace() {
     [data, systemT],
   )
 
-  // Stable callbacks: opening the detail Sheet re-renders only the highlighted row.
-  const retry = useCallback(() => void refetch(), [refetch])
+  const currentIndex = useMemo(() => {
+    if (!detail || !rows) return -1
+    return rows.findIndex((r) => String(r.id) === String(detail.id))
+  }, [detail, rows])
+
+  const stepDetail = useCallback(
+    (delta: -1 | 1) => {
+      if (!rows || currentIndex < 0) return
+      const nextRow = rows[currentIndex + delta]
+      if (nextRow) {
+        setDetail(nextRow)
+      }
+    },
+    [currentIndex, rows],
+  )
+
+  useEffect(() => {
+    if (!detail) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        stepDetail(-1)
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        stepDetail(1)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [detail, stepDetail])
+
+  const retry = useCallback(() => {
+    void refetch()
+    void insightsQuery.refetch()
+  }, [insightsQuery, refetch])
+
   const resetFilters = useCallback(() => {
     setDraftSearch({})
     setAppliedSearch({})
+    setCausalFilter((prev) => ({ range: prev.range }))
     setPage(1)
   }, [])
+
   const changePageSize = useCallback((size: number) => {
     setPage(1)
     setPageSize(size)
   }, [])
+
   const renderActions = useCallback(
     (row: Record<string, unknown>) => (
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-xs"
         aria-label={t('common.详情', { defaultValue: '详情' })}
         onClick={() => setDetail(row as OperLogRow)}
       >
@@ -162,96 +246,246 @@ function OperLogWorkspace() {
     [t],
   )
 
+  const insights = insightsQuery.data
+  const targetEntity = useMemo(() => (detail ? resolveOperTargetEntity(detail) : null), [detail])
+
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <PageHeader
-        title={t('common.操作日志', { defaultValue: '操作日志' })}
-        description={t('common.系统操作审计记录（只读）', {
-          defaultValue: '系统操作审计记录（只读）',
-        })}
-        actions={
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t('dyna.queryRefresh')}
-            onClick={retry}
-            disabled={isFetching}
+    <CoupledMotionGroup activeId={detail ? String(detail.id) : null}>
+      <div className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+        <PageHeader
+          title={t('common.操作日志', { defaultValue: '操作日志' })}
+          actions={
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={t('dyna.queryRefresh')}
+              onClick={retry}
+              disabled={isFetching}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          }
+        />
+
+        {intent?.source && <LivingContextBar source={intent.source} />}
+
+        {canViewInsights && insights && (
+          <section
+            aria-label="操作审计概览脉冲"
+            className="oper-insight-strip flex flex-wrap items-center justify-between gap-2.5 px-3 py-2"
           >
-            <RefreshCw className="size-4" />
-          </Button>
-        }
-      />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                size="xs"
+                variant={!causalActive ? 'default' : 'ghost'}
+                onClick={() => {
+                  setCausalFilter((prev) => ({ range: prev.range }))
+                  setPage(1)
+                }}
+              >
+                <span>全部</span>
+                <span className="ml-1 font-mono text-[11px] tabular-nums">
+                  <MetricValue
+                    value={insights.total}
+                    variant="hero-odometer"
+                    language={language}
+                    motionEnabled={motionEnabled}
+                  />
+                </span>
+              </Button>
+              {insights.byBusinessType.map((entry) => {
+                const code = entry.type ?? ''
+                if (!code) return null
+                const active = causalFilter.businessType === code
+                return (
+                  <Button
+                    key={code}
+                    type="button"
+                    size="xs"
+                    variant={active ? 'default' : 'ghost'}
+                    onClick={() => {
+                      setCausalFilter((prev) => ({
+                        ...prev,
+                        businessType: active ? undefined : code,
+                      }))
+                      setPage(1)
+                    }}
+                  >
+                    <span>{operTypeLabel(code, systemT)}</span>
+                    <span className="ml-1 font-mono text-[11px] opacity-80 tabular-nums">
+                      {entry.count}
+                    </span>
+                  </Button>
+                )
+              })}
+              <span className="mx-0.5 h-3.5 w-px bg-border-subtle" aria-hidden="true" />
+              <Button
+                type="button"
+                size="xs"
+                variant={causalFilter.status === 0 ? 'destructive' : 'outline'}
+                onClick={() => {
+                  setCausalFilter((prev) => ({
+                    ...prev,
+                    status: prev.status === 0 ? undefined : 0,
+                  }))
+                  setPage(1)
+                }}
+              >
+                异常 {insights.failed}
+              </Button>
+              {causalActive && (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    setCausalFilter((prev) => ({ range: prev.range }))
+                    setPage(1)
+                  }}
+                >
+                  <FilterX className="size-3.5" aria-hidden="true" />
+                  清除下钻
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                成功率{' '}
+                <strong className="font-mono font-medium text-foreground tabular-nums">
+                  <MetricValue
+                    value={insights.successRate}
+                    decimals={1}
+                    suffix="%"
+                    variant="tabular"
+                    language={language}
+                  />
+                </strong>
+              </span>
+              <SegmentedControl
+                label={systemT('logInsight.range')}
+                value={causalFilter.range}
+                onChange={(nextRange) => {
+                  setCausalFilter((prev) => ({
+                    ...prev,
+                    range: nextRange as LogInsightRange,
+                  }))
+                  setPage(1)
+                }}
+                options={logInsightRanges.map((option) => ({
+                  value: option,
+                  label: systemT(`logInsight.range${option}`, {
+                    defaultValue:
+                      option === 'DAY' ? '近 24 小时' : option === 'WEEK' ? '近 7 天' : '近 30 天',
+                  }),
+                }))}
+              />
+            </div>
+          </section>
+        )}
 
-      <DynaSearch
-        fields={searchFields}
-        values={draftSearch}
-        onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
-        onSearch={() => {
-          setPage(1)
-          setAppliedSearch({ ...draftSearch })
-        }}
-        onReset={resetFilters}
-      />
+        <DynaSearch
+          fields={searchFields}
+          values={draftSearch}
+          onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
+          onSearch={() => {
+            setPage(1)
+            setAppliedSearch({ ...draftSearch })
+          }}
+          onReset={resetFilters}
+        />
 
-      <p className="text-xs text-muted-foreground">
-        {systemT('operLog.filterContext', { keyword: keyword || systemT('operLog.allRecords') })}
-      </p>
-      <DynaTable
-        columns={displayColumns}
-        rows={rows}
-        loading={isLoading}
-        error={error}
-        refreshing={isFetching}
-        onRetry={retry}
-        filtered={keyword.trim().length > 0}
-        onResetFilters={resetFilters}
-        rowKey="id"
-        actions={renderActions}
-        page={page}
-        size={pageSize}
-        total={data?.total ?? 0}
-        onPageChange={setPage}
-        onPageSizeChange={changePageSize}
-        activeRowKey={detail ? String(detail.id) : null}
-      />
+        <div className="oper-log-table-dense">
+          <DynaTable
+            columns={displayColumns}
+            rows={rows}
+            loading={isLoading}
+            error={error}
+            refreshing={isFetching}
+            onRetry={retry}
+            filtered={keyword.trim().length > 0 || causalActive}
+            onResetFilters={resetFilters}
+            rowKey="id"
+            actions={renderActions}
+            page={page}
+            size={pageSize}
+            total={data?.total ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={changePageSize}
+            activeRowKey={detail ? String(detail.id) : null}
+          />
+        </div>
 
-      <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>{t('common.操作详情', { defaultValue: '操作详情' })}</SheetTitle>
-            <SheetDescription>
-              {detail ? `${detail.title ?? '-'} · ${detail.operName ?? '-'}` : ''}
-            </SheetDescription>
-          </SheetHeader>
+        <ResponsiveInspector
+          mode="sheet"
+          open={detail !== null}
+          onOpenChange={(open) => !open && setDetail(null)}
+          title={t('common.操作详情', { defaultValue: '操作详情' })}
+          context={detail ? `${detail.title ?? '-'} · ${detail.operName ?? '-'}` : undefined}
+          headerActions={
+            rows && rows.length > 1 ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="outline"
+                  aria-label="上一条日志"
+                  disabled={currentIndex <= 0}
+                  onClick={() => stepDetail(-1)}
+                >
+                  <ArrowUp className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="outline"
+                  aria-label="下一条日志"
+                  disabled={currentIndex < 0 || currentIndex >= rows.length - 1}
+                  onClick={() => stepDetail(1)}
+                >
+                  <ArrowDown className="size-3.5" />
+                </Button>
+              </div>
+            ) : undefined
+          }
+        >
           {detail && (
-            <div key={detail.id} className="min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
-              <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div key={detail.id} className="space-y-4">
+              <LivingContextBar title="关联脉络">
+                {detail.operName && (
+                  <EntityPill
+                    kind="user"
+                    id={detail.operName}
+                    label={`操作人：${detail.operName}`}
+                  />
+                )}
+                {targetEntity && (
+                  <EntityPill
+                    kind={targetEntity.kind}
+                    id={targetEntity.id}
+                    label={targetEntity.label}
+                  />
+                )}
+              </LivingContextBar>
+
+              {/* 紧凑 2×2 元信息头卡 */}
+              <dl className="grid grid-cols-2 gap-2.5 rounded-control border border-border-subtle bg-muted/20 p-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     {t('common.操作人', { defaultValue: '操作人' })}
                   </dt>
-                  <dd className="mt-1 break-words">{detail.operName ?? '-'}</dd>
+                  <dd className="mt-1 font-medium">{detail.operName ?? '-'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    {t('common.操作时间', { defaultValue: '操作时间' })}
-                  </dt>
-                  <dd className="mt-1 tabular-nums">{detail.operTime.replace('T', ' ')}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">
-                    {t('common.操作状态', { defaultValue: '操作状态' })}
-                  </dt>
-                  <dd className="mt-1">
-                    <DictTag type="sys_common_status" value={String(detail.status)} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">
+                    {t('common.操作状态', { defaultValue: '操作状态' })} /{' '}
                     {t('common.耗时', { defaultValue: '耗时' })}
                   </dt>
-                  <dd className="mt-1 tabular-nums">
-                    {detail.costTime === null ? '-' : `${detail.costTime} ms`}
+                  <dd className="mt-1 flex items-center gap-2">
+                    <DictTag type="sys_common_status" value={String(detail.status)} />
+                    <span className="font-mono text-xs tabular-nums">
+                      {detail.costTime === null ? '-' : `${detail.costTime} ms`}
+                    </span>
                   </dd>
                 </div>
                 <div>
@@ -261,7 +495,7 @@ function OperLogWorkspace() {
                   <dd className="mt-1 break-all">
                     {operTypeLabel(detail.businessType, systemT)}
                     {detail.businessType && (
-                      <code className="ml-2 font-mono text-xs text-muted-foreground">
+                      <code className="ml-1.5 font-mono text-xs text-muted-foreground">
                         {detail.businessType}
                       </code>
                     )}
@@ -269,11 +503,15 @@ function OperLogWorkspace() {
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    {t('common.操作 IP', { defaultValue: '操作 IP' })}
+                    {t('common.操作时间', { defaultValue: '操作时间' })} / IP
                   </dt>
-                  <dd className="mt-1 break-all">{detail.operIp ?? '-'}</dd>
+                  <dd className="mt-1 font-mono text-xs tabular-nums">
+                    <div>{detail.operTime.replace('T', ' ')}</div>
+                    <div className="text-muted-foreground">{detail.operIp ?? '-'}</div>
+                  </dd>
                 </div>
               </dl>
+
               {detail.errorMsg && (
                 <div className="rounded-control border border-destructive/30 p-3">
                   <DetailBlock
@@ -282,6 +520,7 @@ function OperLogWorkspace() {
                   />
                 </div>
               )}
+
               <DetailBlock label={systemT('operLog.invokedMethod')} value={detail.method} />
               <DetailBlock
                 label={t('common.请求参数', { defaultValue: '请求参数' })}
@@ -293,8 +532,8 @@ function OperLogWorkspace() {
               />
             </div>
           )}
-        </SheetContent>
-      </Sheet>
-    </div>
+        </ResponsiveInspector>
+      </div>
+    </CoupledMotionGroup>
   )
 }

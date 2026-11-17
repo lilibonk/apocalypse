@@ -37,7 +37,7 @@ import { canConfigurePermission, type PermissionDefinition } from '../permission
 import { RoleGraphPagination } from './RolePermissionGraph'
 import { RoleGrantGraph, type GrantNode } from './RoleGrantGraph'
 import { RoleGrantFields } from './RoleGrantFields'
-import { RoleWorkspacePanels } from './RoleWorkspacePanels'
+import { RoleStageSplit as RoleWorkspacePanels } from './RolePanorama'
 import type { GrantTimeZone } from './grant-time'
 import {
   canManageRoleRelations,

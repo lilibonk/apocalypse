@@ -1,5 +1,5 @@
 /**
- * 用户管理页 schema（DynaLayer 渲染）——与 _dev/user-handwritten.tsx 手写版互为回归对照。
+ * 用户管理页 schema（DynaLayer 渲染）。
  *
  * 功能映射（对照手写版）：
  * - 关键词搜索        → search[0]（GET /system/users/page?keyword=）

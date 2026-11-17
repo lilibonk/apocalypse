@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -91,6 +92,14 @@ public class DictController {
   @PreAuthorize("hasAuthority('system:dict:list')")
   public List<DictDataResp> getByType(@PathVariable String type) {
     return dictService.getByType(type);
+  }
+
+  /** 按多个字典类型批量取全部未删除字典项（含启用与停用，供字典样本册一次拉取）。 */
+  @GetMapping("/data/batch")
+  @PreAuthorize("hasAuthority('system:dict:list')")
+  public Map<String, List<DictDataResp>> getBatchByTypes(
+      @RequestParam(required = false) List<String> dictTypes) {
+    return dictService.getBatchByTypes(dictTypes);
   }
 
   /** 新增字典数据，返回主键。 */

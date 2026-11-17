@@ -43,6 +43,36 @@ export interface InsightCount {
   enabled: boolean
 }
 
+export interface BusinessDomainSummary {
+  domainKey: string
+  moduleKey: string | null
+  moduleEnabled: boolean
+  totalPermissions: number
+}
+
+export type RoleDomainAccessLevel = 'GOVERN' | 'READ'
+
+export interface RoleDomainAccess {
+  domainKey: string
+  activeGrantCount: number
+  writeGrantCount: number
+  accessLevel: RoleDomainAccessLevel
+}
+
+export interface RoleTopologyNode {
+  roleId: SnowflakeId
+  roleName: string
+  roleKey: string
+  status: number
+  dataScope: string
+  memberCount: number
+  visibleMemberCount: number
+  sampleMembers: InsightUser[]
+  activeGrantCount: number
+  navigationCount: number
+  domainAccess: RoleDomainAccess[]
+}
+
 export interface AuthorizationOverview {
   evaluatedAt: string
   usersVisible: boolean
@@ -59,6 +89,8 @@ export interface AuthorizationOverview {
   unassignedNavigation: UnassignedNavigation[]
   roleScopeDistribution: InsightCount[]
   permissionModules: InsightCount[]
+  businessDomains?: BusinessDomainSummary[]
+  roleTopology?: RoleTopologyNode[]
 }
 
 export type GrantState =

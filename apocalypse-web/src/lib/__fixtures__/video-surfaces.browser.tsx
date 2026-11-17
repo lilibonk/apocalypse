@@ -402,7 +402,12 @@ http.defaults.adapter = async (config) => {
         config,
         data: { code: 40900, message: '当前账号暂时不能强退' },
       }
-    const target = onlineRows.find((row) => path.endsWith(`/${row.jti}`))
+    const accountPrefix = '/system/online-users/user/'
+    const byAccount = path.startsWith(accountPrefix)
+    const username = byAccount ? decodeURIComponent(path.slice(accountPrefix.length)) : undefined
+    const target = byAccount
+      ? onlineRows.find((row) => row.username === username)
+      : onlineRows.find((row) => path.endsWith(`/${row.jti}`))
     if (!target)
       return {
         status: 200,
@@ -411,8 +416,11 @@ http.defaults.adapter = async (config) => {
         config,
         data: { code: 40400, message: '会话已结束' },
       }
-    for (let index = onlineRows.length - 1; index >= 0; index--)
-      if (onlineRows[index].username === target.username) onlineRows.splice(index, 1)
+    for (let index = onlineRows.length - 1; index >= 0; index--) {
+      const row = onlineRows[index]
+      if (byAccount ? row.username === target.username : row.jti === target.jti)
+        onlineRows.splice(index, 1)
+    }
     saves = {
       ...saves,
       count: saves.count + 1,
@@ -577,7 +585,9 @@ const fixture = (
         {
           pathname: `/fixture/${surface}`,
           state: params.has('context')
-            ? { workspaceContext: { kind: 'user', userId: 'u12', keyword: 'account-12' } }
+            ? {
+                entityIntent: { kind: 'user', id: 'u12', label: 'account-12', triggerPulse: true },
+              }
             : null,
         },
       ]}

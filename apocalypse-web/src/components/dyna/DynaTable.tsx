@@ -62,6 +62,8 @@ export interface DynaTableProps {
   selectable?: boolean
   selectedKeys?: readonly string[]
   onSelectedKeysChange?: (keys: string[]) => void
+  /** Optional whole-row click handler for opening synchronized detail sheets/inspectors. */
+  onRowClick?: (row: Record<string, unknown>, key: string) => void
 }
 
 function CellValue({ column, row }: { column: DynaColumn; row: Record<string, unknown> }) {
@@ -69,6 +71,7 @@ function CellValue({ column, row }: { column: DynaColumn; row: Record<string, un
   const raw = row[column.key]
 
   const content = (() => {
+    if (column.render) return column.render(raw, row)
     if (column.type === 'dict' && column.dictType) {
       return <DictTag type={column.dictType} value={raw as string | number | null | undefined} />
     }
@@ -203,6 +206,7 @@ const DynaTableRow = memo(function DynaTableRow({
   selectable,
   selected,
   onToggleSelect,
+  onRowClick,
 }: {
   row: Record<string, unknown>
   rowKeyValue: string
@@ -215,16 +219,18 @@ const DynaTableRow = memo(function DynaTableRow({
   selectable: boolean
   selected: boolean
   onToggleSelect?: (key: string) => void
+  onRowClick?: (row: Record<string, unknown>, key: string) => void
 }) {
   const t = useDynaText()
   const hasActions = Boolean(actions)
   const actionsFrozen = hasActions ? 0 : null
   return (
     <TableRow
-      className="group [&>td:first-child]:font-medium"
+      className={cn('group [&>td:first-child]:font-medium', onRowClick && 'cursor-pointer')}
       data-origin-active={active ? '' : undefined}
       data-mutated-pulse={mutated ? 'true' : undefined}
       data-just-mutated={mutated ? 'true' : undefined}
+      onClick={onRowClick ? () => onRowClick(row, rowKeyValue) : undefined}
     >
       {selectable && (
         <TableCell className="w-10">
@@ -269,17 +275,20 @@ const DynaTableCard = memo(function DynaTableCard({
   row,
   columns,
   actions,
+  active,
   mutated,
 }: {
   row: Record<string, unknown>
   columns: DynaColumn[]
   actions: DynaTableProps['actions']
+  active: boolean
   mutated: boolean
 }) {
   const t = useDynaText()
   return (
     <article
       className="space-y-3 p-4"
+      data-origin-active={active ? '' : undefined}
       data-mutated-pulse={mutated ? 'true' : undefined}
       data-just-mutated={mutated ? 'true' : undefined}
     >
@@ -332,6 +341,7 @@ export const DynaTable = memo(function DynaTable({
   selectable = false,
   selectedKeys = [],
   onSelectedKeysChange,
+  onRowClick,
 }: DynaTableProps) {
   const t = useDynaText()
   const canShowData = rows !== undefined && !isResourceDenied(error)
@@ -515,6 +525,7 @@ export const DynaTable = memo(function DynaTable({
                           selectable={selectable}
                           selected={selectedSet.has(keyStr)}
                           onToggleSelect={handleToggleRow}
+                          onRowClick={onRowClick}
                         />
                       )
                     })}
@@ -531,6 +542,7 @@ export const DynaTable = memo(function DynaTable({
                       row={row}
                       columns={columns}
                       actions={actions}
+                      active={activeRowKey !== null && keyStr === activeRowKey}
                       mutated={mutatedRowKey !== null && keyStr === mutatedRowKey}
                     />
                   )

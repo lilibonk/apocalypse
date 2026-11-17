@@ -1,8 +1,8 @@
 import { Eye, RotateCcw, Save } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { PulseIndicator } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { PixelScale } from '@/effects/PixelWave'
 
 import './draft.css'
 
@@ -14,6 +14,7 @@ export function DraftBar({
   count,
   saving,
   canSave = true,
+  conflictCount = 0,
   onReview,
   onDiscard,
   onSave,
@@ -21,18 +22,20 @@ export function DraftBar({
   count: number
   saving: boolean
   canSave?: boolean
+  conflictCount?: number
   onReview: () => void
   onDiscard: () => void
   onSave: () => void
 }) {
   const { t } = useTranslation()
-  if (count <= 0) return null
+  if (count <= 0 && conflictCount <= 0) return null
   return (
     <div className="draft-bar-anchor">
       <section
         role="region"
         aria-label={t('draft.region')}
         data-slot="draft-bar"
+        data-has-conflicts={conflictCount > 0 ? 'true' : undefined}
         className="draft-bar"
       >
         <span className="draft-bar-dot" aria-hidden="true" />
@@ -56,7 +59,7 @@ export function DraftBar({
           </Button>
           <Button size="sm" disabled={saving || !canSave} onClick={onSave}>
             {saving ? (
-              <PixelScale variant="inline" tone="current" />
+              <PulseIndicator variant="inline" tone="current" />
             ) : (
               <Save className="size-3.5" aria-hidden="true" />
             )}

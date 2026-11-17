@@ -7,7 +7,6 @@
 import { submitForm } from '@/lib/form-submit'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -29,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { PixelOrb, type OrbState } from '@/effects/PixelOrb'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { useAuthStore } from '@/stores/auth'
 import { useSettings, useSettingsStore, type Language, type ThemeMode } from '@/stores/settings'
 
@@ -41,10 +41,10 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useAuthStore((state) => state.login)
-  const { motionEnabled, language, theme } = useSettings()
+  const { language, theme } = useSettings()
   const setLanguage = useSettingsStore((state) => state.setLanguage)
   const setTheme = useSettingsStore((state) => state.setTheme)
-  const reducedMotion = useReducedMotion()
+  const motionAllowed = useMotionPreference()
   const [submitting, setSubmitting] = useState(false)
   const [orbState, setOrbState] = useState<OrbState>('idle')
   /** 密码框聚焦 → 向导闭眼回避（peek-a-boo）；仅覆盖 idle 态，不盖 waiting/success/error。 */
@@ -93,7 +93,7 @@ export default function LoginPage() {
       const acceptedEpoch = useAuthStore.getState().sessionEpoch
       setOrbState('success')
       // 动效可用时短暂停留展示 success 态，否则立即跳转
-      if (motionEnabled && !reducedMotion) {
+      if (motionAllowed) {
         await new Promise((resolve) =>
           window.setTimeout(resolve, stateMotion.morph.duration * 1000),
         )
@@ -115,26 +115,27 @@ export default function LoginPage() {
 
   return (
     <div className="relative grid min-h-svh gap-6 bg-background p-4 sm:p-6 lg:grid-cols-2 lg:gap-0">
+      <LoginEnvPill
+        theme={theme}
+        language={language}
+        onThemeChange={setTheme}
+        onLanguageChange={setLanguage}
+      />
+
       {/* 实色品牌舞台保留独立 Milk Cloud 接口；正文不叠加玻璃。 */}
       <section className="brand-slime-stage relative hidden min-w-0 overflow-hidden rounded-panel lg:flex lg:flex-col lg:justify-between lg:p-8 xl:p-10">
         <header className="relative z-10">
           <BrandSignature />
         </header>
 
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 py-4">
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 py-4">
           <div className="group/mascot flex flex-col items-center">
             <PixelOrb state={displayState} size={384} gaze />
-            <p className="invisible text-xs text-muted-foreground group-has-[[data-backend=webgpu]]/mascot:visible">
-              {t('brandSlime.hint')}
-            </p>
           </div>
 
           <div className="max-w-lg text-center">
             <p className="text-2xl font-semibold leading-tight tracking-tight text-balance xl:text-3xl">
-              <TaglineReveal text={t('login.tagline')} animate={motionEnabled && !reducedMotion} />
-            </p>
-            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-              {pageT('description')}
+              <TaglineReveal text={t('login.tagline')} animate={motionAllowed} />
             </p>
           </div>
         </div>
@@ -143,14 +144,13 @@ export default function LoginPage() {
       <section className="relative flex min-w-0 items-center justify-center px-2 py-6 sm:px-8 lg:px-12">
         <div className="w-full max-w-sm">
           {/* 紧凑移动品牌头让输入与提交先进入视野，小角色沿原接口静态降级。 */}
-          <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
+          <div className="brand-slime-stage mb-8 flex items-center justify-between gap-4 rounded-panel border border-border-subtle p-4 lg:hidden">
             <BrandSignature />
             <PixelOrb state={displayState} size={64} />
           </div>
 
-          <div className="mb-8 space-y-2">
+          <div className="mb-8">
             <h1 className="text-2xl font-semibold tracking-tight">{t('login.welcome')}</h1>
-            <p className="text-sm text-muted-foreground">{pageT('subtitle')}</p>
           </div>
 
           <Form {...form}>
@@ -199,68 +199,69 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <LoginSubmitButton phase={submitPhase} morph={motionEnabled && !reducedMotion} />
+              <LoginSubmitButton phase={submitPhase} morph={motionAllowed} />
             </form>
           </Form>
-
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">{pageT('accessNote')}</p>
-
-          {/* 登录前可直接修正全局主题与语言，避免登出后落入不可调整的外观状态。 */}
-          <div className="mt-8 space-y-3 border-t border-border pt-5 text-xs text-muted-foreground">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span>{pageT('theme')}</span>
-              <div
-                role="group"
-                aria-label={pageT('theme')}
-                className="flex items-center gap-1 rounded-lg bg-muted p-1"
-              >
-                {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={theme === mode}
-                    onClick={() => setTheme(mode)}
-                    className={cn(
-                      'min-h-9 rounded-md px-3 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      theme === mode && 'bg-card font-medium text-foreground shadow-sm',
-                    )}
-                  >
-                    {mode === 'light'
-                      ? t('common.浅色', { defaultValue: '浅色' })
-                      : mode === 'dark'
-                        ? t('common.深色', { defaultValue: '深色' })
-                        : t('common.跟随系统', { defaultValue: '跟随系统' })}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span>{pageT('language')}</span>
-              <div
-                role="group"
-                aria-label={pageT('language')}
-                className="flex items-center gap-1 rounded-lg bg-muted p-1"
-              >
-                {(['zh', 'en'] as Language[]).map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    aria-pressed={language === lang}
-                    onClick={() => setLanguage(lang)}
-                    className={cn(
-                      'min-h-9 rounded-md px-3 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      language === lang && 'bg-card font-medium text-foreground shadow-sm',
-                    )}
-                  >
-                    {lang === 'zh' ? '中文' : 'English'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </section>
+    </div>
+  )
+}
+
+function LoginEnvPill({
+  theme,
+  language,
+  onThemeChange,
+  onLanguageChange,
+}: {
+  theme: ThemeMode
+  language: Language
+  onThemeChange: (mode: ThemeMode) => void
+  onLanguageChange: (lang: Language) => void
+}) {
+  const { t: pageT } = useTranslation('login-page')
+  return (
+    <div
+      data-slot="login-env-pill"
+      className="fixed top-4 right-4 z-20 flex flex-wrap items-center gap-1.5 rounded-full border border-border-subtle bg-card/85 p-1 text-xs text-muted-foreground shadow-floating backdrop-blur-md"
+    >
+      <div role="group" aria-label={pageT('theme')} className="flex items-center gap-0.5">
+        {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            aria-pressed={theme === mode}
+            onClick={() => onThemeChange(mode)}
+            className={cn(
+              'min-h-7 rounded-full px-2.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              theme === mode && 'bg-muted font-medium text-foreground shadow-xs',
+            )}
+          >
+            {mode === 'light'
+              ? pageT('themeLight')
+              : mode === 'dark'
+                ? pageT('themeDark')
+                : pageT('themeSystem')}
+          </button>
+        ))}
+      </div>
+      <span aria-hidden="true" className="h-3.5 w-px bg-border-subtle" />
+      <div role="group" aria-label={pageT('language')} className="flex items-center gap-0.5">
+        {(['zh', 'en'] as Language[]).map((lang) => (
+          <button
+            key={lang}
+            type="button"
+            aria-pressed={language === lang}
+            onClick={() => onLanguageChange(lang)}
+            className={cn(
+              'min-h-7 rounded-full px-2.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              language === lang && 'bg-muted font-medium text-foreground shadow-xs',
+            )}
+          >
+            {lang === 'zh' ? pageT('langZh') : pageT('langEn')}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

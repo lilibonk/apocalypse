@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
+import { EntityPill, LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { StickyCompactRailLayout } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,8 +31,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePerm } from '@/hooks/usePerm'
+import { cn } from '@/lib/utils'
 
+import { CalendarConfirm } from '../calendar-confirm'
 import type { CalendarRecord, CalendarRole } from '../calendar.api'
+import { toErrorMessage } from '../calendar.format'
 import {
   CalendarPageFrame,
   CalendarPagination,
@@ -40,8 +45,7 @@ import {
   InlineError,
   StateBadge,
 } from '../calendar.ui'
-import { toErrorMessage } from '../calendar.format'
-import { CalendarConfirm } from '../calendar-confirm'
+import { useCalendarDenial } from '../use-calendar-denial'
 
 type CalendarForm = {
   calendarKey: string
@@ -73,9 +77,14 @@ function CalendarManagementPage() {
   const [memberRole, setMemberRole] = useState<CalendarRole>('READER')
   const [memberPaging, setMemberPaging] = useState({ calendarId: '', page: 1 })
 
+  const { intent } = useEntityIntent('calendar')
+  const intentTargetId = intent?.focusTargetId || intent?.id
+
   const calendarsQuery = useQuery(calendarQueries.contexts({}))
-  const selectedId = calendarsQuery.data?.some((calendar) => calendar.id === calendarSelection)
-    ? calendarSelection
+  const candidateSelection =
+    calendarSelection || (intentTargetId && intentTargetId !== 'list' ? intentTargetId : '')
+  const selectedId = calendarsQuery.data?.some((calendar) => calendar.id === candidateSelection)
+    ? candidateSelection
     : (calendarsQuery.data?.[0]?.id ?? '')
   const selected = calendarsQuery.data?.find((calendar) => calendar.id === selectedId) ?? null
   const canManageSelected = selected?.kind === 'MANAGED' && selected.currentUserRole === 'PUBLISHER'
@@ -218,232 +227,262 @@ function CalendarManagementPage() {
         loading={calendarsQuery.isLoading}
         fetching={calendarsQuery.isFetching}
       />
-      <div className="grid items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <Card className="gap-4 py-4">
-          <CardHeader className="px-4">
-            <CardTitle>{t('calendars.contexts')}</CardTitle>
-            <CardDescription>{t('calendars.contextsDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 px-4">
-            {(calendarsQuery.data ?? []).map((calendar) => (
-              <button
-                key={calendar.id}
-                type="button"
-                onClick={() => {
-                  setCalendarSelection(calendar.id)
-                  setMemberOpen(false)
-                  setMemberUserId('')
-                }}
-                className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
-                data-selected={selectedId === calendar.id}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium">{calendar.name}</span>
-                  <Badge variant="outline">{t(`calendarKinds.${calendar.kind}`)}</Badge>
-                </span>
-                <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <StateBadge value={calendar.state} />
-                  {calendar.currentUserRole && t(`roles.${calendar.currentUserRole}`)}
-                </span>
-              </button>
-            ))}
+      <StickyCompactRailLayout
+        railLabel={t('calendars.contexts')}
+        railWidth="locator"
+        railHeader={
+          <div className="px-1 pb-1">
+            <h2 className="text-sm font-semibold">{t('calendars.contexts')}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('calendars.contextsDescription')}
+            </p>
+          </div>
+        }
+        railContent={
+          <div className="space-y-1.5">
+            {(calendarsQuery.data ?? []).map((calendar) => {
+              const hasParent =
+                calendar.parentId != null &&
+                (calendarsQuery.data ?? []).some((c) => c.id === calendar.parentId)
+              return (
+                <button
+                  key={calendar.id}
+                  type="button"
+                  onClick={() => {
+                    setCalendarSelection(calendar.id)
+                    setMemberOpen(false)
+                    setMemberUserId('')
+                  }}
+                  className={cn(
+                    'w-full rounded-md border border-border p-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-[selected=true]:border-primary data-[selected=true]:bg-primary/5',
+                    hasParent && 'ml-3 w-[calc(100%-0.75rem)] border-l-2',
+                  )}
+                  data-selected={selectedId === calendar.id}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium">{calendar.name}</span>
+                    <Badge variant="outline">{t(`calendarKinds.${calendar.kind}`)}</Badge>
+                  </span>
+                  <span className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <StateBadge value={calendar.state} />
+                    {calendar.currentUserRole && t(`roles.${calendar.currentUserRole}`)}
+                  </span>
+                </button>
+              )
+            })}
             {calendarsQuery.isSuccess && calendarsQuery.data.length === 0 && (
               <DataEmpty>{t('calendars.noVisible')}</DataEmpty>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        }
+        stageClassName="space-y-5"
+      >
+        {!selected ? (
+          calendarsQuery.isSuccess && <DataEmpty>{t('calendars.choose')}</DataEmpty>
+        ) : (
+          <>
+            <LivingContextBar source={intent?.source} title="日历脉络">
+              {selected.parentId &&
+                calendarsQuery.data?.find((item) => item.id === selected.parentId) && (
+                  <EntityPill
+                    kind="calendar"
+                    id={selected.parentId}
+                    label={`上级：${calendarsQuery.data.find((item) => item.id === selected.parentId)!.name}`}
+                  />
+                )}
+              {(membersQuery.data?.list ?? []).slice(0, 4).map((member) => (
+                <EntityPill
+                  key={member.userId}
+                  kind="user"
+                  id={member.userId}
+                  label={member.nickname || member.username}
+                />
+              ))}
+            </LivingContextBar>
 
-        <div className="space-y-5">
-          {!selected ? (
-            calendarsQuery.isSuccess && <DataEmpty>{t('calendars.choose')}</DataEmpty>
-          ) : (
-            <>
+            <Card className="gap-4 py-4">
+              <CardHeader className="px-4 sm:px-6">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                  <div>
+                    <CardTitle>{selected.name}</CardTitle>
+                    <CardDescription>{t(`calendarKinds.${selected.kind}`)}</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StateBadge value={selected.state} />
+                    {selected.currentUserRole && (
+                      <Badge>{t(`roles.${selected.currentUserRole}`)}</Badge>
+                    )}
+                    {canManageSelected && (
+                      <>
+                        <Perm perm="calendar:calendar:edit">
+                          <Button variant="outline" size="sm" onClick={() => openEdit(selected)}>
+                            <Pencil />
+                            {t('calendars.edit')}
+                          </Button>
+                        </Perm>
+                        <Perm perm="calendar:calendar:archive">
+                          <CalendarConfirm
+                            title={t('calendars.archive')}
+                            description={t('calendars.archiveWarning')}
+                            reviewKey={JSON.stringify([selected.id, selected.version])}
+                            disabled={archiveMutation.isPending}
+                            onConfirm={() => archiveMutation.mutate(selected.id)}
+                            trigger={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={
+                                  selected.state === 'ARCHIVED' || archiveMutation.isPending
+                                }
+                              >
+                                <Archive />
+                                {t('calendars.archive')}
+                              </Button>
+                            }
+                          >
+                            <p>
+                              {selected.name} · {selected.calendarKey}
+                            </p>
+                          </CalendarConfirm>
+                        </Perm>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-3 px-4 text-sm sm:grid-cols-2 sm:px-6">
+                {selected.kind === 'SYSTEM' && (
+                  <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground sm:col-span-2">
+                    {t('calendars.systemSource')}
+                  </p>
+                )}
+                <div className="rounded-md border border-border p-3">
+                  <div className="text-xs text-muted-foreground">{t('calendars.regionZone')}</div>
+                  <div className="mt-1 font-medium">
+                    {selected.regionCode} · {selected.zoneId}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <div className="text-xs text-muted-foreground">{t('calendars.parentId')}</div>
+                  <div className="mt-1 font-medium">
+                    {calendarsQuery.data?.find((item) => item.id === selected.parentId)?.name ??
+                      '—'}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <CalendarTrace>
+                    <p>
+                      {selected.calendarKey} ·{' '}
+                      {t('workspace.version', { version: selected.version })}
+                    </p>
+                  </CalendarTrace>
+                </div>
+              </CardContent>
+            </Card>
+
+            {canReadMembers && canManageSelected && (
               <Card className="gap-4 py-4">
                 <CardHeader className="px-4 sm:px-6">
-                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <CardTitle>{selected.name}</CardTitle>
-                      <CardDescription>{t(`calendarKinds.${selected.kind}`)}</CardDescription>
+                      <CardTitle>{t('calendars.members')}</CardTitle>
+                      <CardDescription>{t('calendars.membersDescription')}</CardDescription>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StateBadge value={selected.state} />
-                      {selected.currentUserRole && (
-                        <Badge>{t(`roles.${selected.currentUserRole}`)}</Badge>
-                      )}
-                      {canManageSelected && (
-                        <>
-                          <Perm perm="calendar:calendar:edit">
-                            <Button variant="outline" size="sm" onClick={() => openEdit(selected)}>
-                              <Pencil />
-                              {t('calendars.edit')}
-                            </Button>
-                          </Perm>
-                          <Perm perm="calendar:calendar:archive">
-                            <CalendarConfirm
-                              title={t('calendars.archive')}
-                              description={t('calendars.archiveWarning')}
-                              reviewKey={JSON.stringify([selected.id, selected.version])}
-                              disabled={archiveMutation.isPending}
-                              onConfirm={() => archiveMutation.mutate(selected.id)}
-                              trigger={
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={
-                                    selected.state === 'ARCHIVED' || archiveMutation.isPending
-                                  }
-                                >
-                                  <Archive />
-                                  {t('calendars.archive')}
-                                </Button>
-                              }
-                            >
-                              <p>
-                                {selected.name} · {selected.calendarKey}
-                              </p>
-                            </CalendarConfirm>
-                          </Perm>
-                        </>
-                      )}
-                    </div>
+                    <Perm perm="calendar:member:edit">
+                      <Button variant="outline" size="sm" onClick={() => setMemberOpen(true)}>
+                        <UserPlus />
+                        {t('calendars.addMember')}
+                      </Button>
+                    </Perm>
                   </div>
                 </CardHeader>
-                <CardContent className="grid gap-3 px-4 text-sm sm:grid-cols-2 sm:px-6">
-                  {selected.kind === 'SYSTEM' && (
-                    <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground sm:col-span-2">
-                      {t('calendars.systemSource')}
-                    </p>
+                <CardContent className="space-y-2 px-4 sm:px-6">
+                  <CalendarQueryStatus
+                    loading={membersQuery.isLoading}
+                    fetching={membersQuery.isFetching}
+                  />
+                  {membersQuery.error && (
+                    <InlineError message={toErrorMessage(membersQuery.error)} />
                   )}
-                  <div className="rounded-md border border-border p-3">
-                    <div className="text-xs text-muted-foreground">{t('calendars.regionZone')}</div>
-                    <div className="mt-1 font-medium">
-                      {selected.regionCode} · {selected.zoneId}
+                  {(membersQuery.data?.list ?? []).map((member) => (
+                    <div
+                      key={member.userId}
+                      className="flex flex-col justify-between gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {member.nickname || member.username}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {member.username} · {member.userId}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge>{t(`roles.${member.role}`)}</Badge>
+                        <StateBadge value={member.state} />
+                        <Perm perm="calendar:member:edit">
+                          <CalendarConfirm
+                            title={t('calendars.removeMember', { username: member.username })}
+                            description={t('calendars.removeMemberWarning')}
+                            reviewKey={JSON.stringify([
+                              selectedId,
+                              member.userId,
+                              member.version,
+                              member.role,
+                            ])}
+                            disabled={removeMemberMutation.isPending}
+                            onConfirm={() => removeMemberMutation.mutate(member.userId)}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t('calendars.removeMember', {
+                                  username: member.username,
+                                })}
+                                disabled={removeMemberMutation.isPending}
+                              >
+                                <Trash2 className="text-destructive" />
+                              </Button>
+                            }
+                          >
+                            <p>
+                              {selected.name} · {member.username} · {t(`roles.${member.role}`)}
+                            </p>
+                          </CalendarConfirm>
+                        </Perm>
+                      </div>
                     </div>
-                  </div>
-                  <div className="rounded-md border border-border p-3">
-                    <div className="text-xs text-muted-foreground">{t('calendars.parentId')}</div>
-                    <div className="mt-1 font-medium">
-                      {calendarsQuery.data?.find((item) => item.id === selected.parentId)?.name ??
-                        '—'}
-                    </div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <CalendarTrace>
-                      <p>
-                        {selected.calendarKey} ·{' '}
-                        {t('workspace.version', { version: selected.version })}
-                      </p>
-                    </CalendarTrace>
-                  </div>
+                  ))}
+                  {membersQuery.isSuccess && membersQuery.data.list.length === 0 && (
+                    <DataEmpty>
+                      {t(
+                        membersQuery.data.total > 0 ? 'workspace.emptyPage' : 'calendars.noMembers',
+                      )}
+                    </DataEmpty>
+                  )}
+                  {membersQuery.data && (
+                    <CalendarPagination
+                      page={memberPage}
+                      size={20}
+                      total={membersQuery.data.total}
+                      fetching={
+                        membersQuery.isFetching ||
+                        saveMemberMutation.isPending ||
+                        removeMemberMutation.isPending
+                      }
+                      onPage={(page) => {
+                        setMemberPaging({ calendarId: selectedId, page })
+                        setMemberOpen(false)
+                        setMemberUserId('')
+                      }}
+                    />
+                  )}
                 </CardContent>
               </Card>
-
-              {canReadMembers && canManageSelected && (
-                <Card className="gap-4 py-4">
-                  <CardHeader className="px-4 sm:px-6">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <CardTitle>{t('calendars.members')}</CardTitle>
-                        <CardDescription>{t('calendars.membersDescription')}</CardDescription>
-                      </div>
-                      <Perm perm="calendar:member:edit">
-                        <Button variant="outline" size="sm" onClick={() => setMemberOpen(true)}>
-                          <UserPlus />
-                          {t('calendars.addMember')}
-                        </Button>
-                      </Perm>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2 px-4 sm:px-6">
-                    <CalendarQueryStatus
-                      loading={membersQuery.isLoading}
-                      fetching={membersQuery.isFetching}
-                    />
-                    {membersQuery.error && (
-                      <InlineError message={toErrorMessage(membersQuery.error)} />
-                    )}
-                    {(membersQuery.data?.list ?? []).map((member) => (
-                      <div
-                        key={member.userId}
-                        className="flex flex-col justify-between gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center"
-                      >
-                        <div>
-                          <div className="text-sm font-medium">
-                            {member.nickname || member.username}
-                          </div>
-                          <div className="mt-1 font-mono text-xs text-muted-foreground">
-                            {member.username} · {member.userId}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge>{t(`roles.${member.role}`)}</Badge>
-                          <StateBadge value={member.state} />
-                          <Perm perm="calendar:member:edit">
-                            <CalendarConfirm
-                              title={t('calendars.removeMember', { username: member.username })}
-                              description={t('calendars.removeMemberWarning')}
-                              reviewKey={JSON.stringify([
-                                selectedId,
-                                member.userId,
-                                member.version,
-                                member.role,
-                              ])}
-                              disabled={removeMemberMutation.isPending}
-                              onConfirm={() => removeMemberMutation.mutate(member.userId)}
-                              trigger={
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t('calendars.removeMember', {
-                                    username: member.username,
-                                  })}
-                                  disabled={removeMemberMutation.isPending}
-                                >
-                                  <Trash2 className="text-destructive" />
-                                </Button>
-                              }
-                            >
-                              <p>
-                                {selected.name} · {member.username} · {t(`roles.${member.role}`)}
-                              </p>
-                            </CalendarConfirm>
-                          </Perm>
-                        </div>
-                      </div>
-                    ))}
-                    {membersQuery.isSuccess && membersQuery.data.list.length === 0 && (
-                      <DataEmpty>
-                        {t(
-                          membersQuery.data.total > 0
-                            ? 'workspace.emptyPage'
-                            : 'calendars.noMembers',
-                        )}
-                      </DataEmpty>
-                    )}
-                    {membersQuery.data && (
-                      <CalendarPagination
-                        page={memberPage}
-                        size={20}
-                        total={membersQuery.data.total}
-                        fetching={
-                          membersQuery.isFetching ||
-                          saveMemberMutation.isPending ||
-                          removeMemberMutation.isPending
-                        }
-                        onPage={(page) => {
-                          setMemberPaging({ calendarId: selectedId, page })
-                          setMemberOpen(false)
-                          setMemberUserId('')
-                        }}
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+            )}
+          </>
+        )}
+      </StickyCompactRailLayout>
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent>
@@ -592,4 +631,3 @@ function FormInput({
 export default function CalendarModulePage() {
   return <ModuleAccess scope={calendarScope} component={CalendarManagementPage} />
 }
-import { useCalendarDenial } from '../use-calendar-denial'

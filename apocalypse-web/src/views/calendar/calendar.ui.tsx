@@ -29,26 +29,24 @@ import type { CalendarRecord } from './calendar.api'
 
 export function CalendarPageFrame({
   title,
-  description,
   actions,
   children,
 }: {
   title: string
-  description: string
+  description?: string
   actions?: ReactNode
   children: ReactNode
 }) {
   return (
-    <div data-slot="calendar-page" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
-      <PageHeader title={title} description={description} />
-      {actions && (
-        <div
-          data-slot="calendar-toolbar"
-          className="flex min-w-0 flex-wrap items-end gap-3 border-b border-border pb-4"
-        >
-          {actions}
-        </div>
-      )}
+    <div data-slot="calendar-page" className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 border-b border-border-subtle pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <PageHeader title={title} />
+        {actions && (
+          <div data-slot="calendar-toolbar" className="flex min-w-0 flex-wrap items-end gap-2.5">
+            {actions}
+          </div>
+        )}
+      </div>
       <div
         data-slot="calendar-workspace"
         className="min-w-0 space-y-4 [&_[data-slot=card]]:min-w-0 [&_[data-slot=card]]:shadow-none [&_[data-slot=card-header]]:border-b [&_[data-slot=card-header]]:border-border [&_[data-slot=card-header]]:pb-3 [&_[data-slot=card-title]]:text-base"
@@ -78,8 +76,10 @@ export function CalendarPicker({
     ? calendars.filter((calendar) => roles.includes(calendar.currentUserRole))
     : calendars
   return (
-    <div className="grid w-full min-w-0 gap-1.5 sm:w-64">
-      <Label htmlFor={id}>{label ?? t('businessCalendar')}</Label>
+    <div className="grid w-full min-w-0 gap-1 sm:w-56">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label ?? t('businessCalendar')}
+      </Label>
       <FieldSelect
         id={id}
         disabled={options.length === 0}
@@ -216,7 +216,7 @@ export function CalendarPagination({
   const pages = Math.max(1, Math.ceil(total / size))
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-      <p className="text-xs tabular-nums text-muted-foreground">
+      <p className="text-xs text-muted-foreground tabular-nums">
         {t('workspace.pageRange', {
           from: total === 0 ? 0 : Math.min((page - 1) * size + 1, total),
           to: Math.min(page * size, total),
@@ -298,7 +298,9 @@ export function FieldPair({
       <div className="text-sm font-medium sm:col-span-2">{label}</div>
       <div>
         <div className="text-xs text-muted-foreground">{t('systemBaseline')}</div>
-        <div className="mt-1 text-sm">{baseline || '—'}</div>
+        <div className={cn('mt-1 text-sm', changed && 'draft-original text-muted-foreground')}>
+          {baseline || '—'}
+        </div>
       </div>
       <div className={cn(changed && 'text-brand-text')}>
         <div className="text-xs text-muted-foreground">{t('effectiveValue')}</div>

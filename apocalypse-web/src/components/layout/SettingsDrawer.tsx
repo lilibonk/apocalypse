@@ -10,6 +10,10 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MotionCollapse } from '@/components/MotionCollapse'
+import { PulseIndicator } from '@/components/motion'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -17,10 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { PixelScale } from '@/effects/PixelWave'
 import { PixelWaveLab } from '@/effects/PixelWave/PixelWaveLab'
 import { cn } from '@/lib/utils'
 import {
@@ -48,7 +49,10 @@ function OptionRow<T extends string>({
   labels: Record<T, string>
 }) {
   return (
-    <div className="flex gap-1 rounded-md border border-border p-0.5">
+    <div
+      data-slot="segmented-control"
+      className="inline-flex h-9 w-full items-center gap-0.5 rounded-control bg-muted p-1"
+    >
       {options.map((option) => (
         <button
           key={option}
@@ -56,10 +60,10 @@ function OptionRow<T extends string>({
           aria-pressed={option === value}
           onClick={() => onChange(option)}
           className={cn(
-            'flex-1 rounded px-2 py-1.5 text-xs transition-colors',
+            'flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
             option === value
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              ? 'bg-card text-foreground shadow-surface'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {labels[option]}
@@ -93,6 +97,13 @@ const ACCENT_SWATCH: Record<Accent, string> = {
   mono: 'bg-neutral-800 dark:bg-neutral-200',
 }
 
+function isOsReducedMotionActive(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 export function SettingsDrawer({
   open,
   onOpenChange,
@@ -106,6 +117,7 @@ export function SettingsDrawer({
   const [labOpen, setLabOpen] = useState(false)
   const motionId = useId()
   const motionDescriptionId = `${motionId}-description`
+  const osReducedMotion = isOsReducedMotionActive()
   const ct = (key: string) => t(`common.${key}`, { defaultValue: key })
 
   return (
@@ -140,23 +152,34 @@ export function SettingsDrawer({
           </Section>
 
           {isCapabilityExposed('motion') && (
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <Label htmlFor={motionId}>
-                  {t('common.interfaceMotion', { defaultValue: '界面动画' })}
-                </Label>
-                <p id={motionDescriptionId} className="text-xs leading-5 text-muted-foreground">
-                  {t('common.interfaceMotionDescription', {
-                    defaultValue: '关闭后直接呈现变化结果；始终遵循系统的减少动态效果设置。',
-                  })}
-                </p>
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={motionId}>
+                      {t('common.interfaceMotion', { defaultValue: '界面动画' })}
+                    </Label>
+                    {osReducedMotion && <Badge variant="warning">系统已开启减少动态效果</Badge>}
+                  </div>
+                  <p id={motionDescriptionId} className="text-xs leading-5 text-muted-foreground">
+                    {t('common.interfaceMotionDescription', {
+                      defaultValue: '关闭后直接呈现变化结果；始终遵循系统的减少动态效果设置。',
+                    })}
+                  </p>
+                </div>
+                <Switch
+                  id={motionId}
+                  aria-describedby={motionDescriptionId}
+                  checked={settings.motionEnabled}
+                  onCheckedChange={store.setMotionEnabled}
+                />
               </div>
-              <Switch
-                id={motionId}
-                aria-describedby={motionDescriptionId}
-                checked={settings.motionEnabled}
-                onCheckedChange={store.setMotionEnabled}
-              />
+              {osReducedMotion && (
+                <p className="rounded-control bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                  当前检测到操作系统 prefers-reduced-motion:
+                  reduce，已自动派生为瞬时呈现（data-motion=&quot;off&quot;）。
+                </p>
+              )}
             </div>
           )}
 
@@ -182,7 +205,7 @@ export function SettingsDrawer({
                 >
                   <span className="flex-1">
                     {ct('外观实验室')}
-                    <span className="ml-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+                    <span className="ml-2 font-mono text-xs tracking-wider text-muted-foreground uppercase">
                       Dev only
                     </span>
                   </span>
@@ -207,12 +230,12 @@ export function SettingsDrawer({
                         </p>
                       </div>
 
-                      <Section title={ct('像素音阶')}>
+                      <Section title={ct('脉冲指示器')}>
                         <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
                           <span className="text-xs text-muted-foreground">
                             {ct('加载反馈预览')}
                           </span>
-                          <PixelScale variant="card" />
+                          <PulseIndicator variant="card" />
                         </div>
                       </Section>
 

@@ -1,4 +1,5 @@
-import type { LoginHeatmapCell } from '@/views/system/log/log-insight.api'
+import type { LoginHeatmapCell, LogInsightRange } from '@/views/system/log/log-insight.api'
+import type { LoginStreamFilter } from './login-log.api'
 
 /** Failure concentration rule shown in the legend: at least this many failures … */
 export const FAILURE_MIN = 3
@@ -6,6 +7,13 @@ export const FAILURE_MIN = 3
 export const FAILURE_RATIO = 0.2
 
 export type HeatLevel = 0 | 1 | 2 | 3 | 4
+
+export interface LoginCausalFilter {
+  range: LogInsightRange
+  success?: 0 | 1
+  cell?: { isoWeekday: number; hour: number }
+  bucket?: { label: string; bucketFrom: string; bucketTo: string }
+}
 
 /** Level 0 is a recorded zero; uncovered cells are handled separately and never get a level. */
 export function heatLevel(total: number, max: number): HeatLevel {
@@ -56,5 +64,41 @@ export function moveCell(
       return { row, column: 23 }
     default:
       return null
+  }
+}
+
+/** Convert backend insight timestamp `yyyy-MM-dd HH:mm:ss` into ISO `LocalDateTime` `yyyy-MM-ddTHH:mm:ss`. */
+export function toIsoLocalDateTime(value: string): string {
+  return value.trim().replace(' ', 'T')
+}
+
+export function computeBucketWindow(
+  bucketStart: string,
+  nextStartOrWindowEnd: string,
+): { bucketFrom: string; bucketTo: string } {
+  return {
+    bucketFrom: toIsoLocalDateTime(bucketStart),
+    bucketTo: toIsoLocalDateTime(nextStartOrWindowEnd),
+  }
+}
+
+export function hasActiveCausalFilter(filter: LoginCausalFilter): boolean {
+  return filter.success !== undefined || filter.cell !== undefined || filter.bucket !== undefined
+}
+
+export function buildLoginStreamQuery(
+  keyword: string,
+  filter: LoginCausalFilter,
+): LoginStreamFilter {
+  const trimmed = keyword.trim()
+  const hasDrilldown = hasActiveCausalFilter(filter)
+  return {
+    keyword: trimmed || undefined,
+    success: filter.success,
+    isoWeekday: filter.cell?.isoWeekday,
+    hour: filter.cell?.hour,
+    range: hasDrilldown && !filter.bucket ? filter.range : undefined,
+    bucketFrom: filter.bucket?.bucketFrom,
+    bucketTo: filter.bucket?.bucketTo,
   }
 }

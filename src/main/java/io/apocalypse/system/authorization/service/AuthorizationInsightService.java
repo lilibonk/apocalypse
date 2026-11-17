@@ -6,16 +6,21 @@ import io.apocalypse.framework.capability.CapabilityRegistry;
 import io.apocalypse.framework.security.PermissionActionRegistry;
 import io.apocalypse.framework.security.SecurityUtils;
 import io.apocalypse.system.authorization.dto.response.AuthorizationOverviewResp;
+import io.apocalypse.system.authorization.dto.response.BusinessDomainSummaryResp;
 import io.apocalypse.system.authorization.dto.response.DataScopeResp;
 import io.apocalypse.system.authorization.dto.response.IdleRoleResp;
 import io.apocalypse.system.authorization.dto.response.InsightCountResp;
 import io.apocalypse.system.authorization.dto.response.InsightUserResp;
 import io.apocalypse.system.authorization.dto.response.PermissionHolderRoleResp;
 import io.apocalypse.system.authorization.dto.response.PermissionHoldersResp;
+import io.apocalypse.system.authorization.dto.response.RoleDomainAccessResp;
+import io.apocalypse.system.authorization.dto.response.RoleTopologyNodeResp;
 import io.apocalypse.system.authorization.dto.response.UnassignedNavigationResp;
 import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper;
 import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper.GrantRow;
 import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper.MemberRow;
+import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper.PermissionSummaryRow;
+import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper.RoleCountRow;
 import io.apocalypse.system.authorization.mapper.AuthorizationInsightMapper.RoleRow;
 
 import java.time.Clock;
@@ -25,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,6 +52,14 @@ public class AuthorizationInsightService {
 
   static final int MEMBERS_PER_ROLE = 20;
 
+  static final int TOPOLOGY_SAMPLE_LIMIT = 3;
+
+  private static final List<String> CORE_DOMAIN_KEYS =
+      List.of("identity_org", "rbac_nav", "runtime_config", "security_audit");
+
+  private static final Set<String> READ_ONLY_ACTIONS =
+      Set.of("list", "query", "detail", "view", "export", "overview", "holders");
+
   private final AuthorizationInsightMapper mapper;
 
   private final DataScopeService dataScopeService;
@@ -63,14 +77,58 @@ public class AuthorizationInsightService {
     for (RoleRow role : roles) {
       roleById.put(role.id(), role);
     }
+    Map<String, DomainTotalAcc> domainTotals = new LinkedHashMap<>();
+    for (String coreDomain : CORE_DOMAIN_KEYS) {
+      domainTotals.put(coreDomain, new DomainTotalAcc(coreDomain, null, true));
+    }
+    for (PermissionSummaryRow perm : mapper.allPermissionSummaries()) {
+      String normalizedModule =
+          perm.moduleKey() != null && !perm.moduleKey().isBlank() ? perm.moduleKey().trim() : null;
+      String domainKey = classifyDomainKey(normalizedModule, perm.code());
+      domainTotals.computeIfAbsent(
+              domainKey,
+              key ->
+                  new DomainTotalAcc(
+                      key, normalizedModule, capabilities.isEnabled(normalizedModule)))
+          .totalPermissions++;
+    }
+    List<BusinessDomainSummaryResp> businessDomains =
+        domainTotals.values().stream()
+            .map(
+                acc ->
+                    new BusinessDomainSummaryResp(
+                        acc.domainKey, acc.moduleKey, acc.moduleEnabled, acc.totalPermissions))
+            .toList();
+
     Map<Long, Long> activeGrants = new HashMap<>();
+    Map<Long, Map<String, DomainGrantAcc>> roleDomainGrants = new HashMap<>();
     for (GrantRow grant : mapper.grants()) {
       RoleRow role = roleById.get(grant.roleId());
       if (role != null && "ACTIVE".equals(state(role.status(), grant, now))) {
         activeGrants.merge(grant.roleId(), 1L, Long::sum);
+        String domainKey = classifyDomainKey(grant.moduleKey(), grant.permissionCode());
+        DomainGrantAcc acc =
+            roleDomainGrants
+                .computeIfAbsent(grant.roleId(), key -> new LinkedHashMap<>())
+                .computeIfAbsent(domainKey, key -> new DomainGrantAcc());
+        acc.activeGrantCount++;
+        if (isWriteAction(grant.permissionCode())) {
+          acc.writeGrantCount++;
+        }
       }
     }
+
+    Map<Long, List<MemberRow>> membersByRole = new HashMap<>();
+    for (MemberRow member : mapper.allRoleMembers()) {
+      membersByRole.computeIfAbsent(member.roleId(), key -> new ArrayList<>()).add(member);
+    }
+    Map<Long, Long> navCountsByRole = new HashMap<>();
+    for (RoleCountRow navCount : mapper.navigationCountsByRole()) {
+      navCountsByRole.put(navCount.roleId(), navCount.count());
+    }
+
     List<IdleRoleResp> idle = new ArrayList<>();
+    List<RoleTopologyNodeResp> roleTopology = new ArrayList<>();
     Map<String, Long> scopes = new LinkedHashMap<>();
     long enabledRoles = 0;
     for (RoleRow role : roles) {
@@ -92,6 +150,53 @@ public class AuthorizationInsightService {
                 active,
                 noMembers && noGrants ? "BOTH" : noMembers ? "NO_MEMBERS" : "NO_ACTIVE_GRANTS"));
       }
+      List<MemberRow> allMembers = membersByRole.getOrDefault(role.id(), List.of());
+      List<MemberRow> visibleMembers =
+          users == null
+              ? List.of()
+              : allMembers.stream().filter(m -> users.permits(m.deptId())).toList();
+      List<InsightUserResp> sampleMembers =
+          visibleMembers.stream()
+              .limit(TOPOLOGY_SAMPLE_LIMIT)
+              .map(m -> new InsightUserResp(m.userId(), m.username(), m.nickname()))
+              .toList();
+      Map<String, DomainGrantAcc> domainMap = roleDomainGrants.getOrDefault(role.id(), Map.of());
+      List<RoleDomainAccessResp> domainAccess = new ArrayList<>();
+      for (String domainKey : domainTotals.keySet()) {
+        DomainGrantAcc acc = domainMap.get(domainKey);
+        if (acc != null && acc.activeGrantCount > 0) {
+          domainAccess.add(
+              new RoleDomainAccessResp(
+                  domainKey,
+                  acc.activeGrantCount,
+                  acc.writeGrantCount,
+                  acc.writeGrantCount > 0 ? "GOVERN" : "READ"));
+        }
+      }
+      for (Map.Entry<String, DomainGrantAcc> entry : domainMap.entrySet()) {
+        if (!domainTotals.containsKey(entry.getKey()) && entry.getValue().activeGrantCount > 0) {
+          DomainGrantAcc acc = entry.getValue();
+          domainAccess.add(
+              new RoleDomainAccessResp(
+                  entry.getKey(),
+                  acc.activeGrantCount,
+                  acc.writeGrantCount,
+                  acc.writeGrantCount > 0 ? "GOVERN" : "READ"));
+        }
+      }
+      roleTopology.add(
+          new RoleTopologyNodeResp(
+              role.id(),
+              role.roleName(),
+              role.roleKey(),
+              role.status(),
+              role.dataScope(),
+              role.memberCount(),
+              visibleMembers.size(),
+              sampleMembers,
+              active,
+              navCountsByRole.getOrDefault(role.id(), 0L),
+              domainAccess));
     }
     List<UnassignedNavigationResp> navigation =
         mapper.unassignedNavigation().stream()
@@ -137,7 +242,9 @@ public class AuthorizationInsightService {
             .map(
                 row ->
                     new InsightCountResp(row.key(), row.count(), capabilities.isEnabled(row.key())))
-            .toList());
+            .toList(),
+        businessDomains,
+        roleTopology);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -258,11 +365,64 @@ public class AuthorizationInsightService {
     }
   }
 
+  static String classifyDomainKey(String moduleKey, String permissionCode) {
+    if (moduleKey != null && !moduleKey.isBlank()) {
+      return moduleKey.trim();
+    }
+    if (permissionCode == null || permissionCode.isBlank()) {
+      return "security_audit";
+    }
+    String[] parts = permissionCode.trim().split(":");
+    String resource = parts.length >= 2 ? parts[1].trim().toLowerCase(Locale.ROOT) : "";
+    return switch (resource) {
+      case "user", "dept" -> "identity_org";
+      case "role", "permission", "menu" -> "rbac_nav";
+      case "dict", "config", "online" -> "runtime_config";
+      default -> "security_audit";
+    };
+  }
+
+  static boolean isWriteAction(String permissionCode) {
+    if (permissionCode == null || permissionCode.isBlank()) {
+      return false;
+    }
+    String[] parts = permissionCode.trim().split(":");
+    String action =
+        parts.length >= 3
+            ? parts[2].trim().toLowerCase(Locale.ROOT)
+            : parts[parts.length - 1].trim().toLowerCase(Locale.ROOT);
+    return !READ_ONLY_ACTIONS.contains(action);
+  }
+
   private static boolean canQuery(DataScopeResp scope) {
     return scope != null && (scope.all() || !scope.departmentIds().isEmpty());
   }
 
   private static List<Long> ids(DataScopeResp scope) {
     return scope == null ? List.of() : scope.departmentIds();
+  }
+
+  private static final class DomainTotalAcc {
+
+    private final String domainKey;
+
+    private final String moduleKey;
+
+    private final boolean moduleEnabled;
+
+    private long totalPermissions;
+
+    private DomainTotalAcc(String domainKey, String moduleKey, boolean moduleEnabled) {
+      this.domainKey = domainKey;
+      this.moduleKey = moduleKey;
+      this.moduleEnabled = moduleEnabled;
+    }
+  }
+
+  private static final class DomainGrantAcc {
+
+    private long activeGrantCount;
+
+    private long writeGrantCount;
   }
 }

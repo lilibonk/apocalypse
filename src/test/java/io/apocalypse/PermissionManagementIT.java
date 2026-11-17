@@ -26,7 +26,7 @@ class PermissionManagementIT extends AbstractIntegrationTest {
   @Autowired private TransactionTemplate transactionTemplate;
 
   @Test
-  void legacyRoleMenuProtocolAndPermissionMenuWritesAreRejected() {
+  void legacyRoleMenuTablesAreRetiredAndPermissionMenuWritesAreRejected() {
     assertThat(
             jdbcTemplate.queryForObject(
                 "SELECT to_regclass('sys_role_menu') IS NULL", Boolean.class))
@@ -39,19 +39,16 @@ class PermissionManagementIT extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(
             "SELECT count(*) FROM sys_role_navigation WHERE role_id=1", Integer.class);
     assertThat(
-            exchangeRaw("/system/roles/1/menus", HttpMethod.GET, null, admin())
-                .path("code")
-                .asInt())
-        .isEqualTo(40000);
-    assertThat(
-            exchangeRaw("/system/roles/1/menus", HttpMethod.PUT, List.of(101L), admin())
-                .path("code")
-                .asInt())
-        .isEqualTo(40000);
-    assertThat(
             jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM sys_role_navigation WHERE role_id=1", Integer.class))
         .isEqualTo(beforeNavigation);
+    JsonNode corePage =
+        getForData("/system/permissions/page?page=1&size=50&moduleKey=__core__", admin());
+    assertThat(corePage.path("list").isArray()).isTrue();
+    assertThat(corePage.path("list")).isNotEmpty();
+    for (JsonNode item : corePage.path("list")) {
+      assertThat(item.path("moduleKey").isNull()).isTrue();
+    }
     assertThat(
             exchangeRaw(
                     "/system/menus",
