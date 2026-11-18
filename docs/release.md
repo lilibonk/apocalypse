@@ -1,6 +1,6 @@
 # 发行与兼容契约
 
-当前前后端统一为 **`0.1.0-rc.1` 首版预发布**，尚未发布稳定版本。[GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.1) 提供固定 tag 对应的发布包和 SHA-256 校验值；版本号不表示跨平台、容量或完整供应链保证。项目自有部分采用 [Apache License 2.0](../LICENSE)，第三方代码与依赖依[各自声明](../THIRD_PARTY_NOTICES.md)授权。
+当前前后端统一为 **`0.1.0-rc.2` 预发布**，尚未发布稳定版本。[GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2) 提供固定 tag 对应的发布记录与源码归档；版本号不表示跨平台、容量或完整供应链保证。项目自有部分采用 [Apache License 2.0](../LICENSE)，第三方代码与依赖依[各自声明](../THIRD_PARTY_NOTICES.md)授权。
 
 ## 首次发行的制品边界
 
@@ -16,7 +16,7 @@
 node scripts/candidate-manifest.mjs build
 node scripts/candidate-manifest.mjs verify target/scaffold-candidates/<commit前12位>-<manifest摘要前12位>
 # 在仓库根目录单独核对 JAR 与当前随附通知索引；仍需同一 JDK 环境。
-node scripts/candidate-manifest.mjs verify-notices target/apocalypse-0.1.0-rc.1.jar
+node scripts/candidate-manifest.mjs verify-notices target/apocalypse-0.1.0-rc.2.jar
 ```
 
 构建先执行后端 `clean verify`、前端锁文件安装、`pnpm check` 与 `pnpm test:browser`、公开文档链接检查。构建前后工作树必须干净，HEAD 不得改变；前端 `.env` 覆盖文件和 `VITE_*` 环境变量会被拒绝。候选包含可执行 JAR、静态 dist、参考部署文件、原始许可与依赖清单；`manifest.json` 记录版本、源码 commit/tree 与逐文件 SHA-256。校验会拒绝缺失、篡改、额外文件和符号链接。

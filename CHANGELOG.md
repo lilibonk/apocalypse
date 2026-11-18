@@ -1,5 +1,15 @@
 # 变更记录
 
+## 0.1.0-rc.2（2026-11-18，预发布）
+
+在 `0.1.0-rc.1` 基础上完成后端基线巩固与 V2 管理台架构及交互体验全面重构，前后端版本保持同步。
+
+- **后端基线巩固与运行增强**：收敛 Flyway 开发期脚本为单一基线 `V1__init.sql` 并强制 `V1.x` 平台 / `V100.x+` 业务脚本区间隔离；完善请求级 `AuthorizationSnapshot` 复用、单会话 JTI 撤销与用户级凭据失效区分、按用户名+客户端 IP 维度登录锁定、两级缓存单键淘汰与模块化 `RedisCacheTypeRegistration`。新增 `/system/users/me/*` 自助资料/密码/会话接口、声明式安全 CSV 导出、本地文件存储端口以及 `create-module.mjs` / `rebrand-scaffold.mjs` 脚本。
+- **V2 空间设计与三大原生主题世界**：确立 `DEFINITION.md` / `MOTION.md` 设计规范，围绕无头 `useDynaController` 与统一因果动效（`unifiedMotion`）重构 DynaLayer 及领域视图；收敛为三套正交主题世界（`fluid` / `sketchbook` / `obsidian`），提供独立 `/profile` 页面、`EntityPeekSheet` 就地预览以及前后端多维筛选与字典 6 色语义色卡。
+- **角色管理重构与系统工作区统一**：彻底移除拥挤的四栏拓扑图谱，重建 `/system/role` 统一列表（`授权配置` 入口）与全宽 `RoleWorkbench`（内联业务权限/数据范围矩阵、层级导航树表、角色成员页签及并发与跨部门基线保护）；统一用户、参数与权限目录单视图，为菜单与部门树表增加客户端分页及跨页祖先面包屑，并将字典管理与参数设置分页统一收口至支持每页条数切换与无障碍 `<nav>` 地标的 `DynaPagination`。
+
+本次按发行候选预发布分发，稳定版本尚未发布；具体发布说明与源码归档见 [GitHub 预发布](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2)。支持范围与兼容约束见[发行与兼容契约](docs/release.md)。
+
 ## 0.1.0-rc.1（2026-10-01，预发布）
 
 首个通用脚手架发行候选统一前后端版本，保留 Java 25 / Spring Boot 4.1 单 Maven 模块的模块化单体结构。

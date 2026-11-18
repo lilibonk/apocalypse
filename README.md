@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="0.1.0-rc.1 发行候选" height="24"></a>
+  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="0.1.0-rc.2 发行候选" height="24"></a>
   <a href="https://github.com/lilibonk/apocalypse/actions/workflows/ci.yml"><img src=".github/assets/readme/checks.svg" alt="查看 GitHub Actions CI" height="24"></a>
   <a href="LICENSE"><img src=".github/assets/readme/license.svg" alt="Apache License 2.0" height="24"></a>
 </p>
@@ -150,7 +150,7 @@ pnpm test:browser
 
 ## 当前版本与许可
 
-当前为 **0.1.0-rc.1 预发布**，稳定版本尚未发布。[下载发布包与校验值](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.1)。项目适合以现有系统管理能力为基础开发独立业务域；支持范围与兼容政策见[发行契约](docs/release.md)。
+当前为 **0.1.0-rc.2 预发布**，稳定版本尚未发布。[查看发行说明与下载源码包](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2)。项目适合以现有系统管理能力为基础开发独立业务域；支持范围与兼容政策见[发行契约](docs/release.md)。
 
 本版不提供代码生成器、在线任务调度管理平台、公告、多租户或通用文件服务。Calendar 是默认关闭的试验模块，其代码与 Schema 随同一制品保留；早期 Order 运行 API 已退役，兼容表和事件桥仍保留。
 
