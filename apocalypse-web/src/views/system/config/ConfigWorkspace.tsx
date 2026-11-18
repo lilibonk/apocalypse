@@ -9,19 +9,32 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Pencil,
   RotateCcw,
   Search,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { Perm } from '@/components/Perm'
 import { DynaQueryFeedback } from '@/components/dyna'
 import { DraftBar } from '@/components/draft/DraftBar'
 import { DraftDiffDialog } from '@/components/draft/DraftDiffDialog'
 import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { StickyCompactRailLayout, type CompactRailItem } from '@/components/spatial'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,7 +50,18 @@ import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-de
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
-import { getConfigByKey, pageConfigs, saveConfigValues, type ConfigRow } from './config.api'
+import { ConfigForm } from './ConfigForm'
+import schema from './config.schema'
+import {
+  createConfig,
+  deleteConfig,
+  getConfigByKey,
+  pageConfigs,
+  saveConfigValues,
+  updateConfig,
+  type ConfigRow,
+  type ConfigSaveBody,
+} from './config.api'
 import {
   conflictedIds,
   editDraft,
@@ -66,7 +90,15 @@ function isConfigQuery({ queryKey }: { queryKey: readonly unknown[] }) {
   )
 }
 
-export function ConfigWorkspace({ active = true }: { active?: boolean }) {
+export function ConfigWorkspace({
+  active = true,
+  createOpen = false,
+  onCreateOpenChange,
+}: {
+  active?: boolean
+  createOpen?: boolean
+  onCreateOpenChange?: (open: boolean) => void
+}) {
   const { t } = useTranslation('system')
   const client = useQueryClient()
   const canEdit = useAuthStore((state) => state.perms.includes('system:config:edit'))
@@ -81,6 +113,8 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
   const [lastSaved, setLastSaved] = useState<ConfigRow[]>([])
   const [reviewing, setReviewing] = useState(false)
   const [conflict, setConflict] = useState<string | null>(null)
+  const [editingRow, setEditingRow] = useState<ConfigRow | null>(null)
+  const [deletingRow, setDeletingRow] = useState<ConfigRow | null>(null)
 
   const { intent } = useEntityIntent('config')
   const intentKey = intent
@@ -211,9 +245,71 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
       toast.error(error instanceof ApiError ? error.message : t('configWorkspace.failed')),
   })
 
+  const saveDefinition = useModuleMutation(undefined, {
+    localKey: editingRow ? `edit:${editingRow.id}` : 'create',
+    onDenied: denial,
+    mutationFn: (run, body: Record<string, unknown>) => {
+      const payload: ConfigSaveBody = {
+        configKey: String(body.configKey ?? ''),
+        configName: String(body.configName ?? ''),
+        configValue: body.configValue == null ? null : String(body.configValue),
+        remark: body.remark == null ? null : String(body.remark),
+        ...(typeof body.expectedVersion === 'number'
+          ? { expectedVersion: body.expectedVersion }
+          : {}),
+      }
+      return run({
+        scope: undefined,
+        requiredPerms: [editingRow ? 'system:config:edit' : 'system:config:add'],
+        execute: async (transport) => {
+          if (editingRow) {
+            await updateConfig(editingRow.id, payload, transport)
+          } else {
+            await createConfig(payload, transport)
+          }
+        },
+      })
+    },
+    onSuccess: () => {
+      toast.success(editingRow ? '参数定义已更新' : '参数已创建')
+      if (editingRow && draft[editingRow.id]) {
+        setDraft(undoDraft(draft, editingRow.id))
+      }
+      setEditingRow(null)
+      onCreateOpenChange?.(false)
+      void client.invalidateQueries({ predicate: isConfigQuery })
+    },
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : '保存参数失败')
+    },
+  })
+
+  const removeDefinition = useModuleMutation(undefined, {
+    localKey: deletingRow ? `delete:${deletingRow.id}` : '',
+    onDenied: denial,
+    mutationFn: (run, id: string) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:config:remove'],
+        execute: (transport) => deleteConfig(id, transport),
+      }),
+    onSuccess: (_res, id) => {
+      toast.success('参数已删除')
+      if (draft[id]) {
+        setDraft(undoDraft(draft, id))
+      }
+      setDeletingRow(null)
+      void client.invalidateQueries({ predicate: isConfigQuery })
+    },
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : '删除参数失败')
+    },
+  })
+
   const filtered = rows
   const displayedPage = configs.data?.page ?? page
-  const busy = save.isPending || reload.isPending
+  const busy =
+    save.isPending || reload.isPending || saveDefinition.isPending || removeDefinition.isPending
   const pages = Math.max(1, Math.ceil((configs.data?.total ?? 0) / PAGE_SIZE))
   if (!configs.isFetching && configs.data && page > pages) setPage(pages)
 
@@ -442,18 +538,46 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
                           data-intent-highlight={isIntentTarget ? 'true' : undefined}
                         >
                           <div className="min-w-0">
-                            <label
-                              htmlFor={inputId}
-                              className="flex items-center gap-2 font-medium"
-                            >
-                              {item && (
-                                <span
-                                  className="draft-marker"
-                                  aria-label={t('draft.changed', { ns: 'translation' })}
-                                />
-                              )}
-                              <span className="break-words">{row.configName}</span>
-                            </label>
+                            <div className="flex items-start justify-between gap-2">
+                              <label
+                                htmlFor={inputId}
+                                className="flex items-center gap-2 font-medium"
+                              >
+                                {item && (
+                                  <span
+                                    className="draft-marker"
+                                    aria-label={t('draft.changed', { ns: 'translation' })}
+                                  />
+                                )}
+                                <span className="break-words">{row.configName}</span>
+                              </label>
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <Perm perm="system:config:edit">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    disabled={busy}
+                                    aria-label={`编辑定义：${row.configName}`}
+                                    onClick={() => setEditingRow(row)}
+                                  >
+                                    <Pencil className="size-3.5" />
+                                  </Button>
+                                </Perm>
+                                <Perm perm="system:config:remove">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    disabled={busy}
+                                    aria-label={`删除参数：${row.configName}`}
+                                    onClick={() => setDeletingRow(row)}
+                                  >
+                                    <Trash2 className="size-3.5 text-destructive" />
+                                  </Button>
+                                </Perm>
+                              </div>
+                            </div>
                             <code className="mt-1 block font-mono text-xs break-all text-muted-foreground">
                               {row.configKey}
                             </code>
@@ -739,6 +863,52 @@ export function ConfigWorkspace({ active = true }: { active?: boolean }) {
         onOpenChange={setReviewing}
         anchor="bottom-bar"
       />
+
+      {schema.form && (
+        <ConfigForm
+          config={schema.form}
+          mode={editingRow ? 'edit' : 'create'}
+          open={createOpen || editingRow !== null}
+          initialRow={editingRow ? (editingRow as unknown as Record<string, unknown>) : null}
+          submitting={saveDefinition.isPending}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !saveDefinition.isPending) {
+              setEditingRow(null)
+              onCreateOpenChange?.(false)
+            }
+          }}
+          onSubmit={(body) => saveDefinition.mutate(body)}
+        />
+      )}
+
+      <AlertDialog
+        open={deletingRow !== null}
+        onOpenChange={(nextOpen) =>
+          !nextOpen && !removeDefinition.isPending && setDeletingRow(null)
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除参数</AlertDialogTitle>
+            <AlertDialogDescription>
+              将删除参数「{deletingRow?.configName}」（{deletingRow?.configKey}），删除后无法恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeDefinition.isPending}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={removeDefinition.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                if (deletingRow) removeDefinition.mutate(deletingRow.id)
+              }}
+            >
+              {removeDefinition.isPending ? '删除中…' : '确认删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

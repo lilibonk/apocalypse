@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Param;
+import org.springframework.util.StringUtils;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -17,9 +18,25 @@ public interface SysDictDataMapper extends BaseMapper<SysDictDataEntity> {
 
   /** 按字典类型分页。 */
   default PageResult<SysDictDataEntity> pageByType(int page, int size, String dictType) {
+    return pageByType(page, size, dictType, null, null);
+  }
+
+  /** 按字典类型、标签/键值关键字与状态分页。 */
+  default PageResult<SysDictDataEntity> pageByType(
+      int page, int size, String dictType, String keyword, Integer status) {
     LambdaQueryWrapper<SysDictDataEntity> wrapper = new LambdaQueryWrapper<>();
     if (dictType != null && !dictType.isBlank()) {
       wrapper.eq(SysDictDataEntity::getDictType, dictType);
+    }
+    if (status != null) {
+      wrapper.eq(SysDictDataEntity::getStatus, status);
+    }
+    if (StringUtils.hasText(keyword)) {
+      wrapper.and(
+          term ->
+              term.like(SysDictDataEntity::getDictLabel, keyword)
+                  .or()
+                  .like(SysDictDataEntity::getDictValue, keyword));
     }
     wrapper.orderByAsc(SysDictDataEntity::getDictType).orderByAsc(SysDictDataEntity::getSort);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));

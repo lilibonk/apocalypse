@@ -233,7 +233,7 @@ const DynaTableRow = memo(function DynaTableRow({
       onClick={onRowClick ? () => onRowClick(row, rowKeyValue) : undefined}
     >
       {selectable && (
-        <TableCell className="w-10">
+        <TableCell className="w-10" onClick={(event) => event.stopPropagation()}>
           <input
             type="checkbox"
             checked={selected}
@@ -257,6 +257,7 @@ const DynaTableRow = memo(function DynaTableRow({
       ))}
       {actions && (
         <TableCell
+          onClick={(event) => event.stopPropagation()}
           className={cn(
             frozenClass(actionsFrozen),
             'bg-card text-right group-hover:bg-muted/50',

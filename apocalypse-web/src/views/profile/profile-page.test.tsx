@@ -26,23 +26,33 @@ vi.mock('react-i18next', () => ({
 vi.mock('react-router', () => ({
   useNavigate: () => vi.fn(),
 }))
-vi.mock('@/components/ui/sheet', () => ({
-  Sheet: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SheetContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SheetHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+vi.mock('@/components/ui/alert-dialog', () => ({
+  AlertDialog: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AlertDialogTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AlertDialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+  AlertDialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+  AlertDialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AlertDialogCancel: ({ children }: { children: ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
+  AlertDialogAction: ({ children }: { children: ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
 }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: (
     selector: (state: {
       user: { id: string; username: string; nickname: string; deptName: string }
+      roles: string[]
       ensureMe: () => Promise<void>
       clearSession: () => void
     }) => unknown,
   ) =>
     selector({
       user: { id: '1', username: 'admin', nickname: '系统管理员', deptName: '总部' },
+      roles: ['super_admin'],
       ensureMe: async () => {},
       clearSession: () => {},
     }),
@@ -52,14 +62,15 @@ vi.mock('@/stores/tabs', () => ({
     selector({ reset: () => {} }),
 }))
 
-import { ProfileDrawer } from './ProfileDrawer'
+import ProfilePage from './index'
 
-describe('ProfileDrawer', () => {
-  it('renders current user identity, profile form, password form, and active session region', () => {
-    const html = renderToStaticMarkup(<ProfileDrawer open onOpenChange={vi.fn()} />)
+describe('ProfilePage', () => {
+  it('renders current user identity, profile form, password form, and active session region as a standalone page', () => {
+    const html = renderToStaticMarkup(<ProfilePage />)
     expect(html).toContain('个人中心')
     expect(html).toContain('admin')
     expect(html).toContain('总部')
+    expect(html).toContain('super_admin')
     expect(html).toContain('value="系统管理员"')
     expect(html).toContain('修改密码')
     expect(html).toContain('活跃设备会话')

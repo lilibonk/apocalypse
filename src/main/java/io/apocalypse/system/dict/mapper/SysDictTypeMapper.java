@@ -17,12 +17,22 @@ public interface SysDictTypeMapper extends BaseMapper<SysDictTypeEntity> {
 
   /** 按类型标识/名称关键字分页。 */
   default PageResult<SysDictTypeEntity> pageByKeyword(int page, int size, String keyword) {
+    return pageByKeyword(page, size, keyword, null);
+  }
+
+  /** 按类型标识/名称关键字及状态分页。 */
+  default PageResult<SysDictTypeEntity> pageByKeyword(
+      int page, int size, String keyword, Integer status) {
     LambdaQueryWrapper<SysDictTypeEntity> wrapper = new LambdaQueryWrapper<>();
+    if (status != null) {
+      wrapper.eq(SysDictTypeEntity::getStatus, status);
+    }
     if (StringUtils.hasText(keyword)) {
-      wrapper
-          .like(SysDictTypeEntity::getDictType, keyword)
-          .or()
-          .like(SysDictTypeEntity::getDictName, keyword);
+      wrapper.and(
+          term ->
+              term.like(SysDictTypeEntity::getDictType, keyword)
+                  .or()
+                  .like(SysDictTypeEntity::getDictName, keyword));
     }
     wrapper.orderByAsc(SysDictTypeEntity::getDictType);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));

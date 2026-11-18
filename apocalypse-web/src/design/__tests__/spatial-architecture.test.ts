@@ -154,22 +154,13 @@ describe('S5 top-anchored LivingContextBar and zero inline table EntityPill', ()
   })
 })
 
-describe('S6 single primary lens per screen (LoginLog overview vs list)', () => {
-  it('mounts DynaTable only in the list branch of views/system/log/login/index.tsx, never in overview', () => {
+describe('S6 unified primary lens per screen (LoginLog heatmap + search + persistent table)', () => {
+  it('renders LoginActivitySection alongside DynaSearch and DynaTable without dual-view splitting', () => {
     const loginLogSource = read(join(SRC, 'views/system/log/login/index.tsx'))
-    const splitIndex = loginLogSource.indexOf("view === 'overview'")
-    expect(splitIndex).toBeGreaterThan(-1)
-
-    const afterOverviewCheck = loginLogSource.slice(splitIndex)
-    const elseBranchIndex = afterOverviewCheck.indexOf(') : (')
-    expect(elseBranchIndex).toBeGreaterThan(-1)
-
-    const overviewBranch = afterOverviewCheck.slice(0, elseBranchIndex)
-    const listBranch = afterOverviewCheck.slice(elseBranchIndex)
-
-    expect(overviewBranch).not.toContain('<DynaTable')
-    expect(overviewBranch).not.toContain('<DynaSearch')
-    expect(listBranch).toContain('<DynaTable')
+    expect(loginLogSource).not.toContain("view === 'overview'")
+    expect(loginLogSource).toContain('<LoginActivitySection')
+    expect(loginLogSource).toContain('<DynaSearch')
+    expect(loginLogSource).toContain('<DynaTable')
   })
 })
 

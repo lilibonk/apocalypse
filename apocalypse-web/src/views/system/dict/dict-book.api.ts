@@ -35,9 +35,19 @@ export interface DictValueRow {
 
 type Transport = Pick<RequestOptions, 'signal' | 'context'>
 
-export function pageDictTypes(keyword: string, page: number, signal?: AbortSignal) {
+export function pageDictTypes(
+  keyword: string,
+  page: number,
+  signal?: AbortSignal,
+  status?: number,
+) {
   return request<PageResult<DictTypeRow>>('/system/dict/types/page', {
-    query: { page, size: DICT_BOOK_PAGE_SIZE, keyword: keyword || undefined },
+    query: {
+      page,
+      size: DICT_BOOK_PAGE_SIZE,
+      keyword: keyword || undefined,
+      status,
+    },
     signal,
   })
 }

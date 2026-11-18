@@ -146,6 +146,13 @@ export function SettingsDrawer({
                 }}
                 onChange={store.setThemeWorld}
               />
+              <p className="text-xs leading-5 text-muted-foreground">
+                {settings.themeWorld === 'fluid'
+                  ? '通透磨砂玻璃质感、柔和水光投影与清爽薄荷环境光场。'
+                  : settings.themeWorld === 'sketchbook'
+                    ? '冷压暖象牙点阵纸底、单层暖炭墨线边框与纸张错位版画阴影。'
+                    : '深海黑曜石夜视底板、青碧极光微边与高对比夜间审计界面。'}
+              </p>
             </Section>
           )}
 

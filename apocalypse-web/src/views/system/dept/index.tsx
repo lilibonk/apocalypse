@@ -10,7 +10,16 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -30,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { PulseIndicator } from '@/components/motion'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -57,7 +67,7 @@ import { createDept, deleteDept, getDeptTree, updateDept } from './api'
 import { ancestorPath, findNode } from './dept-chart.model'
 import { DeptOrgChart } from './DeptOrgChart'
 import { DeptFormDialog, type DeptFormValues } from './DeptFormDialog'
-import { flattenDeptTree } from './tree-utils'
+import { filterDeptTree, flattenDeptTree } from './tree-utils'
 import { ROOT_DEPT_ID, type DeptSaveReq, type DeptTreeNode, type SnowflakeId } from './types'
 
 const DEPT_VIEWS = ['chart', 'table'] as const
@@ -76,8 +86,11 @@ function DeptWorkspace() {
   // The organisation chart is a desktop workspace; narrow screens keep the tree table.
   const view = desktop ? requestedView : 'table'
   const queryClient = useQueryClient()
-  /** 展开的部门 id 集（默认空 = 只显示根节点）。 */
+  /** 展开的部门 id 集（首次加载默认展开根级部门节点）。 */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [seededRootExpand, setSeededRootExpand] = useState(false)
+  const [deptQuery, setDeptQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<DeptTreeNode | null>(null)
@@ -103,6 +116,11 @@ function DeptWorkspace() {
     },
   })
   const tree = isResourceDenied(error) ? undefined : data
+
+  if (tree && tree.length > 0 && !seededRootExpand) {
+    setSeededRootExpand(true)
+    setExpanded((prev) => new Set([...prev, ...tree.map((node) => node.id)]))
+  }
 
   const intentTargetId = deptIntent?.focusTargetId ?? deptIntent?.id ?? null
   if (
@@ -224,6 +242,11 @@ function DeptWorkspace() {
     setDialogOpen(true)
   }
 
+  const filtering = deptQuery.trim().length > 0 || statusFilter !== 'all'
+  const filteredTree = useMemo(
+    () => (tree ? filterDeptTree(tree, deptQuery, statusFilter) : undefined),
+    [tree, deptQuery, statusFilter],
+  )
   const expandableIds = useMemo(
     () =>
       tree
@@ -234,10 +257,13 @@ function DeptWorkspace() {
     [tree],
   )
   const collapsed = useMemo<ReadonlySet<string>>(
-    () => new Set(expandableIds.filter((id) => !expanded.has(id))),
-    [expandableIds, expanded],
+    () => (filtering ? new Set() : new Set(expandableIds.filter((id) => !expanded.has(id)))),
+    [expandableIds, expanded, filtering],
   )
-  const rows = useMemo(() => (tree ? flattenDeptTree(tree, collapsed) : []), [tree, collapsed])
+  const rows = useMemo(
+    () => (filteredTree ? flattenDeptTree(filteredTree, collapsed) : []),
+    [filteredTree, collapsed],
+  )
   const windowed = useWindowedRows(rows)
   const totalDepartments = tree ? flattenDeptTree(tree, new Set()).length : 0
   const deletingChildCount = deleting?.children?.length ?? 0
@@ -306,6 +332,85 @@ function DeptWorkspace() {
           className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
           aria-busy={isFetching}
         >
+          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+              <div className="relative min-w-48 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={deptQuery}
+                  onChange={(event) => setDeptQuery(event.target.value)}
+                  placeholder="搜索部门名称 / 负责人 / 电话…"
+                  aria-label="搜索部门名称或负责人"
+                  className="h-8 pl-9 text-xs"
+                />
+              </div>
+              <div
+                role="group"
+                aria-label="部门状态筛选"
+                className="inline-flex items-center rounded-control bg-muted p-0.5"
+              >
+                {(
+                  [
+                    { value: 'all', label: '全部' },
+                    { value: '1', label: '正常' },
+                    { value: '0', label: '停用' },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={statusFilter === option.value}
+                    onClick={() => setStatusFilter(option.value)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                      statusFilter === option.value
+                        ? 'bg-card font-medium text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {filtering && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setDeptQuery('')
+                    setStatusFilter('all')
+                  }}
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                  重置
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={filtering || expandableIds.length === 0}
+                onClick={() => setExpanded(new Set(expandableIds))}
+              >
+                <ChevronsUpDown className="size-4" aria-hidden="true" />
+                {t('common.全部展开', { defaultValue: '全部展开' })}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={filtering || expandableIds.length === 0}
+                onClick={() => setExpanded(new Set())}
+              >
+                <ChevronsDownUp className="size-4" aria-hidden="true" />
+                {t('common.全部折叠', { defaultValue: '全部折叠' })}
+              </Button>
+            </div>
+          </div>
           <div
             onScroll={windowed.onScroll}
             style={windowed.maxHeight ? { maxHeight: `${windowed.maxHeight}px` } : undefined}

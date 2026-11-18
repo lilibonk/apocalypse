@@ -1,4 +1,9 @@
-import type { LoginHeatmapCell, LogInsightRange } from '@/views/system/log/log-insight.api'
+import {
+  toDateBeginIso,
+  toExclusiveDateEndIso,
+  type LoginHeatmapCell,
+  type LogInsightRange,
+} from '@/views/system/log/log-insight.api'
 import type { LoginStreamFilter } from './login-log.api'
 
 /** Failure concentration rule shown in the legend: at least this many failures … */
@@ -86,19 +91,27 @@ export function hasActiveCausalFilter(filter: LoginCausalFilter): boolean {
   return filter.success !== undefined || filter.cell !== undefined || filter.bucket !== undefined
 }
 
+export interface LoginSearchFilters {
+  success?: string
+  dateBegin?: string
+  dateEnd?: string
+}
+
 export function buildLoginStreamQuery(
   keyword: string,
   filter: LoginCausalFilter,
+  search?: LoginSearchFilters,
 ): LoginStreamFilter {
   const trimmed = keyword.trim()
   const hasDrilldown = hasActiveCausalFilter(filter)
+  const searchSuccess = search?.success === '1' ? 1 : search?.success === '0' ? 0 : undefined
   return {
     keyword: trimmed || undefined,
-    success: filter.success,
+    success: filter.success ?? searchSuccess,
     isoWeekday: filter.cell?.isoWeekday,
     hour: filter.cell?.hour,
     range: hasDrilldown && !filter.bucket ? filter.range : undefined,
-    bucketFrom: filter.bucket?.bucketFrom,
-    bucketTo: filter.bucket?.bucketTo,
+    bucketFrom: filter.bucket?.bucketFrom ?? toDateBeginIso(search?.dateBegin),
+    bucketTo: filter.bucket?.bucketTo ?? toExclusiveDateEndIso(search?.dateEnd),
   }
 }

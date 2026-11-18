@@ -82,6 +82,7 @@ export function RolePermissionWorkspace({
   const initialKeyword = searchParams.get('roleKey') ?? searchParams.get('keyword') ?? ''
   const [draft, setDraft] = useState(() => initialKeyword)
   const [keyword, setKeyword] = useState(() => initialKeyword)
+  const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
   const [selection, setSelection] = useState<RolePermissionOpening | null>(null)
   const [command, setCommand] = useState<RoleGraphCommand | null>(null)
   const [editingMenus, setEditingMenus] = useState(false)
@@ -149,8 +150,15 @@ export function RolePermissionWorkspace({
     [command],
   )
   const resource = useMemo(
-    () => createRoleChoicesQuery({ page, keyword, principalEpoch, openId: workspaceId }),
-    [page, keyword, principalEpoch, workspaceId],
+    () =>
+      createRoleChoicesQuery({
+        page,
+        keyword,
+        status: statusFilter === 'all' ? undefined : Number(statusFilter),
+        principalEpoch,
+        openId: workspaceId,
+      }),
+    [page, keyword, statusFilter, principalEpoch, workspaceId],
   )
   const result = useQuery(resource.options)
   const denied = isResourceDenied(result.error)
@@ -347,6 +355,37 @@ export function RolePermissionWorkspace({
           <Search className="size-4" />
         </Button>
       </form>
+      <div
+        role="group"
+        aria-label="角色状态筛选"
+        className="flex items-center gap-1 rounded-control border border-border-subtle bg-muted/40 p-0.5"
+      >
+        {(
+          [
+            { value: 'all', label: '全部' },
+            { value: '1', label: '正常' },
+            { value: '0', label: '停用' },
+          ] as const
+        ).map((opt) => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={statusFilter === opt.value ? 'secondary' : 'ghost'}
+            className="h-6 flex-1 px-2 text-xs"
+            aria-pressed={statusFilter === opt.value}
+            disabled={busy || mutationDenied}
+            onClick={() => {
+              if (statusFilter === opt.value) return
+              setCreated(null)
+              setPage(1)
+              setStatusFilter(opt.value)
+            }}
+          >
+            {opt.label}
+          </Button>
+        ))}
+      </div>
       {denied || mutationDenied || (!result.data && result.error) ? (
         <div className="rounded-2xl border border-border bg-card p-5" role="alert">
           <h2 className="text-sm font-semibold">
@@ -572,21 +611,19 @@ export function RolePermissionWorkspace({
           </div>
         </div>
 
-        {pendingMember && (
+        {pendingMember && relation === 'members' && (
           <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-card px-4 py-3 text-sm"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-subtle bg-muted/30 px-3 py-2 text-xs"
             role="status"
           >
-            <div>
-              <p className="font-medium">
+            <span className="text-muted-foreground">
+              <strong className="font-medium text-foreground">
                 {t('roleManage.pendingMember', { name: pendingMember.keyword })}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('roleManage.pendingMemberHint', { id: pendingMember.userId })}
-              </p>
-            </div>
+              </strong>{' '}
+              — {t('roleManage.pendingMemberHint', { id: pendingMember.userId })}
+            </span>
             {!opening && !locatorExpanded && (
-              <Button variant="outline" size="sm" onClick={() => setLocatorExpanded(true)}>
+              <Button variant="outline" size="xs" onClick={() => setLocatorExpanded(true)}>
                 {t('roleManage.showLocator')}
               </Button>
             )}

@@ -54,7 +54,13 @@ public class RoleService {
   /** 分页查询角色。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PageResult<RoleResp> page(int page, int size, String keyword) {
-    var roles = sysRoleMapper.pageByKeyword(page, size, keyword);
+    return page(page, size, keyword, null);
+  }
+
+  /** 分页查询角色（支持按状态精确过滤）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public PageResult<RoleResp> page(int page, int size, String keyword, Integer status) {
+    var roles = sysRoleMapper.pageByKeyword(page, size, keyword, status);
     var revisions =
         authorizationState.roleRevisions(roles.list().stream().map(SysRoleEntity::getId).toList());
     return roles.map(entity -> roleConvert.toResp(entity, revisions.get(entity.getId())));

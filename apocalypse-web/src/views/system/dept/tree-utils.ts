@@ -29,6 +29,35 @@ export function flattenDeptTree(
   return rows
 }
 
+/** 按关键词（名称/负责人/电话）与状态递归筛选部门树，命中节点或其有命中子孙的祖先均保留。 */
+export function filterDeptTree(
+  nodes: DeptTreeNode[],
+  keyword: string,
+  status: 'all' | '1' | '0',
+): DeptTreeNode[] {
+  const q = keyword.trim().toLowerCase()
+  const targetStatus = status === 'all' ? null : Number(status)
+  if (!q && targetStatus === null) return nodes
+
+  const walk = (list: DeptTreeNode[]): DeptTreeNode[] => {
+    const kept: DeptTreeNode[] = []
+    for (const node of list) {
+      const children = walk(node.children ?? [])
+      const matchQuery =
+        !q ||
+        node.deptName.toLowerCase().includes(q) ||
+        (node.leader?.toLowerCase().includes(q) ?? false) ||
+        (node.phone?.toLowerCase().includes(q) ?? false)
+      const matchStatus = targetStatus === null || node.status === targetStatus
+      if ((matchQuery && matchStatus) || children.length > 0) {
+        kept.push({ ...node, children })
+      }
+    }
+    return kept
+  }
+  return walk(nodes)
+}
+
 /** 收集以 root 为根的整棵子树 id（含 root 自身；编辑态用于禁选自身及下级作父部门）。 */
 export function collectSubTreeIds(root: DeptTreeNode): Set<string> {
   const ids = new Set<string>()

@@ -9,13 +9,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import type { OnlineUserRow } from '../online/online.api'
 import type { AuthorizationOverview } from '../role/authorization-insight.api'
-import { UserWorkspace } from './UserWorkspace'
+import { UserDossierContent, UserWorkspace } from './UserWorkspace'
 
 function createBaseCollection(): DynaTableProps {
   return {
     columns: [
       { key: 'username', title: '用户名' },
       { key: 'nickname', title: '昵称' },
+      { key: 'deptName', title: '部门' },
     ],
     rows: [
       {
@@ -55,6 +56,9 @@ function createBaseCollection(): DynaTableProps {
     ],
     rowKey: 'id',
     loading: false,
+    selectable: true,
+    selectedKeys: [],
+    onSelectedKeysChange: vi.fn(),
     page: 1,
     size: 10,
     total: 2,
@@ -72,6 +76,7 @@ describe('UserWorkspace', () => {
       authorizationDeadline: Number.POSITIVE_INFINITY,
       perms: [
         'system:user:list',
+        'system:user:edit',
         'system:role:list',
         'system:permission:list',
         'system:dept:list',
@@ -124,7 +129,7 @@ describe('UserWorkspace', () => {
     Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
   })
 
-  it('renders StickyCompactRailLayout and the 4-section living relationship stage with EntityPills', () => {
+  it('renders unified department filter rail + multi-select DynaTable + runtime roles column without view fragmentation', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
     })
@@ -146,18 +151,19 @@ describe('UserWorkspace', () => {
       unassignedNavigation: [],
       roleScopeDistribution: [],
     }
-    const onlineData: OnlineUserRow[] = [
-      {
-        jti: 'jti-alice-1',
-        username: 'alice',
-        ip: '10.0.0.8',
-        userAgent: 'Chrome',
-        loginTime: '2026-10-18T09:35:00',
-      },
-    ]
 
     queryClient.setQueryData(['system', 'users', 1, 'overview'], overviewData)
-    queryClient.setQueryData(['system', 'online-users', 'user-workspace', 1], onlineData)
+    queryClient.setQueryData(
+      ['system', 'users', 'dept-filter-tree', 1, true],
+      [
+        {
+          id: 'd-root',
+          parentId: '0',
+          deptName: '集团总部',
+          children: [{ id: 'd-fe', parentId: 'd-root', deptName: '前端研发组', children: [] }],
+        },
+      ],
+    )
 
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
@@ -169,13 +175,55 @@ describe('UserWorkspace', () => {
             queryKey={['system', 'users']}
             selectedRowKey="101"
             selectRow={vi.fn()}
+            inspectorOpen={false}
+            onInspectorOpenChange={vi.fn()}
           />
         </MemoryRouter>
       </QueryClientProvider>,
     )
 
-    expect(html).toContain('data-slot="sticky-rail-layout"')
-    expect(html).toContain('data-rail-width="locator"')
+    expect(html).toContain('全部部门')
+    expect(html).toContain('前端研发组')
+    expect(html).toContain('Alice Chen')
+    expect(html).toContain('平台架构师')
+    expect(html).toContain('type="checkbox"')
+    expect(html).not.toContain('页面视图')
+  })
+
+  it('renders real account dossier with in-place actions and zero phantom email/phone/remark fields', () => {
+    const row = createBaseCollection().rows![0]!
+    const onlineData: OnlineUserRow[] = [
+      {
+        jti: 'jti-alice-1',
+        username: 'alice',
+        ip: '10.0.0.8',
+        userAgent: 'Chrome',
+        loginTime: '2026-10-18T09:35:00',
+      },
+    ]
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+    })
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <UserDossierContent
+            selected={row}
+            onlineSessions={onlineData}
+            onlineError={false}
+            canViewOnline
+            canViewLoginLog
+            canEdit
+            onEdit={vi.fn()}
+            onAssignRoles={vi.fn()}
+            onResetPassword={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
     expect(html).toContain('data-slot="entity-peek-link"')
     expect(html).toContain('data-entity-kind="dept"')
     expect(html).toContain('集团总部 / 研发中心 / 前端研发组')
@@ -183,10 +231,13 @@ describe('UserWorkspace', () => {
     expect(html).toContain('data-entity-id="r-admin"')
     expect(html).toContain('平台架构师')
     expect(html).toContain('platform_architect')
-    expect(html).toContain('全部部门')
     expect(html).toContain('data-entity-kind="session"')
     expect(html).toContain('data-entity-kind="log-login"')
     expect(html).toContain('10.0.0.8')
-    expect(html).not.toContain('角色分配在角色工作区管理')
+    expect(html).toContain('分配角色')
+    expect(html).toContain('重置密码')
+    expect(html).not.toContain('/system/role?roleRelation=members')
+    expect(html).not.toContain('邮箱')
+    expect(html).not.toContain('手机')
   })
 })

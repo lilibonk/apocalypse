@@ -1,26 +1,23 @@
 import { expect, test } from '@playwright/test'
 
-test('login heatmap and paged records share a workspace without inventing hour filters', async ({
+test('login heatmap and paged records share a unified workspace without inventing hour filters', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=loginlog')
   const grid = page.getByRole('grid')
   await expect(grid).toBeVisible()
-  await expect(page.getByRole('table')).toHaveCount(0)
+  await expect(page.getByRole('table')).toBeVisible()
   await grid.locator('[data-cell="2-10"]').focus()
   await page.keyboard.press('ArrowRight')
   await expect(grid.locator('[data-cell="2-11"]')).toBeFocused()
   await expect(grid.locator('[data-cell="2-11"]')).toHaveAttribute('tabindex', '0')
 
   await grid.locator('[data-cell="2-11"]').click()
-  const sliceSheet = page.getByRole('dialog')
-  await expect(sliceSheet).toBeVisible()
-  await expect(sliceSheet.locator('[data-slot="living-context-bar"]')).toBeVisible()
-  await sliceSheet.getByRole('button', { name: '在完整列表中展开', exact: true }).click()
-
-  await expect(grid).toBeHidden()
-  await expect(page.getByRole('table')).toBeVisible()
-  await page.getByRole('button', { name: '清除筛选', exact: true }).click()
+  const causalBanner = page.getByRole('status', { name: '当前热力与指标联动筛选' })
+  await expect(causalBanner).toBeVisible()
+  await expect(causalBanner).toContainText('联动筛选：')
+  await causalBanner.getByRole('button', { name: '清除筛选', exact: true }).click()
+  await expect(causalBanner).toHaveCount(0)
 
   const details = page.getByRole('button', { name: '详情', exact: true }).first()
   await details.click()
@@ -33,17 +30,15 @@ test('login heatmap and paged records share a workspace without inventing hour f
     page: 2,
     size: 10,
   })
-  const views = page.getByRole('group', { name: '页面视图' })
-  await views.getByRole('button', { name: '登录观察', exact: true }).click()
-  await expect(grid).toBeVisible()
-  await expect(page.getByRole('table')).toHaveCount(0)
-  await grid.locator('[data-cell="2-10"]').focus()
-  await page.keyboard.press('ArrowRight')
-  await expect(grid.locator('[data-cell="2-11"]')).toHaveAttribute('tabindex', '0')
   await page.getByRole('button', { name: '近 30 天', exact: true }).click()
   await expect(grid).toBeVisible()
   await expect(grid.locator('[data-cell="2-11"]')).toHaveAttribute('tabindex', '0')
   await expect(grid).not.toHaveAttribute('data-wave', 'true')
+
+  await page.getByRole('button', { name: '收起活动概览', exact: true }).click()
+  await expect(grid).toHaveCount(0)
+  await page.getByRole('button', { name: '展开活动概览', exact: true }).click()
+  await expect(grid).toBeVisible()
 })
 
 test('account kick ends every matching fixture session while leaving other accounts intact', async ({

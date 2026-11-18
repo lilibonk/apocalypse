@@ -120,7 +120,7 @@ async function navigate(page: Page, path: string): Promise<void> {
   await expect(page).toHaveURL(new RegExp(`${path}(?:\\?.*)?$`))
   // This authentication rehearsal uses the supported field-list workflow. Object workspaces
   // have their own selection/edit/paging regressions and are now the initial desktop view.
-  if (path === '/system/user' || path === '/system/online')
+  if (path === '/system/online')
     await page
       .getByRole('group', { name: '页面视图' })
       .getByRole('button', { name: '列表', exact: true })

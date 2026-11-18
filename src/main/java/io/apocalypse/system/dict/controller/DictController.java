@@ -46,8 +46,12 @@ public class DictController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String keyword) {
-    return dictService.pageTypes(page, size, keyword);
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "状态仅支持 0/1")
+          @Max(value = 1, message = "状态仅支持 0/1")
+          Integer status) {
+    return dictService.pageTypes(page, size, keyword, status);
   }
 
   /** 新增字典类型，返回主键。 */
@@ -83,8 +87,13 @@ public class DictController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String dictType) {
-    return dictService.pageData(page, size, dictType);
+      @RequestParam(required = false) String dictType,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "状态仅支持 0/1")
+          @Max(value = 1, message = "状态仅支持 0/1")
+          Integer status) {
+    return dictService.pageData(page, size, dictType, keyword, status);
   }
 
   /** 按类型取有效字典项（下拉用，走 dict 两级缓存）。 */

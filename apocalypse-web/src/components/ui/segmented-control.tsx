@@ -51,7 +51,7 @@ export function SegmentedControl<Value extends string>({
             disabled={disabled}
             onClick={() => !pressed && onChange(option.value)}
             className={cn(
-              'inline-flex h-full shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+              'inline-flex h-full shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap transition-[color,background-color,box-shadow,transform] outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50',
               pressed
                 ? 'bg-card text-foreground shadow-surface'
                 : 'text-muted-foreground hover:text-foreground',

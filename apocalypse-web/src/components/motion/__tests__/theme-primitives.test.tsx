@@ -78,7 +78,7 @@ describe('procedural zero-bitmap visual primitives', () => {
     expect(river.bottomBank).toMatch(/^M /)
   })
 
-  it('keeps SketchBox content crisp above isolated wash layer', () => {
+  it('keeps SketchBox as a single native surface without overlaid SVG double-strokes or tape', () => {
     mockState.themeWorld = 'sketchbook'
     const html = renderToStaticMarkup(
       <SketchBox seed={17} wash="wide" washiTape>
@@ -87,7 +87,8 @@ describe('procedural zero-bitmap visual primitives', () => {
     )
     expect(html).toContain('data-slot="sketch-box"')
     expect(html).toContain('data-wash="wide"')
-    expect(html).toContain('data-slot="sketch-washi-tape"')
+    expect(html).not.toContain('data-slot="sketch-washi-tape"')
+    expect(html).not.toContain('sketch-border-svg')
     expect(html).toContain('class="crisp-content"')
 
     mockState.themeWorld = 'fluid'
@@ -96,7 +97,9 @@ describe('procedural zero-bitmap visual primitives', () => {
         <span>核心正文</span>
       </SketchBox>,
     )
+    expect(fluidHtml).toContain('data-slot="sketch-box"')
     expect(fluidHtml).not.toContain('data-slot="sketch-washi-tape"')
+    expect(fluidHtml).not.toContain('sketch-border-svg')
   })
 
   it('renders FluidConduitOverlay, ApoParticleOrb, and SketchApoPeeker safely in SSR / zero idle motion', () => {

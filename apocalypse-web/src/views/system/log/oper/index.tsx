@@ -43,6 +43,33 @@ const DEFAULT_PAGE_SIZE = 10
 
 const searchFields: DynaSearchField[] = [
   { name: 'keyword', label: '模块 / 操作人', type: 'input', placeholder: '模块 / 操作人' },
+  {
+    name: 'businessType',
+    label: '操作类型',
+    type: 'select',
+    placeholder: '全部类型',
+    options: [
+      { label: '新增', value: 'INSERT' },
+      { label: '修改', value: 'UPDATE' },
+      { label: '删除', value: 'DELETE' },
+      { label: '保存', value: 'SAVE' },
+      { label: '授权', value: 'GRANT' },
+      { label: '撤销授权', value: 'REVOKE' },
+      { label: '导出', value: 'EXPORT' },
+      { label: '强制下线', value: 'FORCE' },
+    ],
+  },
+  {
+    name: 'status',
+    label: '操作状态',
+    type: 'select',
+    placeholder: '全部状态',
+    options: [
+      { label: '正常', value: '1' },
+      { label: '异常', value: '0' },
+    ],
+  },
+  { name: 'date', label: '操作日期', type: 'date-range' },
 ]
 
 /** 详情字段块：长内容在块内滚动，空值显示 -，可复制原文，并对 `"******"` 脱敏值作视觉标识。 */
@@ -135,8 +162,14 @@ function OperLogWorkspace() {
 
   const keyword = appliedSearch.keyword ?? ''
   const streamQuery = useMemo(
-    () => buildOperStreamQuery(keyword, causalFilter),
-    [causalFilter, keyword],
+    () =>
+      buildOperStreamQuery(keyword, causalFilter, {
+        businessType: appliedSearch.businessType,
+        status: appliedSearch.status,
+        dateBegin: appliedSearch.dateBegin,
+        dateEnd: appliedSearch.dateEnd,
+      }),
+    [appliedSearch, causalFilter, keyword],
   )
   const causalActive = hasActiveOperFilter(causalFilter)
 
@@ -403,7 +436,16 @@ function OperLogWorkspace() {
             error={error}
             refreshing={isFetching}
             onRetry={retry}
-            filtered={keyword.trim().length > 0 || causalActive}
+            filtered={
+              keyword.trim().length > 0 ||
+              causalActive ||
+              Boolean(
+                appliedSearch.businessType ||
+                appliedSearch.status ||
+                appliedSearch.dateBegin ||
+                appliedSearch.dateEnd,
+              )
+            }
             onResetFilters={resetFilters}
             rowKey="id"
             actions={renderActions}

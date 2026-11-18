@@ -1,5 +1,9 @@
 import type { EntityKind } from '@/components/navigation'
-import type { LogInsightRange } from '@/views/system/log/log-insight.api'
+import {
+  toDateBeginIso,
+  toExclusiveDateEndIso,
+  type LogInsightRange,
+} from '@/views/system/log/log-insight.api'
 import { isKnownOperType } from '../../i18n/oper-log'
 import type { OperLogRow, OperStreamFilter } from './oper-log.api'
 
@@ -34,14 +38,28 @@ export function hasActiveOperFilter(filter: OperCausalFilter): boolean {
   return filter.businessType !== undefined || filter.status !== undefined
 }
 
-export function buildOperStreamQuery(keyword: string, filter: OperCausalFilter): OperStreamFilter {
+export interface OperSearchFilters {
+  businessType?: string
+  status?: string
+  dateBegin?: string
+  dateEnd?: string
+}
+
+export function buildOperStreamQuery(
+  keyword: string,
+  filter: OperCausalFilter,
+  search?: OperSearchFilters,
+): OperStreamFilter {
   const trimmed = keyword.trim()
   const active = hasActiveOperFilter(filter)
+  const searchStatus = search?.status === '1' ? 1 : search?.status === '0' ? 0 : undefined
   return {
     keyword: trimmed || undefined,
-    businessType: filter.businessType,
-    status: filter.status,
+    businessType: filter.businessType ?? (search?.businessType || undefined),
+    status: filter.status ?? searchStatus,
     range: active ? filter.range : undefined,
+    bucketFrom: toDateBeginIso(search?.dateBegin),
+    bucketTo: toExclusiveDateEndIso(search?.dateEnd),
   }
 }
 

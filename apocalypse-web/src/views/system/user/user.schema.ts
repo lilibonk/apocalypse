@@ -1,13 +1,11 @@
 /**
- * 用户管理页 schema（DynaLayer 渲染）。
+ * 用户管理页 schema（DynaLayer 渲染与控制器配置）。
  *
- * 功能映射（对照手写版）：
- * - 关键词搜索        → search[0]（GET /system/users/page?keyword=）
- * - 状态字典列        → columns[3] type:'dict' + dictType sys_user_status
- * - 新增（用户名/密码/昵称）→ form 字段（password hideInEdit，status hideInCreate）
- * - 编辑（昵称/状态）  → 同一份 form：username disabledInEdit 不提交，status valueType number
- * - 启用/禁用         → rowActions status-toggle（既有端点 PUT /system/users/{id} 传 status）
- * - 删除              → rowActions delete（AlertDialog 确认，逻辑删除）
+ * 端点映射（后端 UserController）：
+ * - 多维搜索 + 状态 + 部门树  → search（keyword + status）+ extraSearchKeys（deptId, includeChildren）
+ * - 状态字典列                → columns[3] type:'dict' + dictType sys_user_status
+ * - 新增/编辑/启停/批量删除   → POST/PUT/DELETE /system/users
+ * - 分配角色 / 重置密码       → custom 行操作（由 ./index.tsx 注入原生弹窗）
  */
 
 import { definePageSchema } from '@/components/dyna'
@@ -16,7 +14,7 @@ export default definePageSchema({
   key: 'system-user',
   endpoint: '/system/users',
   title: '用户管理',
-  description: '系统用户的增删改查',
+  description: '系统用户的增删改查、部门筛选、角色分配与密码重置',
   entityName: '用户',
   createPerm: 'system:user:add',
   exportPerm: 'system:user:list',
@@ -27,9 +25,18 @@ export default definePageSchema({
   batchDeletePerm: 'system:user:remove',
   search: [
     { name: 'keyword', label: '用户名 / 昵称', type: 'input', placeholder: '用户名 / 昵称' },
+    {
+      name: 'status',
+      label: '状态',
+      type: 'select',
+      options: [
+        { label: '正常', value: '1' },
+        { label: '停用', value: '0' },
+      ],
+    },
   ],
   columns: [
-    { key: 'username', title: '用户名', copyable: true },
+    { key: 'username', title: '用户名', copyable: true, sortable: true },
     { key: 'nickname', title: '昵称' },
     { key: 'deptName', title: '部门' },
     { key: 'status', title: '状态', type: 'dict', dictType: 'sys_user_status' },
@@ -77,8 +84,22 @@ export default definePageSchema({
     ],
   },
   rowActions: [
-    { kind: 'view', perm: 'system:user:list' },
+    { kind: 'custom', key: 'inspect', label: '查看', icon: 'view', perm: 'system:user:list' },
     { kind: 'edit', perm: 'system:user:edit' },
+    {
+      kind: 'custom',
+      key: 'assign-roles',
+      label: '分配角色',
+      icon: 'members',
+      perm: 'system:user:edit',
+    },
+    {
+      kind: 'custom',
+      key: 'reset-password',
+      label: '重置密码',
+      icon: 'permissions',
+      perm: 'system:user:edit',
+    },
     {
       kind: 'status-toggle',
       field: 'status',

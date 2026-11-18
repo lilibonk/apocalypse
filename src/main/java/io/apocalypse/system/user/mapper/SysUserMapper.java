@@ -57,6 +57,20 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
       boolean includeChildren,
       String sortField,
       String sortOrder) {
+    return pageByKeyword(
+        page, size, keyword, scope, deptId, includeChildren, sortField, sortOrder, null);
+  }
+
+  default PageResult<SysUserEntity> pageByKeyword(
+      int page,
+      int size,
+      String keyword,
+      DataScopeResp scope,
+      Long deptId,
+      boolean includeChildren,
+      String sortField,
+      String sortOrder,
+      Integer status) {
     LambdaQueryWrapper<SysUserEntity> wrapper = new LambdaQueryWrapper<>();
     if (deptId != null) {
       if (includeChildren) {
@@ -77,6 +91,9 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
       } else {
         wrapper.in(SysUserEntity::getDeptId, scope.departmentIds());
       }
+    }
+    if (status != null) {
+      wrapper.eq(SysUserEntity::getStatus, status);
     }
     if (StringUtils.hasText(keyword)) {
       wrapper.and(

@@ -72,6 +72,8 @@ export interface UseDynaControllerOptions {
   entryContext?: { key: string; filters: Record<string, string>; selectedRowKey?: string }
   /** Cross-page EntityPill route intent hint. */
   entityIntent?: EntityRouteIntent
+  /** Additional non-schema query keys managed via filters (e.g., deptId, includeChildren). */
+  extraSearchKeys?: readonly string[]
   /** Custom row action handlers (supports both plain callbacks and ScopedDynaAction). */
   customActions?: Record<string, ((row: DynaRow) => void) | ScopedDynaAction>
   /** Optional callback invoked when retry refreshes companion overview queries. */
@@ -174,6 +176,7 @@ export function useDynaController(
     embedded = false,
     entryContext,
     entityIntent,
+    extraSearchKeys,
     customActions,
     onRefreshCompanion,
   } = options
@@ -205,7 +208,10 @@ export function useDynaController(
     return Object.keys(next).length > 0 ? next : undefined
   }, [entityIntent, entryContext?.filters])
 
-  const searchFieldNames = useMemo(() => expandSearchFieldKeys(schema.search), [schema.search])
+  const searchFieldNames = useMemo(
+    () => [...expandSearchFieldKeys(schema.search), ...(extraSearchKeys ?? [])],
+    [extraSearchKeys, schema.search],
+  )
   const {
     page,
     setPage,

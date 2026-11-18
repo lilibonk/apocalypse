@@ -1,10 +1,11 @@
 /**
- * 正交三主题皮肤世界投影层（html[data-theme-world="fluid" | "sketchbook" | "obsidian"]）。
- * 同一 DOM 骨架通过 CSS 变量与外框修饰层呈现不同美学气质，默认世界为 fluid。
+ * 原生三主题皮肤世界投影层（html[data-theme-world="fluid" | "sketchbook" | "obsidian"]）。
+ * 同一 DOM 骨架通过高层语义变量与原生组件样式（Card / Dialog / Sheet / Button / Input / Table / Nav）
+ * 呈现独立完整的原生视觉体系，彻底摒弃在现有组件上再叠加 SVG 外框的做法。默认世界为 fluid。
  */
 
 /* ============================================================================
- * 1. fluid（清透活水玻璃管 · 产品默认）
+ * 1. fluid（清透流体 · 默认）
  * ============================================================================ */
 
 html[data-theme-world='fluid'] {
@@ -36,20 +37,43 @@ html[data-theme-world='fluid'] [data-theme-stage] {
   background-image: var(--world-stage-wash);
 }
 
+html[data-theme-world='fluid'] [data-slot='card'],
 html[data-theme-world='fluid'] .sketch-surface,
-html[data-theme-world='fluid'] .insight-card {
+html[data-theme-world='fluid'] .insight-card,
+html[data-theme-world='fluid'] [data-slot='table-container'] {
   background: color-mix(in oklch, var(--card) 88%, transparent);
   border-color: color-mix(in oklch, var(--border) 64%, var(--brand) 36%);
   box-shadow: var(--shadow-surface);
 }
 
 @supports (backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)) {
+  html[data-theme-world='fluid'] [data-slot='card'],
   html[data-theme-world='fluid'] .sketch-surface,
-  html[data-theme-world='fluid'] .insight-card {
-    background: color-mix(in oklch, var(--card) 82%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+  html[data-theme-world='fluid'] .insight-card,
+  html[data-theme-world='fluid'] [data-slot='dialog-content'],
+  html[data-theme-world='fluid'] [data-slot='alert-dialog-content'],
+  html[data-theme-world='fluid'] [data-slot='sheet-content'],
+  html[data-theme-world='fluid'] [data-slot='popover-content'],
+  html[data-theme-world='fluid'] [data-slot='dropdown-menu-content'],
+  html[data-theme-world='fluid'] [data-slot='select-content'],
+  html[data-theme-world='fluid'] .entity-peek-card {
+    background: color-mix(in oklch, var(--card) 84%, transparent);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
   }
+}
+
+html[data-theme-world='fluid'] [data-slot='input'],
+html[data-theme-world='fluid'] [data-slot='textarea'],
+html[data-theme-world='fluid'] [data-slot='select-trigger'] {
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  border-color: color-mix(in oklch, var(--input) 78%, var(--brand) 22%);
+}
+
+html[data-theme-world='fluid'] [data-slot='button'][data-variant='default'] {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.36),
+    0 4px 14px -4px color-mix(in oklch, var(--brand) 44%, transparent);
 }
 
 html[data-theme-world='fluid'] [data-slot='app-sidebar'] {
@@ -85,105 +109,171 @@ html[data-theme-world='fluid'] .wash-layer[data-wash='wide'] {
 }
 
 /* ============================================================================
- * 2. sketchbook（手绘水彩手账：点阵冷压纸 + 双墨线出锋 + 文字绝缘水彩湿边）
+ * 2. sketchbook（手绘手账 · 原生冷压纸墨主题：零叠框，单层暖炭墨线 + 纸影触感）
  * ============================================================================ */
 
 html[data-theme-world='sketchbook'] {
-  --background: oklch(0.972 0.015 86);
-  --card: oklch(0.991 0.008 86);
-  --popover: oklch(0.994 0.008 86);
-  --muted: oklch(0.946 0.016 84);
-  --border: oklch(0.84 0.018 82);
-  --border-subtle: oklch(0.89 0.015 82);
-  --surface-navigation: oklch(0.964 0.014 86);
-  --surface-navigation-glass: oklch(0.974 0.012 86 / 0.9);
-  --shadow-surface: 2px 3px 0 oklch(0.32 0.02 90 / 0.06);
-  --peek-surface: oklch(0.964 0.055 92);
-  --peek-border: var(--sketch-ink);
-  --peek-shadow: 3px 4px 0 oklch(0.32 0.02 90 / 0.18);
-  --wash-mint: oklch(0.74 0.14 162 / 0.26);
-  --wash-sky: oklch(0.76 0.11 228 / 0.2);
-  --wash-amber: oklch(0.86 0.15 84 / 0.28);
-  --world-paper-dots: oklch(0.45 0.02 80 / 0.14);
+  --background: oklch(0.968 0.016 86);
+  --foreground: oklch(0.24 0.018 75);
+  --card: oklch(0.992 0.008 86);
+  --card-foreground: oklch(0.24 0.018 75);
+  --popover: oklch(0.995 0.007 86);
+  --popover-foreground: oklch(0.24 0.018 75);
+  --secondary: oklch(0.942 0.018 84);
+  --secondary-foreground: oklch(0.27 0.018 75);
+  --muted: oklch(0.945 0.017 84);
+  --muted-foreground: oklch(0.47 0.018 78);
+  --accent: oklch(0.93 0.024 85);
+  --accent-foreground: oklch(0.24 0.018 75);
+  --border: oklch(0.36 0.022 76 / 0.42);
+  --border-subtle: oklch(0.4 0.02 78 / 0.28);
+  --input: oklch(0.36 0.022 76 / 0.42);
+  --surface-navigation: oklch(0.962 0.016 86);
+  --surface-navigation-glass: oklch(0.974 0.014 86 / 0.94);
+  --shadow-surface: 2px 3px 0 oklch(0.28 0.022 75 / 0.11);
+  --shadow-floating: 4px 6px 0 oklch(0.26 0.022 75 / 0.16);
+  --table-head: oklch(0.945 0.018 84);
+  --peek-surface: oklch(0.985 0.018 88);
+  --peek-border: oklch(0.34 0.022 76 / 0.56);
+  --peek-shadow: 4px 5px 0 oklch(0.28 0.022 75 / 0.18);
+  --wash-mint: oklch(0.74 0.13 162 / 0.2);
+  --wash-sky: oklch(0.76 0.11 228 / 0.16);
+  --wash-amber: oklch(0.86 0.14 84 / 0.22);
+  --world-paper-dots: oklch(0.42 0.02 78 / 0.13);
 }
 
 html.dark[data-theme-world='sketchbook'] {
-  --background: oklch(0.2 0.012 85);
-  --card: oklch(0.245 0.012 85);
-  --popover: oklch(0.275 0.012 85);
-  --muted: oklch(0.285 0.012 85);
-  --border: oklch(0.38 0.016 82);
-  --border-subtle: oklch(0.33 0.014 82);
-  --peek-surface: oklch(0.28 0.024 85);
-  --peek-border: var(--sketch-ink);
-  --peek-shadow: 3px 4px 0 oklch(0.06 0 0 / 0.36);
-  --world-paper-dots: oklch(0.82 0.02 85 / 0.12);
+  --background: oklch(0.2 0.014 82);
+  --foreground: oklch(0.95 0.01 86);
+  --card: oklch(0.245 0.014 82);
+  --popover: oklch(0.27 0.014 82);
+  --muted: oklch(0.285 0.014 82);
+  --border: oklch(0.75 0.025 84 / 0.34);
+  --border-subtle: oklch(0.75 0.02 84 / 0.22);
+  --input: oklch(0.75 0.025 84 / 0.36);
+  --shadow-surface: 2px 3px 0 oklch(0.05 0 0 / 0.32);
+  --shadow-floating: 4px 6px 0 oklch(0.05 0 0 / 0.42);
+  --peek-surface: oklch(0.27 0.02 82);
+  --peek-border: oklch(0.78 0.03 84 / 0.46);
+  --peek-shadow: 4px 5px 0 oklch(0.05 0 0 / 0.42);
+  --world-paper-dots: oklch(0.82 0.02 85 / 0.1);
 }
 
 html[data-theme-world='sketchbook'] .spatial-main-container,
 html[data-theme-world='sketchbook'] [data-theme-stage] {
   background-image:
-    radial-gradient(circle at 12% 18%, var(--wash-mint), transparent 36%),
-    radial-gradient(circle at 88% 82%, var(--wash-amber), transparent 40%),
-    radial-gradient(var(--world-paper-dots) 0.95px, transparent 0.95px);
+    radial-gradient(circle at 10% 14%, var(--wash-mint), transparent 34%),
+    radial-gradient(circle at 90% 84%, var(--wash-amber), transparent 38%),
+    radial-gradient(var(--world-paper-dots) 0.9px, transparent 0.9px);
   background-size:
     100% 100%,
     100% 100%,
-    16px 16px;
+    18px 18px;
 }
 
+/* 原生手账纸墨卡片与浮层：单层清晰描边 + 纸张错位版画投影 */
+html[data-theme-world='sketchbook'] [data-slot='card'],
 html[data-theme-world='sketchbook'] .sketch-surface,
-html[data-theme-world='sketchbook'] .insight-card {
-  border-radius: 14px 17px 15px 16px / 16px 14px 17px 15px;
+html[data-theme-world='sketchbook'] .insight-card,
+html[data-theme-world='sketchbook'] [data-slot='dialog-content'],
+html[data-theme-world='sketchbook'] [data-slot='alert-dialog-content'],
+html[data-theme-world='sketchbook'] [data-slot='sheet-content'],
+html[data-theme-world='sketchbook'] [data-slot='popover-content'],
+html[data-theme-world='sketchbook'] [data-slot='dropdown-menu-content'],
+html[data-theme-world='sketchbook'] [data-slot='select-content'],
+html[data-theme-world='sketchbook'] [data-slot='table-container'] {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--shadow-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
-html[data-theme-world='sketchbook'] .sketch-surface {
-  border-color: transparent;
+html[data-theme-world='sketchbook'] [data-slot='dialog-content'],
+html[data-theme-world='sketchbook'] [data-slot='alert-dialog-content'],
+html[data-theme-world='sketchbook'] [data-slot='sheet-content'],
+html[data-theme-world='sketchbook'] [data-slot='popover-content'],
+html[data-theme-world='sketchbook'] [data-slot='dropdown-menu-content'],
+html[data-theme-world='sketchbook'] [data-slot='select-content'] {
+  background: var(--popover);
+  box-shadow: var(--shadow-floating);
+}
+
+html[data-theme-world='sketchbook'] [data-slot='input'],
+html[data-theme-world='sketchbook'] [data-slot='textarea'],
+html[data-theme-world='sketchbook'] [data-slot='select-trigger'] {
+  background: oklch(0.997 0.005 86);
+  border-color: var(--border);
+  box-shadow: 1px 1.5px 0 oklch(0.28 0.02 75 / 0.09);
+}
+
+html.dark[data-theme-world='sketchbook'] [data-slot='input'],
+html.dark[data-theme-world='sketchbook'] [data-slot='textarea'],
+html.dark[data-theme-world='sketchbook'] [data-slot='select-trigger'] {
+  background: var(--card);
+}
+
+html[data-theme-world='sketchbook'] [data-slot='button'][data-variant='default'],
+html[data-theme-world='sketchbook'] [data-slot='button'][data-variant='outline'],
+html[data-theme-world='sketchbook'] [data-slot='button'][data-variant='secondary'] {
+  border: 1px solid oklch(0.32 0.022 76 / 0.52);
+  box-shadow: 1.5px 2px 0 oklch(0.28 0.022 75 / 0.16);
+}
+
+html[data-theme-world='sketchbook']
+  [data-slot='button'][data-variant='default']:active:not(:disabled),
+html[data-theme-world='sketchbook']
+  [data-slot='button'][data-variant='outline']:active:not(:disabled),
+html[data-theme-world='sketchbook']
+  [data-slot='button'][data-variant='secondary']:active:not(:disabled) {
+  box-shadow: 0 0 0 oklch(0.28 0.022 75 / 0.16);
+}
+
+html[data-theme-world='sketchbook'] [data-slot='segmented-control'] {
+  border: 1px solid var(--border-subtle);
+  background: var(--muted);
+}
+
+html[data-theme-world='sketchbook'] [data-slot='segmented-control'] button[aria-pressed='true'] {
+  border: 1px solid var(--border);
+  box-shadow: 1px 2px 0 oklch(0.28 0.022 75 / 0.12);
 }
 
 html[data-theme-world='sketchbook'] [data-slot='app-sidebar'] {
   background-image: radial-gradient(var(--world-paper-dots) 0.85px, transparent 0.85px);
-  background-size: 16px 16px;
-  border-right-color: oklch(0.28 0.012 145 / 0.48);
-  box-shadow:
-    inset -2px 0 0 oklch(0.28 0.012 145 / 0.16),
-    inset -4px 0 0 oklch(0.28 0.012 145 / 0.06);
+  background-size: 18px 18px;
+  border-right-color: var(--border);
+  box-shadow: none;
 }
 
 html[data-theme-world='sketchbook'] [data-slot='sidebar-link'][data-active='true'] {
   background: linear-gradient(
     96deg,
-    oklch(0.74 0.14 162 / 0.24) 0%,
-    oklch(0.76 0.11 190 / 0.16) 72%,
-    oklch(0.86 0.14 84 / 0.12) 100%
+    oklch(0.76 0.12 162 / 0.22) 0%,
+    oklch(0.84 0.12 86 / 0.16) 100%
   );
-  border-radius: 12px 15px 13px 14px / 14px 12px 15px 13px;
-  box-shadow: inset 3px 0 0 var(--sketch-ink);
-  transform: rotate(-0.45deg);
-}
-
-html[data-theme-world='sketchbook'] .sketch-border-svg {
-  display: block;
+  border: 1px solid var(--border);
+  box-shadow:
+    inset 3px 0 0 var(--sketch-ink),
+    1.5px 2px 0 oklch(0.28 0.022 75 / 0.1);
 }
 
 html[data-theme-world='sketchbook'] .wash-layer[data-wash='normal'] {
-  opacity: 1;
-  filter: url(#watercolor-bleed);
+  opacity: 0.72;
   background:
-    radial-gradient(ellipse at 24% 46%, var(--wash-mint), transparent 68%),
-    radial-gradient(ellipse at 78% 58%, var(--wash-sky), transparent 65%);
+    radial-gradient(ellipse at 18% 40%, var(--wash-mint), transparent 64%),
+    radial-gradient(ellipse at 84% 62%, var(--wash-sky), transparent 64%);
 }
 
 html[data-theme-world='sketchbook'] .wash-layer[data-wash='wide'] {
-  opacity: 1;
-  filter: url(#watercolor-bleed);
+  opacity: 0.78;
   background:
-    radial-gradient(ellipse at 22% 45%, var(--wash-mint), transparent 72%),
-    radial-gradient(ellipse at 80% 52%, var(--wash-amber), transparent 68%);
+    radial-gradient(ellipse at 18% 42%, var(--wash-mint), transparent 68%),
+    radial-gradient(ellipse at 82% 55%, var(--wash-amber), transparent 64%);
 }
 
 /* ============================================================================
- * 3. obsidian（深邃极光夜色：生物荧光等离子管道 + 高对比夜视审计面板）
+ * 3. obsidian（深邃极光夜色：原生深海黑曜石 + 青碧荧光微边）
  * ============================================================================ */
 
 html[data-theme-world='obsidian'] {
@@ -199,6 +289,7 @@ html[data-theme-world='obsidian'] {
   --accent: oklch(0.275 0.022 225);
   --border: oklch(0.35 0.032 195);
   --border-subtle: oklch(0.29 0.024 210);
+  --input: oklch(0.38 0.032 200);
   --surface-navigation: oklch(0.165 0.016 226);
   --surface-navigation-glass: oklch(0.185 0.018 226 / 0.88);
   --insight-surface-raised: oklch(0.25 0.02 225);
@@ -226,13 +317,35 @@ html[data-theme-world='obsidian'] [data-theme-stage] {
     22px 22px;
 }
 
+html[data-theme-world='obsidian'] [data-slot='card'],
 html[data-theme-world='obsidian'] .sketch-surface,
-html[data-theme-world='obsidian'] .insight-card {
-  background: color-mix(in oklch, var(--card) 84%, transparent);
+html[data-theme-world='obsidian'] .insight-card,
+html[data-theme-world='obsidian'] [data-slot='table-container'] {
+  background: color-mix(in oklch, var(--card) 86%, transparent);
   border-color: color-mix(in oklch, var(--border) 70%, var(--brand) 30%);
   box-shadow:
     inset 0 1px 0 oklch(0.95 0.03 185 / 0.09),
     0 12px 30px -12px oklch(0.04 0.01 230 / 0.55);
+}
+
+html[data-theme-world='obsidian'] [data-slot='dialog-content'],
+html[data-theme-world='obsidian'] [data-slot='alert-dialog-content'],
+html[data-theme-world='obsidian'] [data-slot='sheet-content'],
+html[data-theme-world='obsidian'] [data-slot='popover-content'],
+html[data-theme-world='obsidian'] [data-slot='dropdown-menu-content'],
+html[data-theme-world='obsidian'] [data-slot='select-content'] {
+  background: color-mix(in oklch, var(--popover) 92%, transparent);
+  border-color: color-mix(in oklch, var(--border) 62%, var(--brand) 38%);
+  box-shadow:
+    inset 0 1px 0 oklch(0.95 0.03 185 / 0.1),
+    0 20px 48px -12px oklch(0.03 0.01 230 / 0.75);
+}
+
+html[data-theme-world='obsidian'] [data-slot='input'],
+html[data-theme-world='obsidian'] [data-slot='textarea'],
+html[data-theme-world='obsidian'] [data-slot='select-trigger'] {
+  background: oklch(0.16 0.016 226 / 0.9);
+  border-color: color-mix(in oklch, var(--input) 72%, var(--brand) 28%);
 }
 
 html[data-theme-world='obsidian'] [data-slot='app-sidebar'] {
@@ -271,23 +384,12 @@ html[data-theme-world='obsidian'] .wash-layer[data-wash='wide'] {
 
 .sketch-surface
   > :where(
-    :not(.wash-layer):not(.sketch-border-svg):not(.absolute):not(
-        [data-slot='sketch-washi-tape']
-      ):not([data-slot='sketch-apo-peeker']):not([data-slot='fluid-conduit-overlay'])
+    :not(.wash-layer):not(.absolute):not([data-slot='sketch-apo-peeker']):not(
+        [data-slot='fluid-conduit-overlay']
+      )
   ) {
   position: relative;
   z-index: 2;
-}
-
-.sketch-border-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-  z-index: 4;
-  display: none;
 }
 
 .wash-layer {

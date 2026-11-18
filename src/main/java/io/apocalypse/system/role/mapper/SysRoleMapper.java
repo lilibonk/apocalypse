@@ -23,12 +23,22 @@ public interface SysRoleMapper extends BaseMapper<SysRoleEntity> {
 
   /** 按角色名/角色标识关键字分页。 */
   default PageResult<SysRoleEntity> pageByKeyword(int page, int size, String keyword) {
+    return pageByKeyword(page, size, keyword, null);
+  }
+
+  /** 按角色名/角色标识关键字与状态分页。 */
+  default PageResult<SysRoleEntity> pageByKeyword(
+      int page, int size, String keyword, Integer status) {
     LambdaQueryWrapper<SysRoleEntity> wrapper = new LambdaQueryWrapper<>();
+    if (status != null) {
+      wrapper.eq(SysRoleEntity::getStatus, status);
+    }
     if (StringUtils.hasText(keyword)) {
-      wrapper
-          .like(SysRoleEntity::getRoleName, keyword)
-          .or()
-          .like(SysRoleEntity::getRoleKey, keyword);
+      wrapper.and(
+          term ->
+              term.like(SysRoleEntity::getRoleName, keyword)
+                  .or()
+                  .like(SysRoleEntity::getRoleKey, keyword));
     }
     wrapper.orderByAsc(SysRoleEntity::getSort);
     return PageResult.of(selectPage(new Page<>(page, size), wrapper));

@@ -1,35 +1,36 @@
 /**
- * 用户空间工作台（V2 A3 主从档案台）：
- * 左侧 StickyCompactRailLayout 单列紧凑账号定位轨 + 右侧顶置 LivingContextBar 与单一连贯 L1 身份与权责档案面板。
+ * 用户管理统一工作台（单主视图：左部门过滤轨 + 多维搜索 + 全功能多选主表 + 按需侧滑账号上下文抽屉）。
+ * - 废除旧版工作区/列表双页签割裂与跨路由跳去角色页配角色的反人类流程；
+ * - 剔除后端 UserResp 不存在的 email / phone / remark 假字段；
+ * - 分配角色与重置密码全部在本页弹窗闭环完成；关联实体使用 EntityPeekLink 原位速览。
  */
+
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
   Building2,
   ChevronRight,
   CircleUserRound,
-  Inbox,
-  SearchX,
+  FolderTree,
+  KeyRound,
+  Pencil,
   ShieldAlert,
   ShieldCheck,
   Wifi,
 } from 'lucide-react'
-import { LayoutGroup, motion } from 'motion/react'
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 
 import { DictTag } from '@/components/DictTag'
-import { DynaQueryFeedback, type DynaController, type DynaTableProps } from '@/components/dyna'
-import { useDynaText } from '@/components/dyna/use-dyna'
 import {
-  FluidConduitOverlay,
-  MetricValue,
-  PulseIndicator,
-  type ConduitLink,
-} from '@/components/motion'
+  DynaTable,
+  type DynaColumn,
+  type DynaController,
+  type DynaTableProps,
+} from '@/components/dyna'
+import { MetricValue, PulseIndicator } from '@/components/motion'
 import { EntityPeekLink, LivingContextBar, type EntityRouteIntent } from '@/components/navigation'
-import { StickyCompactRailLayout } from '@/components/spatial'
+import { ResponsiveInspector } from '@/components/spatial'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,23 +40,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Skeleton } from '@/components/ui/skeleton'
-import { insightMotion, motionGeometry, motionTransition, stateMotion } from '@/design/motion'
-import { useMenuRoute } from '@/hooks/useMenuRoute'
-import { useMotionPreference } from '@/hooks/useMotionPreference'
-import { ApiError } from '@/lib/api/client'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { ApiError, request } from '@/lib/api/client'
 import type { DeptPathNode, UserRoleSummary } from '@/lib/api/types'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
-import { listOnlineUsers } from '../online/online.api'
+
+import { listOnlineUsers, type OnlineUserRow } from '../online/online.api'
 import { getAuthorizationOverview } from '../role/authorization-insight.api'
 import { canAskAuthorizationQuestions } from '../role/authorization-questions.model'
+import type { AssignRoleUserTarget } from './UserAssignRolesDialog'
+import type { ResetPasswordUserTarget } from './UserResetPasswordDialog'
 
 const value = (row: Record<string, unknown>, key: string) =>
   row[key] == null ? '' : String(row[key])
 
-function readDeptPath(row: Record<string, unknown>): DeptPathNode[] {
+export function readDeptPath(row: Record<string, unknown>): DeptPathNode[] {
   if (Array.isArray(row.deptPath) && row.deptPath.length > 0) {
     return row.deptPath.filter((item): item is DeptPathNode =>
       Boolean(item && typeof item === 'object' && 'id' in item && 'deptName' in item),
@@ -69,10 +71,345 @@ function readDeptPath(row: Record<string, unknown>): DeptPathNode[] {
   return []
 }
 
-function readUserRoles(row: Record<string, unknown>): UserRoleSummary[] {
+export function readUserRoles(row: Record<string, unknown>): UserRoleSummary[] {
   if (!Array.isArray(row.roles)) return []
   return row.roles.filter((item): item is UserRoleSummary =>
     Boolean(item && typeof item === 'object' && 'id' in item && 'roleName' in item),
+  )
+}
+
+interface DeptTreeApiNode {
+  id: string
+  parentId: string
+  deptName: string
+  status?: number
+  children?: DeptTreeApiNode[]
+}
+
+function DeptFilterTree({
+  nodes,
+  depth = 0,
+  selectedDeptId,
+  onSelect,
+}: {
+  nodes: readonly DeptTreeApiNode[]
+  depth?: number
+  selectedDeptId: string
+  onSelect: (deptId: string) => void
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {nodes.map((node) => {
+        const id = String(node.id)
+        const active = selectedDeptId === id
+        return (
+          <li key={id}>
+            <button
+              type="button"
+              onClick={() => onSelect(id)}
+              aria-pressed={active}
+              style={{ paddingLeft: `${0.65 + depth * 0.85}rem` }}
+              className={cn(
+                'flex w-full cursor-pointer items-center gap-1.5 rounded-control py-1.5 pr-2.5 text-left text-xs transition-colors',
+                active
+                  ? 'bg-primary/14 font-semibold text-brand-text'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+              )}
+            >
+              <Building2 className="size-3.5 shrink-0 opacity-75" aria-hidden="true" />
+              <span className="truncate">{node.deptName}</span>
+            </button>
+            {node.children && node.children.length > 0 && (
+              <DeptFilterTree
+                nodes={node.children}
+                depth={depth + 1}
+                selectedDeptId={selectedDeptId}
+                onSelect={onSelect}
+              />
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+export function UserDossierContent({
+  selected,
+  onlineSessions,
+  onlineError,
+  canViewOnline,
+  canViewLoginLog,
+  canEdit,
+  onEdit,
+  onAssignRoles,
+  onResetPassword,
+}: {
+  selected: Record<string, unknown>
+  onlineSessions: OnlineUserRow[]
+  onlineError: boolean
+  canViewOnline: boolean
+  canViewLoginLog: boolean
+  canEdit: boolean
+  onEdit?: (row: Record<string, unknown>) => void
+  onAssignRoles?: (user: AssignRoleUserTarget) => void
+  onResetPassword?: (user: ResetPasswordUserTarget) => void
+}) {
+  const { t } = useTranslation('system')
+  const selectedId = value(selected, 'id')
+  const username = value(selected, 'username')
+  const nickname = value(selected, 'nickname')
+  const name = nickname || username
+  const deptPath = readDeptPath(selected)
+  const deptFullText =
+    deptPath.length > 0
+      ? deptPath.map((d) => d.deptName).join(' / ')
+      : t('objectWorkspace.unspecified')
+  const roles = readUserRoles(selected)
+  const sourceRef = { kind: 'user' as const, id: selectedId, label: name }
+
+  return (
+    <section
+      role="region"
+      aria-label={t('objectWorkspace.accountDetails')}
+      className="divide-y divide-border-subtle"
+    >
+      {/* 头部摘要 + 本页原地快捷操作 */}
+      <div className="space-y-3 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-brand-text/40 bg-primary/14 text-base font-semibold text-brand-text"
+              aria-hidden="true"
+            >
+              {name.slice(0, 1)}
+            </span>
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="break-words text-lg font-semibold text-foreground">{name}</h2>
+                <DictTag type="sys_user_status" value={String(selected.status)} />
+              </div>
+              <p className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                <CircleUserRound className="size-3.5" aria-hidden="true" />@{username}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {canEdit && (
+          <div className="flex flex-wrap items-center gap-2">
+            {onEdit && (
+              <Button type="button" size="xs" variant="outline" onClick={() => onEdit(selected)}>
+                <Pencil className="size-3.5" />
+                编辑资料
+              </Button>
+            )}
+            {onAssignRoles && (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() =>
+                  onAssignRoles({
+                    id: selectedId,
+                    username,
+                    nickname: nickname || null,
+                    roles,
+                  })
+                }
+              >
+                <ShieldCheck className="size-3.5" />
+                分配角色
+              </Button>
+            )}
+            {onResetPassword && (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() =>
+                  onResetPassword({
+                    id: selectedId,
+                    username,
+                    nickname: nickname || null,
+                  })
+                }
+              >
+                <KeyRound className="size-3.5" />
+                重置密码
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 真实基础与组织档案（零虚假占位字段） */}
+      <div className="py-4" data-testid="user-dept-chain">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-xs text-muted-foreground">{t('objectWorkspace.username')}</dt>
+            <dd className="mt-0.5 font-mono text-foreground">{username || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">{t('objectWorkspace.nickname')}</dt>
+            <dd className="mt-0.5 font-medium text-foreground">{nickname || '—'}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">{t('objectWorkspace.department')}</dt>
+            <dd className="mt-0.5 font-medium text-foreground">
+              {deptPath.length > 0 ? (
+                <EntityPeekLink
+                  kind="dept"
+                  id={String(deptPath[deptPath.length - 1]!.id)}
+                  label={deptFullText}
+                  source={sourceRef}
+                />
+              ) : (
+                deptFullText
+              )}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">{t('objectWorkspace.created')}</dt>
+            <dd className="mt-0.5 font-mono text-xs tabular-nums text-foreground">
+              {value(selected, 'createTime').replace('T', ' ') || '—'}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {/* 生效角色：直接弹窗闭环分配 + 原位 EntityPeekLink 预览 */}
+      <div className="space-y-3 py-4" data-testid="user-roles-stage">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <ShieldCheck className="size-4 text-amber-600 dark:text-amber-400" />
+            <span>持有角色</span>
+            <Badge variant="secondary" className="font-mono tabular-nums">
+              {roles.length}
+            </Badge>
+          </div>
+          {canEdit && onAssignRoles && (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() =>
+                onAssignRoles({
+                  id: selectedId,
+                  username,
+                  nickname: nickname || null,
+                  roles,
+                })
+              }
+            >
+              <ShieldCheck className="size-3.5" />
+              {t('objectWorkspace.manageRoles')}
+            </Button>
+          )}
+        </div>
+
+        {roles.length > 0 ? (
+          <ul className="divide-y divide-border-subtle/60 text-sm">
+            {roles.map((role) => (
+              <li
+                key={role.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <EntityPeekLink
+                    kind="role"
+                    id={String(role.id)}
+                    label={role.roleName}
+                    sublabel={role.roleKey}
+                    relation="members"
+                    focusTargetId={selectedId}
+                    source={sourceRef}
+                  />
+                  <code className="font-mono text-xs text-muted-foreground">{role.roleKey}</code>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant={Number(role.status) === 1 ? 'success' : 'secondary'}>
+                    {t(
+                      Number(role.status) === 1 ? 'authorization.active' : 'authorization.inactive',
+                    )}
+                  </Badge>
+                  {role.dataScope && (
+                    <Badge variant="outline">
+                      {t(`dataScope.${role.dataScope}`, { defaultValue: role.dataScope })}
+                    </Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <ShieldAlert className="size-4 text-amber-500" aria-hidden="true" />
+            {t('objectWorkspace.withoutRoles')}
+          </p>
+        )}
+      </div>
+
+      {/* 实时活跃在线状态与登录活动 */}
+      {(canViewOnline || canViewLoginLog) && (
+        <div className="space-y-2.5 pt-4" data-testid="user-sessions-stage">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Activity className="size-4 text-cyan-600 dark:text-cyan-400" />
+              <span>{t('objectWorkspace.online')}</span>
+              {canViewOnline && !onlineError && (
+                <span className="inline-flex items-center gap-1.5">
+                  {onlineSessions.length > 0 && <PulseIndicator tone="brand" />}
+                  <Badge variant="secondary" className="font-mono tabular-nums">
+                    {onlineSessions.length}
+                  </Badge>
+                </span>
+              )}
+            </div>
+            {canViewLoginLog && (
+              <EntityPeekLink
+                kind="log-login"
+                id={username}
+                label={t('objectWorkspace.loginActivity')}
+                source={sourceRef}
+                className="text-xs"
+              />
+            )}
+          </div>
+
+          {canViewOnline &&
+            (onlineSessions.length > 0 ? (
+              <ul className="divide-y divide-border-subtle/60 text-xs">
+                {onlineSessions.map((session) => (
+                  <li
+                    key={session.jti}
+                    className="flex flex-wrap items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
+                  >
+                    <EntityPeekLink
+                      kind="session"
+                      id={session.username}
+                      label={session.userAgent || session.username}
+                      sublabel={session.ip ?? undefined}
+                      source={sourceRef}
+                    />
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <span className="font-mono">{session.ip || '—'}</span>
+                      {session.loginTime && (
+                        <span className="tabular-nums">{session.loginTime.replace('T', ' ')}</span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <Wifi className="size-3.5" aria-hidden="true" />
+                {t('listInsights.online.empty')}
+              </p>
+            ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -84,36 +421,59 @@ export interface UserWorkspaceProps {
   queryKey: readonly unknown[] | undefined
   selectedRowKey: string | null
   selectRow: (key: string | null) => void
+  inspectorOpen: boolean
+  onInspectorOpenChange: (open: boolean) => void
   search?: ReactNode
   intent?: EntityRouteIntent
+  onAssignRoles?: (user: AssignRoleUserTarget) => void
+  onResetPassword?: (user: ResetPasswordUserTarget) => void
 }
 
 export function UserWorkspace({
   controller,
   collection,
+  filters,
   applyFilters,
   queryKey,
   selectedRowKey,
   selectRow,
+  inspectorOpen,
+  onInspectorOpenChange,
   search,
   intent,
+  onAssignRoles,
+  onResetPassword,
 }: UserWorkspaceProps) {
   const { t } = useTranslation('system')
-  const dynaText = useDynaText()
-  const motionEnabled = useMotionPreference()
-  const layoutId = useId()
-  const stageRef = useRef<HTMLDivElement>(null)
   const canOverview = useAuthStore(canAskAuthorizationQuestions)
+  const canReadDept = useAuthStore((state) => state.hasPerm('system:dept:list'))
+  const canReadDeptOptions = useAuthStore(
+    (state) => state.hasPerm('system:user:add') || state.hasPerm('system:user:edit'),
+  )
   const canViewOnline = useAuthStore((state) => state.hasPerm('system:online:list'))
   const canViewLoginLog = useAuthStore((state) => state.hasPerm('system:log:login'))
+  const canEdit = useAuthStore((state) => state.hasPerm('system:user:edit'))
   const epoch = useAuthStore((state) => state.authorizationEpoch)
-  const roleRoute = useMenuRoute('system/role')
+
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [deptRailOpen, setDeptRailOpen] = useState(true)
 
   const overview = useQuery({
     queryKey: [...(queryKey ?? ['system', 'users', 'summary']), epoch, 'overview'],
     queryFn: ({ signal }) => getAuthorizationOverview(signal),
     enabled: canOverview,
+  })
+
+  const deptTreeQuery = useQuery<DeptTreeApiNode[]>({
+    queryKey: ['system', 'users', 'dept-filter-tree', epoch, canReadDept],
+    enabled: canReadDept || canReadDeptOptions,
+    queryFn: ({ signal }) =>
+      canReadDept
+        ? request<DeptTreeApiNode[]>('/system/depts/tree', { signal })
+        : request<DeptTreeApiNode[]>('/system/users/department-options', {
+            query: { operation: 'CREATE' },
+            signal,
+          }),
   })
 
   const onlineQuery = useQuery({
@@ -122,12 +482,98 @@ export function UserWorkspace({
     enabled: canViewOnline,
   })
 
-  const { rows, error, loading, refreshing, onRetry, filtered, onResetFilters } = collection
-  const visible = rows !== undefined && !isResourceDenied(error)
-  const totalPages = Math.max(1, Math.ceil(collection.total / collection.size))
+  const activeDeptId = filters.deptId ?? ''
+  const includeChildren = filters.includeChildren === 'true'
+  const showDeptRail = (canReadDept || canReadDeptOptions) && deptRailOpen
+
+  const selectDept = (deptId: string) => {
+    const next = { ...filters }
+    if (!deptId) {
+      delete next.deptId
+      delete next.includeChildren
+    } else {
+      next.deptId = deptId
+      if (!next.includeChildren) next.includeChildren = 'true'
+    }
+    applyFilters(next)
+  }
+
+  const toggleIncludeChildren = (checked: boolean) => {
+    const next = { ...filters }
+    if (checked && activeDeptId) next.includeChildren = 'true'
+    else delete next.includeChildren
+    applyFilters(next)
+  }
+
+  const enrichedColumns = useMemo<DynaColumn[]>(() => {
+    const base = [...collection.columns]
+    const deptIndex = base.findIndex((col) => col.key === 'deptName')
+    const roleCol: DynaColumn = {
+      key: 'roles',
+      title: '持有角色',
+      render: (_val, row) => {
+        const list = readUserRoles(row)
+        if (list.length === 0) {
+          return <span className="text-xs text-muted-foreground">未分配</span>
+        }
+        return (
+          <div className="flex max-w-52 flex-wrap gap-1">
+            {list.slice(0, 2).map((role) => (
+              <Badge key={role.id} variant="secondary" className="text-[11px]">
+                {role.roleName}
+              </Badge>
+            ))}
+            {list.length > 2 && (
+              <Badge variant="outline" className="font-mono text-[11px]">
+                +{list.length - 2}
+              </Badge>
+            )}
+          </div>
+        )
+      },
+    }
+    if (deptIndex >= 0) base.splice(deptIndex + 1, 0, roleCol)
+    else base.push(roleCol)
+    return base
+  }, [collection.columns])
+
+  const intentId = intent?.id
+  const selectedRow = useMemo(() => {
+    if (!collection.rows?.length) return null
+    return (
+      collection.rows.find(
+        (row) =>
+          value(row, collection.rowKey) === selectedRowKey ||
+          (intentId && value(row, 'username') === intentId),
+      ) ?? null
+    )
+  }, [collection.rowKey, collection.rows, intentId, selectedRowKey])
+
+  const selectedUsername = selectedRow ? value(selectedRow, 'username') : ''
+  const selectedSessions = useMemo(
+    () => (onlineQuery.data ?? []).filter((session) => session.username === selectedUsername),
+    [onlineQuery.data, selectedUsername],
+  )
+
+  const tableProps: DynaTableProps = {
+    ...collection,
+    columns: enrichedColumns,
+    activeRowKey:
+      inspectorOpen && selectedRow
+        ? value(selectedRow, collection.rowKey)
+        : collection.activeRowKey,
+    onRowClick: (_row, key) => {
+      selectRow(key)
+      onInspectorOpenChange(true)
+    },
+  }
+
+  const deptNodes = isResourceDenied(deptTreeQuery.error) ? [] : (deptTreeQuery.data ?? [])
 
   return (
     <div className="space-y-4">
+      {intent?.source && <LivingContextBar source={intent.source} />}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="flex items-baseline gap-2" title={t('objectWorkspace.accountScope')}>
           <span className="text-2xl font-semibold tabular-nums">
@@ -141,479 +587,131 @@ export function UserWorkspace({
             {t('objectWorkspace.matchingAccounts')}
           </span>
         </p>
-        {canOverview && overview.data?.usersVisible && !overview.isError && (
-          <Button variant="secondary" size="sm" onClick={() => setRosterOpen(true)}>
-            <ShieldCheck className="size-4" />
-            {t('objectWorkspace.withoutRoles')}{' '}
-            <span className="tabular-nums">{overview.data.usersWithoutRolesCount}</span>
-          </Button>
-        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {(canReadDept || canReadDeptOptions) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="hidden lg:inline-flex"
+              aria-pressed={deptRailOpen}
+              onClick={() => setDeptRailOpen((prev) => !prev)}
+            >
+              <FolderTree className="size-4" />
+              {deptRailOpen ? '收起部门栏' : '展开部门栏'}
+            </Button>
+          )}
+          {canOverview && overview.data?.usersVisible && !overview.isError && (
+            <Button variant="secondary" size="sm" onClick={() => setRosterOpen(true)}>
+              <ShieldCheck className="size-4" />
+              {t('objectWorkspace.withoutRoles')}{' '}
+              <span className="tabular-nums">{overview.data.usersWithoutRolesCount}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
-      {search}
-
-      <div className="space-y-4" aria-busy={loading || refreshing}>
-        <DynaQueryFeedback
-          error={error}
-          hasData={visible}
-          refreshing={refreshing}
-          onRetry={onRetry}
-        />
-
-        {loading ? (
-          <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <div className="space-y-2.5">
-              {[0, 1, 2, 3].map((key) => (
-                <Skeleton key={key} className="h-20 rounded-xl" />
-              ))}
+      <div
+        className={cn(
+          'grid items-start gap-5',
+          showDeptRail ? 'lg:grid-cols-[240px_minmax(0,1fr)]' : 'grid-cols-1',
+        )}
+      >
+        {showDeptRail && (
+          <aside
+            aria-label="部门筛选"
+            className="hidden rounded-panel border border-border-subtle bg-card p-3 shadow-surface lg:block"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2 border-b border-border-subtle pb-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <FolderTree className="size-3.5 text-brand-text" aria-hidden="true" />
+                按部门筛选
+              </span>
+              {activeDeptId && (
+                <button
+                  type="button"
+                  onClick={() => selectDept('')}
+                  className="cursor-pointer text-[11px] text-brand-text hover:underline"
+                >
+                  全部
+                </button>
+              )}
             </div>
-            <Skeleton className="h-96 rounded-panel" />
-          </div>
-        ) : visible && rows.length > 0 ? (
-          (() => {
-            const selected =
-              rows.find(
-                (row) =>
-                  value(row, collection.rowKey) === selectedRowKey ||
-                  (intent?.id && value(row, 'username') === intent.id),
-              ) ?? rows[0]!
-            const selectedId = value(selected, collection.rowKey)
-            const username = value(selected, 'username')
-            const name = value(selected, 'nickname') || username
-            const deptPath = readDeptPath(selected)
-            const deptFullText =
-              deptPath.length > 0
-                ? deptPath.map((d) => d.deptName).join(' / ')
-                : t('objectWorkspace.unspecified')
-            const roles = readUserRoles(selected)
-            const userSessions = (onlineQuery.data ?? []).filter(
-              (session) => session.username === username,
-            )
-            const rowActions =
-              controller?.actions.renderRowActions(selected) ?? collection.actions?.(selected)
-            const sourceRef = { kind: 'user' as const, id: selectedId, label: name }
 
-            const conduitLinks: ConduitLink[] = [
-              {
-                id: `user-${selectedId}`,
-                from: 'user-rail-active',
-                to: 'user-dossier',
-                enabled: String(selected.status) !== '0',
-              },
-            ]
-
-            return (
-              <LayoutGroup id={layoutId}>
-                <div ref={stageRef} data-theme-stage="" className="relative">
-                  <FluidConduitOverlay
-                    containerRef={stageRef}
-                    links={conduitLinks}
-                    flow="horizontal"
-                    minContainerWidth={720}
-                    pulseKey={selectedId}
-                  />
-                  <StickyCompactRailLayout
-                    railLabel={t('objectWorkspace.account')}
-                    railWidth="locator"
-                    railContent={
-                      <div
-                        className="space-y-2"
-                        role="list"
-                        aria-label={t('objectWorkspace.account')}
-                      >
-                        {rows.map((row) => {
-                          const id = value(row, collection.rowKey)
-                          const active = id === selectedId
-                          const rowUsername = value(row, 'username')
-                          const label = value(row, 'nickname') || rowUsername
-                          const rowRoles = readUserRoles(row)
-                          const rowDept =
-                            readDeptPath(row).at(-1)?.deptName ||
-                            value(row, 'deptName') ||
-                            t('objectWorkspace.unspecified')
-
-                          return (
-                            <motion.article
-                              key={id}
-                              role="listitem"
-                              layout={motionEnabled ? 'position' : false}
-                              transition={
-                                motionEnabled ? stateMotion.yieldLayout : insightMotion.instant
-                              }
-                              data-selected={active}
-                              data-conduit-anchor={active ? 'user-rail-active' : undefined}
-                              className={cn(
-                                'rounded-xl border transition-colors',
-                                active
-                                  ? 'border-primary/40 bg-primary/8 shadow-xs'
-                                  : 'border-border-subtle bg-card/80 hover:border-border hover:bg-muted/40',
-                              )}
-                            >
-                              <button
-                                type="button"
-                                className="w-full rounded-xl p-3 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                aria-pressed={active}
-                                aria-label={t('objectWorkspace.selectAccount', { name: label })}
-                                onClick={() => selectRow(id)}
-                              >
-                                <div className="flex min-w-0 items-center gap-2.5">
-                                  <span
-                                    className={cn(
-                                      'inline-flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
-                                      active
-                                        ? 'border-brand-text/45 bg-primary text-primary-foreground shadow-xs'
-                                        : 'border-border-subtle bg-muted text-muted-foreground',
-                                    )}
-                                    aria-hidden="true"
-                                  >
-                                    {label.slice(0, 1)}
-                                  </span>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-semibold text-foreground">
-                                      {label}
-                                    </p>
-                                    <p className="truncate font-mono text-xs text-muted-foreground">
-                                      @{rowUsername}
-                                    </p>
-                                  </div>
-                                  <DictTag type="sys_user_status" value={String(row.status)} />
-                                </div>
-                                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border-subtle/60 pt-2 text-xs text-muted-foreground">
-                                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-                                    <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
-                                    <span className="truncate">{rowDept}</span>
-                                  </span>
-                                  {rowRoles.length > 0 && (
-                                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] tabular-nums">
-                                      {rowRoles.length}
-                                    </span>
-                                  )}
-                                </div>
-                              </button>
-                            </motion.article>
-                          )
-                        })}
-                      </div>
-                    }
-                    railFooter={
-                      <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          disabled={collection.page <= 1}
-                          onClick={() => collection.onPageChange(collection.page - 1)}
-                        >
-                          {dynaText('上一页')}
-                        </Button>
-                        <span className="font-mono tabular-nums">
-                          {collection.page} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          disabled={collection.page >= totalPages}
-                          onClick={() => collection.onPageChange(collection.page + 1)}
-                        >
-                          {dynaText('下一页')}
-                        </Button>
-                      </div>
-                    }
-                  >
-                    <motion.section
-                      key={`${selectedId}:${value(selected, 'deptId')}:${value(selected, 'status')}`}
-                      initial={
-                        motionEnabled
-                          ? { opacity: stateMotion.dimOpacity, y: motionGeometry.pageOffset }
-                          : false
-                      }
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={motionEnabled ? motionTransition.standard : insightMotion.instant}
-                      role="region"
-                      aria-label={t('objectWorkspace.accountDetails')}
-                      data-conduit-anchor="user-dossier"
-                      className="sketch-surface divide-y divide-border-subtle rounded-panel border border-border-subtle bg-card p-5 shadow-surface"
-                    >
-                      {/* 第一区：黄金视线顶栏 + 仅跨实体穿透时呈现来源回跳条 */}
-                      <div className="space-y-3.5 pb-4">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div className="flex min-w-0 items-center gap-3.5">
-                            <span
-                              className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-brand-text/40 bg-primary/14 text-lg font-semibold text-brand-text shadow-xs"
-                              aria-hidden="true"
-                            >
-                              {name.slice(0, 1)}
-                            </span>
-                            <div className="min-w-0 space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="break-words text-xl font-semibold text-foreground">
-                                  {name}
-                                </h2>
-                                <DictTag type="sys_user_status" value={String(selected.status)} />
-                              </div>
-                              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                <span className="inline-flex items-center gap-1 font-mono">
-                                  <CircleUserRound className="size-3.5" aria-hidden="true" />@
-                                  {username}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          {rowActions && (
-                            <div className="flex flex-wrap items-center gap-1.5">{rowActions}</div>
-                          )}
-                        </div>
-
-                        {intent?.source && <LivingContextBar source={intent.source} />}
-                      </div>
-
-                      {/* 第二区：基础与组织档案（原位 EntityPeekLink 语义直达） */}
-                      <div className="py-4" data-testid="user-dept-chain">
-                        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.username')}
-                            </dt>
-                            <dd className="mt-0.5 font-mono text-foreground">{username || '—'}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.nickname')}
-                            </dt>
-                            <dd className="mt-0.5 font-medium text-foreground">
-                              {value(selected, 'nickname') || '—'}
-                            </dd>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.department')}
-                            </dt>
-                            <dd className="mt-0.5 font-medium text-foreground">
-                              {deptPath.length > 0 ? (
-                                <EntityPeekLink
-                                  kind="dept"
-                                  id={String(deptPath[deptPath.length - 1]!.id)}
-                                  label={deptFullText}
-                                  source={sourceRef}
-                                />
-                              ) : (
-                                deptFullText
-                              )}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.email')}
-                            </dt>
-                            <dd className="mt-0.5 break-all text-foreground">
-                              {value(selected, 'email') || '—'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.phone')}
-                            </dt>
-                            <dd className="mt-0.5 font-mono tabular-nums text-foreground">
-                              {value(selected, 'phone') || value(selected, 'phonenumber') || '—'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.created')}
-                            </dt>
-                            <dd className="mt-0.5 tabular-nums text-foreground">
-                              {value(selected, 'createTime').replace('T', ' ') || '—'}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">
-                              {t('objectWorkspace.remark')}
-                            </dt>
-                            <dd className="mt-0.5 break-words text-foreground">
-                              {value(selected, 'remark') || '—'}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-
-                      {/* 第三区：生效角色与数据范围（无边框清爽列表，零胶囊） */}
-                      <div className="space-y-3 py-4" data-testid="user-roles-stage">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                            <ShieldCheck className="size-4 text-amber-600 dark:text-amber-400" />
-                            <span>{t('authorization.members')}</span>
-                            <Badge variant="secondary" className="font-mono tabular-nums">
-                              {roles.length}
-                            </Badge>
-                          </div>
-                          {roleRoute && (
-                            <Button asChild variant="outline" size="sm">
-                              <Link
-                                to={`${roleRoute}?roleRelation=members&focus=${encodeURIComponent(selectedId)}`}
-                                state={{
-                                  entityIntent: {
-                                    kind: 'role',
-                                    id: roles[0]?.id ? String(roles[0].id) : selectedId,
-                                    label: username,
-                                    relation: 'members',
-                                    focusTargetId: selectedId,
-                                    triggerPulse: true,
-                                    source: sourceRef,
-                                  },
-                                }}
-                              >
-                                <ShieldCheck className="size-4" />
-                                {t('objectWorkspace.manageRoles')}
-                              </Link>
-                            </Button>
-                          )}
-                        </div>
-
-                        {roles.length > 0 ? (
-                          <ul className="divide-y divide-border-subtle/60 text-sm">
-                            {roles.map((role) => (
-                              <li
-                                key={role.id}
-                                className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
-                              >
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <EntityPeekLink
-                                    kind="role"
-                                    id={String(role.id)}
-                                    label={role.roleName}
-                                    sublabel={role.roleKey}
-                                    relation="members"
-                                    focusTargetId={selectedId}
-                                    source={sourceRef}
-                                  />
-                                  <code className="font-mono text-xs text-muted-foreground">
-                                    {role.roleKey}
-                                  </code>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <Badge
-                                    variant={Number(role.status) === 1 ? 'success' : 'secondary'}
-                                  >
-                                    {t(
-                                      Number(role.status) === 1
-                                        ? 'authorization.active'
-                                        : 'authorization.inactive',
-                                    )}
-                                  </Badge>
-                                  {role.dataScope && (
-                                    <Badge variant="outline">
-                                      {t(`dataScope.${role.dataScope}`, {
-                                        defaultValue: role.dataScope,
-                                      })}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                            <ShieldAlert className="size-4 text-amber-500" aria-hidden="true" />
-                            {t('objectWorkspace.withoutRoles')}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* 第四区：实时活跃状态（纯文本设备摘要或离线状态） */}
-                      {(canViewOnline || canViewLoginLog) && (
-                        <div className="space-y-2.5 pt-4" data-testid="user-sessions-stage">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                              <Activity className="size-4 text-cyan-600 dark:text-cyan-400" />
-                              <span>{t('objectWorkspace.online')}</span>
-                              {canViewOnline && !onlineQuery.isError && (
-                                <span className="inline-flex items-center gap-1.5">
-                                  {userSessions.length > 0 && <PulseIndicator tone="brand" />}
-                                  <Badge variant="secondary" className="font-mono tabular-nums">
-                                    {userSessions.length}
-                                  </Badge>
-                                </span>
-                              )}
-                            </div>
-                            {canViewLoginLog && (
-                              <EntityPeekLink
-                                kind="log-login"
-                                id={username}
-                                label={t('objectWorkspace.loginActivity')}
-                                source={sourceRef}
-                                className="text-xs"
-                              />
-                            )}
-                          </div>
-
-                          {canViewOnline &&
-                            (userSessions.length > 0 ? (
-                              <ul className="divide-y divide-border-subtle/60 text-xs">
-                                {userSessions.map((session) => (
-                                  <li
-                                    key={session.jti}
-                                    className="flex flex-wrap items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
-                                  >
-                                    <EntityPeekLink
-                                      kind="session"
-                                      id={session.username}
-                                      label={session.userAgent || session.username}
-                                      sublabel={session.ip ?? undefined}
-                                      source={sourceRef}
-                                    />
-                                    <div className="flex items-center gap-3 text-muted-foreground">
-                                      <span className="font-mono">{session.ip || '—'}</span>
-                                      {session.loginTime && (
-                                        <span className="tabular-nums">
-                                          {session.loginTime.replace('T', ' ')}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                                <Wifi className="size-3.5" aria-hidden="true" />
-                                {t('listInsights.online.empty')}
-                              </p>
-                            ))}
-                        </div>
-                      )}
-                    </motion.section>
-                  </StickyCompactRailLayout>
-                </div>
-              </LayoutGroup>
-            )
-          })()
-        ) : (
-          (visible || !error) && (
-            <>
-              {intent?.source && <LivingContextBar source={intent.source} />}
-              <div
-                role="status"
-                className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-panel border border-border-subtle bg-card p-6 text-center text-muted-foreground"
+            <div className="max-h-[420px] space-y-1 overflow-y-auto pr-1">
+              <button
+                type="button"
+                aria-pressed={!activeDeptId}
+                onClick={() => selectDept('')}
+                className={cn(
+                  'flex w-full cursor-pointer items-center gap-1.5 rounded-control px-2.5 py-1.5 text-left text-xs transition-colors',
+                  !activeDeptId
+                    ? 'bg-primary/14 font-semibold text-brand-text'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
               >
-                {filtered ? (
-                  <SearchX className="size-6" aria-hidden="true" />
-                ) : (
-                  <Inbox className="size-6" aria-hidden="true" />
-                )}
-                <p className="font-medium text-foreground">
-                  {dynaText(filtered ? 'queryNoMatches' : '暂无数据')}
-                </p>
-                <p className="text-sm">
-                  {dynaText(filtered ? 'queryNoMatchesHint' : 'queryEmptyHint')}
-                </p>
-                {filtered && onResetFilters && (
-                  <Button variant="outline" size="sm" onClick={onResetFilters}>
-                    {dynaText('queryClearFilters')}
-                  </Button>
-                )}
+                <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>全部部门</span>
+              </button>
+              {deptNodes.length > 0 && (
+                <DeptFilterTree
+                  nodes={deptNodes}
+                  selectedDeptId={activeDeptId}
+                  onSelect={selectDept}
+                />
+              )}
+            </div>
+
+            {activeDeptId && (
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+                <Label htmlFor="user-include-children" className="text-xs text-muted-foreground">
+                  含下级部门
+                </Label>
+                <Switch
+                  id="user-include-children"
+                  checked={includeChildren}
+                  onCheckedChange={toggleIncludeChildren}
+                />
               </div>
-            </>
-          )
+            )}
+          </aside>
         )}
+
+        <div className="min-w-0 space-y-4">
+          {search}
+          <DynaTable {...tableProps} />
+        </div>
       </div>
+
+      {/* 按需滑出账号上下文检视抽屉（含部门/角色/在线会话原位速览 + 直接分配角色/重置密码/编辑） */}
+      <ResponsiveInspector
+        mode="sheet"
+        title={t('objectWorkspace.accountDetails')}
+        open={inspectorOpen && selectedRow !== null}
+        onOpenChange={onInspectorOpenChange}
+      >
+        {selectedRow && (
+          <UserDossierContent
+            selected={selectedRow}
+            onlineSessions={selectedSessions}
+            onlineError={onlineQuery.isError}
+            canViewOnline={canViewOnline}
+            canViewLoginLog={canViewLoginLog}
+            canEdit={canEdit}
+            onEdit={(row) => {
+              onInspectorOpenChange(false)
+              controller?.actions.openEdit(row)
+            }}
+            onAssignRoles={(user) => {
+              onAssignRoles?.(user)
+            }}
+            onResetPassword={(user) => {
+              onResetPassword?.(user)
+            }}
+          />
+        )}
+      </ResponsiveInspector>
 
       <Dialog open={rosterOpen} onOpenChange={setRosterOpen}>
         <DialogContent>
@@ -640,6 +738,7 @@ export function UserWorkspace({
                   onClick={() => {
                     applyFilters({ keyword: user.username })
                     selectRow(user.id)
+                    onInspectorOpenChange(true)
                     setRosterOpen(false)
                   }}
                 >

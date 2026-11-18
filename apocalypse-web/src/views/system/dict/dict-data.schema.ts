@@ -2,8 +2,7 @@
  * 字典数据页 schema（DynaLayer 渲染，挂在字典管理页「字典数据」页签内）。
  *
  * 端点映射（后端 DictController）：
- * - 类型码过滤 → search[0]（GET /system/dict/data/page?dictType=；
- *   后端 pageData 只认 dictType 参数，无 keyword，故不配置关键词搜索）
+ * - 类型码/关键词/状态过滤 → search（GET /system/dict/data/page?dictType=&keyword=&status=）
  * - 新增/编辑  → form（POST /system/dict/data、PUT /system/dict/data/{id}）
  * - 启用/停用  → rowActions status-toggle（PUT /system/dict/data/{id} 传 status）
  * - 删除       → rowActions delete（DELETE /system/dict/data/{id}，逻辑删）
@@ -20,7 +19,20 @@ export default definePageSchema({
   description: '字典数据的增删改查',
   entityName: '字典数据',
   createPerm: 'system:dict:add',
-  search: [{ name: 'dictType', label: '类型码', type: 'input', placeholder: '输入类型码过滤' }],
+  search: [
+    { name: 'dictType', label: '类型码', type: 'input', placeholder: '输入类型码过滤' },
+    { name: 'keyword', label: '标签 / 键值', type: 'input', placeholder: '字典标签 / 键值' },
+    {
+      name: 'status',
+      label: '状态',
+      type: 'select',
+      placeholder: '全部状态',
+      options: [
+        { label: '正常', value: '1' },
+        { label: '停用', value: '0' },
+      ],
+    },
+  ],
   columns: [
     { key: 'dictType', title: '类型码' },
     { key: 'dictLabel', title: '字典标签' },

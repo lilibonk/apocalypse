@@ -221,7 +221,7 @@ class FrontendHardeningEndpointsTest {
     when(dataScopeService.resolve("system:user:list")).thenReturn(allScope);
     when(sysUserMapper.pageByKeyword(1, 10, null, allScope, null, false, "createTime", "asc"))
         .thenReturn(new io.apocalypse.common.response.PageResult<>(List.of(), 0L, 1, 10));
-    controller.page(1, 10, null, null, false, "createTime", "asc");
+    controller.page(1, 10, null, null, false, "createTime", "asc", null);
     verify(sysUserMapper).pageByKeyword(1, 10, null, allScope, null, false, "createTime", "asc");
   }
 

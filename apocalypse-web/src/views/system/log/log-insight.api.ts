@@ -91,3 +91,16 @@ export function getOperInsights(range: LogInsightRange, signal?: AbortSignal) {
 export function getLoginHeatmap(range: Exclude<LogInsightRange, 'DAY'>, signal?: AbortSignal) {
   return request<LoginHeatmap>('/system/logs/login/heatmap', { query: { range }, signal })
 }
+
+export function toDateBeginIso(date?: string): string | undefined {
+  const trimmed = date?.trim()
+  return trimmed ? `${trimmed}T00:00:00` : undefined
+}
+
+export function toExclusiveDateEndIso(date?: string): string | undefined {
+  const trimmed = date?.trim()
+  if (!trimmed) return undefined
+  const ms = Date.parse(`${trimmed}T00:00:00Z`)
+  if (Number.isNaN(ms)) return undefined
+  return `${new Date(ms + 86_400_000).toISOString().slice(0, 10)}T00:00:00`
+}

@@ -76,7 +76,14 @@ public class DictService {
 
   /** 字典类型分页。 */
   public PageResult<DictTypeResp> pageTypes(int page, int size, String keyword) {
-    return sysDictTypeMapper.pageByKeyword(page, size, keyword).map(dictConvert::toTypeResp);
+    return pageTypes(page, size, keyword, null);
+  }
+
+  /** 字典类型分页（支持按状态过滤）。 */
+  public PageResult<DictTypeResp> pageTypes(int page, int size, String keyword, Integer status) {
+    return sysDictTypeMapper
+        .pageByKeyword(page, size, keyword, status)
+        .map(dictConvert::toTypeResp);
   }
 
   /** 新增字典类型，返回主键。 */
@@ -117,7 +124,15 @@ public class DictService {
 
   /** 字典数据分页。 */
   public PageResult<DictDataResp> pageData(int page, int size, String dictType) {
-    return sysDictDataMapper.pageByType(page, size, dictType).map(dictConvert::toDataResp);
+    return pageData(page, size, dictType, null, null);
+  }
+
+  /** 字典数据分页（支持标签/键值关键字与状态过滤）。 */
+  public PageResult<DictDataResp> pageData(
+      int page, int size, String dictType, String keyword, Integer status) {
+    return sysDictDataMapper
+        .pageByType(page, size, dictType, keyword, status)
+        .map(dictConvert::toDataResp);
   }
 
   /** 新增字典数据，返回主键；evict 对应类型缓存。 */

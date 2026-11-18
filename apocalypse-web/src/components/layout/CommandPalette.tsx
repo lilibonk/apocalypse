@@ -15,6 +15,7 @@ import {
   Rows3,
   Settings2,
   Sparkles,
+  UserCog,
   Zap,
   ZapOff,
   type LucideIcon,
@@ -290,6 +291,13 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
               >
                 <LayoutDashboard className="size-4" />
                 {t('common.工作台', { defaultValue: '工作台' })}
+              </CommandItem>
+              <CommandItem
+                value={`${t('common.个人中心', { defaultValue: '个人中心' })} profile account`}
+                onSelect={() => run(() => navigate('/profile'))}
+              >
+                <UserCog className="size-4" />
+                {t('common.个人中心', { defaultValue: '个人中心' })}
               </CommandItem>
               {routes.map((route) => (
                 <CommandItem

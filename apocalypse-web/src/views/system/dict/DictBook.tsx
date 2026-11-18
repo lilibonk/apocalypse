@@ -93,6 +93,7 @@ export function DictBook({
   const { intent, clearPulse } = useEntityIntent('dict')
   const [draft, setDraft] = useState(() => intent?.id ?? '')
   const [keyword, setKeyword] = useState(() => intent?.id ?? '')
+  const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<string | null | 'none'>(null)
   const [busyTypes, setBusyTypes] = useState<ReadonlySet<string>>(new Set())
@@ -144,8 +145,14 @@ export function DictBook({
   )
 
   const types = useQuery({
-    queryKey: ['system', 'dict', 'book', 'types', keyword, page],
-    queryFn: ({ signal }) => pageDictTypes(keyword, page, signal),
+    queryKey: ['system', 'dict', 'book', 'types', keyword, statusFilter, page],
+    queryFn: ({ signal }) =>
+      pageDictTypes(
+        keyword,
+        page,
+        signal,
+        statusFilter === 'all' ? undefined : Number(statusFilter),
+      ),
     placeholderData: keepPreviousData,
     enabled: active,
   })
@@ -191,30 +198,81 @@ export function DictBook({
   return (
     <div className="space-y-4">
       <LivingContextBar source={intent?.source} />
-      <form
-        className="flex flex-wrap items-center gap-2"
-        role="search"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (busy) return
-          setExpanded(null)
-          setKeyword(draft.trim())
-          setPage(1)
-        }}
-      >
-        <Input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder={t('dictBook.search')}
-          aria-label={t('dictBook.search')}
-          className="max-w-xs"
-          disabled={busy}
-        />
-        <Button type="submit" variant="secondary" size="sm" disabled={busy}>
-          <Search aria-hidden="true" />
-          {t('dictBook.query')}
-        </Button>
-      </form>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (busy) return
+            setExpanded(null)
+            setKeyword(draft.trim())
+            setPage(1)
+          }}
+        >
+          <Input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={t('dictBook.search')}
+            aria-label={t('dictBook.search')}
+            className="max-w-xs"
+            disabled={busy}
+          />
+          <Button type="submit" variant="secondary" size="sm" disabled={busy}>
+            <Search aria-hidden="true" />
+            {t('dictBook.query')}
+          </Button>
+          {(keyword || statusFilter !== 'all') && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setExpanded(null)
+                setDraft('')
+                setKeyword('')
+                setStatusFilter('all')
+                setPage(1)
+              }}
+            >
+              <X aria-hidden="true" />
+              {t('common.重置', { defaultValue: '重置' })}
+            </Button>
+          )}
+        </form>
+        <div
+          role="group"
+          aria-label="字典状态筛选"
+          className="inline-flex items-center gap-0.5 rounded-control border border-border-subtle bg-muted/40 p-0.5"
+        >
+          {(
+            [
+              { value: 'all', label: '全部' },
+              { value: '1', label: '正常' },
+              { value: '0', label: '停用' },
+            ] as const
+          ).map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={statusFilter === option.value ? 'secondary' : 'ghost'}
+              className="h-7 px-2.5 text-xs"
+              aria-pressed={statusFilter === option.value}
+              disabled={busy}
+              onClick={() => {
+                if (statusFilter === option.value) return
+                setExpanded(null)
+                setStatusFilter(option.value)
+                setPage(1)
+              }}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </div>
       <DictTypeControls
         disabled={busyTypes.size > 0}
         createOpen={createOpen}
@@ -264,7 +322,7 @@ export function DictBook({
       )}
       {!types.isError && list && list.length === 0 && (
         <p role="status" className="py-10 text-center text-sm text-muted-foreground">
-          {keyword ? t('dictBook.noMatch') : t('dictBook.empty')}
+          {keyword || statusFilter !== 'all' ? t('dictBook.noMatch') : t('dictBook.empty')}
         </p>
       )}
       {list && list.length > 0 && (
@@ -480,19 +538,22 @@ function DictCard({
 
   const footerNode = !expanded ? (
     <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-        <span
-          className={cn(
-            'size-1.5 rounded-full',
-            type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
-          )}
-          aria-hidden="true"
-        />
-        {type.status === 1
-          ? t('dictBook.statusEnabled', { defaultValue: '正常' })
-          : t('dictBook.typeDisabled')}
-      </span>
-      {type.remark && <span className="truncate">{type.remark}</span>}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground">
+          <span
+            className={cn(
+              'size-1.5 rounded-full',
+              type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
+            )}
+            aria-hidden="true"
+          />
+          {type.status === 1
+            ? t('dictBook.statusEnabled', { defaultValue: '正常' })
+            : t('dictBook.typeDisabled')}
+        </span>
+        {type.remark && <span className="truncate">{type.remark}</span>}
+      </div>
+      <DictCollapsedQuickActions type={type} onManage={onToggle} />
     </div>
   ) : undefined
 
@@ -1401,6 +1462,149 @@ function InlineValueEditorRow({
         <X aria-hidden="true" />
         {t('dictBook.cancel')}
       </Button>
+    </div>
+  )
+}
+
+function DictCollapsedQuickActions({
+  type,
+  onManage,
+}: {
+  type: DictTypeRow
+  onManage: () => void
+}) {
+  const { t } = useTranslation('system')
+  const client = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const refresh = () =>
+    client.invalidateQueries({ predicate: (query) => isDictionaryQuery(query.queryKey) })
+
+  const toggleStatus = useModuleMutation(undefined, {
+    localKey: JSON.stringify([type.id, 'collapsed-toggle']),
+    mutationFn: (run) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dict:edit'],
+        execute: (transport) =>
+          updateDictType(type.id, { ...type, status: type.status === 1 ? 0 : 1 }, transport),
+      }),
+    onSuccess: () => {
+      toast.success(
+        type.status === 1
+          ? t('dictBook.typeDisabledToast', { defaultValue: '已停用字典类型' })
+          : t('dictBook.typeEnabledToast', { defaultValue: '已启用字典类型' }),
+      )
+      void refresh()
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('dictBook.saveFailed')),
+  })
+
+  const removeType = useModuleMutation(undefined, {
+    localKey: JSON.stringify([type.id, 'collapsed-remove']),
+    mutationFn: (run) =>
+      run({
+        scope: undefined,
+        requiredPerms: ['system:dict:remove'],
+        execute: (transport) => deleteDictType(type.id, transport),
+      }),
+    onSuccess: () => {
+      toast.success(t('dictBook.typeDeletedToast', { defaultValue: '字典类型已删除' }))
+      setConfirmDelete(false)
+      void refresh()
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('dictBook.deleteFailed')),
+  })
+
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <Perm perm="system:dict:edit">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-6"
+          aria-label={`管理字典：${type.dictName}`}
+          title="展开管理字典"
+          disabled={toggleStatus.isPending || removeType.isPending}
+          onClick={(event) => {
+            event.stopPropagation()
+            onManage()
+          }}
+        >
+          <Pencil className="size-3.5" aria-hidden="true" />
+        </Button>
+      </Perm>
+      <Perm perm="system:dict:edit">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-6"
+          aria-label={
+            type.status === 1 ? `快速停用：${type.dictName}` : `快速启用：${type.dictName}`
+          }
+          title={type.status === 1 ? '停用类型' : '启用类型'}
+          disabled={toggleStatus.isPending || removeType.isPending}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleStatus.mutate(undefined)
+          }}
+        >
+          <Power className="size-3.5" aria-hidden="true" />
+        </Button>
+      </Perm>
+      <Perm perm="system:dict:remove">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-6 text-destructive hover:text-destructive"
+          aria-label={`快速删除：${type.dictName}`}
+          title="删除类型"
+          disabled={toggleStatus.isPending || removeType.isPending}
+          onClick={(event) => {
+            event.stopPropagation()
+            setConfirmDelete(true)
+          }}
+        >
+          <Trash2 className="size-3.5" aria-hidden="true" />
+        </Button>
+      </Perm>
+      <AlertDialog
+        open={confirmDelete}
+        onOpenChange={(open) => !open && !removeType.isPending && setConfirmDelete(false)}
+      >
+        <AlertDialogContent onClick={(event) => event.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dictBook.deleteTypeTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dictBook.deleteTypeHint', { name: type.dictName })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeType.isPending}>
+              {t('dictBook.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={removeType.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                removeType.mutate(undefined)
+              }}
+            >
+              {t('dictBook.confirmDelete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

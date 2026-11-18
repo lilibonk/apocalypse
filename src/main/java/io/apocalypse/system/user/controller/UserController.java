@@ -122,8 +122,13 @@ public class UserController {
       @RequestParam(required = false) Long deptId,
       @RequestParam(defaultValue = "false") boolean includeChildren,
       @RequestParam(required = false) String sortField,
-      @RequestParam(required = false) String sortOrder) {
-    return userService.page(page, size, keyword, deptId, includeChildren, sortField, sortOrder);
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "状态仅支持 0/1")
+          @Max(value = 1, message = "状态仅支持 0/1")
+          Integer status) {
+    return userService.page(
+        page, size, keyword, deptId, includeChildren, sortField, sortOrder, status);
   }
 
   /** 按当前授权数据范围导出用户 CSV（带 UTF-8 BOM 与公式注入防护）。 */
@@ -133,8 +138,12 @@ public class UserController {
   public ResponseEntity<byte[]> exportCsv(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) Long deptId,
-      @RequestParam(defaultValue = "false") boolean includeChildren) {
-    byte[] bytes = userService.exportCsv(keyword, deptId, includeChildren);
+      @RequestParam(defaultValue = "false") boolean includeChildren,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "状态仅支持 0/1")
+          @Max(value = 1, message = "状态仅支持 0/1")
+          Integer status) {
+    byte[] bytes = userService.exportCsv(keyword, deptId, includeChildren, status);
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
     headers.setContentLength(bytes.length);

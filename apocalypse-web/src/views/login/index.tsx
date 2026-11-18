@@ -121,109 +121,29 @@ export default function LoginPage() {
       data-theme-stage=""
       className="relative grid min-h-svh gap-6 bg-background p-4 sm:p-6 lg:grid-cols-2 lg:gap-0"
     >
-      {/* 左侧互动品牌舞台：Fluid 为流光丝带轨道，Sketchbook 为双墨线手绘+和纸胶带，Obsidian 为极光穹顶 */}
-      <section className="brand-slime-stage relative hidden min-w-0 overflow-hidden rounded-panel lg:flex lg:flex-col">
+      {/* 左侧互动品牌舞台：纯净主题呼吸环境光场 + 3D Milk Cloud 主角 */}
+      <section className="brand-slime-stage relative hidden min-w-0 overflow-hidden rounded-panel border border-border-subtle/70 lg:flex lg:flex-col">
         <SketchBox
           seed={19}
-          wash={themeWorld === 'sketchbook' ? 'wide' : 'none'}
-          washiTape={themeWorld === 'sketchbook'}
-          className={cn(
-            'flex h-full flex-col justify-between p-8 xl:p-10',
-            themeWorld !== 'sketchbook' && 'border-border-subtle/70 bg-transparent shadow-none',
-          )}
+          wash="none"
+          className="flex h-full flex-col justify-between border-0 bg-transparent p-8 shadow-none xl:p-10"
           contentClassName="flex h-full flex-col justify-between"
         >
+          <div
+            aria-hidden="true"
+            className="brand-slime-backdrop pointer-events-none absolute inset-0 z-0"
+          />
+
           <header className="relative z-10 flex items-center justify-between gap-3">
             <BrandSignature />
           </header>
 
-          {/* 主题同源 SVG 背景装饰轨：仅作背景气氛层，零动画空转 */}
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 640 520"
-            preserveAspectRatio="xMidYMid slice"
-            className="pointer-events-none absolute inset-0 z-0 size-full"
-          >
-            {themeWorld === 'sketchbook' ? (
-              <g filter="url(#watercolor-bleed)">
-                <ellipse
-                  cx="320"
-                  cy="245"
-                  rx="218"
-                  ry="168"
-                  fill="none"
-                  stroke="var(--sketch-ink)"
-                  strokeWidth="1.2"
-                  strokeDasharray="6 7"
-                  opacity="0.28"
-                />
-                <path
-                  d="M 48 415 C 165 452, 290 486, 440 462 C 535 446, 592 456, 648 432"
-                  fill="none"
-                  stroke="url(#apo-river-wide-grad)"
-                  strokeWidth="16"
-                  strokeLinecap="round"
-                  opacity="0.45"
-                />
-                <path
-                  d="M 52 415 C 168 452, 292 485, 440 462 C 535 446, 592 456, 648 432"
-                  fill="none"
-                  stroke="var(--sketch-ink)"
-                  strokeWidth="1.25"
-                  strokeDasharray="3 5"
-                  opacity="0.42"
-                />
-              </g>
-            ) : (
-              <g>
-                <ellipse
-                  cx="320"
-                  cy="215"
-                  rx="215"
-                  ry="84"
-                  transform="rotate(-14 320 215)"
-                  fill="none"
-                  stroke="var(--conduit-pipe-mid)"
-                  strokeWidth="1.6"
-                  opacity="0.55"
-                />
-                <circle cx="144" cy="265" r="4" fill="var(--conduit-core)" opacity="0.65" />
-                <circle cx="496" cy="158" r="3.2" fill="var(--orb-accent)" opacity="0.7" />
-                <path
-                  d="M 90 492 C 235 492, 415 478, 540 452 C 590 442, 620 434, 648 432"
-                  fill="none"
-                  stroke="var(--conduit-shadow)"
-                  strokeWidth="16"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 90 492 C 235 492, 415 478, 540 452 C 590 442, 620 434, 648 432"
-                  fill="none"
-                  stroke="url(#apo-glass-pipe-grad)"
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 90 492 C 235 492, 415 478, 540 452 C 590 442, 620 434, 648 432"
-                  fill="none"
-                  stroke="var(--conduit-core)"
-                  strokeWidth="3.2"
-                  strokeLinecap="round"
-                  opacity="0.9"
-                />
-                <path
-                  d="M 90 489.5 C 235 489.5, 415 475.5, 540 449.5 C 590 439.5, 620 431.5, 648 429.5"
-                  fill="none"
-                  stroke="var(--conduit-highlight)"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </g>
-            )}
-          </svg>
-
-          <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-5 py-4">
-            <div className="group/mascot flex flex-col items-center">
+          <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 py-4">
+            <div className="group/mascot relative flex flex-col items-center">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -bottom-3 h-8 w-56 rounded-full bg-brand/15 blur-xl transition-transform duration-300 group-hover/mascot:scale-105"
+              />
               <PixelOrb state={displayState} size={384} gaze />
             </div>
 

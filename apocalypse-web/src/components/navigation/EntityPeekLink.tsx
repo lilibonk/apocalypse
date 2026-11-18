@@ -28,6 +28,7 @@ import {
   type EntityRouteIntent,
   type EntitySourceRef,
 } from './entity-intent'
+import { useEntityPeek } from './entity-peek-context'
 
 const KIND_ICONS: Record<EntityKind, ComponentType<{ className?: string }>> = {
   role: Shield,
@@ -81,6 +82,7 @@ export function EntityPeekLink({
 }: EntityPeekLinkProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const peek = useEntityPeek()
   const authorizedPath = useMenuRoute(ENTITY_COMPONENT_MAP[kind])
   const canNavigate = interactive && Boolean(authorizedPath) && Boolean(id)
   const Icon = KIND_ICONS[kind]
@@ -98,6 +100,18 @@ export function EntityPeekLink({
   }
 
   const jump = (event?: MouseEvent<HTMLButtonElement>) => {
+    event?.stopPropagation()
+    if (!canNavigate || !authorizedPath) return
+    onNavigate?.(intent)
+    if (peek) {
+      peek.openPeek(intent, authorizedPath)
+      return
+    }
+    const target = buildEntityRouteTarget(authorizedPath, intent)
+    navigate({ pathname: target.pathname, search: target.search }, { state: target.state })
+  }
+
+  const openFullRoute = (event?: MouseEvent<HTMLButtonElement>) => {
     event?.stopPropagation()
     if (!canNavigate || !authorizedPath) return
     onNavigate?.(intent)
@@ -157,13 +171,22 @@ export function EntityPeekLink({
               {summary && <div className="leading-relaxed text-muted-foreground">{summary}</div>}
             </div>
           </div>
-          <div className="mt-2.5 flex items-center justify-end border-t border-border-subtle pt-2">
+          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
+            {peek && (
+              <button
+                type="button"
+                onClick={jump}
+                className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand-text hover:underline"
+              >
+                <span>{t('common.原位速览', { defaultValue: '原位速览' })}</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={jump}
-              className="inline-flex cursor-pointer items-center gap-1 font-medium text-brand-text hover:underline"
+              onClick={openFullRoute}
+              className="ml-auto inline-flex cursor-pointer items-center gap-1 font-medium text-muted-foreground hover:text-foreground hover:underline"
             >
-              <span>{t('common.直达详情', { defaultValue: '直达详情' })}</span>
+              <span>{t('common.前往模块', { defaultValue: '前往模块' })}</span>
               <ArrowUpRight className="size-3" aria-hidden="true" />
             </button>
           </div>

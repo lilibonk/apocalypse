@@ -17,6 +17,7 @@ import { DASHBOARD_TAB, useTabsStore } from '@/stores/tabs'
 
 const LoginPage = lazy(() => import('@/views/login'))
 const DashboardPage = lazy(() => import('@/views/dashboard'))
+const ProfilePage = lazy(() => import('@/views/profile'))
 
 function NotFoundPage() {
   return (
@@ -36,7 +37,7 @@ function ProtectedRoutes() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const allowedPaths = useMemo(
-    () => [DASHBOARD_TAB.key, ...flattenMenuRoutes(menus).map((route) => route.path)],
+    () => [DASHBOARD_TAB.key, '/profile', ...flattenMenuRoutes(menus).map((route) => route.path)],
     [menus],
   )
 
@@ -56,6 +57,14 @@ function ProtectedRoutes() {
           element={
             <Suspense fallback={<PageLoading />}>
               <DashboardPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <Suspense fallback={<PageLoading />}>
+              <ProfilePage />
             </Suspense>
           }
         />

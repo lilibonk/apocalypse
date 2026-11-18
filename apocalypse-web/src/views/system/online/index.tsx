@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, LayoutDashboard, List, LogOut, RefreshCw } from 'lucide-react'
+import { Eye, LayoutDashboard, List, LogOut, RefreshCw, Search, X } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
@@ -65,6 +66,7 @@ function OnlineUserWorkspace() {
   const { intent } = useEntityIntent('session')
   const [kicking, setKicking] = useState<KickTarget | null>(null)
   const [detail, setDetail] = useState<OnlineUserRow | null>(null)
+  const [keyword, setKeyword] = useState('')
   const [expanded, setExpanded] = useState<string | null>(() =>
     intent?.id && intent.id !== 'list' ? intent.id : null,
   )
@@ -139,13 +141,27 @@ function OnlineUserWorkspace() {
     [],
   )
 
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  const filteredData = useMemo(() => {
+    if (!data) return undefined
+    if (!normalizedKeyword) return data
+    return data.filter((row) => {
+      const summary = summarizeUserAgent(row.userAgent).toLowerCase()
+      return (
+        row.username.toLowerCase().includes(normalizedKeyword) ||
+        (row.ip?.toLowerCase().includes(normalizedKeyword) ?? false) ||
+        summary.includes(normalizedKeyword)
+      )
+    })
+  }, [data, normalizedKeyword])
+
   const rows = useMemo(
     () =>
-      data?.map((row) => ({
+      filteredData?.map((row) => ({
         ...row,
         deviceSummary: summarizeUserAgent(row.userAgent),
       })),
-    [data],
+    [filteredData],
   )
   const inspected = data?.find((row) => row.jti === detail?.jti)
 
@@ -239,6 +255,36 @@ function OnlineUserWorkspace() {
           }
         />
 
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="relative min-w-52 flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索账号 / IP / 终端设备…"
+              aria-label="搜索在线账号、IP 或设备"
+              className="h-8 pl-9 text-xs"
+            />
+          </div>
+          {normalizedKeyword && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                匹配 {filteredData?.length ?? 0} / {data?.length ?? 0} 条会话
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setKeyword('')}
+              >
+                <X className="size-3.5" aria-hidden="true" />
+                重置
+              </Button>
+            </div>
+          )}
+        </div>
+
         {view === 'overview' ? (
           <>
             <DynaQueryFeedback
@@ -248,9 +294,9 @@ function OnlineUserWorkspace() {
               onRetry={retry}
             />
             {isLoading && <Skeleton className="h-40" />}
-            {data && (
+            {filteredData && (
               <OnlineAccounts
-                rows={data}
+                rows={filteredData}
                 expanded={expanded}
                 onExpanded={setExpanded}
                 onDetail={setDetail}

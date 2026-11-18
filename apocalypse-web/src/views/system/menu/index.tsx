@@ -254,12 +254,18 @@ function MenuPageContent() {
                 className="flex items-center rounded-control bg-muted p-0.5"
               >
                 {(
-                  [
-                    ['ALL', '全部'],
-                    ['C', '目录'],
-                    ['M', '菜单'],
-                    ['F', '历史按钮'],
-                  ] as const
+                  (allNodes.some((node) => node.menuType === 'F')
+                    ? [
+                        ['ALL', '全部'],
+                        ['C', '目录'],
+                        ['M', '菜单'],
+                        ['F', '历史按钮'],
+                      ]
+                    : [
+                        ['ALL', '全部'],
+                        ['C', '目录'],
+                        ['M', '菜单'],
+                      ]) as readonly (readonly ['ALL' | 'C' | 'M' | 'F', string])[]
                 ).map(([value, label]) => (
                   <button
                     key={value}

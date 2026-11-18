@@ -62,10 +62,12 @@ export const unifiedMotion = {
     morph: { duration: 0.24, ease: motionEase.enter },
     /** Channel 3: 单边界 FLIP 几何展开与邻位让位 (380ms) */
     flip: { duration: 0.38, ease: motionEase.flip },
-    /** 阻尼弹簧表面过渡（无过冲） */
-    springSurface: { type: 'spring' as const, stiffness: 280, damping: 26, mass: 0.8 },
+    /** 清新触觉弹簧（标签切换、按钮弹跳、轻浮层落位） */
+    springTactile: { type: 'spring' as const, stiffness: 440, damping: 28, mass: 0.72 },
+    /** 温润阻尼弹簧表面过渡（清新自然微弹，不僵硬、不过度晃动） */
+    springSurface: { type: 'spring' as const, stiffness: 340, damping: 25, mass: 0.8 },
     /** 阻尼弹簧布局让位 */
-    springLayout: { type: 'spring' as const, stiffness: 260, damping: 28, mass: 0.9 },
+    springLayout: { type: 'spring' as const, stiffness: 320, damping: 26, mass: 0.85 },
   },
   causal: {
     /** 首屏概览卡入场，同一会话/授权周期仅触发一次 (320ms) */
@@ -114,6 +116,8 @@ export const motionTransition = {
   panelExit: unifiedMotion.spatial.sheetExit,
   hud: unifiedMotion.spatial.hud,
   flip: unifiedMotion.spatial.flip,
+  springSurface: unifiedMotion.spatial.springSurface,
+  springTactile: unifiedMotion.spatial.springTactile,
 } as const
 
 /** Dashboard / authorization insights: finite, interruptible movement; derived from unifiedMotion. */

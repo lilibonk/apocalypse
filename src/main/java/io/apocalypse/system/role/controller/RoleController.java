@@ -47,8 +47,12 @@ public class RoleController {
           @Min(value = 1, message = "每页条数必须大于 0")
           @Max(value = 200, message = "每页条数不能超过 200")
           int size,
-      @RequestParam(required = false) String keyword) {
-    return roleService.page(page, size, keyword);
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false)
+          @Min(value = 0, message = "状态仅支持 0/1")
+          @Max(value = 1, message = "状态仅支持 0/1")
+          Integer status) {
+    return roleService.page(page, size, keyword, status);
   }
 
   /** 新增，返回主键。 */

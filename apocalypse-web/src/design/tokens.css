@@ -724,6 +724,86 @@ html[data-gray='on'] {
   animation: surface-float-exit var(--motion-duration-exit) var(--motion-ease-exit) both;
 }
 
+/* 全局清新自然物理弹性（基于 linear() 渐进增强，仅作用于位移/缩放，不作用于 opacity 防闪烁） */
+@keyframes surface-dialog-spring-rise {
+  from {
+    transform: translateY(calc(var(--spacing) * 3)) scale(0.95);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes surface-float-spring-scale {
+  from {
+    scale: 0.94;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+  @media (prefers-reduced-motion: no-preference) {
+    html:not([data-motion='off']) {
+      --motion-ease-spring-tactile: linear(
+        0,
+        0.42 9%,
+        0.84 21%,
+        1.042 35%,
+        1.012 49%,
+        0.997 68%,
+        1
+      );
+      --motion-ease-spring-spatial: linear(
+        0,
+        0.34 9%,
+        0.76 22%,
+        1.028 38%,
+        1.008 54%,
+        0.999 72%,
+        1
+      );
+    }
+
+    html:not([data-motion='off']) [data-slot='dialog-content'][data-state='open'],
+    html:not([data-motion='off']) [data-slot='alert-dialog-content'][data-state='open'] {
+      animation:
+        surface-overlay-enter var(--motion-duration-fade) linear both,
+        surface-dialog-spring-rise 300ms var(--motion-ease-spring-spatial) both;
+    }
+
+    html:not([data-motion='off']) [data-slot='sheet-content'][data-state='open'] {
+      animation-duration: 320ms;
+      animation-timing-function: var(--motion-ease-spring-spatial);
+    }
+
+    html:not([data-motion='off']) [data-slot='tooltip-content'][data-state='delayed-open'],
+    html:not([data-motion='off']) [data-slot='tooltip-content'][data-state='instant-open'],
+    html:not([data-motion='off']) [data-slot='select-content'][data-state='open'],
+    html:not([data-motion='off']) [data-slot='popover-content'][data-state='open'],
+    html:not([data-motion='off']) [data-slot='dropdown-menu-content'][data-state='open'],
+    html:not([data-motion='off']) [data-slot='dropdown-menu-sub-content'][data-state='open'] {
+      animation:
+        surface-overlay-enter var(--motion-duration-fade) linear both,
+        surface-float-spring-scale 260ms var(--motion-ease-spring-tactile) both;
+    }
+
+    html:not([data-motion='off']) [data-slot='app-sidebar'] {
+      transition-duration: 280ms;
+      transition-timing-function: var(--motion-ease-spring-spatial);
+    }
+
+    html:not([data-motion='off']) [data-slot='button'],
+    html:not([data-motion='off']) [data-slot='segmented-control'] button,
+    html:not([data-motion='off']) [data-slot='tabs-trigger'],
+    html:not([data-motion='off']) [data-slot='interactive-card'] {
+      transition-duration: 220ms;
+      transition-timing-function: var(--motion-ease-spring-tactile);
+    }
+  }
+}
+
 [data-slot='app-sidebar'] {
   transition-duration: var(--motion-duration-standard);
   transition-timing-function: var(--motion-ease-enter);
@@ -766,7 +846,7 @@ html[data-gray='on'] {
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   html:not([data-motion='off']) [data-slot='button']:not(:disabled):active {
-    transform: translateY(calc(var(--spacing) * 0.25));
+    transform: translateY(calc(var(--spacing) * 0.25)) scale(0.985);
   }
 }
 

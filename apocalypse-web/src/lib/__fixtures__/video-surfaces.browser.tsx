@@ -10,9 +10,11 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { AppProviders } from '@/app/providers'
 import { PageTransition } from '@/components/PageTransition'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { EntityPeekProvider } from '@/components/navigation/EntityPeekSheet'
 import { http } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/auth'
-import { useSettingsStore } from '@/stores/settings'
+import { useSettingsStore, type ThemeWorld } from '@/stores/settings'
+import ProfilePage from '@/views/profile'
 import { ConfigWorkspace } from '@/views/system/config/ConfigWorkspace'
 import { DeptOrgChart } from '@/views/system/dept/DeptOrgChart'
 import type { DeptTreeNode } from '@/views/system/dept/types'
@@ -28,7 +30,9 @@ const params = new URLSearchParams(window.location.search)
 const surface = params.get('surface') ?? 'config'
 const permissions = [
   'system:config:list',
+  'system:config:add',
   'system:config:edit',
+  'system:config:remove',
   'system:log:list',
   'system:log:login',
   'system:log:oper',
@@ -45,8 +49,10 @@ useAuthStore.setState({
   user: {
     id: 'fixture-principal',
     username: params.has('self') ? 'alice' : 'fixture-operator',
-    nickname: null,
+    nickname: surface === 'profile' ? '运维操作员' : null,
+    deptName: surface === 'profile' ? '前端组' : undefined,
   },
+  roles: surface === 'profile' ? ['系统管理员'] : [],
   sessionEpoch: 1,
   authorizationEpoch: 1,
   meLoaded: true,
@@ -72,10 +78,14 @@ useAuthStore.setState({
         }))
       : [],
 })
+const requestedTheme = params.get('theme')
+const themeWorld: ThemeWorld =
+  requestedTheme === 'sketchbook' || requestedTheme === 'obsidian' ? requestedTheme : 'fluid'
+
 useSettingsStore.setState({
   motionEnabled: !params.has('motionOff'),
   language: 'zh',
-  themeWorld: 'fluid',
+  themeWorld,
 })
 
 const configs = [
@@ -94,7 +104,7 @@ const configs = [
     configValue: 'false',
     remark: null,
   },
-].map((row) => ({ ...row, version: 1 }))
+].map((row) => ({ ...row, remark: row.remark as string | null, version: 1 }))
 if (params.has('manyConfigs'))
   configs.push(
     ...Array.from({ length: 203 }, (_, index) => ({
@@ -107,6 +117,11 @@ if (params.has('manyConfigs'))
     })),
   )
 let saves = { count: 0, body: '', permissionModule: '' }
+const roleCatalog = [
+  { id: 'r1', roleName: '系统管理员', roleKey: 'admin', status: 1 },
+  { id: 'r2', roleName: '审计员', roleKey: 'auditor', status: 1 },
+]
+
 const userRows = Array.from({ length: 12 }, (_, index) => ({
   id: `u${index + 1}`,
   username: `account-${index + 1}`,
@@ -114,6 +129,7 @@ const userRows = Array.from({ length: 12 }, (_, index) => ({
   status: 1,
   deptId: 'fe',
   deptName: '前端组',
+  roles: index === 0 ? [roleCatalog[0]] : [],
   createTime: '2026-10-18T09:00:00',
 }))
 let userDenied = false
@@ -245,6 +261,37 @@ http.defaults.adapter = async (config) => {
         data: { code: 40400, message: '参数不存在' },
       }
     data = structuredClone(row)
+  } else if (path === '/system/configs' && config.method === 'post') {
+    const payload = body as {
+      configKey: string
+      configName: string
+      configValue: string
+      remark?: string | null
+    }
+    const created = {
+      id: `c${configs.length + 1}`,
+      configKey: payload.configKey,
+      configName: payload.configName,
+      configValue: payload.configValue,
+      remark: payload.remark ?? null,
+      version: 1,
+    }
+    configs.unshift(created)
+    saves = { ...saves, count: saves.count + 1, body: JSON.stringify(payload) }
+    notify()
+    data = created.id
+  } else if (/^\/system\/configs\/c\d+$/.test(path) && config.method === 'put') {
+    const row = configs.find((entry) => path.endsWith(`/${entry.id}`))
+    if (row) Object.assign(row, body as Partial<typeof row>, { version: row.version + 1 })
+    saves = { ...saves, count: saves.count + 1, body: JSON.stringify(body) }
+    notify()
+    data = null
+  } else if (/^\/system\/configs\/c\d+$/.test(path) && config.method === 'delete') {
+    const idx = configs.findIndex((entry) => path.endsWith(`/${entry.id}`))
+    if (idx >= 0) configs.splice(idx, 1)
+    saves = { ...saves, count: saves.count + 1, body: path }
+    notify()
+    data = null
   } else if (path === '/system/configs/values') {
     const items = (
       body as { items: { id: string; expectedVersion: number; configValue: string }[] }
@@ -276,8 +323,14 @@ http.defaults.adapter = async (config) => {
     const page = Number(query.page ?? 1),
       size = Number(query.size ?? 10)
     const keyword = String(query.keyword ?? '')
+    const hasSuccess = query.success !== undefined && query.success !== ''
+    const successVal = Number(query.success)
+    const hasWeekday = query.isoWeekday !== undefined
     const rows = loginRows.filter(
-      (row) => !keyword || `${row.username} ${row.ip}`.includes(keyword),
+      (row, idx) =>
+        (!keyword || `${row.username} ${row.ip}`.includes(keyword)) &&
+        (!hasSuccess || row.success === successVal) &&
+        (!hasWeekday || idx % 2 === 0),
     )
     saves = { ...saves, body: JSON.stringify(query) }
     notify()
@@ -336,8 +389,14 @@ http.defaults.adapter = async (config) => {
       const page = Number(query.page ?? 1)
       const size = Number(query.size ?? 10)
       const keyword = String(query.keyword ?? '')
+      const statusParam =
+        query.status !== undefined && query.status !== '' ? Number(query.status) : null
+      const deptParam = String(query.deptId ?? '')
       const rows = userRows.filter(
-        (row) => !keyword || `${row.username} ${row.nickname}`.includes(keyword),
+        (row) =>
+          (!keyword || `${row.username} ${row.nickname}`.includes(keyword)) &&
+          (statusParam === null || row.status === statusParam) &&
+          (!deptParam || row.deptId === deptParam || query.includeChildren === 'true'),
       )
       data = {
         list: structuredClone(rows.slice((page - 1) * size, page * size)),
@@ -346,14 +405,51 @@ http.defaults.adapter = async (config) => {
         size,
       }
     }
-  } else if (path === '/system/users/department-options') data = tree
-  else if (/^\/system\/users\/u\d+$/.test(path) && config.method === 'put') {
+  } else if (path === '/system/users/department-options' || path === '/system/depts/tree')
+    data = tree
+  else if (path === '/system/roles/page') {
+    data = { list: structuredClone(roleCatalog), total: roleCatalog.length, page: 1, size: 200 }
+  } else if (/^\/system\/users\/u\d+\/roles$/.test(path) && config.method === 'put') {
+    const uid = path.split('/')[3]
+    const row = userRows.find((entry) => entry.id === uid)
+    const roleIds = (
+      Array.isArray(body) ? body : ((body as { roleIds?: string[] })?.roleIds ?? [])
+    ).map(String)
+    if (row) row.roles = roleCatalog.filter((r) => roleIds.includes(r.id))
+    saves = { ...saves, count: saves.count + 1, body: JSON.stringify(body) }
+    notify()
+    data = null
+  } else if (/^\/system\/users\/u\d+\/password$/.test(path) && config.method === 'put') {
+    saves = { ...saves, count: saves.count + 1, body: JSON.stringify(body) }
+    notify()
+    data = null
+  } else if (/^\/system\/users\/u\d+$/.test(path) && config.method === 'put') {
     const row = userRows.find((row) => path.endsWith(`/${row.id}`))!
     const changes = body as Partial<typeof row>
     Object.assign(row, changes)
     saves = { ...saves, count: saves.count + 1, body: JSON.stringify(changes) }
     notify()
     data = null
+  } else if (path === '/system/users/me') {
+    data = structuredClone(useAuthStore.getState().user)
+  } else if (path === '/system/users/me/profile' && config.method === 'put') {
+    const current = useAuthStore.getState().user
+    const next = current ? { ...current, ...(body as Record<string, unknown>) } : current
+    data = next
+  } else if (path === '/system/users/me/password' && config.method === 'put') {
+    data = null
+  } else if (path === '/system/users/me/sessions') {
+    if (config.method === 'delete') {
+      data = null
+    } else {
+      data = onlineRows.map((row) => ({
+        jti: row.jti,
+        ip: row.ip,
+        userAgent: row.userAgent,
+        loginTime: row.loginTime,
+        current: row.jti === 'j1',
+      }))
+    }
   } else if (path === '/system/authorization/insights/overview')
     data =
       surface === 'palette'
@@ -528,6 +624,7 @@ function Fixture() {
         Change theme elsewhere
       </button>
       {surface === 'config' && <ConfigWorkspace />}
+      {surface === 'profile' && <ProfilePage />}
       {surface === 'oper' && <OperLogPage />}
       {surface === 'loginlog' && <LoginLogPage />}
       {surface === 'online' && (
@@ -592,7 +689,9 @@ const fixture = (
         },
       ]}
     >
-      <Fixture />
+      <EntityPeekProvider>
+        <Fixture />
+      </EntityPeekProvider>
     </MemoryRouter>
   </AppProviders>
 )

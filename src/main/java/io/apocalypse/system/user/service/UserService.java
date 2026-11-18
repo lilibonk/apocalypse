@@ -175,6 +175,7 @@ public class UserService implements UserApi, LoginUserQuery {
   }
 
   /** 分页查询，支持受控列排序（{@code createTime} / {@code username}）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PageResult<UserResp> page(
       int page,
       int size,
@@ -183,18 +184,28 @@ public class UserService implements UserApi, LoginUserQuery {
       boolean includeChildren,
       String sortField,
       String sortOrder) {
-    PageResult<UserResp> basePage =
-        sysUserMapper
-            .pageByKeyword(
-                page,
-                size,
-                keyword,
-                dataScopeService.resolve("system:user:list"),
-                deptId,
-                includeChildren,
-                sortField,
-                sortOrder)
-            .map(userConvert::toResp);
+    return page(page, size, keyword, deptId, includeChildren, sortField, sortOrder, null);
+  }
+
+  /** 分页查询，支持按状态精确过滤及受控列排序（{@code createTime} / {@code username}）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public PageResult<UserResp> page(
+      int page,
+      int size,
+      String keyword,
+      Long deptId,
+      boolean includeChildren,
+      String sortField,
+      String sortOrder,
+      Integer status) {
+    DataScopeResp scope = dataScopeService.resolve("system:user:list");
+    PageResult<SysUserEntity> rawPage =
+        status == null
+            ? sysUserMapper.pageByKeyword(
+                page, size, keyword, scope, deptId, includeChildren, sortField, sortOrder)
+            : sysUserMapper.pageByKeyword(
+                page, size, keyword, scope, deptId, includeChildren, sortField, sortOrder, status);
+    PageResult<UserResp> basePage = rawPage.map(userConvert::toResp);
     return new PageResult<>(
         enrichUserResps(basePage.list()), basePage.total(), basePage.page(), basePage.size());
   }
@@ -202,14 +213,23 @@ public class UserService implements UserApi, LoginUserQuery {
   /** 按当前授权数据范围导出用户 CSV（UTF-8 BOM + 公式注入防护，单次上限 2000 行）。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public byte[] exportCsv(String keyword, Long deptId, boolean includeChildren) {
+    return exportCsv(keyword, deptId, includeChildren, null);
+  }
+
+  /** 按当前授权数据范围及筛选条件导出用户 CSV（UTF-8 BOM + 公式注入防护，单次上限 2000 行）。 */
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public byte[] exportCsv(String keyword, Long deptId, boolean includeChildren, Integer status) {
     DataScopeResp scope = dataScopeService.resolve("system:user:list");
     List<List<String>> rows = new java.util.ArrayList<>();
     int pageSize = 200;
     for (int pageNo = 1; pageNo <= 10; pageNo++) {
-      PageResult<UserResp> baseBatch =
-          sysUserMapper
-              .pageByKeyword(pageNo, pageSize, keyword, scope, deptId, includeChildren)
-              .map(userConvert::toResp);
+      PageResult<SysUserEntity> rawBatch =
+          status == null
+              ? sysUserMapper.pageByKeyword(
+                  pageNo, pageSize, keyword, scope, deptId, includeChildren)
+              : sysUserMapper.pageByKeyword(
+                  pageNo, pageSize, keyword, scope, deptId, includeChildren, null, null, status);
+      PageResult<UserResp> baseBatch = rawBatch.map(userConvert::toResp);
       List<UserResp> batchList = enrichUserResps(baseBatch.list());
       for (UserResp u : batchList) {
         rows.add(

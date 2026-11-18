@@ -21,6 +21,16 @@ export default definePageSchema({
   createPerm: 'system:dict:add',
   search: [
     { name: 'keyword', label: '类型码 / 名称', type: 'input', placeholder: '类型码 / 名称' },
+    {
+      name: 'status',
+      label: '状态',
+      type: 'select',
+      placeholder: '全部状态',
+      options: [
+        { label: '正常', value: '1' },
+        { label: '停用', value: '0' },
+      ],
+    },
   ],
   columns: [
     { key: 'dictType', title: '类型码' },

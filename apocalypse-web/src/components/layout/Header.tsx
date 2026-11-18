@@ -1,20 +1,9 @@
 /**
- * 顶栏：侧栏开关、cmdk 命令面板入口、风格世界快捷切换、设置入口、用户下拉。
+ * 顶栏：侧栏开关、cmdk 命令面板入口、设置入口（统一承载风格世界与偏好）、用户下拉（个人中心主体页/退出）。
  * layout='topbar' / 'mixed' 时兼任顶部主导航（顶层菜单横排）。
  */
 
-import {
-  Check,
-  ChevronsLeft,
-  Droplets,
-  LogOut,
-  Menu,
-  Palette,
-  Search,
-  Settings2,
-  Sparkles,
-  UserCog,
-} from 'lucide-react'
+import { ChevronsLeft, LogOut, Menu, Search, Settings2, UserCog } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
@@ -33,16 +22,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
-import { useTabsStore } from '@/stores/tabs'
-import { useAuthStore } from '@/stores/auth'
-import {
-  isCapabilityExposed,
-  useSettings,
-  useSettingsStore,
-  type ThemeWorld,
-} from '@/stores/settings'
 import type { MenuNode } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
+import { useTabsStore } from '@/stores/tabs'
 
 interface HeaderProps {
   collapsed: boolean
@@ -50,7 +33,6 @@ interface HeaderProps {
   onOpenMobileNav: () => void
   onOpenCommand: () => void
   onOpenSettings: () => void
-  onOpenProfile?: () => void
   /** topbar / mixed 模式传入顶层菜单。 */
   topMenus?: MenuNode[]
 }
@@ -61,7 +43,6 @@ export function Header({
   onOpenMobileNav,
   onOpenCommand,
   onOpenSettings,
-  onOpenProfile,
   topMenus,
 }: HeaderProps) {
   const navigate = useNavigate()
@@ -69,26 +50,8 @@ export function Header({
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const resetTabs = useTabsStore((state) => state.reset)
-  const { themeWorld } = useSettings()
-  const setThemeWorld = useSettingsStore((state) => state.setThemeWorld)
   const menuTitle = useMenuTitle()
   const [loggingOut, setLoggingOut] = useState(false)
-
-  const worldOptions: { value: ThemeWorld; label: string; icon: typeof Droplets }[] = [
-    { value: 'fluid', label: t('common.清透流体', { defaultValue: '清透流体' }), icon: Droplets },
-    {
-      value: 'sketchbook',
-      label: t('common.手绘手账', { defaultValue: '手绘手账' }),
-      icon: Palette,
-    },
-    {
-      value: 'obsidian',
-      label: t('common.深邃夜色', { defaultValue: '深邃夜色' }),
-      icon: Sparkles,
-    },
-  ]
-  const CurrentWorldIcon =
-    worldOptions.find((option) => option.value === themeWorld)?.icon ?? Droplets
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -172,36 +135,6 @@ export function Header({
         </kbd>
       </Button>
 
-      {isCapabilityExposed('themeWorld') && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t('common.风格世界', { defaultValue: '风格世界' })}
-            >
-              <CurrentWorldIcon className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuLabel>
-              {t('common.风格世界', { defaultValue: '风格世界' })}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {worldOptions.map((option) => {
-              const Icon = option.icon
-              return (
-                <DropdownMenuItem key={option.value} onSelect={() => setThemeWorld(option.value)}>
-                  <Icon className="size-4" />
-                  <span className="flex-1">{option.label}</span>
-                  {themeWorld === option.value && <Check className="size-4 text-brand-text" />}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-
       <Button
         variant="ghost"
         size="icon"
@@ -237,12 +170,10 @@ export function Header({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {onOpenProfile && (
-            <DropdownMenuItem onClick={onOpenProfile}>
-              <UserCog className="size-4" />
-              {t('common.个人中心', { defaultValue: '个人中心' })}
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem onClick={() => navigate('/profile')}>
+            <UserCog className="size-4" />
+            {t('common.个人中心', { defaultValue: '个人中心' })}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void handleLogout()} disabled={loggingOut}>
             <LogOut className="size-4" />
             {t('common.退出登录', { defaultValue: '退出登录' })}

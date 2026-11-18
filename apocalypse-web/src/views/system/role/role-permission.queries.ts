@@ -181,6 +181,7 @@ export function createRoleMembersQuery(opening: RoleResourceOpening, page: numbe
 export function createRoleChoicesQuery(params: {
   page: number
   keyword: string
+  status?: number
   principalEpoch: number
   openId: string
 }) {
@@ -190,7 +191,12 @@ export function createRoleChoicesQuery(params: {
     'permission-graph-choices',
     params.principalEpoch,
     params.openId,
-    { page: params.page, size: ROLE_CHOICES_PAGE_SIZE, keyword: params.keyword },
+    {
+      page: params.page,
+      size: ROLE_CHOICES_PAGE_SIZE,
+      keyword: params.keyword,
+      ...(params.status !== undefined ? { status: params.status } : {}),
+    },
   ] as const
   return privateRoleGraphQuery(queryKey, params.principalEpoch, canReadRoleWorkspace, (transport) =>
     request<PageResult<RolePermissionTarget>>('/system/roles/page', {
@@ -199,6 +205,7 @@ export function createRoleChoicesQuery(params: {
         page: params.page,
         size: ROLE_CHOICES_PAGE_SIZE,
         keyword: params.keyword || undefined,
+        status: params.status,
       },
     }),
   )

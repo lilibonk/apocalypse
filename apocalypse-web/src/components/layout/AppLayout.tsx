@@ -18,7 +18,7 @@ import { BrandSignature } from '@/components/BrandSignature'
 import { CommandPalette } from '@/components/layout/CommandPalette'
 import { useRecentRoutes } from '@/stores/recent-routes'
 import { Header } from '@/components/layout/Header'
-import { ProfileDrawer } from '@/components/layout/ProfileDrawer'
+import { EntityPeekProvider } from '@/components/navigation/EntityPeekSheet'
 import { RouteErrorBoundary } from '@/components/layout/RouteErrorBoundary'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -56,7 +56,6 @@ export function AppLayout() {
   )
   const [commandOpen, setCommandOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
@@ -86,8 +85,10 @@ export function AppLayout() {
     const rawTitle =
       location.pathname === '/dashboard'
         ? '工作台'
-        : (flattenMenuRoutes(menus).find((route) => route.path === location.pathname)?.title ??
-          document.title)
+        : location.pathname === '/profile'
+          ? '个人中心'
+          : (flattenMenuRoutes(menus).find((route) => route.path === location.pathname)?.title ??
+            document.title)
     openTab(
       { key: location.pathname, title: rawTitle },
       location.search ? location.search : undefined,
@@ -169,7 +170,6 @@ export function AppLayout() {
           onOpenMobileNav={() => setMobileNavOpen(true)}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
-          onOpenProfile={() => setProfileOpen(true)}
           topMenus={topMenus}
         />
         {tabsEnabled && (
@@ -188,11 +188,13 @@ export function AppLayout() {
         >
           {/* contentWidth=boxed：内容限宽居中；fluid：通栏 */}
           <div className={cn(contentWidth === 'boxed' && 'mx-auto w-full max-w-7xl')}>
-            <RouteErrorBoundary>
-              <PageTransition key={location.pathname}>
-                <Outlet />
-              </PageTransition>
-            </RouteErrorBoundary>
+            <EntityPeekProvider>
+              <RouteErrorBoundary>
+                <PageTransition key={location.pathname}>
+                  <Outlet />
+                </PageTransition>
+              </RouteErrorBoundary>
+            </EntityPeekProvider>
           </div>
         </main>
       </div>
@@ -224,7 +226,6 @@ export function AppLayout() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <SettingsDrawer open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <ProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   )
 }

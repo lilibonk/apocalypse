@@ -2,6 +2,37 @@
   --background: var(--slime-stage);
   background: var(--slime-stage);
 }
+
+.brand-slime-backdrop {
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in oklch, var(--orb-halo) 65%, transparent) 0%,
+      transparent 56%
+    ),
+    radial-gradient(
+      ellipse at 50% 78%,
+      color-mix(in oklch, var(--brand) 16%, transparent) 0%,
+      transparent 62%
+    );
+}
+
+html[data-theme-world='sketchbook'] .brand-slime-backdrop {
+  background:
+    radial-gradient(ellipse at 18% 20%, var(--wash-mint), transparent 46%),
+    radial-gradient(ellipse at 82% 76%, var(--wash-amber), transparent 50%),
+    radial-gradient(var(--world-paper-dots) 0.9px, transparent 0.9px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    18px 18px;
+}
+
+html[data-theme-world='obsidian'] .brand-slime-backdrop {
+  background:
+    radial-gradient(circle at 50% 44%, oklch(0.82 0.16 172 / 0.16), transparent 54%),
+    radial-gradient(ellipse at 50% 80%, oklch(0.76 0.13 205 / 0.12), transparent 60%);
+}
 .slime-mascot {
   position: relative;
   flex-shrink: 0;

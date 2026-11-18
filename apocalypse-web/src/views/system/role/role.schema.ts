@@ -22,6 +22,16 @@ export default definePageSchema({
   createRequiresAllScope: true,
   search: [
     { name: 'keyword', label: '角色名称 / 标识', type: 'input', placeholder: '角色名称 / 标识' },
+    {
+      name: 'status',
+      label: '状态',
+      type: 'select',
+      placeholder: '全部状态',
+      options: [
+        { label: '正常', value: '1' },
+        { label: '停用', value: '0' },
+      ],
+    },
   ],
   columns: [
     { key: 'roleName', title: '角色名称' },

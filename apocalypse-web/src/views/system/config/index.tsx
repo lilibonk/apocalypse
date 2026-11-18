@@ -1,22 +1,19 @@
 /**
- * 参数设置：“参数值”工作区（多项草稿与原子保存，桌面与移动共用）+“参数定义”DynaPage（新增、改名、删除）。
- * 参数定义页面结构事实来源：./config.schema.ts。
+ * 参数设置：统一单主视图（同屏支持参数分组改值草稿/批量原子保存 + 新增/编辑/删除参数定义）。
+ * 参数定义表单事实来源：./config.schema.ts。
  */
 
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useAuthStore } from '@/stores/auth'
 import { useTranslation } from 'react-i18next'
 
-import { DynaPage } from '@/components/dyna'
+import { Perm } from '@/components/Perm'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { usePageView } from '@/hooks/usePageView'
+import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/stores/auth'
 
-import { ConfigForm } from './ConfigForm'
 import { ConfigWorkspace } from './ConfigWorkspace'
 import schema from './config.schema'
-
-const CONFIG_VIEWS = ['values', 'definitions'] as const
 
 export default function ConfigPage() {
   const epoch = useAuthStore((state) => state.authorizationEpoch)
@@ -25,34 +22,25 @@ export default function ConfigPage() {
 
 function ConfigPageContent() {
   const { t } = useTranslation()
-  const { t: systemT } = useTranslation('system')
-  const [view, setView] = usePageView(CONFIG_VIEWS, 'configView')
-  const [definitionsVisited, setDefinitionsVisited] = useState(view === 'definitions')
-  if (view === 'definitions' && !definitionsVisited) setDefinitionsVisited(true)
+  const [createOpen, setCreateOpen] = useState(false)
+
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div data-theme-stage="" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
         title={t('common.参数设置', { defaultValue: '参数设置' })}
-        view={
-          <SegmentedControl
-            label={t('dyna.pageView')}
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'values', label: systemT('configWorkspace.values') },
-              { value: 'definitions', label: systemT('configWorkspace.definitions') },
-            ]}
-          />
+        description="按分组维护系统参数值与参数定义，支持多页暂存、差异审阅与 40900 冲突解决。"
+        actions={
+          <Perm perm={schema.createPerm!}>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden="true" />
+              新增参数
+            </Button>
+          </Perm>
         }
       />
-      <div className="pb-24" hidden={view !== 'values'}>
-        <ConfigWorkspace active={view === 'values'} />
+      <div className="pb-24">
+        <ConfigWorkspace active createOpen={createOpen} onCreateOpenChange={setCreateOpen} />
       </div>
-      {definitionsVisited && (
-        <div hidden={view !== 'definitions'}>
-          <DynaPage schema={schema} formComponent={ConfigForm} embedded />
-        </div>
-      )}
     </div>
   )
 }

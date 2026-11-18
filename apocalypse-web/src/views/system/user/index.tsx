@@ -1,16 +1,13 @@
 /**
- * 用户管理：基于 Headless `useDynaController` + `UserWorkspace`（StickyCompactRailLayout + 活水关系舞台）
- * 与标准 `DynaTable` 列表双视图。
+ * 用户管理：统一单主视图（左部门树过滤 + 多维搜索 + 多选主表 + 原地分配角色/重置密码弹窗 + 侧滑上下文抽屉）。
  * 页面结构事实来源：./user.schema.ts（CI 由 components/dyna/__tests__/schema.test.ts 校验）。
  */
 
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, List } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   DynaDialogs,
-  DynaTable,
   DynaToolbar,
   DynaToolbarActions,
   useDynaController,
@@ -18,28 +15,23 @@ import {
 } from '@/components/dyna'
 import { useDynaText } from '@/components/dyna/use-dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { LivingContextBar, useEntityIntent, type EntityRouteIntent } from '@/components/navigation'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { useDesktopViewport } from '@/hooks/useDesktopViewport'
-import { usePageView } from '@/hooks/usePageView'
+import { useEntityIntent, type EntityRouteIntent } from '@/components/navigation'
 import { request } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 import schema from './user.schema'
+import { UserAssignRolesDialog, type AssignRoleUserTarget } from './UserAssignRolesDialog'
 import { UserForm } from './UserForm'
-import { UserWorkspace } from './UserWorkspace'
+import { UserResetPasswordDialog, type ResetPasswordUserTarget } from './UserResetPasswordDialog'
+import { UserWorkspace, readUserRoles } from './UserWorkspace'
 
-type UserPageView = 'workspace' | 'list'
-const USER_PAGE_VIEWS = ['workspace', 'list'] as const
+const EXTRA_SEARCH_KEYS = ['deptId', 'includeChildren'] as const
 
 export default function UserPage() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   const { intent: rawIntent } = useEntityIntent('user')
   const intent = rawIntent ?? undefined
-  const desktop = useDesktopViewport()
-  const [view, setView] = usePageView<UserPageView>(USER_PAGE_VIEWS)
-  const activeView: UserPageView = desktop ? view : 'list'
   const instanceKey = JSON.stringify([
     sessionEpoch,
     authorizationEpoch,
@@ -49,27 +41,16 @@ export default function UserPage() {
     intent?.roleId,
   ])
 
-  return (
-    <UserPageContent
-      key={instanceKey}
-      intent={intent}
-      view={activeView}
-      onViewChange={desktop ? setView : undefined}
-    />
-  )
+  return <UserPageContent key={instanceKey} intent={intent} />
 }
 
-function UserPageContent({
-  intent,
-  view,
-  onViewChange,
-}: {
-  intent?: EntityRouteIntent
-  view: UserPageView
-  onViewChange?: (view: UserPageView) => void
-}) {
+function UserPageContent({ intent }: { intent?: EntityRouteIntent }) {
   const t = useDynaText()
   const queryClient = useQueryClient()
+  const [inspectorOpen, setInspectorOpen] = useState(() => Boolean(intent?.id))
+  const [assignTarget, setAssignTarget] = useState<AssignRoleUserTarget | null>(null)
+  const [resetTarget, setResetTarget] = useState<ResetPasswordUserTarget | null>(null)
+
   const asyncValidators = useMemo<Record<string, DynaAsyncFieldValidator>>(
     () => ({
       username: async (value) => {
@@ -90,6 +71,28 @@ function UserPageContent({
 
   const controller = useDynaController(schema, {
     entityIntent: intent,
+    extraSearchKeys: EXTRA_SEARCH_KEYS,
+    customActions: {
+      inspect: (row) => {
+        controller.selectRow(String(row.id ?? ''))
+        setInspectorOpen(true)
+      },
+      'assign-roles': (row) => {
+        setAssignTarget({
+          id: String(row.id ?? ''),
+          username: String(row.username ?? ''),
+          nickname: row.nickname == null ? null : String(row.nickname),
+          roles: readUserRoles(row),
+        })
+      },
+      'reset-password': (row) => {
+        setResetTarget({
+          id: String(row.id ?? ''),
+          username: String(row.username ?? ''),
+          nickname: row.nickname == null ? null : String(row.nickname),
+        })
+      },
+    },
     onRefreshCompanion: (overviewKey) => {
       if (overviewKey) {
         void queryClient.invalidateQueries({ queryKey: overviewKey })
@@ -97,58 +100,51 @@ function UserPageContent({
     },
   })
 
-  const viewControl = onViewChange ? (
-    <SegmentedControl
-      label={t('pageView')}
-      value={view}
-      onChange={onViewChange}
-      options={[
-        { value: 'workspace', label: t('viewWorkspace'), icon: LayoutDashboard },
-        { value: 'list', label: t('viewList'), icon: List },
-      ]}
-    />
-  ) : undefined
-
-  const searchControl = (
-    <DynaToolbar
-      controller={controller}
-      presentation={view === 'workspace' ? 'toolbar' : 'panel'}
-    />
-  )
+  const searchControl = <DynaToolbar controller={controller} presentation="panel" />
 
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div data-theme-stage="" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
       <PageHeader
         title={t(schema.title)}
         description={schema.description ? t(schema.description) : undefined}
-        view={viewControl}
         actions={<DynaToolbarActions controller={controller} />}
       />
 
-      {view === 'workspace' ? (
-        <UserWorkspace
-          controller={controller}
-          collection={controller.collection}
-          filters={controller.filters}
-          applyFilters={controller.applyFilters}
-          queryKey={controller.queryKey}
-          selectedRowKey={controller.selectedRowKey}
-          selectRow={controller.selectRow}
-          search={searchControl}
-          intent={intent}
-        />
-      ) : (
-        <>
-          {intent?.source && <LivingContextBar source={intent.source} />}
-          {searchControl}
-          <DynaTable {...controller.collection} />
-        </>
-      )}
+      <UserWorkspace
+        controller={controller}
+        collection={controller.collection}
+        filters={controller.filters}
+        applyFilters={controller.applyFilters}
+        queryKey={controller.queryKey}
+        selectedRowKey={controller.selectedRowKey}
+        selectRow={controller.selectRow}
+        inspectorOpen={inspectorOpen}
+        onInspectorOpenChange={setInspectorOpen}
+        search={searchControl}
+        intent={intent}
+        onAssignRoles={setAssignTarget}
+        onResetPassword={setResetTarget}
+      />
 
       <DynaDialogs
         controller={controller}
         formComponent={UserForm}
         asyncValidators={asyncValidators}
+      />
+
+      <UserAssignRolesDialog
+        key={assignTarget ? `roles:${assignTarget.id}` : 'roles:closed'}
+        user={assignTarget}
+        open={assignTarget !== null}
+        onOpenChange={(open) => !open && setAssignTarget(null)}
+        onSaved={() => void controller.actions.invalidate()}
+      />
+
+      <UserResetPasswordDialog
+        key={resetTarget ? `pwd:${resetTarget.id}` : 'pwd:closed'}
+        user={resetTarget}
+        open={resetTarget !== null}
+        onOpenChange={(open) => !open && setResetTarget(null)}
       />
     </div>
   )
