@@ -11,6 +11,7 @@ import { request, type RequestOptions } from '@/lib/api/client'
 import type { DictTone, PageResult, SnowflakeId } from '@/lib/api/types'
 
 export const DICT_BOOK_PAGE_SIZE = 12
+export const DICT_BOOK_PAGE_SIZE_OPTIONS = [12, 24, 48, 96] as const
 export const DICT_VALUE_PAGE_SIZE = 20
 
 export interface DictTypeRow {
@@ -40,11 +41,12 @@ export function pageDictTypes(
   page: number,
   signal?: AbortSignal,
   status?: number,
+  size: number = DICT_BOOK_PAGE_SIZE,
 ) {
   return request<PageResult<DictTypeRow>>('/system/dict/types/page', {
     query: {
       page,
-      size: DICT_BOOK_PAGE_SIZE,
+      size,
       keyword: keyword || undefined,
       status,
     },
@@ -67,9 +69,14 @@ export function enabledDictValues(type: string, signal?: AbortSignal) {
   return request<DictValueRow[]>(`/system/dict/data/type/${encodeURIComponent(type)}`, { signal })
 }
 
-export function pageDictValues(type: string, page: number, signal?: AbortSignal) {
+export function pageDictValues(
+  type: string,
+  page: number,
+  signal?: AbortSignal,
+  size: number = DICT_VALUE_PAGE_SIZE,
+) {
   return request<PageResult<DictValueRow>>('/system/dict/data/page', {
-    query: { page, size: DICT_VALUE_PAGE_SIZE, dictType: type },
+    query: { page, size, dictType: type },
     signal,
   })
 }

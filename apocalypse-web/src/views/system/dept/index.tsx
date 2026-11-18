@@ -360,254 +360,254 @@ function DeptWorkspace() {
         </div>
       )}
       {view === 'table' && (!error || tree !== undefined) && (
-        <div
-          className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
-          aria-busy={isFetching}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-              <div className="relative min-w-48 flex-1 sm:max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={deptQuery}
-                  onChange={(event) => {
-                    setDeptQuery(event.target.value)
-                    setPage(1)
-                  }}
-                  placeholder="搜索部门名称 / 负责人 / 电话…"
-                  aria-label="搜索部门名称或负责人"
-                  className="h-8 pl-9 text-xs"
-                />
-              </div>
-              <div
-                role="group"
-                aria-label="部门状态筛选"
-                className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
-              >
-                {(
-                  [
-                    { value: 'all', label: '全部' },
-                    { value: '1', label: '正常' },
-                    { value: '0', label: '停用' },
-                  ] as const
-                ).map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={statusFilter === option.value}
-                    onClick={() => {
-                      setStatusFilter(option.value)
+        <div className="space-y-4">
+          <div
+            className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
+            aria-busy={isFetching}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+                <div className="relative min-w-48 flex-1 sm:max-w-xs">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={deptQuery}
+                    onChange={(event) => {
+                      setDeptQuery(event.target.value)
                       setPage(1)
                     }}
-                    className={cn(
-                      'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                      statusFilter === option.value
-                        ? 'bg-card font-medium text-foreground shadow-xs'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
+                    placeholder="搜索部门名称 / 负责人 / 电话…"
+                    aria-label="搜索部门名称或负责人"
+                    className="h-8 pl-9 text-xs"
+                  />
+                </div>
+                <div
+                  role="group"
+                  aria-label="部门状态筛选"
+                  className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
+                >
+                  {(
+                    [
+                      { value: 'all', label: '全部' },
+                      { value: '1', label: '正常' },
+                      { value: '0', label: '停用' },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={statusFilter === option.value}
+                      onClick={() => {
+                        setStatusFilter(option.value)
+                        setPage(1)
+                      }}
+                      className={cn(
+                        'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        statusFilter === option.value
+                          ? 'bg-card font-medium text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {filtering && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setDeptQuery('')
+                      setStatusFilter('all')
+                      setPage(1)
+                    }}
                   >
-                    {option.label}
-                  </button>
-                ))}
+                    <X className="size-3.5" aria-hidden="true" />
+                    重置
+                  </Button>
+                )}
               </div>
-              {filtering && (
+              <div className="flex flex-wrap items-center gap-1">
                 <Button
                   type="button"
-                  size="sm"
                   variant="ghost"
-                  className="h-8 text-xs"
+                  size="sm"
+                  disabled={filtering || expandableIds.length === 0}
+                  onClick={() => setExpanded(new Set(expandableIds))}
+                >
+                  <ChevronsUpDown className="size-4" aria-hidden="true" />
+                  {t('common.全部展开', { defaultValue: '全部展开' })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={filtering || expandableIds.length === 0}
                   onClick={() => {
-                    setDeptQuery('')
-                    setStatusFilter('all')
+                    setExpanded(new Set())
                     setPage(1)
                   }}
                 >
-                  <X className="size-3.5" aria-hidden="true" />
-                  重置
+                  <ChevronsDownUp className="size-4" aria-hidden="true" />
+                  {t('common.全部折叠', { defaultValue: '全部折叠' })}
                 </Button>
-              )}
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={filtering || expandableIds.length === 0}
-                onClick={() => setExpanded(new Set(expandableIds))}
-              >
-                <ChevronsUpDown className="size-4" aria-hidden="true" />
-                {t('common.全部展开', { defaultValue: '全部展开' })}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={filtering || expandableIds.length === 0}
-                onClick={() => {
-                  setExpanded(new Set())
-                  setPage(1)
-                }}
-              >
-                <ChevronsDownUp className="size-4" aria-hidden="true" />
-                {t('common.全部折叠', { defaultValue: '全部折叠' })}
-              </Button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('common.部门名称', { defaultValue: '部门名称' })}</TableHead>
-                  <TableHead>{t('common.负责人', { defaultValue: '负责人' })}</TableHead>
-                  <TableHead>{t('common.联系电话', { defaultValue: '联系电话' })}</TableHead>
-                  <TableHead className="w-16">
-                    {t('common.排序', { defaultValue: '排序' })}
-                  </TableHead>
-                  <TableHead className="w-20">
-                    {t('common.状态', { defaultValue: '状态' })}
-                  </TableHead>
-                  <TableHead>{t('common.备注', { defaultValue: '备注' })}</TableHead>
-                  <TableHead className="w-32 text-right">
-                    {t('common.操作', { defaultValue: '操作' })}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading &&
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <TableRow key={index}>
-                      {Array.from({ length: 7 }).map((__, cell) => (
-                        <TableCell key={cell}>
-                          <Skeleton className="h-4 w-full" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                {!isLoading && rows.length === 0 && (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                      {t('common.暂无数据', { defaultValue: '暂无数据' })}
-                    </TableCell>
+                    <TableHead>{t('common.部门名称', { defaultValue: '部门名称' })}</TableHead>
+                    <TableHead>{t('common.负责人', { defaultValue: '负责人' })}</TableHead>
+                    <TableHead>{t('common.联系电话', { defaultValue: '联系电话' })}</TableHead>
+                    <TableHead className="w-16">
+                      {t('common.排序', { defaultValue: '排序' })}
+                    </TableHead>
+                    <TableHead className="w-20">
+                      {t('common.状态', { defaultValue: '状态' })}
+                    </TableHead>
+                    <TableHead>{t('common.备注', { defaultValue: '备注' })}</TableHead>
+                    <TableHead className="w-32 text-right">
+                      {t('common.操作', { defaultValue: '操作' })}
+                    </TableHead>
                   </TableRow>
-                )}
-                {pagedRows.map((row) => {
-                  const node = row.node
-                  const isCollapsed = collapsed.has(node.id)
-                  const ancestorNames = ancestorNamesById.get(node.id) ?? []
-                  const parentOffPage =
-                    row.depth > 0 && !pageNodeIds.has(node.parentId) && ancestorNames.length > 0
-                  return (
-                    <TableRow key={node.id}>
-                      <TableCell>
-                        <div
-                          className="flex items-center gap-1"
-                          style={{ paddingLeft: `calc(var(--spacing) * ${row.depth * 6})` }}
+                </TableHeader>
+                <TableBody>
+                  {isLoading &&
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <TableRow key={index}>
+                        {Array.from({ length: 7 }).map((__, cell) => (
+                          <TableCell key={cell}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  {!isLoading && rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                        {t('common.暂无数据', { defaultValue: '暂无数据' })}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {pagedRows.map((row) => {
+                    const node = row.node
+                    const isCollapsed = collapsed.has(node.id)
+                    const ancestorNames = ancestorNamesById.get(node.id) ?? []
+                    const parentOffPage =
+                      row.depth > 0 && !pageNodeIds.has(node.parentId) && ancestorNames.length > 0
+                    return (
+                      <TableRow key={node.id}>
+                        <TableCell>
+                          <div
+                            className="flex items-center gap-1"
+                            style={{ paddingLeft: `calc(var(--spacing) * ${row.depth * 6})` }}
+                          >
+                            {row.hasChildren ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 shrink-0"
+                                aria-expanded={!isCollapsed}
+                                aria-label={
+                                  isCollapsed
+                                    ? t('common.展开', { defaultValue: '展开' })
+                                    : t('common.折叠', { defaultValue: '折叠' })
+                                }
+                                onClick={() => toggleExpanded(node.id)}
+                              >
+                                <ChevronRight
+                                  className={cn(
+                                    'size-3.5 transition-transform',
+                                    !isCollapsed && 'rotate-90',
+                                  )}
+                                />
+                              </Button>
+                            ) : (
+                              <span className="size-6 shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              {parentOffPage && (
+                                <div
+                                  data-slot="dept-page-ancestor-trail"
+                                  className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground"
+                                >
+                                  {ancestorNames.map((ancName, index) => (
+                                    <Fragment key={`${node.id}-anc-${index}`}>
+                                      {index > 0 && <span aria-hidden="true">/</span>}
+                                      <span className="max-w-28 truncate">{ancName}</span>
+                                    </Fragment>
+                                  ))}
+                                  <span aria-hidden="true">/</span>
+                                </div>
+                              )}
+                              <span className="font-medium">{node.deptName}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{node.leader ?? '-'}</TableCell>
+                        <TableCell>{node.phone ?? '-'}</TableCell>
+                        <TableCell>{node.sort}</TableCell>
+                        <TableCell>
+                          <DictTag type="sys_user_status" value={node.status} />
+                        </TableCell>
+                        <TableCell
+                          className="max-w-48 truncate text-muted-foreground"
+                          title={node.remark ?? undefined}
                         >
-                          {row.hasChildren ? (
+                          {node.remark ?? '-'}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Perm perm="system:dept:add" requiresAllScope>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="size-6 shrink-0"
-                              aria-expanded={!isCollapsed}
-                              aria-label={
-                                isCollapsed
-                                  ? t('common.展开', { defaultValue: '展开' })
-                                  : t('common.折叠', { defaultValue: '折叠' })
-                              }
-                              onClick={() => toggleExpanded(node.id)}
+                              aria-label={t('common.新增下级', { defaultValue: '新增下级' })}
+                              onClick={() => openCreate(node.id)}
                             >
-                              <ChevronRight
-                                className={cn(
-                                  'size-3.5 transition-transform',
-                                  !isCollapsed && 'rotate-90',
-                                )}
-                              />
+                              <Plus className="size-3.5" />
                             </Button>
-                          ) : (
-                            <span className="size-6 shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            {parentOffPage && (
-                              <div
-                                data-slot="dept-page-ancestor-trail"
-                                className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground"
-                              >
-                                {ancestorNames.map((ancName, index) => (
-                                  <Fragment key={`${node.id}-anc-${index}`}>
-                                    {index > 0 && <span aria-hidden="true">/</span>}
-                                    <span className="max-w-28 truncate">{ancName}</span>
-                                  </Fragment>
-                                ))}
-                                <span aria-hidden="true">/</span>
-                              </div>
-                            )}
-                            <span className="font-medium">{node.deptName}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{node.leader ?? '-'}</TableCell>
-                      <TableCell>{node.phone ?? '-'}</TableCell>
-                      <TableCell>{node.sort}</TableCell>
-                      <TableCell>
-                        <DictTag type="sys_user_status" value={node.status} />
-                      </TableCell>
-                      <TableCell
-                        className="max-w-48 truncate text-muted-foreground"
-                        title={node.remark ?? undefined}
-                      >
-                        {node.remark ?? '-'}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Perm perm="system:dept:add" requiresAllScope>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={t('common.新增下级', { defaultValue: '新增下级' })}
-                            onClick={() => openCreate(node.id)}
-                          >
-                            <Plus className="size-3.5" />
-                          </Button>
-                        </Perm>
-                        <Perm perm="system:dept:edit" requiresAllScope>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={t('common.编辑', { defaultValue: '编辑' })}
-                            onClick={() => openEdit(node)}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        </Perm>
-                        <Perm perm="system:dept:remove" requiresAllScope>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={t('common.删除', { defaultValue: '删除' })}
-                            onClick={() => setDeleting(node)}
-                          >
-                            <Trash2 className="size-3.5 text-destructive" />
-                          </Button>
-                        </Perm>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                          </Perm>
+                          <Perm perm="system:dept:edit" requiresAllScope>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t('common.编辑', { defaultValue: '编辑' })}
+                              onClick={() => openEdit(node)}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          </Perm>
+                          <Perm perm="system:dept:remove" requiresAllScope>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t('common.删除', { defaultValue: '删除' })}
+                              onClick={() => setDeleting(node)}
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                            </Button>
+                          </Perm>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           {tree !== undefined && rows.length > 0 && (
-            <div className="border-t border-border-subtle px-4 py-3">
-              <DynaPagination
-                page={currentPage}
-                size={pageSize}
-                total={rows.length}
-                onPageChange={setPage}
-                onPageSizeChange={(nextSize) => {
-                  setPageSize(nextSize)
-                  setPage(1)
-                }}
-              />
-            </div>
+            <DynaPagination
+              page={currentPage}
+              size={pageSize}
+              total={rows.length}
+              onPageChange={setPage}
+              onPageSizeChange={(nextSize) => {
+                setPageSize(nextSize)
+                setPage(1)
+              }}
+            />
           )}
         </div>
       )}

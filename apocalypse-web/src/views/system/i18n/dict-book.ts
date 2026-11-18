@@ -21,9 +21,6 @@ export const dictBookCopy = {
     storedValue: '值 {{value}}',
     typePages: '字典类型分页',
     valuePages: '{{name}}的字典值分页',
-    pageSummary: '第 {{page}} / {{pages}} 页 · 共 {{total}} 项',
-    previous: '上一页',
-    next: '下一页',
     result: {
       created: '已创建“{{name}}”',
       updated: '已更新“{{name}}”',
@@ -84,9 +81,6 @@ export const dictBookCopy = {
     storedValue: 'Value {{value}}',
     typePages: 'Dictionary type pages',
     valuePages: 'Value pages for {{name}}',
-    pageSummary: 'Page {{page}} of {{pages}} · {{total}} items',
-    previous: 'Previous',
-    next: 'Next',
     result: {
       created: 'Created “{{name}}”',
       updated: 'Updated “{{name}}”',

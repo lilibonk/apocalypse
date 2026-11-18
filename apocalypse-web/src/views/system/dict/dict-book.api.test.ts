@@ -8,19 +8,19 @@ vi.mock('@/lib/api/client', () => ({ request }))
 beforeEach(() => request.mockClear())
 
 describe('dictionary complete page access', () => {
-  it('forwards later type pages and the applied keyword to the existing server query', async () => {
+  it('forwards later type pages, page size and the applied keyword to the existing server query', async () => {
     const signal = new AbortController().signal
-    await pageDictTypes('department', 3, signal)
+    await pageDictTypes('department', 3, signal, 1, 24)
     expect(request).toHaveBeenCalledWith('/system/dict/types/page', {
-      query: { page: 3, size: expect.any(Number), keyword: 'department' },
+      query: { page: 3, size: 24, keyword: 'department', status: 1 },
       signal,
     })
   })
 
-  it('loads later value pages only for the selected dictionary type', async () => {
-    await pageDictValues('custom_status', 11)
+  it('loads later value pages and custom size only for the selected dictionary type', async () => {
+    await pageDictValues('custom_status', 11, undefined, 50)
     expect(request).toHaveBeenCalledWith('/system/dict/data/page', {
-      query: { page: 11, size: expect.any(Number), dictType: 'custom_status' },
+      query: { page: 11, size: 50, dictType: 'custom_status' },
       signal: undefined,
     })
   })

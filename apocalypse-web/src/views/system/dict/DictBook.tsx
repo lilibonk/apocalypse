@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
-import { DynaQueryFeedback } from '@/components/dyna/DynaQueryFeedback'
+import { DynaPagination, DynaQueryFeedback } from '@/components/dyna'
 import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import {
   AlertDialog,
@@ -47,6 +47,7 @@ import { useAuthStore } from '@/stores/auth'
 
 import {
   DICT_BOOK_PAGE_SIZE,
+  DICT_BOOK_PAGE_SIZE_OPTIONS,
   DICT_VALUE_PAGE_SIZE,
   batchDictValues,
   createDictValue,
@@ -67,7 +68,6 @@ import {
   resolveDictSwatchTone,
   type DictTypeChange,
 } from './dict-book.model'
-import { DictPagination } from './DictPagination'
 import { DictTypeControls } from './DictTypeControls'
 import './dict-book.css'
 
@@ -101,6 +101,7 @@ export function DictBook({
   const [keyword, setKeyword] = useState(() => intent?.id ?? '')
   const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DICT_BOOK_PAGE_SIZE)
   const [selectedType, setSelectedType] = useState<DictTypeRow | null | 'none'>(null)
   const [valueBusy, setValueBusy] = useState(false)
   const [typeBusy, setTypeBusy] = useState(false)
@@ -152,13 +153,14 @@ export function DictBook({
   )
 
   const types = useQuery({
-    queryKey: ['system', 'dict', 'book', 'types', keyword, statusFilter, page],
+    queryKey: ['system', 'dict', 'book', 'types', keyword, statusFilter, page, pageSize],
     queryFn: ({ signal }) =>
       pageDictTypes(
         keyword,
         page,
         signal,
         statusFilter === 'all' ? undefined : Number(statusFilter),
+        pageSize,
       ),
     placeholderData: keepPreviousData,
     enabled: active,
@@ -203,7 +205,7 @@ export function DictBook({
     },
   })
 
-  const pages = lastDictionaryPage(types.data?.total ?? 0, DICT_BOOK_PAGE_SIZE)
+  const pages = lastDictionaryPage(types.data?.total ?? 0, pageSize)
   if (types.data && !types.isPlaceholderData && page > pages) setPage(pages)
 
   return (
@@ -365,15 +367,21 @@ export function DictBook({
         </div>
       )}
       {list && types.data && (
-        <DictPagination
-          page={page}
+        <DynaPagination
+          ariaLabel={t('dictBook.typePages')}
+          page={Math.min(page, pages)}
+          size={pageSize}
           total={types.data.total}
-          size={DICT_BOOK_PAGE_SIZE}
-          label={t('dictBook.typePages')}
+          pageSizeOptions={DICT_BOOK_PAGE_SIZE_OPTIONS}
           disabled={busy || types.isFetching}
-          onChange={(next) => {
+          onPageChange={(next) => {
             setSelectedType('none')
             setPage(next)
+          }}
+          onPageSizeChange={(nextSize) => {
+            setSelectedType('none')
+            setPageSize(nextSize)
+            setPage(1)
           }}
         />
       )}
@@ -639,6 +647,7 @@ function DictValues({
   }))
   const [deletingType, setDeletingType] = useState(false)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DICT_VALUE_PAGE_SIZE)
   const [result, setResult] = useState<{
     id: string
     label: string
@@ -647,16 +656,16 @@ function DictValues({
   } | null>(null)
 
   const values = useQuery({
-    queryKey: ['system', 'dict', 'book', 'values', type.dictType, page],
-    queryFn: ({ signal }) => pageDictValues(type.dictType, page, signal),
+    queryKey: ['system', 'dict', 'book', 'values', type.dictType, page, pageSize],
+    queryFn: ({ signal }) => pageDictValues(type.dictType, page, signal, pageSize),
     placeholderData: (previousData): PageResult<DictValueRow> | undefined => {
       if (previousData !== undefined) return previousData
       if (page === 1 && initialItems !== undefined) {
         return {
-          list: initialItems.slice(0, DICT_VALUE_PAGE_SIZE),
+          list: initialItems.slice(0, pageSize),
           total: initialItems.length,
           page: 1,
-          size: DICT_VALUE_PAGE_SIZE,
+          size: pageSize,
         }
       }
       return undefined
@@ -931,7 +940,7 @@ function DictValues({
     return () => onTotalChange(null)
   }, [liveTotal, onTotalChange])
 
-  const pages = lastDictionaryPage(values.data?.total ?? 0, DICT_VALUE_PAGE_SIZE)
+  const pages = lastDictionaryPage(values.data?.total ?? 0, pageSize)
   if (values.data && !values.isPlaceholderData && page > pages) setPage(pages)
 
   if (values.isPending) return <Skeleton className="h-24" />
@@ -1201,13 +1210,17 @@ function DictValues({
       )}
 
       {values.data && (
-        <DictPagination
-          page={page}
+        <DynaPagination
+          ariaLabel={t('dictBook.valuePages', { name: type.dictName })}
+          page={Math.min(page, pages)}
+          size={pageSize}
           total={values.data.total}
-          size={DICT_VALUE_PAGE_SIZE}
-          label={t('dictBook.valuePages', { name: type.dictName })}
           disabled={busy || typeBusy || values.isFetching}
-          onChange={setPage}
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize)
+            setPage(1)
+          }}
         />
       )}
 

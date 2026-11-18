@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { zh } from '@/i18n/locales/zh'
 import { ApiError } from '@/lib/api/client'
 
+import { DynaPagination } from '../DynaPagination'
 import { DynaSearch } from '../DynaSearch'
 import { DynaTable, type DynaTableProps } from '../DynaTable'
 
@@ -127,5 +128,27 @@ describe('Dyna search labels', () => {
     )
     expect(html).toContain('关键词</label>')
     expect(html).not.toContain('aria-label="internal_search_argument"')
+  })
+})
+
+describe('DynaPagination landmark and locking', () => {
+  it('renders a distinguishable nav landmark when ariaLabel is provided and locks controls when disabled', () => {
+    const html = renderToStaticMarkup(
+      <DynaPagination
+        ariaLabel="参数分页"
+        page={2}
+        size={20}
+        total={50}
+        disabled
+        onPageChange={vi.fn()}
+        onPageSizeChange={vi.fn()}
+      />,
+    )
+    expect(html).toContain('<nav aria-label="参数分页"')
+    expect(html).toContain('第 21-40 条，共 50 条')
+    expect(html).toContain('2 / 3')
+    expect(html).toMatch(/<button\b[^>]*disabled=""[^>]*aria-label="每页条数"/)
+    expect(html).toMatch(/disabled=""[^>]*>上一页<\/button>/)
+    expect(html).toMatch(/disabled=""[^>]*>下一页<\/button>/)
   })
 })

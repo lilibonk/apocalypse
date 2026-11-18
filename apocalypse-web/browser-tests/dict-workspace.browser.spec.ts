@@ -40,19 +40,27 @@ test('the card book creates, edits and removes both dictionary layers without vi
   await expect(page.getByText('已删除“已修改的字典类型”及其字典值', { exact: true })).toBeVisible()
 })
 
-test('the final type page can be reached and deletion returns to a valid page', async ({
+test('the final type page can be reached, resized, and deletion returns to a valid page', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/dict-book.html')
-  await page
-    .getByRole('navigation', { name: '字典类型分页' })
-    .getByRole('button', { name: '下一页', exact: true })
-    .click()
+  const pager = page.getByRole('navigation', { name: '字典类型分页' })
+  await expect(pager).toContainText('第 1-12 条，共 13 条')
+  await pager.getByRole('combobox', { name: '每页条数', exact: true }).click()
+  await page.getByRole('option', { name: '24', exact: true }).click()
+  await expect(pager).toContainText('第 1-13 条，共 13 条')
+  await expect(page.locator('.dict-card')).toHaveCount(13)
+
+  await pager.getByRole('combobox', { name: '每页条数', exact: true }).click()
+  await page.getByRole('option', { name: '12', exact: true }).click()
+  await pager.getByRole('button', { name: '下一页', exact: true }).click()
   await page.getByRole('button', { name: /fixture_13/ }).click()
   const sheet = page.getByRole('dialog', { name: '类型 13', exact: true })
   await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('navigation', { name: '类型 13的字典值分页' })).toBeVisible()
   await sheet.getByRole('button', { name: '删除类型：类型 13', exact: true }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: '删除', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: '字典类型分页' })).toContainText('第 1 / 1 页')
+  await expect(pager).toContainText('第 1-12 条，共 12 条')
+  await expect(pager).toContainText('1 / 1')
   await expect(page.locator('.dict-card')).toHaveCount(12)
 })

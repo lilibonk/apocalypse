@@ -954,18 +954,17 @@ function RolePermissionsTabContent({
             </TableBody>
           </Table>
         </div>
-
-        {rowsData.total > GRANT_PAGE_SIZE && (
-          <div className="border-t border-border-subtle px-4 py-3">
-            <DynaPagination
-              page={rowsData.page + 1}
-              size={GRANT_PAGE_SIZE}
-              total={rowsData.total}
-              onPageChange={(next) => setPage(next - 1)}
-            />
-          </div>
-        )}
       </section>
+
+      {(!shouldFetchCatalog || !candidateQuery.isPending || rowsData.items.length > 0) && (
+        <DynaPagination
+          page={rowsData.page + 1}
+          size={GRANT_PAGE_SIZE}
+          total={rowsData.total}
+          disabled={disabled || candidateQuery.isFetching}
+          onPageChange={(next) => setPage(next - 1)}
+        />
+      )}
 
       <Dialog
         open={ruleTargetId !== null && ruleGrant !== undefined && canEdit}

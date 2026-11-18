@@ -3,24 +3,13 @@
  * 行内蓝点/划线原值/单项撤销 + 40900 三方冲突对比恢复 + 底部居中深色胶囊未保存事务条。
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Pencil,
-  RotateCcw,
-  Search,
-  Trash2,
-  TriangleAlert,
-} from 'lucide-react'
+import { Check, Eye, EyeOff, Pencil, RotateCcw, Search, Trash2, TriangleAlert } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
-import { DynaQueryFeedback } from '@/components/dyna'
+import { DynaPagination, DynaQueryFeedback } from '@/components/dyna'
 import { DraftBar } from '@/components/draft/DraftBar'
 import { DraftDiffDialog } from '@/components/draft/DraftDiffDialog'
 import { LivingContextBar, useEntityIntent } from '@/components/navigation'
@@ -78,7 +67,7 @@ import {
 import '@/components/draft/draft.css'
 import './config-workspace.css'
 
-const PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 20
 const MAX_DRAFT = 200
 const CONFLICT = 40900
 const ALL_GROUPS_KEY = '__all__'
@@ -107,6 +96,7 @@ export function ConfigWorkspace({
   const [restoredNotice] = useState(() => Object.keys(pageDraft.restored ?? {}).length > 0)
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [activeGroupKey, setActiveGroupKey] = useState<string>(ALL_GROUPS_KEY)
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({})
   const [highlightedConfigId, setHighlightedConfigId] = useState<string | null>(null)
@@ -136,8 +126,8 @@ export function ConfigWorkspace({
   }
 
   const configs = useQuery({
-    queryKey: ['system', 'configs', 'workspace', keyword.trim(), page],
-    queryFn: ({ signal }) => pageConfigs(page, PAGE_SIZE, keyword.trim(), signal),
+    queryKey: ['system', 'configs', 'workspace', keyword.trim(), page, pageSize],
+    queryFn: ({ signal }) => pageConfigs(page, pageSize, keyword.trim(), signal),
     placeholderData: keepPreviousData,
     enabled: active,
   })
@@ -307,11 +297,14 @@ export function ConfigWorkspace({
   })
 
   const filtered = rows
-  const displayedPage = configs.data?.page ?? page
   const busy =
     save.isPending || reload.isPending || saveDefinition.isPending || removeDefinition.isPending
-  const pages = Math.max(1, Math.ceil((configs.data?.total ?? 0) / PAGE_SIZE))
+  const pages = Math.max(1, Math.ceil((configs.data?.total ?? 0) / pageSize))
   if (!configs.isFetching && configs.data && page > pages) setPage(pages)
+  const displayedPage = configs.isPlaceholderData
+    ? (configs.data?.page ?? page)
+    : Math.min(page, pages)
+  const displayedSize = configs.isPlaceholderData ? (configs.data?.size ?? pageSize) : pageSize
 
   const groups = useMemo(() => {
     const map = new Map<string, { label: string; rows: ConfigRow[] }>()
@@ -808,41 +801,18 @@ export function ConfigWorkspace({
         ))}
 
       {configs.data && (
-        <nav
-          aria-label={t('configWorkspace.pagination')}
-          className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-3 text-xs text-muted-foreground"
-        >
-          <span>
-            {t('configWorkspace.range', {
-              from: configs.data.total ? (displayedPage - 1) * PAGE_SIZE + 1 : 0,
-              to: Math.min(displayedPage * PAGE_SIZE, configs.data.total),
-              total: configs.data.total,
-            })}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1 || configs.isFetching || busy}
-              onClick={() => setPage(page - 1)}
-            >
-              <ChevronLeft aria-hidden="true" />
-              {t('configWorkspace.previous')}
-            </Button>
-            <span className="tabular-nums">
-              {page} / {pages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= pages || configs.isFetching || busy}
-              onClick={() => setPage(page + 1)}
-            >
-              {t('configWorkspace.next')}
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-        </nav>
+        <DynaPagination
+          ariaLabel={t('configWorkspace.pagination')}
+          page={displayedPage}
+          size={displayedSize}
+          total={configs.data.total}
+          disabled={busy || configs.isFetching}
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize)
+            setPage(1)
+          }}
+        />
       )}
       <DraftBar
         count={count}

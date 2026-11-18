@@ -605,18 +605,17 @@ function RoleMembersTabContent({
             </TableBody>
           </Table>
         </div>
-
-        {(membersQuery.data?.total ?? 0) > ROLE_MEMBERS_PAGE_SIZE && (
-          <div className="border-t border-border-subtle px-4 py-3">
-            <DynaPagination
-              page={memberPage}
-              size={ROLE_MEMBERS_PAGE_SIZE}
-              total={membersQuery.data?.total ?? 0}
-              onPageChange={setMemberPage}
-            />
-          </div>
-        )}
       </section>
+
+      {membersQuery.data && (
+        <DynaPagination
+          page={memberPage}
+          size={ROLE_MEMBERS_PAGE_SIZE}
+          total={membersQuery.data.total}
+          disabled={disabled || membersQuery.isFetching}
+          onPageChange={setMemberPage}
+        />
+      )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-2xl">
@@ -694,11 +693,12 @@ function RoleMembersTabContent({
             )}
           </div>
 
-          {(candidateQuery.data?.total ?? 0) > ROLE_MEMBERS_PAGE_SIZE && (
+          {candidateQuery.data && (
             <DynaPagination
               page={candidatePage}
               size={ROLE_MEMBERS_PAGE_SIZE}
-              total={candidateQuery.data?.total ?? 0}
+              total={candidateQuery.data.total}
+              disabled={disabled || candidateQuery.isFetching}
               onPageChange={setCandidatePage}
             />
           )}

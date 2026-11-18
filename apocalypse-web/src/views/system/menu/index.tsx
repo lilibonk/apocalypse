@@ -223,137 +223,133 @@ function MenuPageContent() {
         onRetry={() => void refetch()}
       />
       {(!error || canShowTree) && (
-        <section
-          className="overflow-hidden rounded-panel border border-border-subtle bg-card shadow-surface"
-          aria-busy={isFetching}
-        >
-          {/* 单行紧凑过滤工具条 */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-              <div className="relative min-w-52 flex-1 sm:max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="menu-search"
-                  aria-label={t('dyna.querySearch')}
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value)
-                    setPage(1)
-                  }}
-                  placeholder={t('system:authorization.menuSearch')}
-                  className="h-8 pl-9 text-xs"
-                />
-              </div>
-              <div
-                role="group"
-                aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
-                className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
-              >
-                {(
-                  (allNodes.some((node) => node.menuType === 'F')
-                    ? [
-                        ['ALL', '全部'],
-                        ['C', '目录'],
-                        ['M', '菜单'],
-                        ['F', '历史按钮'],
-                      ]
-                    : [
-                        ['ALL', '全部'],
-                        ['C', '目录'],
-                        ['M', '菜单'],
-                      ]) as readonly (readonly ['ALL' | 'C' | 'M' | 'F', string])[]
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={typeFilter === value}
-                    onClick={() => {
-                      setTypeFilter(value)
+        <MenuTreeTable
+          tree={filteredTree}
+          isLoading={isLoading}
+          isFetching={isFetching}
+          collapsed={effectiveCollapsed}
+          onToggle={toggle}
+          onSelect={(id) => {
+            const target = allNodes.find((node) => node.id === id)
+            if (target?.children.length) toggle(id)
+            selectNode(id)
+          }}
+          highlightId={effectiveSelectedId}
+          onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+          onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+          onDelete={setDeleting}
+          filtering={filtering}
+          onResetFilters={() => {
+            setQuery('')
+            setTypeFilter('ALL')
+            setPage(1)
+          }}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize)
+            setPage(1)
+          }}
+          toolbar={
+            <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border-subtle bg-muted/20 px-4 py-2.5">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+                <div className="relative min-w-52 flex-1 sm:max-w-xs">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="menu-search"
+                    aria-label={t('dyna.querySearch')}
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
                       setPage(1)
                     }}
-                    className={cn(
-                      'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                      typeFilter === value
-                        ? 'bg-card font-medium text-foreground shadow-xs'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                    )}
-                  >
-                    {value === 'F'
-                      ? t('system:authorization.legacyButton')
-                      : t(`dyna.${label}`, { defaultValue: label })}
-                  </button>
-                ))}
+                    placeholder={t('system:authorization.menuSearch')}
+                    className="h-8 pl-9 text-xs"
+                  />
+                </div>
+                <div
+                  role="group"
+                  aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
+                  className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
+                >
+                  {(
+                    (allNodes.some((node) => node.menuType === 'F')
+                      ? [
+                          ['ALL', '全部'],
+                          ['C', '目录'],
+                          ['M', '菜单'],
+                          ['F', '历史按钮'],
+                        ]
+                      : [
+                          ['ALL', '全部'],
+                          ['C', '目录'],
+                          ['M', '菜单'],
+                        ]) as readonly (readonly ['ALL' | 'C' | 'M' | 'F', string])[]
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={typeFilter === value}
+                      onClick={() => {
+                        setTypeFilter(value)
+                        setPage(1)
+                      }}
+                      className={cn(
+                        'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        typeFilter === value
+                          ? 'bg-card font-medium text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                      )}
+                    >
+                      {value === 'F'
+                        ? t('system:authorization.legacyButton')
+                        : t(`dyna.${label}`, { defaultValue: label })}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-1">
-              {selectedNode && selectedHasChildren && (
+              <div className="flex flex-wrap items-center gap-1">
+                {selectedNode && selectedHasChildren && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={filtering}
+                    onClick={() => toggle(selectedNode.id, true)}
+                  >
+                    <ChevronsUpDown className="size-4" />
+                    {selectedBranchExpanded
+                      ? t('common.折叠当前分支', { defaultValue: '折叠当前分支' })
+                      : t('common.展开当前分支', { defaultValue: '展开当前分支' })}
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
                   disabled={filtering}
-                  onClick={() => toggle(selectedNode.id, true)}
+                  onClick={() => setExpanded(new Set(expandableIds))}
                 >
                   <ChevronsUpDown className="size-4" />
-                  {selectedBranchExpanded
-                    ? t('common.折叠当前分支', { defaultValue: '折叠当前分支' })
-                    : t('common.展开当前分支', { defaultValue: '展开当前分支' })}
+                  {t('common.全部展开', { defaultValue: '全部展开' })}
                 </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={filtering}
-                onClick={() => setExpanded(new Set(expandableIds))}
-              >
-                <ChevronsUpDown className="size-4" />
-                {t('common.全部展开', { defaultValue: '全部展开' })}
-              </Button>
-              <Button variant="ghost" size="sm" disabled={filtering} onClick={collapseAll}>
-                <ChevronsDownUp className="size-4" />
-                {t('common.全部折叠', { defaultValue: '全部折叠' })}
-              </Button>
-              {canShowTree && (
-                <span className="ml-2 text-xs text-muted-foreground tabular-nums">
-                  {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
-                    defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
-                    visible: filteredNodes.length,
-                    total: allNodes.length,
-                  })}
-                </span>
-              )}
+                <Button variant="ghost" size="sm" disabled={filtering} onClick={collapseAll}>
+                  <ChevronsDownUp className="size-4" />
+                  {t('common.全部折叠', { defaultValue: '全部折叠' })}
+                </Button>
+                {canShowTree && (
+                  <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+                    {t('common.显示 {{visible}} / {{total}} 个菜单节点', {
+                      defaultValue: '显示 {{visible}} / {{total}} 个菜单节点',
+                      visible: filteredNodes.length,
+                      total: allNodes.length,
+                    })}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-
-          <MenuTreeTable
-            tree={filteredTree}
-            isLoading={isLoading}
-            collapsed={effectiveCollapsed}
-            onToggle={toggle}
-            onSelect={(id) => {
-              const target = allNodes.find((node) => node.id === id)
-              if (target?.children.length) toggle(id)
-              selectNode(id)
-            }}
-            highlightId={effectiveSelectedId}
-            onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-            onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-            onDelete={setDeleting}
-            filtering={filtering}
-            onResetFilters={() => {
-              setQuery('')
-              setTypeFilter('ALL')
-              setPage(1)
-            }}
-            page={page}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={(nextSize) => {
-              setPageSize(nextSize)
-              setPage(1)
-            }}
-          />
-        </section>
+          }
+        />
       )}
 
       <MenuFormDialog
