@@ -2,119 +2,132 @@
   <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset=".github/assets/readme/hero-mobile-dark.png">
   <source media="(max-width: 600px)" srcset=".github/assets/readme/hero-mobile-light.png">
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/hero-dark.png">
-  <img src=".github/assets/readme/hero-light.png" alt="Apocalypse — Admin Foundation。为复杂系统，保留秩序。Apo / Milk Cloud 品牌角色。" width="100%">
+  <img src=".github/assets/readme/hero-light.png" alt="Apocalypse：Java 25 后端模块化单体与 React 19 管理台" width="100%">
 </picture>
 
 <p align="center">
-  <strong>让业务从一个更好的起点开始。</strong><br>
-  Java 模块化单体 × React 管理台，为你的下一套业务系统打好基础。
+  <strong>Java 25 / Spring Boot 4.1 模块化单体 × React 19 管理台基座</strong><br>
+  含认证授权、实时权限判定、操作审计、两级缓存与标准化后台页面组件。
 </p>
 
 <p align="center">
-  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="0.1.0-rc.2 发行候选" height="24"></a>
-  <a href="https://github.com/lilibonk/apocalypse/actions/workflows/ci.yml"><img src=".github/assets/readme/checks.svg" alt="查看 GitHub Actions CI" height="24"></a>
-  <a href="LICENSE"><img src=".github/assets/readme/license.svg" alt="Apache License 2.0" height="24"></a>
+  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="Version: 0.1.0-rc.2" height="24"></a>
+  <a href="https://github.com/lilibonk/apocalypse/actions/workflows/ci.yml"><img src=".github/assets/readme/checks.svg" alt="CI: GitHub Actions workflow" height="24"></a>
+  <a href="LICENSE"><img src=".github/assets/readme/license.svg" alt="License: Apache 2.0" height="24"></a>
 </p>
 
 <p align="center">
   <a href="docs/getting-started.md"><strong>快速开始</strong></a> ·
-  <a href="#界面一览">界面一览</a> ·
-  <a href="docs/module-development.md">开发业务模块</a> ·
-  <a href="docs/README.md">使用文档</a> ·
-  <a href="CHANGELOG.md">更新记录</a>
+  <a href="#界面预览">界面预览</a> ·
+  <a href="docs/module-development.md">模块开发</a> ·
+  <a href="docs/README.md">文档索引</a> ·
+  <a href="CHANGELOG.md">变更记录</a>
 </p>
 
-## 界面一览
+## 界面预览
 
-薄荷绿的操作强调、清晰的内容层级，还有一只柔软的 Apo。管理台支持明暗主题、中英文、两档密度与响应式布局，让日常管理也有一点轻快感。
+管理台包含用户、角色、权限目录、菜单、部门、字典与参数工作区，支持清透流体、手绘手账与深邃夜色（Obsidian）三套主题，以及中英文、两档密度与响应式布局。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/admin-dark.jpg">
-  <img src=".github/assets/readme/admin-light.jpg" alt="Apocalypse 用户管理：侧栏导航、多页签、筛选与操作表格。当前组件渲染，全部为示例数据。" width="100%">
+  <img src=".github/assets/readme/admin-light.jpg" alt="Apocalypse 用户管理界面：左侧部门树筛选、多维检索条、用户表与统一下置分页器，全部为示例数据。" width="100%">
 </picture>
 
-<p align="center"><sub>当前管理台组件 · 示例数据 · 随阅读环境切换明暗展示</sub></p>
+<p align="center"><sub>用户管理工作区（清透流体亮色 / Obsidian 暗色 · 示例数据）</sub></p>
 
 <details>
-<summary><strong>认识 Apo：登录页的品牌宠物</strong></summary>
+<summary><strong>角色授权工作台：业务权限、数据范围与导航分配</strong></summary>
 
-Apo 的 Milk Cloud 造型也出现在首页首图中。在支持 WebGPU 的浏览器里，它能跟随视线、回应按压与拖拽；输入密码时会闭上眼睛，等待、成功和出错时也有对应表情。关闭动效或浏览器不支持时，仍以静态形象陪伴登录。
+角色配置在同一路由全宽展开，统一编辑业务权限开关、逐权限数据范围覆盖、UTC 生效起止时间、C/M 导航菜单分配以及角色成员基线，保存时校验服务端修订号。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/login-dark.jpg">
-  <img src=".github/assets/readme/login-light.jpg" alt="Apocalypse 登录页：左侧为 Apo / Milk Cloud 品牌宠物，右侧为登录表单及主题、语言设置。" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/role-workbench-dark.jpg">
+  <img src=".github/assets/readme/role-workbench-light.jpg" alt="Apocalypse 角色授权工作台：内联配置业务权限、数据范围覆盖、有效期与导航菜单。" width="100%">
 </picture>
 
 </details>
 
-## 为什么选择 Apocalypse
+<details>
+<summary><strong>登录页与三主题世界切换</strong></summary>
 
-### 一个后端制品，清楚的业务边界
+登录页左侧为 Apo / Milk Cloud 角色舞台（支持 WebGPU 交互并在关闭动效或不支持时降级为静态形象），右侧为凭证表单以及底部的主题世界与语言切换控制。
 
-后端保留**单 Maven 模块**，业务域各自拥有明确入口和对外 facade。Spring Modulith 与 ArchUnit 把边界变成可执行检查，让项目从第一天就有清楚的结构，也能沿着同一套约定继续扩展。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme/login-dark.jpg">
+  <img src=".github/assets/readme/login-light.jpg" alt="Apocalypse 登录页：左侧 Milk Cloud 角色与右侧登录表单及主题切换条。" width="100%">
+</picture>
 
-### 从权限到页面，基础已经配套
+</details>
 
-用户、角色、部门、导航、业务权限和审计已有完整管理界面。对象工作区把选择、关系、编辑和保存结果连续呈现，并保留字段列表入口。业务授权独立于导航，支持逐权限的数据范围和生效起止时间；标准 CRUD 页面通过 DynaLayer 声明筛选、表格和表单，业务模块可复用现成控件与查询生命周期。
+## 结构与取向
 
-### 把质量检查带进开发流程
+### 单 Maven 模块下的物理边界
 
-后端检查架构、迁移、安全和集成行为，前端检查类型、组件与真实浏览器交互。模块启停、撤权和换号后的旧请求处理都有回归覆盖，新业务可以沿用同一套门禁。
+后端保持单 Maven 模块构建，以 `io.apocalypse.<domain>` 划分业务域，`common` 与 `framework` 承担共享契约和基础设施装配。跨模块调用仅允许通过对方 `api` 包 facade 或 `common.event` 事件，边界规则由 Spring Modulith 与 ArchUnit 在构建阶段检查。
 
-## 开箱有什么
+### 独立业务授权与数据范围
 
-| 能力       | 已有内容                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------- |
-| 系统管理   | 用户、角色、独立业务权限与导航、部门、字典、参数、在线会话                                      |
-| 数据权限   | 角色默认及逐权限的全部/本部门/本部门及子部门范围、固定有效期，以及用户归属对象授权                    |
-| 登录与安全 | Spring Security / JWT、内存 access token、HttpOnly refresh cookie、CSRF、登录限流与失败锁定 |
-| 审计与运行 | 登录 / 操作日志、统一脱敏、TraceId、OpenAPI、健康检查                                       |
-| 数据与缓存 | MyBatis-Plus、Flyway、PostgreSQL、Redis / Caffeine 两级缓存                                 |
-| 前端体验   | 明暗主题、中英文、响应式布局、多页签、全局搜索与 DynaLayer CRUD                             |
-| 可选能力   | Calendar 试验模块：默认关闭，以服务端开关统一控制暴露面                                     |
+业务权限（`sys_permission` / `sys_role_permission`）与菜单导航（`sys_menu` / `sys_role_navigation`）彻底分离：新增或调整菜单不会授予任何接口能力，后端每个 `@PreAuthorize` 经统一 factory 对角色范围（`ALL` / `DEPT` / `DEPT_AND_CHILDREN`）、逐权限范围覆盖、生效有效期及请求级授权快照实时判定。
+
+### 统一的前端工作区与门禁
+
+后台页面围绕无头 `useDynaController`、`DynaPage`、`DynaPagination` 与实体速览组件 `EntityPeekLink` 构建，配合 `/profile` 自助资料、密码与在线会话管理。前后端在 CI 中分别执行 `./mvnw --batch-mode verify`（ArchUnit、Modulith、Flyway 与 Testcontainers 集成测试）与 `pnpm check` / `pnpm test:browser`（Vitest 与 Chromium 浏览器交互测试）。
+
+## 内置能力
+
+| 领域       | 包含内容                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| 系统管理   | 用户（CSV 导入导出、部门过滤）、角色与授权工作台、权限目录、菜单与部门分页树、字典色卡、参数批量编辑、在线会话 |
+| 数据权限   | 角色默认与逐权限 `ALL` / `DEPT` / `DEPT_AND_CHILDREN` 范围、UTC 固定有效期、用户归属对象校验 |
+| 认证与安全 | 内存 access JWT、同源 HttpOnly/Secure refresh Cookie 轮转、CSRF、IP/账号登录锁定与接口限流 |
+| 审计与可观测 | 事件驱动登录/操作日志、敏感字段脱敏、TraceId 透传、OpenAPI（仅开发态）与健康检查         |
+| 数据与缓存 | MyBatis-Plus 3.5、Flyway（`V1.x` 平台 / `V100.x+` 业务隔离）、PostgreSQL、Redis + Caffeine 两级缓存 |
+| 前端管理台 | 三套主题世界（`fluid` / `sketchbook` / `obsidian`）、中英文、命令面板、多页签与 `/profile` 个人中心 |
+| 可选模块   | Calendar 试验域：默认关闭，通过配置开关统一控制暴露面与授权状态                          |
 
 <details>
-<summary><strong>技术栈与目录</strong></summary>
+<summary><strong>技术栈与目录结构</strong></summary>
 
 | 后端                                            | 前端                                    |
 | ----------------------------------------------- | --------------------------------------- |
-| Java 25 · Spring Boot 4.1 · Spring Modulith 2.1 | React 19 · TypeScript · Vite 7          |
-| Spring Security · MyBatis-Plus · Flyway         | Tailwind CSS 4 · shadcn/ui · Radix UI   |
+| Java 25 · Spring Boot 4.1.1 · Spring Modulith 2.1 | React 19 · TypeScript · Vite 7          |
+| Spring Security · MyBatis-Plus 3.5 · Flyway     | Tailwind CSS 4 · shadcn/ui · Radix UI   |
 | PostgreSQL 18.6 · Redis 8.10.1 · Caffeine       | TanStack Query · Zustand · React Router |
 | ArchUnit · Testcontainers                       | Vitest · Playwright                     |
 
 ```text
 src/main/java/io/apocalypse/
-├── common/             共享契约与通用模型
-├── framework/          安全、缓存、Web 与模块装配
-├── system/             系统管理业务域
+├── common/             共享响应、异常与跨模块事件契约
+├── framework/          安全、缓存、Web 与模块装配基础设施
+├── system/             系统管理业务域（用户/角色/权限/菜单/部门/字典/参数/日志）
 └── calendar/           可选万年历业务域
 
 apocalypse-web/src/
-├── components/         共享控件、布局与 DynaLayer
-├── lib/                API 与查询生命周期
-└── views/              按业务域组织的页面
+├── components/         布局骨架、DynaLayer 与通用组件
+├── design/             设计规范（DEFINITION.md / MOTION.md）与主题变量
+├── lib/                API 客户端、授权快照生命周期与路由辅助
+└── views/              按业务域划分的页面实现
 ```
 
 </details>
 
-## 在本地跑起来
+## 本地运行
 
-准备 **JDK 25、Docker Compose、Node.js 24、pnpm 11.19.0**。Maven 已通过 Wrapper 随仓库提供。
+需要 **JDK 25、Docker Compose、Node.js 24、pnpm 11.19.0**（Maven 通过 `./mvnw` 随仓库提供）。
 
 ```bash
 git clone https://github.com/lilibonk/apocalypse.git
 cd apocalypse
 ```
 
-按[快速开始](docs/getting-started.md#1-准备本地服务和一次性管理员密码)设置当前 shell 的私有 JWT 签名密钥与一次性管理员密码，然后启动后端：
+按[快速开始](docs/getting-started.md#1-准备本地服务和一次性管理员密码)在当前 shell 设置本地 JWT 签名密钥与一次性管理员密码后，启动依赖与后端：
 
 ```bash
 docker compose up -d
 ./mvnw spring-boot:run
 ```
 
-另开终端，在仓库根目录启动管理台：
+另开终端启动前端：
 
 ```bash
 cd apocalypse-web
@@ -122,36 +135,39 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-访问 [http://localhost:5173](http://localhost:5173)，使用 `admin` 和刚才设置的密码登录。首次成功启动后移除一次性密码变量，后续启动不会重置管理员密码。Windows、环境排查与完整命令见[快速开始](docs/getting-started.md)。
+打开 [http://localhost:5173](http://localhost:5173) 使用 `admin` 和设置的密码登录；首次初始化完成后请及时移除一次性密码环境变量。更多环境细节见[快速开始](docs/getting-started.md)。
 
-> 空库自动执行统一的 `V1__init.sql` 初始基线（含独立业务授权 `sys_permission`/`sys_role_permission`、导航关系 `sys_role_navigation` 与 Calendar 完整结构）；平台级迁移固定在 `V1.x` 区间，下游业务模块迁移固定在 `V100.x+` 区间。版本升级或数据库恢复均须停止全部旧实例、使用全新 JWT 签名密钥，用户重新登录、服务账号重新签发并验证管理 scope。
+> 空库自动执行统一的 `V1__init.sql` 初始基线；平台级迁移固定在 `V1.x`，下游业务模块迁移固定在 `V100.x+`。涉及版本升级或数据库恢复时，需先停止全部旧实例并使用全新 JWT 签名密钥重新签发凭据。
 
-## 开始构建你的业务
+## 开发与验证
 
-先读[模块开发指南](docs/module-development.md)：划分业务域，声明模块入口，接入权限与迁移，再添加页面。标准列表优先复用 DynaLayer；复杂业务保留自己的页面与编排。
+参考[模块开发指南](docs/module-development.md)划分新业务域，可使用 `scripts/create-module.mjs` 脚手架生成模块基础结构；标准列表优先复用 DynaLayer 与通用控制器，复杂交互保持域内独立实现。
 
 ```bash
-# 仓库根目录：后端全量检查
+# 仓库根目录：完整后端门禁（单测、架构校验、Testcontainers 集成测试、格式化检查）
 ./mvnw --batch-mode verify
 
-# 前端目录：格式、lint、单元测试与构建
+# 仓库根目录：校验公开文档内部链接
+node scripts/verify-public-docs.mjs
+
+# 前端目录：格式、lint、单测、构建与 Chromium 浏览器交互测试
 cd apocalypse-web
 pnpm check
 pnpm test:browser
 ```
 
-| 你要做什么         | 从这里开始                                                                    |
+| 目标               | 文档                                                                          |
 | ------------------ | ----------------------------------------------------------------------------- |
-| 运行并登录项目     | [快速开始](docs/getting-started.md)                                           |
-| 添加业务模块与页面 | [模块开发](docs/module-development.md) · [前端说明](apocalypse-web/README.md) |
+| 本地安装与故障排查 | [快速开始](docs/getting-started.md)                                           |
+| 扩展新业务模块     | [模块开发](docs/module-development.md) · [前端说明](apocalypse-web/README.md) |
 | 部署、备份与升级   | [部署指南](docs/deployment.md) · [运行与升级](docs/operations.md)             |
 | 启用 Calendar      | [Calendar 手册](docs/calendar/README.md)                                      |
-| 确认版本支持范围   | [发行契约](docs/release.md) · [更新记录](CHANGELOG.md)                        |
+| 查看边界与兼容政策 | [发行契约](docs/release.md) · [变更记录](CHANGELOG.md)                        |
 
-## 当前版本与许可
+## 版本状态与许可
 
-当前为 **0.1.0-rc.2 预发布**，稳定版本尚未发布。[查看发行说明与下载源码包](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2)。项目适合以现有系统管理能力为基础开发独立业务域；支持范围与兼容政策见[发行契约](docs/release.md)。
+当前版本为 **`0.1.0-rc.2` 预发布**，稳定版尚未发布，详见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2) 与[发行契约](docs/release.md)。
 
-本版不提供代码生成器、在线任务调度管理平台、公告、多租户或通用文件服务。Calendar 是默认关闭的试验模块，其代码与 Schema 随同一制品保留；早期 Order 运行 API 已退役，兼容表和事件桥仍保留。
+本版本不包含代码生成器、在线任务调度管理平台、公告、多租户与通用文件管理界面。Calendar 为默认关闭的可选试验域；早期 Order 运行接口已退役，仅保留兼容表结构与事件桥。
 
-项目自有部分采用 [Apache License 2.0](LICENSE)。直接移植的代码、素材和依赖保留原始授权，详见[第三方声明](THIRD_PARTY_NOTICES.md)。
+项目自有代码按 [Apache License 2.0](LICENSE) 分发；移植代码、素材与运行时依赖的原始许可见[第三方声明](THIRD_PARTY_NOTICES.md)。

@@ -1,53 +1,38 @@
 # Apocalypse Web
 
-同仓库的 React 19 / Vite 7 / TypeScript 管理台。先按[仓库快速开始](../docs/getting-started.md)启动后端，再从本目录运行：
+与主仓库同步的 React 19 / Vite 7 / TypeScript 管理台前端。先按[快速开始](../docs/getting-started.md)启动后端服务，再在当前目录执行：
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-开发服务器位于 `http://localhost:5173`，把 `/api` 代理至 `http://localhost:8080` 并去掉前缀。仅需更换开发后端时，可在启动前设置 `APOCALYPSE_API_PROXY_TARGET`；它不会进入浏览器 bundle。登录由后端认证，后端未启动时登录会提示网络错误。
+开发服务器监听 `http://localhost:5173`，并将 `/api` 代理至 `http://localhost:8080`（转发时剥离前缀）。需要指向其他后端实例时，启动前设置 `APOCALYPSE_API_PROXY_TARGET`（该变量不打入浏览器产物）。
 
-## 开发与检查
+## 常用命令
 
-| 命令          | 用途                                 |
-| ------------- | ------------------------------------ |
-| `pnpm check`  | 格式、lint、测试和生产构建的完整检查 |
-| `pnpm test`   | Vitest                               |
-| `pnpm build`  | TypeScript 与 Vite 构建              |
-| `pnpm format` | 格式化本目录文件                     |
+| 命令                | 说明                                  |
+| ------------------- | ------------------------------------- |
+| `pnpm check`        | 格式检查、lint、Vitest 单测与生产构建 |
+| `pnpm test`         | 运行 Vitest 单元测试与设计门禁        |
+| `pnpm test:browser` | 运行 Chromium fixtures 交互测试       |
+| `pnpm build`        | 执行 TypeScript 编译与 Vite 生产构建  |
+| `pnpm format`       | 使用 Prettier 格式化前端源码          |
 
-`src/lib/api/` 是后端响应和刷新令牌的适配层；`src/routes/` 将后端菜单映射到 `src/views/**` 页面；`src/components/dyna/` 提供标准 CRUD schema 渲染；`src/i18n/` 自动装载模块自己的中英文 locale pack。新业务域的接入步骤见[模块开发](../docs/module-development.md)，现有 lint、类型和测试检查验证组件及查询边界。
+`src/lib/api/` 封装统一信封与同源刷新令牌重试逻辑；`src/routes/` 根据后端菜单树注册动态路由；`src/components/dyna/` 承载无头控制器 `useDynaController` 与 schema 渲染；`src/i18n/` 自动加载各模块的中英文语言包。新增业务模块页面的约定见[模块开发](../docs/module-development.md)。
 
-Calendar 页面随前端构建存在，但运行时只依据后端最新菜单/权限开放；前端不设置第二个启停开关。其边界和配置见[Calendar 手册](../docs/calendar/README.md)。
+Calendar 路由组件随主包构建，但运行时严格依据后端返回菜单和实时授权开放，不在前端设置旁路开关，详情见 [Calendar 手册](../docs/calendar/README.md)。
 
-登录页的 WebGPU 史莱姆是当前品牌实现；不支持 WebGPU 或用户关闭动效时使用静态展示。Apocalypse 项目自有部分按 [Apache License 2.0](../LICENSE) 授权；史莱姆、UI 组件和其他直接移植来源的原始许可见[第三方声明](../THIRD_PARTY_NOTICES.md)。历史设计验收记录不是新业务页面的接入指南；现行视觉与交互约束见[设计定义](src/design/DEFINITION.md)。
+登录页交互角色基于 `PixelOrb`（WebGPU 实现，在不支持或关闭动效时自动回退至静态图像）。项目自有代码按 [Apache License 2.0](../LICENSE) 授权，第三方源码与依赖声明见[第三方声明](../THIRD_PARTY_NOTICES.md)。
 
-## 工作台与角色权限
+## 界面、主题与页面约定
 
-桌面工作台按当前用户权限读取服务端全量周期统计（近 24 小时／7 天／30 天）、最近活动和当前在线会话。周期总量与曲线使用同一已接受结果，在线会话单独说明即时口径；7 天／30 天聚合沿用服务端缓存策略，不宣称实时。最近活动仍是有界样本，无权限、无数据和读取失败分别表达。主总量保留滚轮，次级指标直接更新，避免多处数字同时滚动。
-
-桌面角色管理提供两套完整操作方式：默认图谱围绕角色对象和关系构建管理流程，也可切换 DynaLayer 列表。两种入口共用业务权限、导航分配、成员三个关系编辑器，支持新增／移除、逐项还原、整体撤销、差异预览、未保存退出确认与失败恢复；移动端使用同样完整的列表流程。角色属性与启停更新携带 `expectedAuthorizationRevision`，并发变更须重新载入后审阅。
-
-业务权限从独立权限目录选择，完整读取 `GET /system/roles/{id}/permissions`，候选分页仅用于发现定义。每项授权可设置启停、继承角色范围或动作支持的部门范围、明确时区的起止时间；保存提交带角色与目录 revision 的 touched delta，未触碰的历史或不可读定义保留。`40900` 冲突保留草稿并要求重新读取，`403/404` 清理旧资源上下文。权限目录通过 DynaLayer 管理名称、说明、启停和生命周期；权限代码、可执行绑定与支持范围由服务端声明，页面不创建任意可执行权限。
-
-导航分配仅决定目录和页面入口，不授予业务操作或数据范围。`GET/PUT /system/roles/{id}/navigation` 使用 revision 和 `addIds/removeIds`，旧 `/roles/{id}/menus` 已停用。菜单管理只新增／编辑目录和页面，历史 F 按钮及旧权限标识只读追溯。成员编辑使用 `GET /system/roles/{id}/user-ids` 的完整 ID 基线；可见用户页仅补充资料，绝不重建完整替换集合，保存前仍核对完整成员基线。
-
-读取按对应权限展示；角色、导航、成员、权限定义等全局管理写操作要求该动作的 ALL 有效范围。页面、请求与草稿绑定服务端授权快照、代次和截止时间；身份变化、撤权、到期或资源拒绝会使旧数据与迟到回调失效。实际授权始终由服务端决定，图谱展示的是保存配置。
-
-普通焦点/可见性恢复通过 `/me` 重验，同快照保留未保存草稿；从 BFCache 恢复则先失效旧上下文，再在跨标签锁内重新核验共享 Cookie，避免漏收换号通知后继续显示旧身份。
-
-各工作区使用真实接口与既有 React Query、CSS、Motion，遵循明暗主题、正式设置中的动画开关与系统减少动态设置。角色定位器和相邻检查器按实际内容宽度收起；窄屏检查器使用 Sheet，草稿、范围、时区和有效期仍由原编辑器持有。授权链上的对象可直接定位到相应关系详情，保存后保留仍有效的选择。移动端工作台保留原视图，角色关系使用完整列表编辑。
-
-桌面角色页在未指定角色且同时具备角色与权限目录查看权限时先显示权限全景（用户、角色、业务权限、导航入口计数盘），选择角色后进入只读授权链，编辑仍回到上述三个关系编辑器；全景仅展示保存的配置，不代表某个用户的最终有效权限。工作台、登录热力图与操作统计使用服务端全量统计（近 24 小时／7 天／30 天，按服务器记录时区分桶）。部门页提供组织图（方向键导航），字典与参数页分别提供卡片视图和多项草稿工作区，参数值批量保存携带版本并以 `40900` 整批拒绝过期项。
-
-用户与权限目录默认采用对象工作区，保留可切换的字段列表。账号选择连接所属部门、状态和可用操作，待分配角色入口可带着账号进入角色成员流程；权限目录按当前页的模块／资源／动作组织，并标明数据范围。菜单展示导航路径与相邻节点详情，字典册可完成类型和值两层管理；参数草稿可跨分页和搜索保留，仍按完整差异原子保存。登录观察把热力图和分页记录放在同一工作区，明确记录不支持按所选小时筛选；在线视图按账号展开设备，强退影响该账号全部设备。
-
-命令面板输入 `?` 进入规则查询（非 AI），结果可以携带对象 ID 与搜索条件进入合法页面。目标页重新读取当前授权范围，不信任路由中的业务数据或授权信息。模块可在 `src/views/**/command-questions.tsx` 默认导出 `CommandQuestionProvider` 注册问题，构建时自动发现；描述对象常驻，面板组件应懒加载。页面草稿经 `usePageDraft` 只保存在内存中，绑定当前身份与授权代次，关闭含草稿的页签前会确认。
-
-页面统一使用 `PageHeader`（标题、说明、视图切换、操作）；视图、关系与时间范围切换使用 `SegmentedControl`。空间工作台直接调用 `useDynaController`（headless：分页查询、筛选、选择、权限与原生行操作）并组合 `components/spatial` 骨架与 `DynaDialogs`；桌面可切换“工作区 | 列表”（URL `view=`），不清空当前查询和编辑态。跨页对象关联使用 `EntityPill`（`components/navigation/`）携带上下文直达目标工作区。标准表格页仍可用 `DynaPage`；页内分区里的 DynaPage 用 `embedded` 只显示工具条。传给 DynaTable 的回调需保持稳定（`useCallback` / `useStableCallback`），打开弹层时只重渲被标记的来源行。
-
-当前界面采用苹果应用式层级与 mint 品牌：中性内容底色、轻量导航材质、明暗主题、固定正文的两档密度与整层浮层动效。标准 CRUD 继续使用 DynaLayer，查询失败与成功空态分别表达；视觉和状态规则见[设计定义](src/design/DEFINITION.md)。
-
-工作台的品牌首图与根 README 同源，提供桌面/手机、明暗四份素材。静态 Apo 图形标用于登录页、侧栏、移动导航与 favicon；应用图形标和首图跟随应用主题，登录交互角色仍沿用现有 WebGPU 与静态降级。素材位于 `public/brand/`，图形消费者为 `BrandSignature`，首图消费者为 `BrandHero`。
+- **三套原生主题世界**：全站通过 `html[data-theme-world]` 切换 `fluid`（清透流体 · 默认）、`sketchbook`（手绘手账）与 `obsidian`（深邃夜色，自动联动 `.dark` 基线），登录页与顶栏设置共用同一状态，响应两档密度（`compact` / `comfortable`）与中英文切换。所有设计变量、动效边界及组件门禁定义在[设计定义](src/design/DEFINITION.md)和[动效规范](src/design/MOTION.md)。
+- **工作台与个人中心**：`/dashboard` 依据当前授权展示近 24 小时／7 天／30 天运行态势、最近审计动态及在线会话；`/profile` 提供独立的个人昵称修改、密码更新（强制全端凭据轮转）与当前登录设备管理。
+- **角色授权重构**：`/system/role` 默认呈现实用的角色列表并保留列表 CRUD；点击「授权配置」后在同一路由全宽进入 `RoleWorkbench`，集中处理以下三类关系并统一校验服务端修订号与并发冲突（`40900` 保留草稿并提示重新载入）：
+  - **业务权限**：拉取 `GET /system/roles/{id}/permissions` 与权限目录定义，在单表内直接配置启停状态、逐权限部门范围覆盖（受权限定义声明的 `supportedScopeOverrides` 约束）与明确时区的起止有效期；权限标识、生命周期定义由权限目录页（`/system/permission`）集中查阅与启停管理，不能在页面任意创建可执行代码。
+  - **导航分配**：通过 `GET/PUT /system/roles/{id}/navigation`（`addIds/removeIds`）维护 C/M 目录及菜单入口，与业务接口授权解耦，不再使用已废弃的 `/roles/{id}/menus`。
+  - **角色成员**：基于 `GET /system/roles/{id}/user-ids` 完整基线增删成员。
+- **统一的系统管理工作区与分页**：用户管理、权限目录、菜单与部门树表、字典色卡与参数工作区统一收口分页器至全宽下置 `DynaPagination`（含页码、每页条数切换与总条数统计）。其中用户页集中部门树过滤与角色分配/重置密码弹窗闭环；菜单与部门树表支持客户端分页并自动补齐跨页祖先面包屑；字典管理提供 6 种语义色调抽屉（`DictBook`）；参数配置支持跨页保留草稿并按版本并发校验原子保存。
+- **授权快照、命令面板与内存草稿**：页面请求与内存草稿（`usePageDraft`）绑定当前登录身份、服务端 `authorizationSnapshotId` 及到期时间，切换账号、撤权或 BFCache 恢复会及时失效旧上下文。全局 `⌘K` 支持规则查询（`?` 前缀，非外部模型），并依据目标菜单与实时权限执行页面跳转或只读降级（`<EntityPeekLink />`）。
+- **品牌资源**：应用内顶栏与侧栏签名使用 `BrandSignature`，登录/桌面应用资源位于 `public/brand/`，与仓库根展示区素材（`.github/assets/readme/`）解耦。
