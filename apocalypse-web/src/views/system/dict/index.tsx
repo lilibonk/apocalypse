@@ -60,7 +60,7 @@ function DictWorkspace() {
   const view = busy || createOpen ? 'cards' : desktop ? requestedView : 'list'
   if (view === 'list' && !visitedList) setVisitedList(true)
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t('common.字典管理', { defaultValue: '字典管理' })}
         view={

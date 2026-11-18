@@ -20,13 +20,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { DictTag } from '@/components/DictTag'
 import { Perm } from '@/components/Perm'
-import { DynaQueryFeedback } from '@/components/dyna'
+import { DynaPagination, DynaQueryFeedback } from '@/components/dyna'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,7 +58,6 @@ import { cn } from '@/lib/utils'
 import { Network, Rows3 } from 'lucide-react'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { usePageView } from '@/hooks/usePageView'
-import { useWindowedRows } from '@/hooks/useWindowedRows'
 import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -91,6 +90,8 @@ function DeptWorkspace() {
   const [seededRootExpand, setSeededRootExpand] = useState(false)
   const [deptQuery, setDeptQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<DeptTreeNode | null>(null)
@@ -116,6 +117,7 @@ function DeptWorkspace() {
     },
   })
   const tree = isResourceDenied(error) ? undefined : data
+  const filtering = deptQuery.trim().length > 0 || statusFilter !== 'all'
 
   if (tree && tree.length > 0 && !seededRootExpand) {
     setSeededRootExpand(true)
@@ -130,7 +132,22 @@ function DeptWorkspace() {
     findNode(tree, intentTargetId)
   ) {
     setAppliedIntentId(intentTargetId)
-    setExpanded((prev) => new Set([...prev, ...ancestorPath(tree, intentTargetId)]))
+    const nextExpanded = new Set([...expanded, ...ancestorPath(tree, intentTargetId)])
+    setExpanded(nextExpanded)
+    const nextCollapsed = filtering
+      ? new Set<string>()
+      : new Set(
+          flattenDeptTree(tree, new Set())
+            .filter((row) => row.hasChildren && !nextExpanded.has(row.node.id))
+            .map((row) => row.node.id),
+        )
+    const targetTree = filterDeptTree(tree, deptQuery, statusFilter)
+    const targetIdx = flattenDeptTree(targetTree, nextCollapsed).findIndex(
+      (row) => row.node.id === intentTargetId,
+    )
+    if (targetIdx >= 0) {
+      setPage(Math.floor(targetIdx / pageSize) + 1)
+    }
   }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system', 'depts'] })
@@ -242,7 +259,6 @@ function DeptWorkspace() {
     setDialogOpen(true)
   }
 
-  const filtering = deptQuery.trim().length > 0 || statusFilter !== 'all'
   const filteredTree = useMemo(
     () => (tree ? filterDeptTree(tree, deptQuery, statusFilter) : undefined),
     [tree, deptQuery, statusFilter],
@@ -264,15 +280,31 @@ function DeptWorkspace() {
     () => (filteredTree ? flattenDeptTree(filteredTree, collapsed) : []),
     [filteredTree, collapsed],
   )
-  const windowed = useWindowedRows(rows)
-  const totalDepartments = tree ? flattenDeptTree(tree, new Set()).length : 0
+  const ancestorNamesById = useMemo(() => {
+    const map = new Map<string, string[]>()
+    if (!filteredTree) return map
+    const walk = (nodes: DeptTreeNode[], trail: string[]) => {
+      for (const node of nodes) {
+        map.set(node.id, trail)
+        if (node.children?.length) walk(node.children, [...trail, node.deptName])
+      }
+    }
+    walk(filteredTree, [])
+    return map
+  }, [filteredTree])
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pagedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [rows, currentPage, pageSize],
+  )
+  const pageNodeIds = useMemo(() => new Set(pagedRows.map((row) => row.node.id)), [pagedRows])
   const deletingChildCount = deleting?.children?.length ?? 0
 
   return (
-    <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t('common.部门管理', { defaultValue: '部门管理' })}
-        description={t('common.组织部门的树形维护', { defaultValue: '组织部门的树形维护' })}
         view={
           desktop ? (
             <SegmentedControl
@@ -338,7 +370,10 @@ function DeptWorkspace() {
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={deptQuery}
-                  onChange={(event) => setDeptQuery(event.target.value)}
+                  onChange={(event) => {
+                    setDeptQuery(event.target.value)
+                    setPage(1)
+                  }}
                   placeholder="搜索部门名称 / 负责人 / 电话…"
                   aria-label="搜索部门名称或负责人"
                   className="h-8 pl-9 text-xs"
@@ -347,7 +382,7 @@ function DeptWorkspace() {
               <div
                 role="group"
                 aria-label="部门状态筛选"
-                className="inline-flex items-center rounded-control bg-muted p-0.5"
+                className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
               >
                 {(
                   [
@@ -360,9 +395,12 @@ function DeptWorkspace() {
                     key={option.value}
                     type="button"
                     aria-pressed={statusFilter === option.value}
-                    onClick={() => setStatusFilter(option.value)}
+                    onClick={() => {
+                      setStatusFilter(option.value)
+                      setPage(1)
+                    }}
                     className={cn(
-                      'rounded-md px-2.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                      'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                       statusFilter === option.value
                         ? 'bg-card font-medium text-foreground shadow-xs'
                         : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -381,6 +419,7 @@ function DeptWorkspace() {
                   onClick={() => {
                     setDeptQuery('')
                     setStatusFilter('all')
+                    setPage(1)
                   }}
                 >
                   <X className="size-3.5" aria-hidden="true" />
@@ -404,18 +443,17 @@ function DeptWorkspace() {
                 variant="ghost"
                 size="sm"
                 disabled={filtering || expandableIds.length === 0}
-                onClick={() => setExpanded(new Set())}
+                onClick={() => {
+                  setExpanded(new Set())
+                  setPage(1)
+                }}
               >
                 <ChevronsDownUp className="size-4" aria-hidden="true" />
                 {t('common.全部折叠', { defaultValue: '全部折叠' })}
               </Button>
             </div>
           </div>
-          <div
-            onScroll={windowed.onScroll}
-            style={windowed.maxHeight ? { maxHeight: `${windowed.maxHeight}px` } : undefined}
-            className={cn(windowed.windowed && 'overflow-y-auto')}
-          >
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -452,14 +490,12 @@ function DeptWorkspace() {
                     </TableCell>
                   </TableRow>
                 )}
-                {windowed.topSpacerHeight > 0 && (
-                  <TableRow aria-hidden="true" style={{ height: `${windowed.topSpacerHeight}px` }}>
-                    <TableCell colSpan={7} className="p-0" />
-                  </TableRow>
-                )}
-                {windowed.visibleRows.map((row) => {
+                {pagedRows.map((row) => {
                   const node = row.node
                   const isCollapsed = collapsed.has(node.id)
+                  const ancestorNames = ancestorNamesById.get(node.id) ?? []
+                  const parentOffPage =
+                    row.depth > 0 && !pageNodeIds.has(node.parentId) && ancestorNames.length > 0
                   return (
                     <TableRow key={node.id}>
                       <TableCell>
@@ -490,7 +526,23 @@ function DeptWorkspace() {
                           ) : (
                             <span className="size-6 shrink-0" />
                           )}
-                          <span className="font-medium">{node.deptName}</span>
+                          <div className="min-w-0">
+                            {parentOffPage && (
+                              <div
+                                data-slot="dept-page-ancestor-trail"
+                                className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground"
+                              >
+                                {ancestorNames.map((ancName, index) => (
+                                  <Fragment key={`${node.id}-anc-${index}`}>
+                                    {index > 0 && <span aria-hidden="true">/</span>}
+                                    <span className="max-w-28 truncate">{ancName}</span>
+                                  </Fragment>
+                                ))}
+                                <span aria-hidden="true">/</span>
+                              </div>
+                            )}
+                            <span className="font-medium">{node.deptName}</span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>{node.leader ?? '-'}</TableCell>
@@ -540,26 +592,21 @@ function DeptWorkspace() {
                     </TableRow>
                   )
                 })}
-                {windowed.bottomSpacerHeight > 0 && (
-                  <TableRow
-                    aria-hidden="true"
-                    style={{ height: `${windowed.bottomSpacerHeight}px` }}
-                  >
-                    <TableCell colSpan={7} className="p-0" />
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </div>
-          {tree !== undefined && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
-              <span>
-                {t('common.显示 {{visible}} / {{total}} 个部门', {
-                  defaultValue: '显示 {{visible}} / {{total}} 个部门',
-                  visible: rows.length,
-                  total: totalDepartments,
-                })}
-              </span>
+          {tree !== undefined && rows.length > 0 && (
+            <div className="border-t border-border-subtle px-4 py-3">
+              <DynaPagination
+                page={currentPage}
+                size={pageSize}
+                total={rows.length}
+                onPageChange={setPage}
+                onPageSizeChange={(nextSize) => {
+                  setPageSize(nextSize)
+                  setPage(1)
+                }}
+              />
             </div>
           )}
         </div>

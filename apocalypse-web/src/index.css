@@ -96,3 +96,15 @@ html[data-motion='off'] article[data-mutated-pulse='true'] {
     animation: none;
   }
 }
+
+/* Keep modal overlays from chaining wheel/touch scroll to the workspace container beneath. */
+[data-slot='dialog-overlay'],
+[data-slot='sheet-overlay'] {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+[data-slot='dialog-content'],
+[data-slot='sheet-content'] {
+  overscroll-behavior: contain;
+}

@@ -1,6 +1,6 @@
 import { ChevronDown, Eye, LogOut, Monitor } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Perm } from '@/components/Perm'
@@ -9,8 +9,6 @@ import { EntityPeekLink, LivingContextBar } from '@/components/navigation'
 import type { EntitySourceRef } from '@/components/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { stateMotion } from '@/design/motion'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { summarizeUserAgent } from '@/lib/user-agent'
@@ -39,15 +37,7 @@ export function OnlineAccounts({
   const { t, i18n } = useTranslation('system')
   const language = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'zh'
   const animate = useMotionPreference()
-  const [search, setSearch] = useState('')
   const accounts = useMemo(() => groupOnlineAccounts(rows), [rows])
-  const keyword = search.trim().toLowerCase()
-  const visible = accounts.filter(
-    (account) =>
-      !keyword ||
-      account.username.toLowerCase().includes(keyword) ||
-      account.sessions.some((session) => session.ip?.toLowerCase().includes(keyword)),
-  )
   const counts = [
     ['accounts', accounts.length],
     ['sessions', rows.length],
@@ -62,12 +52,12 @@ export function OnlineAccounts({
       className="space-y-4"
     >
       {intentSource && <LivingContextBar source={intentSource} />}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
-        <dl className="flex flex-wrap gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-border-subtle bg-card px-4 py-3.5 shadow-surface">
+        <dl className="flex flex-wrap gap-6 sm:gap-8">
           {counts.map(([key, value]) => (
             <div key={key}>
               <dt className="text-xs text-muted-foreground">{t(`listInsights.online.${key}`)}</dt>
-              <dd className="mt-1 text-xl font-medium tabular-nums">
+              <dd className="insight-metric mt-1 text-xl font-semibold tabular-nums">
                 <MetricValue
                   value={value}
                   variant={key === 'sessions' ? 'hero-odometer' : 'tabular'}
@@ -78,31 +68,23 @@ export function OnlineAccounts({
             </div>
           ))}
         </dl>
-        <div className="grid w-full gap-1.5 sm:w-64">
-          <Label htmlFor="online-account-search">{t('listInsights.online.search')}</Label>
-          <Input
-            id="online-account-search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
       </div>
       {expanded && !accounts.some((account) => account.username === expanded) && (
         <p role="status" className="rounded-control bg-muted p-3 text-sm">
           {t('listInsights.online.accountGone', { name: expanded })}
         </p>
       )}
-      {visible.length === 0 && (
+      {accounts.length === 0 && (
         <p
           role="status"
           className="rounded-control border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
         >
-          {t(rows.length === 0 ? 'listInsights.online.empty' : 'listInsights.online.noMatches')}
+          {rows.length === 0 ? t('listInsights.online.empty') : t('listInsights.online.noMatches')}
         </p>
       )}
       <div className="space-y-3">
         <AnimatePresence initial={false}>
-          {visible.map((account) => {
+          {accounts.map((account) => {
             const open = expanded === account.username
             return (
               <OnlineAccountCard

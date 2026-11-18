@@ -39,7 +39,7 @@ export default definePageSchema({
       key: 'lifecycle',
       title: '生命周期',
       options: [
-        { value: 'ACTIVE', label: '可配置', tone: 'secondary' },
+        { value: 'ACTIVE', label: '开放授权', tone: 'secondary' },
         { value: 'DEPRECATED', label: '已弃用', tone: 'warning' },
         { value: 'LEGACY', label: '历史兼容', tone: 'secondary' },
       ],
@@ -59,7 +59,7 @@ export default definePageSchema({
         type: 'select',
         required: true,
         options: [
-          { value: 'ACTIVE', label: '可配置' },
+          { value: 'ACTIVE', label: '开放授权' },
           { value: 'DEPRECATED', label: '已弃用' },
           { value: 'LEGACY', label: '历史兼容' },
         ],

@@ -175,13 +175,8 @@ export default function ProfilePage() {
   const initial = displayName.slice(0, 1).toUpperCase() || '?'
 
   return (
-    <div data-theme-stage="" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
-      <PageHeader
-        title={t('common.个人中心', { defaultValue: '个人中心' })}
-        description={t('common.账户资料与登录会话管理', {
-          defaultValue: '维护个人展示资料、登录密码与当前活跃设备会话。',
-        })}
-      />
+    <div data-theme-stage="" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
+      <PageHeader title={t('common.个人中心', { defaultValue: '个人中心' })} />
 
       <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         {/* 左栏：账户档案与昵称维护 */}

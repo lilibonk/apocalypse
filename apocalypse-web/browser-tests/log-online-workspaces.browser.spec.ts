@@ -5,8 +5,10 @@ test('login heatmap and paged records share a unified workspace without inventin
 }) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=loginlog')
   const grid = page.getByRole('grid')
-  await expect(grid).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()
+  await expect(grid).toHaveCount(0)
+  await page.getByRole('button', { name: '展开活动概览', exact: true }).click()
+  await expect(grid).toBeVisible()
   await grid.locator('[data-cell="2-10"]').focus()
   await page.keyboard.press('ArrowRight')
   await expect(grid.locator('[data-cell="2-11"]')).toBeFocused()
@@ -37,8 +39,6 @@ test('login heatmap and paged records share a unified workspace without inventin
 
   await page.getByRole('button', { name: '收起活动概览', exact: true }).click()
   await expect(grid).toHaveCount(0)
-  await page.getByRole('button', { name: '展开活动概览', exact: true }).click()
-  await expect(grid).toBeVisible()
 })
 
 test('account kick ends every matching fixture session while leaving other accounts intact', async ({

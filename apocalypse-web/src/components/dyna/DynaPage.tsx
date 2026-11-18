@@ -102,7 +102,7 @@ function DynaPageContent({
 
   if (!validation.success) {
     return (
-      <div className="w-full space-y-4 p-4 sm:p-6">
+      <div className="w-full space-y-5 p-4 sm:p-6">
         <div className="rounded-lg border border-destructive p-4">
           <h1 className="text-base font-semibold text-destructive">
             {t('页面 schema 校验失败')}（{schema.key}）
@@ -124,23 +124,13 @@ function DynaPageContent({
   const searchControl = <DynaToolbar controller={controller} presentation="panel" />
 
   return (
-    <div className={cn('w-full min-w-0 space-y-6', !embedded && 'p-4 sm:p-6')}>
+    <div className={cn('w-full min-w-0 space-y-5', !embedded && 'p-4 sm:p-6')}>
       {embedded ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {schema.description ? (
-            <p className="text-sm text-muted-foreground">{t(schema.description)}</p>
-          ) : (
-            <span />
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
         </div>
       ) : (
-        <PageHeader
-          title={t(schema.title)}
-          description={schema.description ? t(schema.description) : undefined}
-          view={headerView}
-          actions={headerActions}
-        />
+        <PageHeader title={t(schema.title)} view={headerView} actions={headerActions} />
       )}
 
       {searchControl}

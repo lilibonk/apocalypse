@@ -60,7 +60,7 @@ function SheetContent({
         data-side={side}
         data-motion-preset="surface"
         className={cn(
-          'fixed z-50 flex max-h-dvh flex-col gap-4 overflow-y-auto border-border-subtle bg-popover text-popover-foreground shadow-floating outline-none',
+          'fixed z-50 flex max-h-dvh flex-col gap-4 overflow-y-auto overscroll-contain border-border-subtle bg-popover text-popover-foreground shadow-floating outline-none',
           side === 'right' &&
             'inset-y-0 right-0 h-full w-full border-l sm:max-w-sm sm:rounded-l-panel',
           side === 'left' &&

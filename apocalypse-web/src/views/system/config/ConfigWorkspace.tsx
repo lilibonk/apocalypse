@@ -15,7 +15,7 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -372,11 +372,11 @@ export function ConfigWorkspace({
   }
 
   return (
-    <div className="config-workspace space-y-4" aria-busy={configs.isFetching || busy}>
+    <div className="config-workspace space-y-5" aria-busy={configs.isFetching || busy}>
       <LivingContextBar source={intent?.source} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full max-w-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="relative w-full min-w-[14rem] sm:max-w-xs">
             <Search
               className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
@@ -390,7 +390,7 @@ export function ConfigWorkspace({
               }}
               placeholder={t('configWorkspace.search')}
               aria-label={t('configWorkspace.search')}
-              className="pl-9"
+              className="h-9 pl-9"
             />
           </div>
           {!canEdit && (
@@ -459,13 +459,11 @@ export function ConfigWorkspace({
             {keyword ? t('configWorkspace.noMatch') : t('configWorkspace.empty')}
           </p>
         ) : (
-          <StickyCompactRailLayout
-            railLabel="参数分组锚点"
-            railWidth="compact"
-            items={railItems}
-            activeKey={activeGroupKey}
-            onSelect={handleSelectGroup}
-            stageClassName="space-y-4"
+          <ConfigGroupsShell
+            groupCount={groups.size}
+            railItems={railItems}
+            activeGroupKey={activeGroupKey}
+            onSelectGroup={handleSelectGroup}
           >
             {[...groups.entries()].map(([groupKey, groupData]) => {
               const isGroupHighlighted = activeGroupKey === groupKey
@@ -806,7 +804,7 @@ export function ConfigWorkspace({
                 </section>
               )
             })}
-          </StickyCompactRailLayout>
+          </ConfigGroupsShell>
         ))}
 
       {configs.data && (
@@ -909,6 +907,72 @@ export function ConfigWorkspace({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+function ConfigGroupsShell({
+  groupCount,
+  railItems,
+  activeGroupKey,
+  onSelectGroup,
+  children,
+}: {
+  groupCount: number
+  railItems: readonly CompactRailItem[]
+  activeGroupKey: string
+  onSelectGroup: (key: string) => void
+  children: ReactNode
+}) {
+  if (groupCount >= 5) {
+    return (
+      <StickyCompactRailLayout
+        railLabel="参数分组锚点"
+        railWidth="compact"
+        items={railItems}
+        activeKey={activeGroupKey}
+        onSelect={onSelectGroup}
+        stageClassName="space-y-4"
+      >
+        {children}
+      </StickyCompactRailLayout>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <nav
+        aria-label="参数分组锚点"
+        className="flex flex-wrap items-center gap-1.5 rounded-panel border border-border-subtle bg-card p-2.5 shadow-surface"
+      >
+        {railItems.map((item) => {
+          const active = item.key === activeGroupKey
+          return (
+            <button
+              key={item.key}
+              type="button"
+              aria-current={active ? 'true' : undefined}
+              onClick={() => onSelectGroup(item.key)}
+              className={cn(
+                'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-control border px-2.5 text-xs font-medium transition-colors',
+                active
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-transparent bg-muted/45 text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {item.dirty && <span className="draft-marker" aria-hidden="true" />}
+              {item.conflict && (
+                <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />
+              )}
+              <span>{item.label}</span>
+              {item.count != null && (
+                <span className="font-mono text-[11px] opacity-75 tabular-nums">{item.count}</span>
+              )}
+            </button>
+          )
+        })}
+      </nav>
+      <div className="space-y-4">{children}</div>
     </div>
   )
 }

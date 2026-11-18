@@ -67,7 +67,7 @@ function LoginLogWorkspace() {
   const desktop = useDesktopViewport()
   const canViewStats = useAuthStore((state) => state.perms.includes('system:log:login'))
   const hasOverview = desktop && canViewStats
-  const [activityCollapsed, setActivityCollapsed] = useState(false)
+  const [activityCollapsed, setActivityCollapsed] = useState(true)
 
   const keyword = appliedSearch.keyword ?? ''
   const streamQuery = useMemo(
@@ -164,7 +164,7 @@ function LoginLogWorkspace() {
 
   return (
     <CoupledMotionGroup activeId={detail ? String(detail.id) : null}>
-      <div data-theme-stage="" className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+      <div data-theme-stage="" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
         <PageHeader
           title={t('common.登录日志', { defaultValue: '登录日志' })}
           actions={

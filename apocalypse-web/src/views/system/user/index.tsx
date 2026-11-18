@@ -103,10 +103,9 @@ function UserPageContent({ intent }: { intent?: EntityRouteIntent }) {
   const searchControl = <DynaToolbar controller={controller} presentation="panel" />
 
   return (
-    <div data-theme-stage="" className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+    <div data-theme-stage="" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t(schema.title)}
-        description={schema.description ? t(schema.description) : undefined}
         actions={<DynaToolbarActions controller={controller} />}
       />
 

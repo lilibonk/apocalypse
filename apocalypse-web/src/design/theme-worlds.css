@@ -61,6 +61,13 @@ html[data-theme-world='fluid'] [data-slot='table-container'] {
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
   }
+
+  /* High-density multi-card grids avoid continuous per-card blur thrashing during expand/collapse reflows. */
+  html[data-theme-world='fluid'] .dict-card.sketch-surface {
+    background: color-mix(in oklch, var(--card) 94%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 html[data-theme-world='fluid'] [data-slot='input'],

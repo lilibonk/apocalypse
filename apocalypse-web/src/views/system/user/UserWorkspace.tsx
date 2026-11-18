@@ -621,7 +621,7 @@ export function UserWorkspace({
         {showDeptRail && (
           <aside
             aria-label="部门筛选"
-            className="hidden rounded-panel border border-border-subtle bg-card p-3 shadow-surface lg:block"
+            className="hidden rounded-panel border border-border-subtle bg-card p-3 shadow-surface lg:sticky lg:top-4 lg:block lg:max-h-[calc(var(--shell-viewport-h)-2rem)] lg:overflow-y-auto"
           >
             <div className="mb-2 flex items-center justify-between gap-2 border-b border-border-subtle pb-2">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">

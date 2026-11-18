@@ -1,20 +1,18 @@
 /**
- * 字典样本册（桌面，对照 0999.jpg）：
- * - 四层紧凑样本册卡片：类型编码头 + 启停双色比例细条 + 6 色语义色卡胶囊流（默认项带 ✓）+ 状态底栏
- * - 严格 FLIP 几何让位：复用 `@/components/motion` 的 `<FlipExpandGrid>` + `<FlipExpandCard>`，
- *   无卡片级 `container-type: inline-size`、无子级嵌套 `layout`，支持过渡期动态 `z-index` 层级锁
- * - 展开区内原地全闭环编辑：字典值增删改、6 色调色圆点、默认项切换、启停开关与类型原地编辑
+ * 字典样本册（桌面）：
+ * - 固定 3 列样本卡目录：类型编码头 + 启停双色比例细条 + 6 色语义色卡胶囊流 + 状态底栏
+ * - 点击任意字典卡或快捷按钮滑出右侧宽抽屉（Sheet）单一滚动维护字典值与类型属性，
+ *   避免网格跨列换行引发空洞与主容器双重滚动
  */
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
-import { Check, ChevronDown, Pencil, Plus, Power, Search, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Check, ChevronRight, Pencil, Plus, Power, Search, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Perm } from '@/components/Perm'
 import { DynaQueryFeedback } from '@/components/dyna/DynaQueryFeedback'
-import { FlipExpandCard, FlipExpandGrid } from '@/components/motion'
 import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import {
   AlertDialog,
@@ -26,8 +24,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { insightMotion, motionTransition } from '@/design/motion'
@@ -95,12 +101,15 @@ export function DictBook({
   const [keyword, setKeyword] = useState(() => intent?.id ?? '')
   const [statusFilter, setStatusFilter] = useState<'all' | '1' | '0'>('all')
   const [page, setPage] = useState(1)
-  const [expanded, setExpanded] = useState<string | null | 'none'>(null)
-  const [busyTypes, setBusyTypes] = useState<ReadonlySet<string>>(new Set())
+  const [selectedType, setSelectedType] = useState<DictTypeRow | null | 'none'>(null)
+  const [valueBusy, setValueBusy] = useState(false)
+  const [typeBusy, setTypeBusy] = useState(false)
+  const [liveTotal, setLiveTotal] = useState<number | null>(null)
   const [creatingBusy, setCreatingBusy] = useState(false)
   const [lastChange, setLastChange] = useState<(DictTypeChange & { sequence: number }) | null>(null)
   const result = useRef<HTMLDivElement>(null)
-  const busy = creatingBusy || busyTypes.size > 0
+  const drawerBusy = valueBusy || typeBusy
+  const busy = creatingBusy || drawerBusy
 
   useEffect(() => {
     onBusyChange?.(busy)
@@ -110,16 +119,6 @@ export function DictBook({
   useEffect(() => {
     if (lastChange?.action === 'deleted') result.current?.focus({ preventScroll: true })
   }, [lastChange])
-
-  const onCardBusyChange = useCallback((id: string, value: boolean) => {
-    setBusyTypes((previous) => {
-      if (previous.has(id) === value) return previous
-      const next = new Set(previous)
-      if (value) next.add(id)
-      else next.delete(id)
-      return next
-    })
-  }, [])
 
   const onTypeChanged = useCallback(
     (change: DictTypeChange) => {
@@ -138,8 +137,16 @@ export function DictBook({
           }
         },
       )
-      if (change.action === 'deleted')
-        setExpanded((current) => (current === change.id ? null : current))
+      if (change.action === 'deleted') {
+        setSelectedType((current) =>
+          current !== null && current !== 'none' && current.id === change.id ? 'none' : current,
+        )
+      } else if (change.row) {
+        const nextRow = change.row
+        setSelectedType((current) =>
+          current !== null && current !== 'none' && current.id === change.id ? nextRow : current,
+        )
+      }
     },
     [client],
   )
@@ -168,25 +175,29 @@ export function DictBook({
   })
 
   // Support EntityPill deep-link focus (`?dictType=...` or `?focusId=...`)
-  const resolvedExpanded =
-    expanded === 'none'
+  const resolvedSelectedType: DictTypeRow | null =
+    selectedType === 'none'
       ? null
-      : (expanded ??
-        (intent?.id
-          ? (list?.find((item) => item.dictType === intent.id || item.id === intent.id)?.id ?? null)
-          : null))
+      : selectedType !== null
+        ? (list?.find((item) => item.id === selectedType.id) ?? selectedType)
+        : intent?.id
+          ? (list?.find((item) => item.dictType === intent.id || item.id === intent.id) ?? null)
+          : null
 
   useEffect(() => {
-    if (intent?.triggerPulse && resolvedExpanded) {
+    if (intent?.triggerPulse && resolvedSelectedType) {
       clearPulse()
     }
-  }, [clearPulse, intent?.triggerPulse, resolvedExpanded])
+  }, [clearPulse, intent?.triggerPulse, resolvedSelectedType])
 
   useResourceDenial({
     errors: [types.error, batchPreview.error],
     clear: { queryKey: ['system', 'dict', 'book'] },
     reset: () => {
-      setExpanded(null)
+      setSelectedType(null)
+      setValueBusy(false)
+      setTypeBusy(false)
+      setLiveTotal(null)
       setLastChange(null)
       onCreateOpenChange?.(false)
     },
@@ -196,16 +207,16 @@ export function DictBook({
   if (types.data && !types.isPlaceholderData && page > pages) setPage(pages)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <LivingContextBar source={intent?.source} />
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5"
           role="search"
           onSubmit={(event) => {
             event.preventDefault()
             if (busy) return
-            setExpanded(null)
+            setSelectedType('none')
             setKeyword(draft.trim())
             setPage(1)
           }}
@@ -215,10 +226,10 @@ export function DictBook({
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t('dictBook.search')}
             aria-label={t('dictBook.search')}
-            className="max-w-xs"
+            className="h-9 w-full sm:w-64"
             disabled={busy}
           />
-          <Button type="submit" variant="secondary" size="sm" disabled={busy}>
+          <Button type="submit" variant="secondary" disabled={busy}>
             <Search aria-hidden="true" />
             {t('dictBook.query')}
           </Button>
@@ -226,10 +237,9 @@ export function DictBook({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               disabled={busy}
               onClick={() => {
-                setExpanded(null)
+                setSelectedType('none')
                 setDraft('')
                 setKeyword('')
                 setStatusFilter('all')
@@ -244,7 +254,7 @@ export function DictBook({
         <div
           role="group"
           aria-label="字典状态筛选"
-          className="inline-flex items-center gap-0.5 rounded-control border border-border-subtle bg-muted/40 p-0.5"
+          className="inline-flex h-9 items-center gap-1 rounded-control border border-border-subtle bg-muted/40 p-1"
         >
           {(
             [
@@ -263,7 +273,7 @@ export function DictBook({
               disabled={busy}
               onClick={() => {
                 if (statusFilter === option.value) return
-                setExpanded(null)
+                setSelectedType('none')
                 setStatusFilter(option.value)
                 setPage(1)
               }}
@@ -274,7 +284,7 @@ export function DictBook({
         </div>
       </div>
       <DictTypeControls
-        disabled={busyTypes.size > 0}
+        disabled={drawerBusy}
         createOpen={createOpen}
         onCreateOpenChange={onCreateOpenChange}
         onBusyChange={setCreatingBusy}
@@ -299,7 +309,15 @@ export function DictBook({
                 setKeyword(lastChange.dictType)
                 setDraft(lastChange.dictType)
                 setPage(1)
-                setExpanded(lastChange.id)
+                setSelectedType(
+                  lastChange.row ?? {
+                    id: lastChange.id,
+                    dictType: lastChange.dictType,
+                    dictName: lastChange.name,
+                    status: 1,
+                    remark: null,
+                  },
+                )
               }}
             >
               {t('dictBook.locateType')}
@@ -326,30 +344,25 @@ export function DictBook({
         </p>
       )}
       {list && list.length > 0 && (
-        <FlipExpandGrid
-          groupId="system-dict-sample-book"
-          className="dict-book-grid"
-          data-dict-motion={motionEnabled ? 'on' : 'off'}
-          aria-busy={types.isFetching}
-        >
+        <div className="dict-book-grid" aria-busy={types.isFetching}>
           {list.map((type) => (
             <DictCard
               key={type.id}
               type={type}
               batchItems={batchPreview.data?.[type.dictType]}
-              expanded={resolvedExpanded === type.id}
+              selected={resolvedSelectedType?.id === type.id}
               motionEnabled={motionEnabled}
-              active={active}
               disabled={busy || types.isPlaceholderData}
               changed={lastChange?.id === type.id ? lastChange : undefined}
-              onBusyChange={onCardBusyChange}
-              onTypeChanged={onTypeChanged}
-              onToggle={() => {
-                if (!busy) setExpanded(resolvedExpanded === type.id ? 'none' : type.id)
+              onOpen={() => {
+                if (!busy) {
+                  setLiveTotal(null)
+                  setSelectedType(type)
+                }
               }}
             />
           ))}
-        </FlipExpandGrid>
+        </div>
       )}
       {list && types.data && (
         <DictPagination
@@ -359,11 +372,79 @@ export function DictBook({
           label={t('dictBook.typePages')}
           disabled={busy || types.isFetching}
           onChange={(next) => {
-            setExpanded(null)
+            setSelectedType('none')
             setPage(next)
           }}
         />
       )}
+
+      <Sheet
+        open={resolvedSelectedType !== null}
+        onOpenChange={(open) => {
+          if (!open && !drawerBusy) {
+            setSelectedType('none')
+            setLiveTotal(null)
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col gap-0 p-0 sm:max-w-3xl lg:max-w-4xl"
+          showCloseButton={!drawerBusy}
+          onEscapeKeyDown={(event) => {
+            if (drawerBusy) event.preventDefault()
+          }}
+          onInteractOutside={(event) => {
+            if (drawerBusy) event.preventDefault()
+          }}
+        >
+          {resolvedSelectedType && (
+            <>
+              <SheetHeader className="border-b border-border-subtle px-6 py-4 pr-14">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SheetTitle className="text-lg font-semibold">
+                    {resolvedSelectedType.dictName}
+                  </SheetTitle>
+                  <Badge variant={resolvedSelectedType.status === 1 ? 'success' : 'secondary'}>
+                    {resolvedSelectedType.status === 1
+                      ? t('dictBook.statusEnabled', { defaultValue: '正常' })
+                      : t('dictBook.typeDisabled')}
+                  </Badge>
+                </div>
+                <SheetDescription asChild>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-foreground">
+                      {resolvedSelectedType.dictType}
+                    </code>
+                    <span>·</span>
+                    <span className="tabular-nums">
+                      {t('dictBook.valueCount', {
+                        count:
+                          liveTotal ??
+                          batchPreview.data?.[resolvedSelectedType.dictType]?.length ??
+                          0,
+                      })}
+                    </span>
+                  </div>
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
+                <DictValues
+                  key={resolvedSelectedType.id}
+                  type={resolvedSelectedType}
+                  initialItems={batchPreview.data?.[resolvedSelectedType.dictType]}
+                  active={active}
+                  motionEnabled={motionEnabled}
+                  onBusyChange={setValueBusy}
+                  onTypeBusyChange={setTypeBusy}
+                  onTotalChange={setLiveTotal}
+                  onTypeChanged={onTypeChanged}
+                />
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -371,66 +452,32 @@ export function DictBook({
 function DictCard({
   type,
   batchItems,
-  expanded,
+  selected,
   motionEnabled,
-  active,
   disabled,
   changed,
-  onBusyChange,
-  onTypeChanged,
-  onToggle,
+  onOpen,
 }: {
   type: DictTypeRow
   batchItems?: readonly DictValueRow[]
-  expanded: boolean
+  selected: boolean
   motionEnabled: boolean
-  active: boolean
   disabled: boolean
   changed?: DictTypeChange & { sequence: number }
-  onBusyChange: (id: string, busy: boolean) => void
-  onTypeChanged: (change: DictTypeChange) => void
-  onToggle: () => void
+  onOpen: () => void
 }) {
   const { t } = useTranslation('system')
-  const bodyId = useId()
-  const header = useRef<HTMLButtonElement>(null)
-  const [valueBusy, setValueBusy] = useState(false)
-  const [typeBusy, setTypeBusy] = useState(false)
-  const [liveTotal, setLiveTotal] = useState<number | null>(null)
-  const busy = valueBusy || typeBusy
-
-  useEffect(() => {
-    onBusyChange(type.id, busy)
-    return () => onBusyChange(type.id, false)
-  }, [busy, onBusyChange, type.id])
 
   const previewItems = batchItems ?? []
   const ratio = useMemo(() => computeDictRatio(batchItems ?? []), [batchItems])
-  const summaryCount = expanded && liveTotal !== null ? liveTotal : ratio.total
 
-  const collapse = () => {
-    if (busy || disabled) return
-    onToggle()
-    header.current?.focus()
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (expanded && event.key === 'Escape' && !busy) {
-      event.stopPropagation()
-      collapse()
-    }
-  }
-
-  const summaryNode = (
-    <div onKeyDown={onKeyDown}>
+  return (
+    <article className="dict-card sketch-surface" data-selected={selected ? 'true' : undefined}>
       <button
-        ref={header}
         type="button"
-        className="dict-card-header"
-        aria-expanded={expanded}
-        aria-controls={bodyId}
-        disabled={busy || disabled}
-        onClick={expanded ? collapse : onToggle}
+        className="dict-card-header cursor-pointer"
+        disabled={disabled}
+        onClick={onOpen}
       >
         <span className="min-w-0 flex-1 text-left">
           <code className="block truncate font-mono text-sm font-semibold text-foreground">
@@ -445,18 +492,11 @@ function DictCard({
         )}
         <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
           {t('dictBook.itemCountSummary', {
-            count: summaryCount,
-            defaultValue: `${summaryCount} 项`,
+            count: ratio.total,
+            defaultValue: `${ratio.total} 项`,
           })}
         </span>
-        <ChevronDown
-          data-slot="motion-disclosure-indicator"
-          className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform',
-            expanded && 'rotate-180',
-          )}
-          aria-hidden="true"
-        />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </button>
 
       {/* Enabled / Disabled ratio thin bar (frame 0999.jpg) */}
@@ -494,93 +534,63 @@ function DictCard({
         </motion.p>
       )}
 
-      {!expanded && (
-        <div
-          className="dict-card-body mt-3 flex flex-wrap gap-1.5"
-          aria-label={t('dictBook.enabledValues')}
-        >
-          {previewItems.slice(0, CHIP_LIMIT).map((value) => {
-            const tone = resolveDictSwatchTone(type.dictType, value)
-            return (
-              <span
-                key={value.id}
-                data-slot="dict-swatch-chip"
-                data-tone={tone}
-                data-disabled={value.status !== 1 ? 'true' : undefined}
-                className="dict-swatch-chip"
-              >
-                <span className="dict-swatch-dot-indicator" aria-hidden="true" />
-                <span>{value.dictLabel}</span>
-                {value.isDefault === 1 && (
-                  <span
-                    className="dict-swatch-default"
-                    aria-label={t('dictBook.defaultBadge', { defaultValue: '默认' })}
-                  >
-                    ✓
-                  </span>
-                )}
-                <code className="dict-swatch-code">{value.dictValue}</code>
-              </span>
-            )
-          })}
-          {previewItems.length > CHIP_LIMIT && (
-            <span className="self-center text-xs text-muted-foreground">
-              {t('dictBook.moreValues', { count: previewItems.length - CHIP_LIMIT })}
+      <div
+        className="dict-card-body mt-3 flex min-h-[3.25rem] flex-wrap content-start gap-1.5"
+        aria-label={t('dictBook.enabledValues')}
+      >
+        {previewItems.slice(0, CHIP_LIMIT).map((value) => {
+          const tone = resolveDictSwatchTone(type.dictType, value)
+          return (
+            <span
+              key={value.id}
+              data-slot="dict-swatch-chip"
+              data-tone={tone}
+              data-disabled={value.status !== 1 ? 'true' : undefined}
+              className="dict-swatch-chip"
+            >
+              <span className="dict-swatch-dot-indicator" aria-hidden="true" />
+              <span>{value.dictLabel}</span>
+              {value.isDefault === 1 && (
+                <span
+                  className="dict-swatch-default"
+                  aria-label={t('dictBook.defaultBadge', { defaultValue: '默认' })}
+                >
+                  ✓
+                </span>
+              )}
+              <code className="dict-swatch-code">{value.dictValue}</code>
             </span>
-          )}
-          {previewItems.length === 0 && (
-            <span className="text-xs text-muted-foreground">{t('dictBook.noEnabledValues')}</span>
-          )}
-        </div>
-      )}
-    </div>
-  )
-
-  const footerNode = !expanded ? (
-    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground">
-          <span
-            className={cn(
-              'size-1.5 rounded-full',
-              type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
-            )}
-            aria-hidden="true"
-          />
-          {type.status === 1
-            ? t('dictBook.statusEnabled', { defaultValue: '正常' })
-            : t('dictBook.typeDisabled')}
-        </span>
-        {type.remark && <span className="truncate">{type.remark}</span>}
+          )
+        })}
+        {previewItems.length > CHIP_LIMIT && (
+          <span className="self-center text-xs text-muted-foreground">
+            {t('dictBook.moreValues', { count: previewItems.length - CHIP_LIMIT })}
+          </span>
+        )}
+        {previewItems.length === 0 && (
+          <span className="text-xs text-muted-foreground">{t('dictBook.noEnabledValues')}</span>
+        )}
       </div>
-      <DictCollapsedQuickActions type={type} onManage={onToggle} />
-    </div>
-  ) : undefined
 
-  const expandedNode = (
-    <div id={bodyId} className="dict-card-body mt-4" onKeyDown={onKeyDown}>
-      <DictValues
-        key={type.dictType}
-        type={type}
-        active={active}
-        motionEnabled={motionEnabled}
-        onBusyChange={setValueBusy}
-        onTypeBusyChange={setTypeBusy}
-        onTotalChange={setLiveTotal}
-        onTypeChanged={onTypeChanged}
-      />
-    </div>
-  )
-
-  return (
-    <FlipExpandCard
-      id={type.id}
-      expanded={expanded}
-      className={cn('dict-card sketch-surface', expanded && 'dict-card-expanded')}
-      summary={summaryNode}
-      expandedContent={expandedNode}
-      footer={footerNode}
-    />
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground">
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                type.status === 1 ? 'bg-success' : 'bg-muted-foreground/50',
+              )}
+              aria-hidden="true"
+            />
+            {type.status === 1
+              ? t('dictBook.statusEnabled', { defaultValue: '正常' })
+              : t('dictBook.typeDisabled')}
+          </span>
+          {type.remark && <span className="truncate">{type.remark}</span>}
+        </div>
+        <DictCollapsedQuickActions type={type} onManage={onOpen} />
+      </div>
+    </article>
   )
 }
 
@@ -598,6 +608,7 @@ interface ValueDraftState {
 
 function DictValues({
   type,
+  initialItems,
   active,
   motionEnabled,
   onBusyChange,
@@ -606,6 +617,7 @@ function DictValues({
   onTypeChanged,
 }: {
   type: DictTypeRow
+  initialItems?: readonly DictValueRow[]
   active: boolean
   motionEnabled: boolean
   onBusyChange: (busy: boolean) => void
@@ -637,7 +649,18 @@ function DictValues({
   const values = useQuery({
     queryKey: ['system', 'dict', 'book', 'values', type.dictType, page],
     queryFn: ({ signal }) => pageDictValues(type.dictType, page, signal),
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData): PageResult<DictValueRow> | undefined => {
+      if (previousData !== undefined) return previousData
+      if (page === 1 && initialItems !== undefined) {
+        return {
+          list: initialItems.slice(0, DICT_VALUE_PAGE_SIZE),
+          total: initialItems.length,
+          page: 1,
+          size: DICT_VALUE_PAGE_SIZE,
+        }
+      }
+      return undefined
+    },
     enabled: active,
   })
 
@@ -1013,7 +1036,15 @@ function DictValues({
           {t('dictBook.noValues')}
         </p>
       ) : (
-        <div className="dict-values-table overflow-x-auto rounded-panel border border-border-subtle bg-card/85">
+        <div
+          role="region"
+          tabIndex={0}
+          aria-label={t('dictBook.valuesRegion', {
+            name: type.dictName,
+            defaultValue: `${type.dictName}字典项列表`,
+          })}
+          className="dict-values-table overflow-x-auto rounded-panel border border-border-subtle bg-card/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+        >
           <div aria-hidden="true" className="dict-values-head">
             <span>{t('dictBook.colLabel', { defaultValue: '标签预览' })}</span>
             <span>{t('dictBook.colKey', { defaultValue: '存储键值' })}</span>
@@ -1529,9 +1560,9 @@ function DictCollapsedQuickActions({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-6"
+          className="size-7"
           aria-label={`管理字典：${type.dictName}`}
-          title="展开管理字典"
+          title="管理字典项"
           disabled={toggleStatus.isPending || removeType.isPending}
           onClick={(event) => {
             event.stopPropagation()
@@ -1546,7 +1577,7 @@ function DictCollapsedQuickActions({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-6"
+          className="size-7"
           aria-label={
             type.status === 1 ? `快速停用：${type.dictName}` : `快速启用：${type.dictName}`
           }
@@ -1565,7 +1596,7 @@ function DictCollapsedQuickActions({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-6 text-destructive hover:text-destructive"
+          className="size-7 text-destructive hover:text-destructive"
           aria-label={`快速删除：${type.dictName}`}
           title="删除类型"
           disabled={toggleStatus.isPending || removeType.isPending}

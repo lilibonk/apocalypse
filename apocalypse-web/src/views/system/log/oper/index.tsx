@@ -284,7 +284,7 @@ function OperLogWorkspace() {
 
   return (
     <CoupledMotionGroup activeId={detail ? String(detail.id) : null}>
-      <div className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+      <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
         <PageHeader
           title={t('common.操作日志', { defaultValue: '操作日志' })}
           actions={

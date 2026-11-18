@@ -1,7 +1,7 @@
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { useId, useState, type HTMLAttributes, type ReactNode } from 'react'
 
-import { coupledMotion, insightMotion } from '@/design/motion'
+import { insightMotion, motionTransition } from '@/design/motion'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 
@@ -12,9 +12,9 @@ export interface FlipExpandGridProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Skeleton C: Single-boundary FLIP expand grid container.
- * Enforces `grid-auto-flow: dense` and `align-items: start` so expanded cards span `1 / -1`
- * while neighboring cards yield smoothly via pure position translation.
+ * Skeleton C: Ordered expand grid container.
+ * Uses natural row flow (`align-items: start`) so expanded cards span `1 / -1`
+ * without `dense` backfilling reordering interactive DOM/tab order.
  */
 export function FlipExpandGrid({ groupId, className, children, ...rest }: FlipExpandGridProps) {
   const fallbackId = useId()
@@ -44,12 +44,11 @@ export interface FlipExpandCardProps {
 }
 
 /**
- * Channel 3 (0–380ms): Single-boundary FLIP card implementing the 5 strict geometry rules:
- * 1. No card-level `container-type: inline-size`.
- * 2. Single root `layout="position"` (zero child `layout` nesting, preventing text distortion).
- * 3. Explicit height/opacity transition on `.flip-expand-card-panel`.
- * 4. Dynamic `z-index` lock (`3` expanded, `2` transitioning, `1` idle) preventing neighbor overlap.
- * 5. `overflow: hidden` radius clipping isolation.
+ * Channel 3 (0–240ms): Ordered expand card with exit-width lock:
+ * 1. Holds full-row span (`data-exiting="true"`) until collapse animation completes (no narrow-column crush).
+ * 2. Smooth vertical panel reveal without cross-column diagonal box collisions.
+ * 3. Dynamic `z-index` lock (`3` expanded, `2` exiting/transitioning, `1` idle).
+ * 4. `overflow: hidden` radius clipping isolation.
  */
 export function FlipExpandCard({
   id,
@@ -62,36 +61,52 @@ export function FlipExpandCard({
 }: FlipExpandCardProps) {
   const motionEnabled = useMotionPreference()
   const [transitioning, setTransitioning] = useState(false)
+  const [exiting, setExiting] = useState(false)
   const [prevExpanded, setPrevExpanded] = useState(expanded)
 
   if (prevExpanded !== expanded) {
     setPrevExpanded(expanded)
     if (motionEnabled) {
       setTransitioning(true)
+      setExiting(!expanded)
+    } else {
+      setTransitioning(false)
+      setExiting(false)
     }
   }
 
   return (
     <motion.article
-      layout={motionEnabled ? 'position' : false}
-      transition={motionEnabled ? coupledMotion.flip : insightMotion.instant}
-      onLayoutAnimationComplete={() => setTransitioning(false)}
       data-slot="flip-expand-card"
       data-card-id={id}
       data-expanded={expanded ? 'true' : 'false'}
+      data-exiting={exiting ? 'true' : undefined}
       data-transitioning={transitioning ? 'true' : undefined}
       className={cn('flip-expand-card', className)}
     >
       <div data-slot="flip-expand-summary">{summary}</div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          setExiting(false)
+          setTransitioning(false)
+        }}
+      >
         {expanded && expandedContent != null && (
           <motion.div
             key="expanded-panel"
             data-slot="flip-expand-panel"
             initial={motionEnabled ? { height: 0, opacity: 0 } : false}
             animate={{ height: 'auto', opacity: 1 }}
-            exit={motionEnabled ? { height: 0, opacity: 0 } : { height: 0, opacity: 0 }}
-            transition={motionEnabled ? coupledMotion.flip : insightMotion.instant}
+            exit={
+              motionEnabled
+                ? { height: 0, opacity: 0, transition: motionTransition.exit }
+                : { height: 0, opacity: 0 }
+            }
+            transition={motionEnabled ? motionTransition.standard : insightMotion.instant}
+            onAnimationComplete={() => {
+              if (expanded) setTransitioning(false)
+            }}
             className={cn('overflow-hidden', expandedPanelClassName)}
           >
             {expandedContent}

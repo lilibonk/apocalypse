@@ -1,10 +1,9 @@
 /**
- * 菜单管理（V2 A3/A4 树账本 + 检视器）：菜单树（目录/菜单/按钮）的增删改查。
- * 单行紧凑过滤工具栏 + 5 列清晰缩进树表 + 右侧 ResponsiveInspector 顶置 LivingContextBar。
+ * 菜单管理：单行紧凑过滤工具栏 + 高清晰度可折叠树表（目录/菜单）+ 弹窗增删改查。
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronsDownUp, ChevronsUpDown, Network, Plus, Rows3, Search } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
@@ -12,13 +11,9 @@ import { useSearchParams } from 'react-router'
 import { Perm } from '@/components/Perm'
 import { DynaQueryFeedback } from '@/components/dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useEntityIntent } from '@/components/navigation'
-import { ResponsiveInspector } from '@/components/spatial'
+import { LivingContextBar, useEntityIntent } from '@/components/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { useDesktopViewport } from '@/hooks/useDesktopViewport'
-import { usePageView } from '@/hooks/usePageView'
 import { isResourceDenied, useResourceDenial } from '@/lib/query/use-resource-denial'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -26,7 +21,6 @@ import { useAuthStore } from '@/stores/auth'
 import { MenuDeleteDialog } from './MenuDeleteDialog'
 import { MenuFormDialog, type MenuFormPayload } from './MenuFormDialog'
 import { MenuTreeTable } from './MenuTreeTable'
-import { MenuInspector, MenuTreeWorkspace } from './MenuTreeWorkspace'
 import { menuAncestorPath } from './menu-workspace.model'
 import { getMenuTree } from './menu.api'
 import {
@@ -37,12 +31,17 @@ import {
   type MenuType,
 } from './menu.types'
 
-const MENU_VIEWS = ['workspace', 'table'] as const
-
 type MenuFilter = 'ALL' | MenuType
 
 function flattenTree(nodes: MenuNode[]): MenuNode[] {
   return nodes.flatMap((node) => [node, ...flattenTree(node.children)])
+}
+
+function flattenVisibleIds(nodes: MenuNode[], collapsed: ReadonlySet<string>): string[] {
+  return nodes.flatMap((node) => [
+    node.id,
+    ...(collapsed.has(node.id) ? [] : flattenVisibleIds(node.children, collapsed)),
+  ])
 }
 
 function filterTree(nodes: MenuNode[], query: string, type: MenuFilter): MenuNode[] {
@@ -69,11 +68,7 @@ function MenuPageContent() {
   const { t } = useTranslation()
   const { intent: menuIntent, clearPulse } = useEntityIntent('menu')
   const queryClient = useQueryClient()
-  const desktop = useDesktopViewport()
-  const [requestedView, setView] = usePageView(MENU_VIEWS, 'menuView')
-  const view = desktop ? requestedView : 'workspace'
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [tableInspectorOpen, setTableInspectorOpen] = useState(false)
   const [focusAfterSave, setFocusAfterSave] = useState<{ id: string; sequence: number }>()
   const [lastResult, setLastResult] = useState('')
 
@@ -82,6 +77,8 @@ function MenuPageContent() {
   const [deleting, setDeleting] = useState<MenuNode | null>(null)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<MenuFilter>('ALL')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['system', 'menus', 'tree'],
@@ -133,7 +130,10 @@ function MenuPageContent() {
     })
   }
 
-  const collapseAll = () => setExpanded(new Set())
+  const collapseAll = () => {
+    setExpanded(new Set())
+    setPage(1)
+  }
 
   const [params] = useSearchParams()
   const urlFocusMenuId = menuIntent?.focusTargetId ?? menuIntent?.id ?? params.get('menuId')
@@ -159,16 +159,21 @@ function MenuPageContent() {
       next.add(parent.id)
     setAppliedFocus(focusTarget.id)
     setExpanded(next)
+    const nextCollapsed = filtering
+      ? new Set<string>()
+      : new Set(expandableIds.filter((id) => !next.has(id)))
+    const targetIdx = flattenVisibleIds(filteredTree, nextCollapsed).indexOf(focusTarget.id)
+    if (targetIdx >= 0) {
+      setPage(Math.floor(targetIdx / pageSize) + 1)
+    }
   }
   useEffect(() => {
     if (!appliedFocus) return
-    const row = document.getElementById(
-      `${view === 'workspace' ? 'menu-object' : 'menu-row'}-${appliedFocus}`,
-    )
+    const row = document.getElementById(`menu-row-${appliedFocus}`)
     row?.scrollIntoView({ block: 'center' })
     row?.focus({ preventScroll: true })
     if (menuIntent?.triggerPulse) clearPulse()
-  }, [appliedFocus, appliedSequence, clearPulse, menuIntent?.triggerPulse, view])
+  }, [appliedFocus, appliedSequence, clearPulse, menuIntent?.triggerPulse])
 
   const selectNode = (id: string) => {
     setSelectedId(id)
@@ -183,7 +188,6 @@ function MenuPageContent() {
   const selectedNode = effectiveSelectedId
     ? allNodes.find((node) => node.id === effectiveSelectedId)
     : undefined
-  const selectedPath = effectiveSelectedId ? menuAncestorPath(tree, effectiveSelectedId) : []
   const selectedHasChildren = Boolean(selectedNode && selectedNode.children.length > 0)
   const selectedBranchExpanded = Boolean(selectedNode && expanded.has(selectedNode.id))
 
@@ -191,19 +195,6 @@ function MenuPageContent() {
     <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t('common.菜单管理', { defaultValue: '菜单管理' })}
-        view={
-          desktop ? (
-            <SegmentedControl
-              label={t('system:menuWorkspace.view')}
-              value={view}
-              onChange={setView}
-              options={[
-                { value: 'workspace', label: t('system:menuWorkspace.workspace'), icon: Network },
-                { value: 'table', label: t('system:menuWorkspace.table'), icon: Rows3 },
-              ]}
-            />
-          ) : undefined
-        }
         actions={
           <Perm perm="system:menu:add" requiresAllScope>
             <Button onClick={() => setFormPayload({ mode: 'create', parentId: ROOT_PARENT_ID })}>
@@ -213,6 +204,8 @@ function MenuPageContent() {
           </Perm>
         }
       />
+
+      <LivingContextBar source={menuIntent?.source} />
 
       {lastResult && (
         <p
@@ -243,7 +236,10 @@ function MenuPageContent() {
                   id="menu-search"
                   aria-label={t('dyna.querySearch')}
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value)
+                    setPage(1)
+                  }}
                   placeholder={t('system:authorization.menuSearch')}
                   className="h-8 pl-9 text-xs"
                 />
@@ -251,7 +247,7 @@ function MenuPageContent() {
               <div
                 role="group"
                 aria-label={t('common.菜单类型筛选', { defaultValue: '菜单类型筛选' })}
-                className="flex items-center rounded-control bg-muted p-0.5"
+                className="inline-flex h-8 items-center gap-0.5 rounded-control border border-border-subtle bg-muted/60 p-0.5"
               >
                 {(
                   (allNodes.some((node) => node.menuType === 'F')
@@ -271,9 +267,12 @@ function MenuPageContent() {
                     key={value}
                     type="button"
                     aria-pressed={typeFilter === value}
-                    onClick={() => setTypeFilter(value)}
+                    onClick={() => {
+                      setTypeFilter(value)
+                      setPage(1)
+                    }}
                     className={cn(
-                      'rounded-md px-2.5 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                      'inline-flex h-full items-center rounded-md px-2.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                       typeFilter === value
                         ? 'bg-card font-medium text-foreground shadow-xs'
                         : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -326,70 +325,34 @@ function MenuPageContent() {
             </div>
           </div>
 
-          {view === 'workspace' ? (
-            <MenuTreeWorkspace
-              tree={filteredTree}
-              allTree={tree}
-              collapsed={effectiveCollapsed}
-              selectedId={effectiveSelectedId}
-              loading={isLoading}
-              filtering={filtering}
-              source={menuIntent?.source}
-              onSelect={selectNode}
-              onToggle={toggle}
-              onResetFilters={() => {
-                setQuery('')
-                setTypeFilter('ALL')
-              }}
-              onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-              onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-              onDelete={setDeleting}
-            />
-          ) : (
-            <div className="menu-workspace p-4">
-              <div className="menu-workspace-grid">
-                <div className="min-w-0 overflow-hidden rounded-control border border-border-subtle">
-                  <MenuTreeTable
-                    tree={filteredTree}
-                    isLoading={isLoading}
-                    collapsed={effectiveCollapsed}
-                    onToggle={toggle}
-                    onSelect={(id) => {
-                      selectNode(id)
-                      setTableInspectorOpen(true)
-                    }}
-                    highlightId={effectiveSelectedId}
-                    onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-                    onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-                    onDelete={setDeleting}
-                    filtering={filtering}
-                    onResetFilters={() => {
-                      setQuery('')
-                      setTypeFilter('ALL')
-                    }}
-                  />
-                </div>
-                <ResponsiveInspector
-                  title={t('system:menuWorkspace.details')}
-                  context={selectedNode?.menuName}
-                  open={tableInspectorOpen}
-                  onOpenChange={setTableInspectorOpen}
-                  mode="auto"
-                  className="menu-workspace-aside min-w-0"
-                >
-                  <MenuInspector
-                    node={selectedNode}
-                    path={selectedPath}
-                    source={menuIntent?.source}
-                    onSelect={selectNode}
-                    onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
-                    onEdit={(node) => setFormPayload({ mode: 'edit', node })}
-                    onDelete={setDeleting}
-                  />
-                </ResponsiveInspector>
-              </div>
-            </div>
-          )}
+          <MenuTreeTable
+            tree={filteredTree}
+            isLoading={isLoading}
+            collapsed={effectiveCollapsed}
+            onToggle={toggle}
+            onSelect={(id) => {
+              const target = allNodes.find((node) => node.id === id)
+              if (target?.children.length) toggle(id)
+              selectNode(id)
+            }}
+            highlightId={effectiveSelectedId}
+            onCreateChild={(node) => setFormPayload({ mode: 'create', parentId: node.id })}
+            onEdit={(node) => setFormPayload({ mode: 'edit', node })}
+            onDelete={setDeleting}
+            filtering={filtering}
+            onResetFilters={() => {
+              setQuery('')
+              setTypeFilter('ALL')
+              setPage(1)
+            }}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize)
+              setPage(1)
+            }}
+          />
         </section>
       )}
 
@@ -402,6 +365,7 @@ function MenuPageContent() {
         onSaved={(id, name) => {
           setQuery('')
           setTypeFilter('ALL')
+          setPage(1)
           setFocusAfterSave((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
           setLastResult(t('system:menuWorkspace.saved', { name }))
           void invalidate()

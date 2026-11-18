@@ -76,7 +76,7 @@ function DialogContent({
         data-depth={depth}
         data-motion-preset="surface"
         className={cn(
-          'fixed z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] gap-5 overflow-y-auto rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating outline-none sm:max-w-lg',
+          'fixed z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] gap-5 overflow-y-auto overscroll-contain rounded-panel border border-border-subtle bg-popover p-6 text-popover-foreground shadow-floating outline-none sm:max-w-lg',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}

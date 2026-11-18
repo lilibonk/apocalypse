@@ -7,7 +7,7 @@ import '@/i18n'
 import type { DynaTableProps } from '@/components/dyna'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
-import type { AuthorizationOverview, PermissionHolders } from '../role/authorization-insight.api'
+import type { AuthorizationOverview } from '../role/authorization-insight.api'
 import { CORE_MODULE_FILTER_VALUE, PermissionWorkspace } from './PermissionWorkspace'
 
 function createBaseCollection(): DynaTableProps {
@@ -52,6 +52,7 @@ describe('PermissionWorkspace', () => {
       authorizationSnapshotId: 'test-snapshot',
       authorizationDeadline: Number.POSITIVE_INFINITY,
       perms: ['system:permission:list', 'system:role:list', 'system:user:list'],
+      allScopePerms: [],
       authorizationEpoch: 1,
       menus: [
         {
@@ -85,7 +86,7 @@ describe('PermissionWorkspace', () => {
     Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
   })
 
-  it('renders interactive __core__ module pill and live permission holders with Role & User EntityPills', () => {
+  it('renders interactive __core__ module pill and clean permission inventory table without SVG diagram clutter', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
     })
@@ -111,41 +112,7 @@ describe('PermissionWorkspace', () => {
       roleScopeDistribution: [],
     }
 
-    const holdersData: PermissionHolders = {
-      evaluatedAt: '2026-10-18T12:00:00Z',
-      permissionId: 'p-user-remove',
-      code: 'system:user:remove',
-      name: '删除用户',
-      moduleKey: null,
-      status: 1,
-      lifecycle: 'ACTIVE',
-      moduleEnabled: true,
-      membersVisible: true,
-      outOfScopeVisible: false,
-      activeRoleCount: 1,
-      coveredVisibleUserCount: 1,
-      roles: [
-        {
-          roleId: 'r-sec',
-          roleName: '安全管理员',
-          roleKey: 'security_admin',
-          roleStatus: 1,
-          roleDataScope: 'ALL',
-          enabled: true,
-          scopeOverride: 'DEPT_AND_CHILDREN',
-          effectiveScope: 'DEPT_AND_CHILDREN',
-          validFrom: '2026-10-01T00:00:00Z',
-          validUntil: '2026-12-31T23:59:59Z',
-          state: 'ACTIVE',
-          visibleMemberCount: 1,
-          outOfScopeMemberCount: 0,
-          members: [{ id: '101', username: 'alice', nickname: 'Alice Chen' }],
-        },
-      ],
-    }
-
     queryClient.setQueryData(['system', 'permissions', 1, 'overview'], overviewData)
-    queryClient.setQueryData(['system', 'permissions', 'holders', 'p-user-remove', 1], holdersData)
 
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
@@ -162,17 +129,69 @@ describe('PermissionWorkspace', () => {
       </QueryClientProvider>,
     )
 
-    expect(html).toContain('data-slot="sticky-rail-layout"')
-    expect(html).toContain('data-rail-width="locator"')
     expect(html).toContain(`data-module-chip="${CORE_MODULE_FILTER_VALUE}"`)
-    expect(html).toContain('data-slot="entity-peek-link"')
-    expect(html).toContain('data-testid="permission-holders-stage"')
-    expect(html).toContain('data-entity-kind="role"')
-    expect(html).toContain('data-entity-id="r-sec"')
-    expect(html).toContain('安全管理员')
-    expect(html).toContain('data-entity-kind="user"')
-    expect(html).toContain('data-entity-id="101"')
-    expect(html).toContain('Alice Chen')
-    expect(html).not.toContain('已登记的业务动作；目录定义与角色授权分别管理。')
+    expect(html).toContain('system:user:remove')
+    expect(html).toContain('删除用户')
+    expect(html).toContain('查看持有角色：删除用户')
+    expect(html).not.toContain('data-testid="permission-holders-stage"')
+    expect(html).not.toContain('data-slot="sticky-rail-layout"')
+  })
+
+  it('renders explicit configure action enabled with ALL scope and visibly explained disabled without it', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+    })
+    const fakeController = {
+      actions: {
+        openEdit: vi.fn(),
+        openView: vi.fn(),
+      },
+    } as unknown as React.ComponentProps<typeof PermissionWorkspace>['controller']
+
+    useAuthStore.setState({
+      perms: ['system:permission:list', 'system:permission:edit'],
+      allScopePerms: ['system:permission:edit'],
+    })
+    Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
+    const enabledHtml = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <PermissionWorkspace
+            controller={fakeController}
+            collection={createBaseCollection()}
+            filters={{}}
+            applyFilters={vi.fn()}
+            queryKey={['system', 'permissions']}
+            selectedRowKey={null}
+            selectRow={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(enabledHtml).toContain('aria-label="配置：删除用户"')
+    expect(enabledHtml).not.toMatch(/disabled=""[^>]*aria-label="配置：删除用户"/)
+
+    useAuthStore.setState({
+      perms: ['system:permission:list'],
+      allScopePerms: [],
+    })
+    Object.assign(useAuthStore.getInitialState(), useAuthStore.getState())
+    const readonlyHtml = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <PermissionWorkspace
+            controller={fakeController}
+            collection={createBaseCollection()}
+            filters={{}}
+            applyFilters={vi.fn()}
+            queryKey={['system', 'permissions']}
+            selectedRowKey={null}
+            selectRow={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(readonlyHtml).toContain('aria-label="配置：删除用户"')
+    expect(readonlyHtml).toContain('需要「权限编辑」全部门写权限')
   })
 })

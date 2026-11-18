@@ -249,7 +249,6 @@
   grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
   gap: calc(var(--spacing) * 3.5);
   align-items: start;
-  grid-auto-flow: dense;
 }
 
 /* Constraint 1 & 4 & 5: No container-type on card; z-index lock (1/2/3); overflow: hidden */
@@ -264,12 +263,17 @@
   box-shadow: var(--shadow-surface);
 }
 
-.flip-expand-card[data-transitioning='true'] {
+.flip-expand-card[data-transitioning='true'],
+.flip-expand-card[data-exiting='true'] {
   z-index: 2;
 }
 
-.flip-expand-card[data-expanded='true'] {
+.flip-expand-card[data-expanded='true'],
+.flip-expand-card[data-exiting='true'] {
   grid-column: 1 / -1;
+}
+
+.flip-expand-card[data-expanded='true'] {
   z-index: 3;
   border-color: var(--border);
   box-shadow: var(--shadow-floating);

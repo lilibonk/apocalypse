@@ -104,7 +104,7 @@ export const authorizationCopy = {
     version: '版本',
     active: '启用',
     inactive: '停用',
-    ACTIVE: '可配置',
+    ACTIVE: '开放授权',
     DEPRECATED: '已弃用',
     LEGACY: '历史兼容',
     permissionId: '权限 ID',
@@ -234,7 +234,7 @@ export const authorizationCopy = {
     version: 'Version',
     active: 'Enabled',
     inactive: 'Disabled',
-    ACTIVE: 'Configurable',
+    ACTIVE: 'Open',
     DEPRECATED: 'Deprecated',
     LEGACY: 'Legacy compatibility',
     permissionId: 'Permission ID',
@@ -269,10 +269,17 @@ export const permissionCatalogCopy = {
     modulePlaceholder: '如 calendar',
     resourcePlaceholder: '如 user',
     registered: '已登记动作',
+    registeredStatus: '声明状态',
     notRegistered: '历史定义，未绑定可执行动作',
     legacyReadOnly: '此历史定义只读保留，不能修改或重新启用。',
     loadFailed: '定义详情加载失败',
     missingVersion: '定义版本未完整加载，请关闭并重新读取。',
+    configureAction: '配置',
+    detailsShort: '详情',
+    configureRequiresAllScope:
+      '需要「权限编辑」全部门写权限；角色授权与数据范围请前往「角色管理」配置。',
+    editScopeNote:
+      '此处维护权限显示名称、定义状态、生命周期（开放授权 / 已弃用）与说明；角色授权及部门数据范围请在「角色管理」中配置。',
   },
   en: {
     referenceRoleCount: 'Referencing roles',
@@ -293,10 +300,17 @@ export const permissionCatalogCopy = {
     modulePlaceholder: 'e.g. calendar',
     resourcePlaceholder: 'e.g. user',
     registered: 'Registered action',
+    registeredStatus: 'Registration status',
     notRegistered: 'Legacy definition without an executable binding',
     legacyReadOnly:
       'This legacy definition is retained for reference and cannot be edited or reactivated.',
     loadFailed: 'Could not load permission details',
     missingVersion: 'The definition version is unavailable. Close and reload it.',
+    configureAction: 'Configure',
+    detailsShort: 'Details',
+    configureRequiresAllScope:
+      'Requires global (all-dept) permission-edit scope; role grants and data scopes are configured in Role Management.',
+    editScopeNote:
+      'Configure display name, definition status, lifecycle (Open / Deprecated) and notes here. Role grants and department scopes are assigned in Role Management.',
   },
 } as const

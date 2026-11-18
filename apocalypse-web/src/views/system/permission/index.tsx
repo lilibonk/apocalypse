@@ -1,5 +1,4 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, List } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,7 +6,6 @@ import {
   DynaDetail,
   DynaDialogs,
   DynaForm,
-  DynaTable,
   DynaToolbar,
   DynaToolbarActions,
   useDynaController,
@@ -15,57 +13,40 @@ import {
 } from '@/components/dyna'
 import { useDynaText } from '@/components/dyna/use-dyna'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { LivingContextBar, useEntityIntent, type EntityRouteIntent } from '@/components/navigation'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { useDesktopViewport } from '@/hooks/useDesktopViewport'
-import { usePageView } from '@/hooks/usePageView'
+import { useEntityIntent, type EntityRouteIntent } from '@/components/navigation'
 import { useAuthStore } from '@/stores/auth'
 
 import { permissionMetadataBody } from './permission.model'
 import schema from './permission.schema'
 import { PermissionWorkspace } from './PermissionWorkspace'
 
-type PermissionPageView = 'workspace' | 'list'
-const PERMISSION_PAGE_VIEWS = ['workspace', 'list'] as const
-
 function PermissionForm(props: DynaFormProps) {
   const { t } = useTranslation('system')
   const version = props.initialRow?.version
   const readOnly = props.initialRow?.registered !== true || props.initialRow?.lifecycle === 'LEGACY'
   const versionValid = typeof version === 'number' && Number.isInteger(version) && version >= 0
-  const supports = Array.isArray(props.initialRow?.supportedScopeOverrides)
-    ? props.initialRow.supportedScopeOverrides
-    : []
   return (
     <DynaForm
       {...props}
       config={{
         ...props.config,
-        fields: props.config.fields.map((field) => ({
-          ...field,
-          disabledInEdit: readOnly || field.disabledInEdit,
-          options:
-            field.name === 'lifecycle' && !readOnly
-              ? field.options?.filter((option) => option.value !== 'LEGACY')
-              : field.options,
-        })),
+        fields: props.config.fields
+          .filter((field) => field.name !== 'declarationSource')
+          .map((field) => ({
+            ...field,
+            disabledInEdit: readOnly || field.disabledInEdit,
+            options:
+              field.name === 'lifecycle' && !readOnly
+                ? field.options?.filter((option) => option.value !== 'LEGACY')
+                : field.options,
+          })),
       }}
       submitDisabled={props.submitDisabled || !versionValid || readOnly}
       onSubmit={(body) => props.onSubmit(permissionMetadataBody(body, version))}
       feedback={
-        <div className="space-y-2 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-          <p>{t(readOnly ? 'permissionCatalog.legacyReadOnly' : 'permissionCatalog.metadata')}</p>
-          <p>
-            {t('permissionCatalog.impact', {
-              count: String(props.initialRow?.referenceRoleCount ?? '—'),
-            })}
-          </p>
-          <p>
-            {t('permissionCatalog.supportedScopes')}:{' '}
-            {supports.length
-              ? supports.map((scope) => t(`authorization.${String(scope)}`)).join(' · ')
-              : t('permissionCatalog.noScopes')}
-          </p>
+        <div className="space-y-1.5 rounded-control border border-border-subtle bg-muted/30 p-3 text-xs text-muted-foreground">
+          <p>{t('permissionCatalog.editScopeNote')}</p>
+          {readOnly && <p>{t('permissionCatalog.legacyReadOnly')}</p>}
           {!versionValid && (
             <p role="alert" className="text-destructive">
               {t('permissionCatalog.missingVersion')}
@@ -81,9 +62,6 @@ export default function PermissionPage() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   const { intent } = useEntityIntent('permission')
-  const desktop = useDesktopViewport()
-  const [view, setView] = usePageView<PermissionPageView>(PERMISSION_PAGE_VIEWS)
-  const activeView: PermissionPageView = desktop ? view : 'list'
   const instanceKey = JSON.stringify([
     sessionEpoch,
     authorizationEpoch,
@@ -93,25 +71,10 @@ export default function PermissionPage() {
     intent?.resource,
   ])
 
-  return (
-    <PermissionPageContent
-      key={instanceKey}
-      intent={intent ?? undefined}
-      view={activeView}
-      onViewChange={desktop ? setView : undefined}
-    />
-  )
+  return <PermissionPageContent key={instanceKey} intent={intent ?? undefined} />
 }
 
-function PermissionPageContent({
-  intent,
-  view,
-  onViewChange,
-}: {
-  intent?: EntityRouteIntent
-  view: PermissionPageView
-  onViewChange?: (view: PermissionPageView) => void
-}) {
+function PermissionPageContent({ intent }: { intent?: EntityRouteIntent }) {
   const { t } = useTranslation('system')
   const dynaText = useDynaText()
   const queryClient = useQueryClient()
@@ -139,7 +102,7 @@ function PermissionPageContent({
     return {
       ...schema,
       title: t('permissionCatalog.title'),
-      description: t('permissionCatalog.description'),
+      description: undefined,
       entityName: t('permissionCatalog.entity'),
       rowActions: schema.rowActions?.map((action) =>
         action.kind === 'custom' ? { ...action, label: t('permissionCatalog.details') } : action,
@@ -181,7 +144,7 @@ function PermissionPageContent({
             field.key === 'supportedScopesDisplay'
               ? t('permissionCatalog.supportedScopes')
               : field.key === 'registeredDisplay'
-                ? t('authorization.declarationSource')
+                ? t('permissionCatalog.registeredStatus', { defaultValue: '声明状态' })
                 : field.key === 'referenceRoleCount'
                   ? t('permissionCatalog.referenceRoleCount')
                   : fieldTitle(field.key),
@@ -218,54 +181,28 @@ function PermissionPageContent({
       }
     : null
 
-  const viewControl = onViewChange ? (
-    <SegmentedControl
-      label={dynaText('pageView')}
-      value={view}
-      onChange={onViewChange}
-      options={[
-        { value: 'workspace', label: dynaText('viewWorkspace'), icon: LayoutDashboard },
-        { value: 'list', label: dynaText('viewList'), icon: List },
-      ]}
-    />
-  ) : undefined
-
-  const searchControl = (
-    <DynaToolbar
-      controller={controller}
-      presentation={view === 'workspace' ? 'toolbar' : 'panel'}
-    />
-  )
+  const searchControl = <DynaToolbar controller={controller} presentation="panel" />
 
   return (
     <>
-      <div className="w-full min-w-0 space-y-6 p-4 sm:p-6">
+      <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
         <PageHeader
           title={dynaText(localized.title)}
-          description={localized.description ? dynaText(localized.description) : undefined}
-          view={viewControl}
           actions={<DynaToolbarActions controller={controller} />}
         />
 
-        {view === 'workspace' ? (
-          <PermissionWorkspace
-            controller={controller}
-            collection={controller.collection}
-            filters={controller.filters}
-            applyFilters={controller.applyFilters}
-            queryKey={controller.queryKey}
-            selectedRowKey={controller.selectedRowKey}
-            selectRow={controller.selectRow}
-            search={searchControl}
-            intent={intent}
-          />
-        ) : (
-          <>
-            {intent?.source && <LivingContextBar source={intent.source} />}
-            {searchControl}
-            <DynaTable {...controller.collection} />
-          </>
-        )}
+        <PermissionWorkspace
+          controller={controller}
+          collection={controller.collection}
+          filters={controller.filters}
+          applyFilters={controller.applyFilters}
+          queryKey={controller.queryKey}
+          selectedRowKey={controller.selectedRowKey}
+          selectRow={controller.selectRow}
+          onOpenDetails={setDetail}
+          search={searchControl}
+          intent={intent}
+        />
 
         <DynaDialogs controller={controller} formComponent={PermissionForm} />
       </div>

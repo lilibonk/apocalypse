@@ -38,7 +38,7 @@ export function CalendarPageFrame({
   children: ReactNode
 }) {
   return (
-    <div data-slot="calendar-page" className="w-full min-w-0 space-y-4 p-4 sm:p-6">
+    <div data-slot="calendar-page" className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <div className="flex flex-col gap-3 border-b border-border-subtle pb-3 lg:flex-row lg:items-center lg:justify-between">
         <PageHeader title={title} />
         {actions && (

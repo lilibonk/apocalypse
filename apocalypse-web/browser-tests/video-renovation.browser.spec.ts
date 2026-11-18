@@ -342,15 +342,10 @@ test('online accounts expand devices and retain the session list as a compatible
   await expect(page.getByRole('alertdialog')).toContainText('alice')
 })
 
-test('permission module chips filter the object workspace and preserve filters in the list', async ({
+test('permission module chips filter the unified permission table and open the holding roles dialog', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/video-surfaces.html?surface=permission')
-  const views = page.getByRole('group', { name: '页面视图' })
-  await expect(views.getByRole('button', { name: '工作区', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
   const chip = page.getByRole('button', { name: /^calendar 2/ })
   await chip.click()
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
@@ -358,19 +353,15 @@ test('permission module chips filter the object workspace and preserve filters i
     'data-permission-module',
     'calendar',
   )
-  await page.getByRole('button', { name: '查看动作：读取日期详情', exact: true }).click()
-  await expect(page.getByRole('complementary', { name: '定义上下文' })).toContainText(
-    'calendar:day:read',
-  )
-  await views.getByRole('button', { name: '列表', exact: true }).click()
   await expect(page.getByRole('cell', { name: 'calendar:day:list' }).first()).toBeVisible()
   await expect(page.getByRole('cell', { name: 'system:user:list' })).toHaveCount(0)
   await expect(page.getByPlaceholder('如 calendar')).toHaveValue('calendar')
-  await views.getByRole('button', { name: '工作区', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: '查看动作：读取日期详情', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: '查看持有角色：读取日期详情', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('calendar:day:read')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
   await page.getByRole('button', { name: '重置', exact: true }).click()
-  await expect(page.getByRole('button', { name: '查看动作：读取用户', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'system:user:list' }).first()).toBeVisible()
   await expect(page.getByPlaceholder('如 calendar')).toHaveValue('')
 })

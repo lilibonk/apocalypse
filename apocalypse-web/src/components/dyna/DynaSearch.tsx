@@ -51,7 +51,7 @@ function SearchControl({
         value={value}
         onChange={(event) => onChange(field.name, event.target.value)}
         placeholder={field.placeholder ? t(field.placeholder) : undefined}
-        className="w-full sm:w-56"
+        className="h-9 w-full sm:w-48"
       />
     )
   }
@@ -60,14 +60,15 @@ function SearchControl({
     const [beginKey, endKey] = field.rangeKeys ?? [`${field.name}Begin`, `${field.name}End`]
     const labelText = t(field.label ?? field.placeholder ?? 'querySearch')
     return (
-      <div className="flex flex-wrap items-center gap-2" data-slot="search-date-range">
+      <div className="flex flex-wrap items-center gap-1.5" data-slot="search-date-range">
         <DatePicker
           id={id}
           mode="date"
           value={values[beginKey] ?? ''}
           onValueChange={(next) => onChange(beginKey, next)}
+          placeholder={t('rangeStart')}
           aria-label={`${labelText} (${t('rangeStart')})`}
-          className="w-36"
+          className="h-9 w-36"
         />
         <span className="text-muted-foreground" aria-hidden="true">
           –
@@ -77,8 +78,9 @@ function SearchControl({
           mode="date"
           value={values[endKey] ?? ''}
           onValueChange={(next) => onChange(endKey, next)}
+          placeholder={t('rangeEnd')}
           aria-label={`${labelText} (${t('rangeEnd')})`}
-          className="w-36"
+          className="h-9 w-36"
         />
       </div>
     )
@@ -117,7 +119,7 @@ function SearchControl({
       id={id}
       value={value}
       onValueChange={(next) => onChange(field.name, next)}
-      className="w-full sm:w-56"
+      className="h-9 w-full sm:w-44"
       placeholder={field.placeholder ? t(field.placeholder) : undefined}
     >
       <FieldOption value="">{t('全部')}</FieldOption>
@@ -152,8 +154,8 @@ export function DynaSearch({
       className={cn(
         'grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end',
         presentation === 'panel'
-          ? 'rounded-panel bg-muted/40 p-4'
-          : 'border-b border-border-subtle py-2',
+          ? 'rounded-panel border border-border-subtle bg-card p-4 shadow-surface'
+          : 'border-b border-border-subtle pb-3 pt-1',
       )}
       aria-label={t('queryFilters')}
       onSubmit={(event) => {
@@ -168,7 +170,7 @@ export function DynaSearch({
             'col-span-2 sm:col-auto',
             presentation === 'toolbar' && fields.length === 1
               ? 'flex items-center gap-3'
-              : 'space-y-2',
+              : 'flex flex-col gap-2',
           )}
         >
           <Label htmlFor={`${searchId}-${field.name}`}>
@@ -182,24 +184,26 @@ export function DynaSearch({
           />
         </div>
       ))}
-      <Button type="submit" variant="secondary">
-        <Search className="size-4" />
-        {t('查询')}
-      </Button>
-      <Button type="button" variant="ghost" onClick={onReset}>
-        {t('重置')}
-      </Button>
-      {collapsible && (
-        <Button
-          type="button"
-          variant="ghost"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? t('收起') : t('展开')}
-          {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+      <div className="col-span-2 flex shrink-0 flex-wrap items-center gap-2 sm:col-auto sm:ml-auto">
+        <Button type="submit" variant="secondary">
+          <Search className="size-4" />
+          {t('查询')}
         </Button>
-      )}
+        <Button type="button" variant="ghost" onClick={onReset}>
+          {t('重置')}
+        </Button>
+        {collapsible && (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? t('收起') : t('展开')}
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        )}
+      </div>
     </form>
   )
 }

@@ -21,6 +21,7 @@ type DatePickerProps = Omit<
   allowClear?: boolean
   min?: string
   max?: string
+  placeholder?: string
 }
 
 /** Local wall-clock strings only: selection never converts a business date to another time zone. */
@@ -32,6 +33,7 @@ export function DatePicker({
   allowClear = true,
   min = '0001-01-01',
   max = '9999-12-31',
+  placeholder,
   className,
   'aria-label': ariaLabel,
   ...triggerProps
@@ -123,7 +125,9 @@ export function DatePicker({
             className,
           )}
         >
-          <span className="truncate">{value ? value.replace('T', ' ') : label}</span>
+          <span className="truncate">
+            {value ? value.replace('T', ' ') : (placeholder ?? label)}
+          </span>
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </Popover.Trigger>

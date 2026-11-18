@@ -255,15 +255,15 @@ function OnlineUserWorkspace() {
           }
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="relative min-w-52 flex-1 sm:max-w-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
+          <div className="relative min-w-56 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               placeholder="搜索账号 / IP / 终端设备…"
               aria-label="搜索在线账号、IP 或设备"
-              className="h-8 pl-9 text-xs"
+              className="h-9 pl-9"
             />
           </div>
           {normalizedKeyword && (
@@ -271,14 +271,8 @@ function OnlineUserWorkspace() {
               <span className="tabular-nums">
                 匹配 {filteredData?.length ?? 0} / {data?.length ?? 0} 条会话
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => setKeyword('')}
-              >
-                <X className="size-3.5" aria-hidden="true" />
+              <Button type="button" variant="ghost" size="default" onClick={() => setKeyword('')}>
+                <X className="size-4" aria-hidden="true" />
                 重置
               </Button>
             </div>

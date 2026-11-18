@@ -23,22 +23,28 @@
 .odometer {
   display: inline-flex;
   font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 
 .odometer-track {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
+  line-height: 1.1;
 }
 
 .odometer-reel {
   position: relative;
   display: inline-block;
   overflow: hidden;
-  line-height: inherit;
-  vertical-align: baseline;
+  line-height: 1.1;
+  height: 1.1em;
+  vertical-align: middle;
 }
 
 .odometer-sizer {
+  display: block;
+  line-height: 1.1;
+  height: 1.1em;
   visibility: hidden;
 }
 
@@ -54,8 +60,11 @@
 }
 
 .odometer-strip > span {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 10%;
+  line-height: 1.1;
   text-align: center;
 }
 
