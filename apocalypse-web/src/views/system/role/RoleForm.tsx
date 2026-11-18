@@ -25,7 +25,9 @@ export function localizeRoleSchema(schema: DynaPageSchema, text: (key: string) =
         ? {
             ...action,
             label: text(
-              `authorization.${action.key === 'grant-permissions' ? 'permissions' : action.key === 'grant-navigation' ? 'navigation' : action.key === 'grant-users' ? 'members' : 'toggleRole'}`,
+              action.key === 'configure-role'
+                ? 'roleManage.configureRole'
+                : 'authorization.toggleRole',
             ),
           }
         : action,

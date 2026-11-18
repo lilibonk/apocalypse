@@ -4,12 +4,17 @@ import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/lib/api/client'
-import { RoleMemberEditor } from './RoleMemberEditor'
-import type { RoleMemberGraphNode } from './RoleMemberGraph'
+import { RoleMembersTab } from './RoleMembersTab'
 import type { RoleGraphMutationOptions } from './use-role-graph-mutation'
 
 type Effect = { setup: () => void | (() => void); deps: readonly unknown[] }
-type ButtonProps = { children?: ReactNode; onClick?: () => void; disabled?: boolean }
+type ButtonProps = {
+  children?: ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  'aria-label'?: string
+}
+
 const harness = vi.hoisted(() => ({
   auth: {
     authorizationEpoch: 1,
@@ -20,22 +25,13 @@ const harness = vi.hoisted(() => ({
     meLoaded: true,
     perms: ['system:role:list', 'system:role:edit', 'system:user:list'],
   },
-  listeners: new Set<
-    (state: {
-      sessionEpoch: number
-      meLoaded: boolean
-      perms: string[]
-      authorizationEpoch: number
-      allScopePerms: string[]
-    }) => void
-  >(),
+  listeners: new Set<(state: unknown) => void>(),
   states: [] as unknown[],
   stateIndex: 0,
   changed: false,
   effects: [] as Effect[],
   previousEffects: [] as Array<Effect & { cleanup?: () => void }>,
   buttons: [] as ButtonProps[],
-  graph: undefined as { nodes: RoleMemberGraphNode[]; onToggle?: (id: string) => void } | undefined,
   mutationOptions: undefined as
     RoleGraphMutationOptions<{ baselineUserIds: string[]; userIds: string[] }, void> | undefined,
   mutate: vi.fn(),
@@ -55,6 +51,7 @@ const harness = vi.hoisted(() => ({
     total: 1,
   },
 }))
+
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useState: (initial: unknown) => {
@@ -72,20 +69,29 @@ vi.mock('react', async (original) => ({
   },
   useLayoutEffect: (setup: Effect['setup'], deps: readonly unknown[] = []) =>
     harness.effects.push({ setup, deps }),
+  useMemo: (factory: () => unknown) => factory(),
 }))
+
 vi.mock('@/stores/auth', () => ({
   isAuthorizationCurrent: (epoch?: number) =>
     epoch === undefined || epoch === harness.auth.authorizationEpoch,
   assertAuthorizationCurrent: () => undefined,
   useAuthStore: Object.assign(() => harness.auth, {
     getState: () => harness.auth,
-    subscribe: (listener: (state: typeof harness.auth) => void) => {
+    subscribe: (listener: (state: unknown) => void) => {
       harness.listeners.add(listener)
       return () => harness.listeners.delete(listener)
     },
   }),
 }))
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts && 'name' in opts ? `${key}:${String(opts.name)}` : key,
+  }),
+}))
+
 vi.mock('@tanstack/react-query', async (original) => ({
   ...(await original<typeof import('@tanstack/react-query')>()),
   useQueryClient: () => harness.client,
@@ -104,6 +110,7 @@ vi.mock('@tanstack/react-query', async (original) => ({
     error: null,
   }),
 }))
+
 vi.mock('./role-permission.queries', () => {
   const resource = (kind: string, opening: { openId: string }) => ({
     options: { queryKey: [kind, opening.openId] },
@@ -120,12 +127,14 @@ vi.mock('./role-permission.queries', () => {
       resource('candidates', opening),
   }
 })
+
 vi.mock('./use-role-graph-mutation', () => ({
   useRoleGraphMutation: (options: typeof harness.mutationOptions) => {
     harness.mutationOptions = options
     return { mutate: harness.mutate, isPending: false }
   },
 }))
+
 vi.mock('@/lib/query/use-resource-denial', async (original) => ({
   ...(await original<typeof import('@/lib/query/use-resource-denial')>()),
   useResourceDenial: (options: { reset: () => void }) => ({
@@ -133,15 +142,27 @@ vi.mock('@/lib/query/use-resource-denial', async (original) => ({
     isCurrent: () => true,
   }),
 }))
-vi.mock('@/components/insights/InsightCard', () => ({
-  InsightCard: ({ children }: { children: ReactNode }) => <section>{children}</section>,
-}))
+
 vi.mock('@/components/ui/button', () => ({
   Button: (props: ButtonProps) => {
     harness.buttons.push(props)
     return <button disabled={props.disabled}>{props.children}</button>
   },
 }))
+
+vi.mock('@/components/ui/dialog', () => {
+  const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>
+  return {
+    ...Object.fromEntries(
+      ['DialogContent', 'DialogHeader', 'DialogTitle', 'DialogDescription', 'DialogFooter'].map(
+        (key) => [key, Container],
+      ),
+    ),
+    Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
+      open ? <div role="dialog">{children}</div> : null,
+  }
+})
+
 vi.mock('@/components/ui/alert-dialog', () => {
   const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {
@@ -153,34 +174,24 @@ vi.mock('@/components/ui/alert-dialog', () => {
         'AlertDialogDescription',
         'AlertDialogFooter',
         'AlertDialogCancel',
-        'AlertDialogAction',
       ].map((key) => [key, Container]),
     ),
+    AlertDialogAction: (props: ButtonProps) => {
+      harness.buttons.push(props)
+      return <button disabled={props.disabled}>{props.children}</button>
+    },
     AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
       open ? <div role="alertdialog">{children}</div> : null,
   }
 })
-vi.mock('./RolePermissionGraph', () => ({ RoleGraphPagination: () => null }))
-vi.mock('./RoleMemberGraph', () => ({
-  RoleMemberGraph: (props: NonNullable<typeof harness.graph>) => {
-    harness.graph = props
-    return (
-      <div>
-        {props.nodes.map((node) => (
-          <span key={node.id}>{node.member?.username ?? node.id}</span>
-        ))}
-      </div>
-    )
-  },
-}))
 
 const opening = {
   role: { id: 'role-1', roleName: 'Role', roleKey: 'role', status: 1, dataScope: 'ALL' },
   openId: 'editor',
   principalEpoch: 4,
 }
-const callbacks = { onClose: vi.fn(), onSaved: vi.fn(), onResourceDenied: vi.fn() }
-function renderEditor() {
+
+function renderTab() {
   let html: string
   let passes = 0
   do {
@@ -188,9 +199,8 @@ function renderEditor() {
     harness.stateIndex = 0
     harness.effects = []
     harness.buttons = []
-    harness.graph = undefined
-    html = renderToStaticMarkup(<RoleMemberEditor opening={opening} {...callbacks} />)
-    if (++passes > 12) throw new Error('Editor did not settle')
+    html = renderToStaticMarkup(<RoleMembersTab opening={opening} />)
+    if (++passes > 12) throw new Error('Member tab did not settle')
   } while (harness.changed)
   const previous = harness.previousEffects
   harness.previousEffects = harness.effects.map((effect, index) => {
@@ -208,13 +218,16 @@ function renderEditor() {
   previous.slice(harness.effects.length).forEach((effect) => effect.cleanup?.())
   return html
 }
-function click(label: string) {
+
+function click(labelOrAria: string) {
   const button = harness.buttons.find(
     (item) =>
-      item.children === label || (Array.isArray(item.children) && item.children.includes(label)),
+      item.children === labelOrAria ||
+      (Array.isArray(item.children) && item.children.includes(labelOrAria)) ||
+      item['aria-label'] === labelOrAria,
   )
-  expect(button, label).toBeDefined()
-  expect(button!.disabled, label).not.toBe(true)
+  expect(button, labelOrAria).toBeDefined()
+  expect(button!.disabled, labelOrAria).not.toBe(true)
   button!.onClick!()
 }
 
@@ -235,29 +248,28 @@ beforeEach(() => {
   harness.baselineFetching = false
   harness.client = new QueryClient()
   harness.mutate.mockReset()
-  Object.values(callbacks).forEach((callback) => callback.mockReset())
 })
 
-describe('member editor complete-baseline UI', () => {
-  it('never offers editing from a cached baseline while its fresh read is pending', () => {
+describe('RoleMembersTab complete-baseline table', () => {
+  it('never exposes editing from a cached baseline while its fresh read is pending', () => {
     harness.baselineFetching = true
-    expect(renderEditor()).toContain('roleMemberEdit.loading')
-    expect(harness.graph).toBeUndefined()
-    expect(harness.buttons.some((button) => button.children === 'roleMemberEdit.save')).toBe(false)
+    const html = renderTab()
+    expect(html).toContain('roleMemberEdit.loading')
+    expect(html).not.toContain('VisibleMember')
   })
 
-  it('adds and removes by node while preserving invisible baseline IDs in the reviewed submission', () => {
-    renderEditor()
+  it('adds a candidate via Add dialog, removes a visible member, and preserves invisible baseline IDs', () => {
+    renderTab()
     click('roleMemberEdit.candidates')
-    renderEditor()
-    harness.graph!.onToggle!('candidate')
-    renderEditor()
-    click('roleMemberEdit.visible')
-    renderEditor()
-    harness.graph!.onToggle!('visible')
-    renderEditor()
+    renderTab()
+    click('roleMemberEdit.addNamed:CandidatePrivateName')
+    renderTab()
+    click('authorization.done')
+    renderTab()
+    click('roleMemberEdit.removeNamed:VisibleMember')
+    renderTab()
     click('roleMemberEdit.review')
-    renderEditor()
+    renderTab()
     click('roleMemberEdit.save')
     expect(harness.mutate).toHaveBeenCalledWith({
       baselineUserIds: ['visible', 'hidden-outside-scope'],
@@ -265,40 +277,28 @@ describe('member editor complete-baseline UI', () => {
     })
   })
 
-  it('terminates an editor containing candidate profiles after revoke/regrant of user:list', () => {
-    renderEditor()
+  it('terminates loaded candidate profiles after revoke/regrant of system:user:list', () => {
+    renderTab()
     click('roleMemberEdit.candidates')
-    expect(renderEditor()).toContain('CandidatePrivateName')
+    expect(renderTab()).toContain('CandidatePrivateName')
     expect(harness.mutationOptions?.requiredPerms).toContain('system:user:list')
     harness.auth.perms = ['system:role:list', 'system:role:edit']
     harness.listeners.forEach((listener) => listener(harness.auth))
     harness.auth.perms.push('system:user:list')
     harness.listeners.forEach((listener) => listener(harness.auth))
-    const html = renderEditor()
+    const html = renderTab()
     expect(html).toContain('roleMemberEdit.denied')
     expect(html).not.toContain('CandidatePrivateName')
     expect(html).not.toContain('VisibleMember')
-    expect(harness.graph).toBeUndefined()
   })
 
-  it('requires explicit discard before leaving a dirty member graph', () => {
-    renderEditor()
-    harness.graph!.onToggle!('visible')
-    renderEditor()
-    click('roleMemberEdit.back')
-    expect(renderEditor()).toContain('role="alertdialog"')
-    expect(callbacks.onClose).not.toHaveBeenCalled()
-  })
-
-  it('clears editable member and candidate context after a write denial', () => {
-    renderEditor()
+  it('clears editable member and candidate state on 40300 write denial', () => {
+    renderTab()
     click('roleMemberEdit.candidates')
-    renderEditor()
+    renderTab()
     harness.mutationOptions!.onDenied!.handle(new ApiError(40300, '全部数据范围不足'))
-    const html = renderEditor()
-    expect(callbacks.onResourceDenied).toHaveBeenCalledOnce()
+    const html = renderTab()
     expect(html).toContain('roleMemberEdit.denied')
     expect(html).not.toContain('CandidatePrivateName')
-    expect(harness.graph).toBeUndefined()
   })
 })

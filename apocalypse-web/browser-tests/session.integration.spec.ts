@@ -188,22 +188,19 @@ async function revalidateAuthorization(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: /^账户菜单：/ })).toBeVisible()
 }
 
-/** Only normal editor controls can close this dialog; snapshot replacement may close it first. */
-async function closeBusinessDialog(dialog: Locator): Promise<void> {
-  const back = dialog.getByRole('button', { name: '返回角色', exact: true })
-  await expect.poll(async () => !(await dialog.isVisible()) || (await back.isVisible())).toBe(true)
-  if (await dialog.isVisible()) {
+/** Returns from RoleWorkbench to the role table unless authorization revalidation already closed it. */
+async function returnToRoleList(page: Page): Promise<void> {
+  const back = page.getByRole('button', { name: '返回角色列表', exact: true })
+  if (await back.isVisible().catch(() => false)) {
     try {
       await back.click({ timeout: 2000 })
     } catch {
-      // A successful /me change can unmount the old editor between visibility and click.
-      await expect(dialog).toBeHidden()
+      await expect(back).toBeHidden()
     }
   }
-  await expect(dialog).toBeHidden()
 }
 
-/** Business authority is granted separately from navigation, through the full baseline editor. */
+/** Business authority is granted separately from navigation, through the full baseline workbench. */
 async function setUserListGrant(page: Page, roleRow: Locator, selected: boolean): Promise<string> {
   const initial = page.waitForResponse(
     (response) =>
@@ -211,7 +208,7 @@ async function setUserListGrant(page: Page, roleRow: Locator, selected: boolean)
       response.request().method() === 'GET' &&
       response.status() === 200,
   )
-  await roleRow.getByRole('button', { name: '业务权限', exact: true }).click()
+  await roleRow.getByRole('button', { name: '授权配置', exact: true }).click()
   const baseline = await responseData(await initial)
   if (
     !baseline ||
@@ -221,25 +218,24 @@ async function setUserListGrant(page: Page, roleRow: Locator, selected: boolean)
   )
     throw new Error('Role permission baseline identity missing')
   const roleId = baseline.roleId
-  const dialog = page.getByRole('dialog', { name: '业务权限', exact: true })
-  await dialog.getByRole('button', { name: '编辑业务授权', exact: true }).click()
-  if (selected) await dialog.getByRole('button', { name: '候选权限', exact: true }).click()
-  await dialog
+  await page
     .getByRole('textbox', { name: '搜索权限名称或标识', exact: true })
     .fill('system:user:list')
-  await dialog.getByRole('button', { name: '查询', exact: true }).click()
-  const entry = dialog
-    .getByRole('listitem')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  const row = page
+    .getByRole('row')
     .filter({ has: page.getByText('system:user:list', { exact: true }) })
-  await expect(entry).toHaveCount(1)
-  await entry.getByRole('button', { name: selected ? /^添加授权：/ : /^移除授权：/ }).click()
-  await dialog.getByRole('button', { name: '审阅变更', exact: true }).click()
+  await expect(row).toHaveCount(1)
+  const checkbox = row.getByRole('checkbox')
+  if (selected) await checkbox.check()
+  else await checkbox.uncheck()
+  await page.getByRole('button', { name: '审阅并保存', exact: true }).click()
   const saved = page.waitForResponse(
     (response) =>
       endpoint(response, `/system/roles/${roleId}/permissions`) &&
       response.request().method() === 'PUT',
   )
-  await dialog.getByRole('button', { name: '保存授权', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '保存授权', exact: true }).click()
   const response = await saved
   await responseData(response)
   const submitted: unknown = response.request().postDataJSON()
@@ -253,49 +249,46 @@ async function setUserListGrant(page: Page, roleRow: Locator, selected: boolean)
   expect(Array.isArray(submitted.upsert) ? submitted.upsert.length : -1).toBe(selected ? 1 : 0)
   expect(stringIds(submitted.remove)).toHaveLength(selected ? 0 : 1)
   await revalidateAuthorization(page)
-  await closeBusinessDialog(dialog)
+  await returnToRoleList(page)
   return roleId
 }
 
 async function readRoleNavigation(page: Page, roleRow: Locator, roleId: string): Promise<string[]> {
+  await roleRow.getByRole('button', { name: '授权配置', exact: true }).click()
   const initial = page.waitForResponse(
     (response) =>
       endpoint(response, `/system/roles/${roleId}/navigation`) &&
       response.request().method() === 'GET' &&
       response.status() === 200,
   )
-  await roleRow.getByRole('button', { name: '导航分配', exact: true }).click()
+  await page.getByRole('tab', { name: /导航分配/ }).click()
   const value = await responseData(await initial)
   if (!value || typeof value !== 'object' || !('navigationIds' in value))
     throw new Error('Navigation baseline missing')
   const ids = stringIds(value.navigationIds)
-  const dialog = page.getByRole('dialog', { name: '导航分配', exact: true })
-  await dialog.getByRole('button', { name: '返回图谱', exact: true }).click()
-  await expect(dialog).toBeHidden()
+  await returnToRoleList(page)
   return ids
 }
 
 async function grantUserNavigation(page: Page, roleRow: Locator, roleId: string): Promise<void> {
-  await roleRow.getByRole('button', { name: '导航分配', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '导航分配', exact: true })
-  await dialog
-    .getByRole('searchbox', { name: '搜索导航名称、路径或 ID…', exact: true })
+  await roleRow.getByRole('button', { name: '授权配置', exact: true }).click()
+  await page.getByRole('tab', { name: /导航分配/ }).click()
+  await page
+    .getByRole('textbox', { name: '搜索导航名称、路径或 ID…', exact: true })
     .fill('用户管理')
-  const entry = dialog
-    .getByRole('listitem')
-    .filter({ has: page.getByText('用户管理', { exact: true }) })
-  await expect(entry).toHaveCount(1)
-  await entry.getByRole('button', { name: '添加授权', exact: true }).click()
-  await dialog.getByRole('button', { name: '审阅关联变更', exact: true }).click()
+  const row = page.getByRole('row').filter({ has: page.getByText('用户管理', { exact: true }) })
+  await expect(row).toHaveCount(1)
+  await row.getByRole('checkbox').check()
+  await page.getByRole('button', { name: '审阅并保存', exact: true }).click()
   const saved = page.waitForResponse(
     (response) =>
       endpoint(response, `/system/roles/${roleId}/navigation`) &&
       response.request().method() === 'PUT',
   )
-  await dialog.getByRole('button', { name: '确认并保存关联', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '保存导航', exact: true }).click()
   await responseData(await saved)
-  await expect(dialog).toBeHidden()
   await revalidateAuthorization(page)
+  await returnToRoleList(page)
 }
 
 async function assignRoleMember(
@@ -304,24 +297,25 @@ async function assignRoleMember(
   roleId: string,
   username: string,
 ): Promise<void> {
+  await roleRow.getByRole('button', { name: '授权配置', exact: true }).click()
   const initial = page.waitForResponse(
     (response) =>
       endpoint(response, `/system/roles/${roleId}/user-ids`) &&
       response.request().method() === 'GET' &&
       response.status() === 200,
   )
-  await roleRow.getByRole('button', { name: '角色成员', exact: true }).click()
+  await page.getByRole('tab', { name: /角色成员/ }).click()
   const baseline = stringIds(await responseData(await initial))
-  const dialog = page.getByRole('dialog', { name: '角色成员', exact: true })
-  await dialog.getByRole('button', { name: '添加成员', exact: true }).click()
-  await dialog.getByRole('textbox', { name: '搜索用户名或显示名称', exact: true }).fill(username)
+  await page.getByRole('button', { name: '添加成员', exact: true }).click()
+  const addDialog = page.getByRole('dialog', { name: '添加成员', exact: true })
+  await addDialog.getByRole('textbox', { name: '搜索用户名或显示名称', exact: true }).fill(username)
   const candidateResponse = page.waitForResponse(
     (response) =>
       endpoint(response, '/system/users/page') &&
       new URL(response.url()).searchParams.get('keyword') === username &&
       response.status() === 200,
   )
-  await dialog.getByRole('button', { name: '查找成员', exact: true }).click()
+  await addDialog.getByRole('button', { name: '查找成员', exact: true }).click()
   const candidates = await responseData(await candidateResponse)
   if (
     !candidates ||
@@ -341,23 +335,27 @@ async function assignRoleMember(
     typeof candidate.id !== 'string'
   )
     throw new Error('Member candidate identity missing')
-  const entry = dialog
+  const entry = addDialog
     .getByRole('listitem')
     .filter({ has: page.getByText(username, { exact: true }) })
   await entry.getByRole('button', { name: '添加授权', exact: true }).click()
-  await dialog.getByRole('button', { name: '审核变更', exact: true }).click()
+  await addDialog.getByRole('button', { name: '完成', exact: true }).click()
+  await page.getByRole('button', { name: '审核变更', exact: true }).click()
   const saved = page.waitForResponse(
     (response) =>
       endpoint(response, `/system/roles/${roleId}/users`) && response.request().method() === 'PUT',
   )
-  await dialog.getByRole('button', { name: '保存成员关系', exact: true }).click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: '保存成员关系', exact: true })
+    .click()
   const response = await saved
   await responseData(response)
   expect(stringIds(response.request().postDataJSON()).sort()).toEqual(
     [...new Set([...baseline, candidate.id])].sort(),
   )
-  await expect(dialog).toBeHidden()
   await revalidateAuthorization(page)
+  await returnToRoleList(page)
 }
 
 test('temporary certificate pin accepts its origin and a wrong pin is rejected', async ({

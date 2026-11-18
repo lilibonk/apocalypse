@@ -69,12 +69,12 @@ export function AppLayout() {
   }, [])
 
   const isStageRoute = useMemo(() => {
-    if (location.pathname === '/system/role' || location.pathname === '/system/dept') {
+    if (location.pathname === '/system/dept') {
       return true
     }
     const matched = flattenMenuRoutes(menus).find((route) => route.path === location.pathname)
     const comp = matched?.component?.replace(/^\/+|\/+$/g, '').replace(/\/index$/, '')
-    return comp === 'system/role' || comp === 'system/dept'
+    return comp === 'system/dept'
   }, [location.pathname, menus])
 
   const collapsed = userCollapsed ?? (narrowDesktop && isStageRoute)

@@ -128,24 +128,19 @@ test('with motion off the submit button never changes geometry', async ({ page }
   await expect(page.getByRole('button', { name: '登录中…' })).toBeVisible()
 })
 
-test('role page without a requested role opens the overview, drills into a chain and returns', async ({
+test('role page opens the unified role list, drills into the workbench and returns', async ({
   page,
 }) => {
   await page.goto('/test-fixtures/role-resize.html?overview')
-  const roleButton = page.getByRole('button', { name: 'Resize role 启用', exact: true })
-  await expect(roleButton).toBeVisible()
-  await expect(page.locator('[data-topology-domain="identity_org"]')).toBeVisible()
-  await expect(page.getByRole('button', { name: '编辑业务授权', exact: true })).toHaveCount(0)
-  await roleButton.focus()
-  await expect(page.locator('[data-topology-role="role-1"]')).toHaveAttribute(
-    'data-related',
-    'true',
-  )
-  await roleButton.click()
-  await expect(page.getByRole('group', { name: '「Resize role」的授权链' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^角色成员.*0$/ })).toBeVisible()
-  await page.getByRole('button', { name: '权限全景', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Resize role 启用', exact: true })).toBeVisible()
+  await expect(page.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Resize role', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '授权配置', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Resize role' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /业务权限/ })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /导航分配/ })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /角色成员/ })).toBeVisible()
+  await page.getByRole('button', { name: '返回角色列表', exact: true }).click()
+  await expect(page.getByRole('table')).toBeVisible()
 })
 
 test('config workspace keeps a multi-item draft, refuses a stale batch and rebases on request', async ({

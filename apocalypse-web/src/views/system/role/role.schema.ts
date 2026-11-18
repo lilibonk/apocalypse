@@ -83,26 +83,9 @@ export default definePageSchema({
   rowActions: [
     {
       kind: 'custom',
-      key: 'grant-permissions',
-      label: '业务权限',
-      icon: 'permissions',
+      key: 'configure-role',
+      label: '授权配置',
       perm: 'system:role:list',
-    },
-    {
-      kind: 'custom',
-      key: 'grant-navigation',
-      label: '分配导航',
-      icon: 'navigation',
-      perm: 'system:role:edit',
-      requiresAllScope: true,
-    },
-    {
-      kind: 'custom',
-      key: 'grant-users',
-      label: '分配用户',
-      icon: 'members',
-      perm: 'system:role:edit',
-      requiresAllScope: true,
     },
     { kind: 'edit', perm: 'system:role:edit', requiresAllScope: true },
     {

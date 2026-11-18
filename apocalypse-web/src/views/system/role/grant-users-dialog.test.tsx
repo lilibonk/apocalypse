@@ -1,18 +1,24 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { GrantUsersDialog } from './index'
 import type { RolePermissionOpening } from './role-permission.model'
+
 const { editor } = vi.hoisted(() => ({ editor: vi.fn() }))
-vi.mock('./RoleMemberEditor', () => ({
-  RoleMemberEditor: (props: unknown) => {
+
+vi.mock('./RoleMembersTab', () => ({
+  RoleMembersTab: (props: unknown) => {
     editor(props)
     return <div data-testid="shared-member-editor" />
   },
 }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: (selector: (state: { sessionEpoch: number }) => number) =>
-    selector({ sessionEpoch: 8 }),
+  useAuthStore: Object.assign(
+    (selector: (state: { sessionEpoch: number; authorizationEpoch: number }) => unknown) =>
+      selector({ sessionEpoch: 8, authorizationEpoch: 1 }),
+    { subscribe: () => () => {} },
+  ),
 }))
 vi.mock('@/components/dyna', () => ({
   DynaPage: () => null,
@@ -28,9 +34,11 @@ vi.mock('@/components/ui/dialog', () => {
     ]),
   )
 })
+
 beforeEach(() => editor.mockClear())
+
 describe('list member assignment entry', () => {
-  it('uses the same complete-baseline editor in list presentation', () => {
+  it('mounts RoleMembersTab with role opening metadata', () => {
     expect(
       renderToStaticMarkup(
         <GrantUsersDialog
@@ -40,10 +48,10 @@ describe('list member assignment entry', () => {
       ),
     ).toContain('shared-member-editor')
     expect(editor.mock.calls[0]![0]).toMatchObject({
-      presentation: 'list',
       opening: { principalEpoch: 8, role: { id: '9223372036854775801', roleName: '审计员' } },
     })
   })
+
   it('gives every reopened dialog a fresh private baseline identity', () => {
     const render = () =>
       renderToStaticMarkup(

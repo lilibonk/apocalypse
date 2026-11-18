@@ -2,11 +2,11 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { ApiError } from '@/lib/api/client'
-import { RoleBusinessPermissions } from './RoleBusinessPermissions'
-import type { RoleGrantsBaseline, RoleGrant, roleGrantSubmission } from './role-grant.model'
 import type { PermissionDefinition } from '../permission/permission.types'
-import type { GrantNode } from './RoleGrantGraph'
+import { RolePermissionsTab } from './RolePermissionsTab'
+import type { RoleGrant, RoleGrantsBaseline, roleGrantSubmission } from './role-grant.model'
 import type { RoleGraphMutationOptions } from './use-role-graph-mutation'
 
 type Effect = { setup: () => void | (() => void); deps: readonly unknown[] }
@@ -16,6 +16,19 @@ type ButtonProps = {
   disabled?: boolean
   'aria-label'?: string
 }
+type InputProps = {
+  type?: string
+  checked?: boolean
+  disabled?: boolean
+  onChange?: () => void
+  'aria-label'?: string
+}
+type FieldsProps = {
+  grant: RoleGrant
+  disabled: boolean
+  onChange: (patch: Partial<RoleGrant>) => void
+}
+
 const h = vi.hoisted(() => ({
   auth: {
     sessionEpoch: 4,
@@ -31,12 +44,8 @@ const h = vi.hoisted(() => ({
   effects: [] as Effect[],
   previous: [] as Array<Effect & { cleanup?: () => void }>,
   buttons: [] as ButtonProps[],
-  graph: undefined as
-    | { nodes: GrantNode[]; onToggle: (id: string) => void; onSelect: (id: string) => void }
-    | undefined,
-  fields: undefined as
-    | { grant: RoleGrant; disabled: boolean; onChange: (patch: Partial<RoleGrant>) => void }
-    | undefined,
+  inputs: [] as InputProps[],
+  fields: undefined as FieldsProps | undefined,
   mutation: undefined as
     RoleGraphMutationOptions<ReturnType<typeof roleGrantSubmission>, void> | undefined,
   mutate: vi.fn(),
@@ -47,6 +56,7 @@ const h = vi.hoisted(() => ({
     { list: PermissionDefinition[]; total: number; page: number; size: number } | undefined,
   fetching: false,
 }))
+
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useState: (initial: unknown) => {
@@ -63,7 +73,9 @@ vi.mock('react', async (original) => ({
   },
   useLayoutEffect: (setup: Effect['setup'], deps: readonly unknown[] = []) =>
     h.effects.push({ setup, deps }),
+  useMemo: (factory: () => unknown) => factory(),
 }))
+
 vi.mock('@/stores/auth', () => ({
   isAuthorizationCurrent: (epoch?: number) =>
     h.auth.meLoaded && (epoch === undefined || epoch === h.auth.authorizationEpoch),
@@ -76,9 +88,15 @@ vi.mock('@/stores/auth', () => ({
     },
   }),
 }))
+
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { resolvedLanguage: 'en' } }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts && 'name' in opts ? `${key}:${String(opts.name)}` : key,
+    i18n: { resolvedLanguage: 'en' },
+  }),
 }))
+
 vi.mock('@tanstack/react-query', async (original) => ({
   ...(await original<typeof import('@tanstack/react-query')>()),
   useQueryClient: () => h.client,
@@ -90,6 +108,7 @@ vi.mock('@tanstack/react-query', async (original) => ({
     error: null,
   }),
 }))
+
 vi.mock('./role-grant.queries', () => {
   const resource = (kind: string, opening: { openId: string }) => ({
     options: { queryKey: [kind, opening.openId] },
@@ -99,17 +118,19 @@ vi.mock('./role-grant.queries', () => {
     disposeIfInactive: () => false,
   })
   return {
-    GRANT_PAGE_SIZE: 4,
+    GRANT_PAGE_SIZE: 50,
     createRoleGrantQuery: (opening: { openId: string }) => resource('baseline', opening),
     createGrantCandidatesQuery: (opening: { openId: string }) => resource('candidates', opening),
   }
 })
+
 vi.mock('./use-role-graph-mutation', () => ({
   useRoleGraphMutation: (options: typeof h.mutation) => {
     h.mutation = options
     return { mutate: h.mutate, isPending: false }
   },
 }))
+
 vi.mock('@/lib/query/use-resource-denial', async (original) => ({
   ...(await original<typeof import('@/lib/query/use-resource-denial')>()),
   useResourceDenial: (options: { reset: () => void }) => ({
@@ -117,15 +138,34 @@ vi.mock('@/lib/query/use-resource-denial', async (original) => ({
     isCurrent: () => true,
   }),
 }))
-vi.mock('@/components/insights/InsightCard', () => ({
-  InsightCard: ({ children }: { children: ReactNode }) => <section>{children}</section>,
-}))
+
 vi.mock('@/components/ui/button', () => ({
   Button: (props: ButtonProps) => {
     h.buttons.push(props)
     return <button disabled={props.disabled}>{props.children}</button>
   },
 }))
+
+vi.mock('@/components/ui/input', () => ({
+  Input: (props: InputProps) => {
+    h.inputs.push(props)
+    return <input type={props.type} />
+  },
+}))
+
+vi.mock('@/components/ui/dialog', () => {
+  const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>
+  return {
+    ...Object.fromEntries(
+      ['DialogContent', 'DialogHeader', 'DialogTitle', 'DialogDescription', 'DialogFooter'].map(
+        (key) => [key, Container],
+      ),
+    ),
+    Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
+      open ? <div role="dialog">{children}</div> : null,
+  }
+})
+
 vi.mock('@/components/ui/alert-dialog', () => {
   const Container = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {
@@ -137,28 +177,19 @@ vi.mock('@/components/ui/alert-dialog', () => {
         'AlertDialogDescription',
         'AlertDialogFooter',
         'AlertDialogCancel',
-        'AlertDialogAction',
       ].map((key) => [key, Container]),
     ),
+    AlertDialogAction: (props: ButtonProps) => {
+      h.buttons.push(props)
+      return <button disabled={props.disabled}>{props.children}</button>
+    },
     AlertDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
       open ? <div role="alertdialog">{children}</div> : null,
   }
 })
-vi.mock('./RolePermissionGraph', () => ({ RoleGraphPagination: () => null }))
-vi.mock('./RoleGrantGraph', () => ({
-  RoleGrantGraph: (props: NonNullable<typeof h.graph>) => {
-    h.graph = props
-    return (
-      <div data-testid="grant-graph">
-        {props.nodes.map((node) => (
-          <span key={node.id}>{node.definition?.name ?? node.id}</span>
-        ))}
-      </div>
-    )
-  },
-}))
+
 vi.mock('./RoleGrantFields', () => ({
-  RoleGrantFields: (props: NonNullable<typeof h.fields>) => {
+  RoleGrantFields: (props: FieldsProps) => {
     h.fields = props
     return <div data-testid="grant-fields" />
   },
@@ -180,6 +211,7 @@ const definition = (id: string): PermissionDefinition => ({
   registered: true,
   referenceRoleCount: '1',
 })
+
 const grant = (permissionId: string): RoleGrant => ({
   permissionId,
   enabled: true,
@@ -187,26 +219,33 @@ const grant = (permissionId: string): RoleGrant => ({
   validFrom: null,
   validUntil: null,
 })
+
 const opening = {
   role: { id: 'role-1', roleName: 'Role', roleKey: 'role', status: 1, dataScope: 'DEPT' },
   principalEpoch: 4,
   openId: 'opening',
 }
-const callbacks = { onEditingChange: vi.fn(), onClose: vi.fn() }
-function render(presentation: 'graph' | 'list' = 'graph') {
-  let html: string,
-    passes = 0
+
+function render(
+  callbacks: { onDirtyChange?: (dirty: boolean) => void; onCountChange?: (n: number) => void } = {},
+) {
+  let html: string
+  let passes = 0
   do {
     h.changed = false
     h.index = 0
     h.buttons = []
+    h.inputs = []
     h.effects = []
-    h.graph = undefined
     h.fields = undefined
     html = renderToStaticMarkup(
-      <RoleBusinessPermissions opening={opening} presentation={presentation} {...callbacks} />,
+      <RolePermissionsTab
+        opening={opening}
+        onDirtyChange={callbacks.onDirtyChange}
+        onCountChange={callbacks.onCountChange}
+      />,
     )
-    if (++passes > 15) throw new Error('Draft did not settle')
+    if (++passes > 15) throw new Error('Tab state did not settle')
   } while (h.changed)
   const previous = h.previous
   h.previous = h.effects.map((effect, index) => {
@@ -224,17 +263,19 @@ function render(presentation: 'graph' | 'list' = 'graph') {
   previous.slice(h.effects.length).forEach((effect) => effect.cleanup?.())
   return html
 }
-function click(label: string) {
+
+function clickButton(match: string) {
   const button = h.buttons.find(
     (item) =>
-      item.children === label ||
-      (Array.isArray(item.children) && item.children.includes(label)) ||
-      item['aria-label'] === label,
+      item.children === match ||
+      (Array.isArray(item.children) && item.children.includes(match)) ||
+      item['aria-label']?.includes(match),
   )
-  expect(button, label).toBeDefined()
-  expect(button!.disabled, label).not.toBe(true)
+  expect(button, `button matching "${match}"`).toBeDefined()
+  expect(button!.disabled, `button "${match}" disabled`).not.toBe(true)
   button!.onClick!()
 }
+
 beforeEach(() => {
   h.auth = {
     sessionEpoch: 4,
@@ -258,34 +299,30 @@ beforeEach(() => {
     ],
   }
   h.definitions = [definition('new')]
-  h.candidatePage = { list: h.definitions, total: h.definitions.length, page: 1, size: 4 }
+  h.candidatePage = { list: h.definitions, total: h.definitions.length, page: 1, size: 50 }
   h.client = new QueryClient()
   h.mutate.mockClear()
-  callbacks.onClose.mockClear()
-  callbacks.onEditingChange.mockClear()
 })
-describe('shared complete permission grant editor', () => {
-  it('does not open an editable draft from a cached baseline during its fresh fetch', () => {
+
+describe('RolePermissionsTab inline matrix', () => {
+  it('never renders an editable matrix from stale baseline while fetching is true', () => {
     h.fetching = true
-    render()
-    expect(
-      h.buttons.find(
-        (button) =>
-          Array.isArray(button.children) && button.children.includes('authorization.edit'),
-      )?.disabled,
-    ).toBe(true)
-    expect(h.graph?.nodes.map((node) => node.id)).toEqual(['opaque', 'known'])
-    expect(callbacks.onEditingChange).toHaveBeenLastCalledWith(false)
+    const html = render()
+    expect(html).toContain('authorization.readLoading')
+    expect(html).not.toContain('system:known:read')
   })
-  it('adds a candidate, configures its fields and submits a touched delta preserving opaque grants', () => {
-    render()
-    click('authorization.edit')
-    render()
-    click('authorization.candidates')
-    render()
-    h.graph!.onToggle('new')
-    render()
-    h.graph!.onSelect('new')
+
+  it('renders candidate matrix inline, configures rule via dialog, and submits touched delta', () => {
+    const onDirtyChange = vi.fn()
+    render({ onDirtyChange })
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+    const html = render()
+    expect(html).toContain('system:new:read')
+    expect(html).toContain('system:known:read')
+    expect(html).toContain('authorization.addNamed:Definition new')
+
+    clickButton('authorization.configureWindow：Definition known')
     render()
     expect(h.fields?.disabled).toBe(false)
     h.fields!.onChange({
@@ -294,15 +331,15 @@ describe('shared complete permission grant editor', () => {
       validFrom: '2026-10-18T00:00:00Z',
     })
     render()
-    click('authorization.review')
+    clickButton('authorization.saveReview')
     render()
-    click('authorization.save')
+    clickButton('authorization.save')
     expect(h.mutate).toHaveBeenCalledExactlyOnceWith({
       expectedRevision: '12',
       expectedCatalogRevision: '9',
       upsert: [
         {
-          ...grant('new'),
+          ...grant('known'),
           scopeOverride: 'DEPT_AND_CHILDREN',
           enabled: false,
           validFrom: '2026-10-18T00:00:00Z',
@@ -311,79 +348,39 @@ describe('shared complete permission grant editor', () => {
       remove: [],
     })
   })
-  it('allows explicit removal of opaque grants without catalog access and keeps the remaining baseline', () => {
-    h.auth.perms = ['system:role:list', 'system:role:edit']
-    render()
-    click('authorization.edit')
-    render()
-    h.graph!.onToggle('opaque')
-    render()
-    click('authorization.review')
-    render()
-    click('authorization.save')
-    expect(h.mutate).toHaveBeenCalledWith({
-      expectedRevision: '12',
-      expectedCatalogRevision: '9',
-      upsert: [],
-      remove: ['opaque'],
-    })
-  })
-  it('keeps deprecated grants removable but their configuration read only', () => {
+
+  it('disables configuration fields for deprecated grants while still allowing revocation', () => {
     h.baseline!.grants[1]!.definition = { ...definition('known'), lifecycle: 'DEPRECATED' }
-    render()
-    click('authorization.edit')
-    render()
-    h.graph!.onSelect('known')
-    render()
-    expect(h.fields?.disabled).toBe(true)
+    const html = render()
+    expect(html).toContain('authorization.DEPRECATED')
+    const configBtn = h.buttons.find((b) =>
+      b['aria-label']?.includes('authorization.configureWindow：Definition known'),
+    )
+    expect(configBtn?.disabled).toBe(true)
   })
-  it('requires explicit discard for a dirty draft and blocks saving after a server conflict', () => {
+
+  it('blocks saving after server conflict 40900 and preserves alert', () => {
     render()
-    click('authorization.edit')
-    render()
-    h.graph!.onToggle('known')
-    render()
-    click('authorization.close')
-    expect(render()).toContain('role="alertdialog"')
-    expect(callbacks.onClose).not.toHaveBeenCalled()
     h.mutation!.onError!(new ApiError(40900, 'conflict'), {
       expectedRevision: '12',
       expectedCatalogRevision: '9',
       upsert: [],
       remove: [],
     })
-    expect(render()).toContain('authorization.conflict')
-    expect(
-      h.buttons.find(
-        (button) =>
-          Array.isArray(button.children) && button.children.includes('authorization.review'),
-      )?.disabled,
-    ).toBe(true)
+    const html = render()
+    expect(html).toContain('authorization.conflict')
+    expect(html).toContain('authorization.reload')
   })
-  it('permanently clears this draft on a rapid ALL scope revoke/regrant', () => {
-    render()
-    click('authorization.edit')
+
+  it('locks and resets to read-only immediately when ALL-scope edit permission is revoked', () => {
     render()
     h.auth.allScopePerms = []
     h.listeners.forEach((listener) => listener(h.auth))
-    h.auth.allScopePerms = ['system:role:edit']
-    h.listeners.forEach((listener) => listener(h.auth))
     const html = render()
-    expect(html).toContain('authorization.denied')
-    expect(html).not.toContain('Definition known')
-    expect(h.graph).toBeUndefined()
-  })
-  it('offers the same add/remove workflow in list presentation', () => {
-    render('list')
-    click('authorization.edit')
-    const html = render('list')
-    expect(html).not.toContain('grant-graph')
-    expect(html).toContain('system:known:read')
-    click('authorization.remove')
-    render('list')
-    click('authorization.review')
-    render('list')
-    click('authorization.save')
-    expect(h.mutate.mock.calls[0]![0].remove).toHaveLength(1)
+    expect(html).toContain('authorization.readOnlyNotice')
+    const windowBtn = h.buttons.find((b) =>
+      b['aria-label']?.includes('authorization.configureWindow：Definition known'),
+    )
+    expect(windowBtn?.disabled).toBe(true)
   })
 })

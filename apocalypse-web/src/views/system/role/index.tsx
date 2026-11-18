@@ -1,40 +1,31 @@
-/** Role workbench escapes DynaLayer for related navigation, permission grants and members.
- * Standard role CRUD remains schema based; list and graph consume identical guarded editors. */
-import { List, Network } from 'lucide-react'
-import { useCallback, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+/**
+ * 角色管理：
+ * - 默认呈现单一主表（角色列表 CRUD + 授权配置入口）
+ * - 点击“授权配置”或带角色路由意图进入时，在同一路由全宽钻取至 RoleWorkbench（业务权限 / 导航菜单 / 角色成员）
+ */
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
 
 import { DynaPage } from '@/components/dyna'
-import { useEntityIntent } from '@/components/navigation'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { useAuthStore } from '@/stores/auth'
-import { useDesktopViewport } from '@/hooks/useDesktopViewport'
+import { LivingContextBar, useEntityIntent } from '@/components/navigation'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
-import schema from './role.schema'
+import { useAuthStore } from '@/stores/auth'
+
 import { localizeRoleSchema, RoleForm } from './RoleForm'
-import { RolePermissionWorkspace } from './RolePermissionWorkspace'
-import { RolePermissionEditor } from './RolePermissionEditor'
-import { RoleMemberEditor } from './RoleMemberEditor'
-import { RoleBusinessPermissions } from './RoleBusinessPermissions'
+import { RoleMembersTab } from './RoleMembersTab'
+import { RoleWorkbench, type WorkbenchTab } from './RoleWorkbench'
+import { canReadRoleWorkspace, type RolePermissionTarget } from './role-permission.model'
 import { RoleGraphCrudPanel } from './role-graph-crud'
-import { invalidateRoleGraphQueries } from './role-graph.operations'
-import {
-  canReadRoleWorkspace,
-  type RolePermissionOpening,
-  type RolePermissionTarget,
-} from './role-permission.model'
 import type { RoleGraphCommand } from './role-graph-crud.model'
+import { invalidateRoleGraphQueries } from './role-graph.operations'
+import schema from './role.schema'
 
 type Row = Record<string, unknown>
+
 function targetOf(row: Row): RolePermissionTarget {
   return {
     id: String(row.id ?? ''),
@@ -51,27 +42,14 @@ function targetOf(row: Row): RolePermissionTarget {
       : {}),
   }
 }
-function RelationshipDialog({ title, children }: { title: string; children: ReactNode }) {
-  const { t } = useTranslation('system')
-  return (
-    <Dialog open>
-      <DialogContent
-        className="sm:max-w-6xl"
-        showCloseButton={false}
-        onEscapeKeyDown={(event) => event.preventDefault()}
-        onInteractOutside={(event) => event.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{t('authorization.dialogHint')}</DialogDescription>
-        </DialogHeader>
-        {children}
-      </DialogContent>
-    </Dialog>
-  )
+
+function normalizeTab(raw: string | null | undefined): WorkbenchTab {
+  if (raw === 'navigation' || raw === 'menus') return 'navigation'
+  if (raw === 'members') return 'members'
+  return 'permissions'
 }
 
-/** Full assignment baseline is read by the shared editor, including profiles outside the readable scope. */
+/** Compat dialog for caller tests / direct member opening without leaving another view. */
 export function GrantUsersDialog({
   role,
   onClose,
@@ -81,21 +59,20 @@ export function GrantUsersDialog({
 }) {
   const { t } = useTranslation('system')
   const epoch = useAuthStore((state) => state.sessionEpoch)
-  const [opening] = useState<RolePermissionOpening>(() => ({
+  const [opening] = useState(() => ({
     role: targetOf(role),
     principalEpoch: epoch,
     openId: crypto.randomUUID(),
   }))
   return (
-    <RelationshipDialog title={t('authorization.members')}>
-      <RoleMemberEditor
-        opening={opening}
-        presentation="list"
-        onClose={onClose}
-        onSaved={onClose}
-        onResourceDenied={onClose}
-      />
-    </RelationshipDialog>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{t('authorization.members')}</DialogTitle>
+        </DialogHeader>
+        <RoleMembersTab opening={opening} />
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -109,148 +86,182 @@ export default function RolePage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
   return <RolePageContent key={authorizationEpoch} />
 }
+
 function RolePageContent() {
   const { t } = useTranslation('system')
   const auth = useAuthStore()
   const client = useQueryClient()
-  const desktop = useDesktopViewport()
   useRealtimePulse({ queryKeys: ROLE_PULSE_KEYS })
-  const canInspectGraph = desktop && canReadRoleWorkspace(auth)
-  // One description for both views, so switching never changes the header.
+
   const localizedSchema = useMemo(
-    () => ({ ...localizeRoleSchema(schema, t), description: t('roleManage.description') }),
+    () => ({ ...localizeRoleSchema(schema, t), description: undefined }),
     [t],
   )
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const { intent } = useEntityIntent('role')
-  const view = searchParams.get('roleView') === 'list' ? 'list' : 'graph'
-  const setView = useCallback(
-    (nextView: 'graph' | 'list') =>
+
+  const [pickedRole, setPickedRole] = useState<RolePermissionTarget | null>(null)
+  const [command, setCommand] = useState<RoleGraphCommand | null>(null)
+  const [pendingMember, setPendingMember] = useState<{
+    userId: string
+    keyword: string
+  } | null>(() =>
+    entityIntentMemberCandidate(intent, searchParams)
+      ? {
+          userId: intent!.focusTargetId!,
+          keyword: intent!.label ?? intent!.focusTargetId!,
+        }
+      : null,
+  )
+
+  const targetRoleId =
+    searchParams.get('roleId') ??
+    searchParams.get('focusId') ??
+    (!pendingMember ? (intent?.id ?? null) : null)
+  const targetRoleKey = searchParams.get('roleKey') ?? ''
+  const initialTab = normalizeTab(searchParams.get('roleRelation') ?? intent?.relation)
+  const initialFocusId = searchParams.get('focus') ?? intent?.focusTargetId ?? null
+
+  const openWorkbench = useCallback(
+    (role: RolePermissionTarget, relation?: WorkbenchTab) => {
+      const nextRelation = relation ?? (pendingMember ? 'members' : 'permissions')
+      setPickedRole(role)
       setSearchParams(
         (previous) => {
           const next = new URLSearchParams(previous)
-          next.set('roleView', nextView)
+          next.delete('focusId')
+          next.delete('roleView')
+          next.set('roleId', role.id)
+          next.set('roleKey', role.roleKey)
+          next.set('roleRelation', nextRelation)
           return next
         },
         { replace: true, state: location.state },
-      ),
-    [setSearchParams, location.state],
+      )
+    },
+    [pendingMember, setSearchParams, location.state],
   )
-  const [graphBusy, setGraphBusy] = useState(false)
-  const [workspaceOpened, setWorkspaceOpened] = useState(desktop && view === 'graph')
-  if (view === 'graph' && desktop && !workspaceOpened) setWorkspaceOpened(true)
-  else if (view !== 'graph' && workspaceOpened) setWorkspaceOpened(false)
-  const [relation, setRelation] = useState<{
-    kind: 'permissions' | 'navigation' | 'members'
-    opening: RolePermissionOpening
-  } | null>(null)
-  const [command, setCommand] = useState<RoleGraphCommand | null>(null)
+
+  const returnToList = useCallback(() => {
+    setPickedRole(null)
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete('roleId')
+        next.delete('roleKey')
+        next.delete('roleRelation')
+        next.delete('focusId')
+        next.delete('focus')
+        next.delete('roleView')
+        return next
+      },
+      { replace: true, state: location.state },
+    )
+    void invalidateRoleGraphQueries(client)
+  }, [setSearchParams, location.state, client])
+
   useLayoutEffect(
     () =>
       useAuthStore.subscribe((current) => {
-        if (current.meLoaded && !canReadRoleWorkspace(current)) setView('list')
+        if (current.meLoaded && !canReadRoleWorkspace(current) && targetRoleId) {
+          returnToList()
+        }
       }),
-    [setView],
+    [targetRoleId, returnToList],
   )
-  const customActions = useMemo(() => {
-    const open = (kind: 'permissions' | 'navigation' | 'members', row: Row) =>
-      setRelation({
-        kind,
-        opening: {
-          role: targetOf(row),
-          principalEpoch: auth.sessionEpoch,
-          openId: crypto.randomUUID(),
-        },
-      })
-    return {
-      'grant-permissions': (row: Row) => open('permissions', row),
-      'grant-navigation': (row: Row) => open('navigation', row),
-      'grant-users': (row: Row) => open('members', row),
+
+  const customActions = useMemo(
+    () => ({
+      'configure-role': (row: Row) => openWorkbench(targetOf(row)),
       'toggle-role': (row: Row) =>
         setCommand({ id: crypto.randomUUID(), kind: 'toggle', role: targetOf(row) }),
-    }
-  }, [auth.sessionEpoch])
-  const closeRelation = () => setRelation(null)
-  const saved = () => {
-    void invalidateRoleGraphQueries(client, relation?.opening.role.id)
-    closeRelation()
+    }),
+    [openWorkbench],
+  )
+
+  if (targetRoleId && canReadRoleWorkspace(auth)) {
+    return (
+      <RoleWorkbench
+        key={`${targetRoleId}:${auth.sessionEpoch}`}
+        roleId={targetRoleId}
+        roleKey={targetRoleKey}
+        initialRole={pickedRole}
+        initialTab={initialTab}
+        initialFocusId={initialFocusId}
+        pendingMember={pendingMember}
+        principalEpoch={auth.sessionEpoch}
+        onBack={returnToList}
+        onRoleDeleted={returnToList}
+      />
+    )
   }
-  const viewControl = canInspectGraph ? (
-    <SegmentedControl
-      label={t('roleGraph.pageView')}
-      value={view}
-      disabled={graphBusy}
-      onChange={setView}
-      options={[
-        { value: 'graph', label: t('roleGraph.action'), icon: Network },
-        { value: 'list', label: t('roleGraph.roleList'), icon: List },
-      ]}
-    />
-  ) : null
+
   return (
     <>
-      {canReadRoleWorkspace(auth) &&
-      view === 'graph' &&
-      (desktop || workspaceOpened || graphBusy || Boolean(intent)) ? (
-        <RolePermissionWorkspace
-          principalEpoch={auth.sessionEpoch}
-          entityIntent={intent}
-          presentation={desktop ? 'graph' : 'list'}
-          viewControl={viewControl}
-          onBusyChange={setGraphBusy}
-        />
-      ) : (
-        <>
-          <DynaPage
-            schema={localizedSchema}
-            headerView={viewControl}
-            customActions={customActions}
-            formComponent={RoleForm}
-          />
-        </>
-      )}
-      {relation && (
-        <RelationshipDialog title={t(`authorization.${relation.kind}`)}>
-          {relation.kind === 'permissions' ? (
-            <RoleBusinessPermissions
-              opening={relation.opening}
-              presentation="list"
-              onEditingChange={setGraphBusy}
-              onClose={closeRelation}
-            />
-          ) : relation.kind === 'navigation' ? (
-            <RolePermissionEditor
-              opening={relation.opening}
-              presentation="list"
-              onClose={closeRelation}
-              onSaved={saved}
-              onResourceDenied={closeRelation}
-            />
-          ) : (
-            <RoleMemberEditor
-              opening={relation.opening}
-              presentation="list"
-              onClose={closeRelation}
-              onSaved={saved}
-              onResourceDenied={closeRelation}
-            />
-          )}
-        </RelationshipDialog>
-      )}
+      <div className="w-full min-w-0 space-y-4">
+        {(intent?.source || pendingMember) && (
+          <div className="space-y-3 px-4 pt-4 sm:px-6 sm:pt-6">
+            <LivingContextBar source={intent?.source} />
+            {pendingMember && (
+              <div
+                role="status"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-brand-text/40 bg-primary/5 px-4 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-foreground">
+                    {t('roleManage.pendingMember', { name: pendingMember.keyword })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('roleManage.pendingMemberHint', { id: pendingMember.userId })}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPendingMember(null)}
+                >
+                  {t('authorization.close')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DynaPage schema={localizedSchema} customActions={customActions} formComponent={RoleForm} />
+      </div>
+
       {command && (
-        <RelationshipDialog title={t('authorization.toggleRole')}>
-          <RoleGraphCrudPanel
-            command={command}
-            onClose={() => setCommand(null)}
-            onCreated={() => setCommand(null)}
-            onUpdated={() => setCommand(null)}
-            onDeleted={() => setCommand(null)}
-            onDenied={() => setCommand(null)}
-            clearQueries={{ queryKey: ['system', 'roles'] }}
-          />
-        </RelationshipDialog>
+        <Dialog open onOpenChange={(open) => !open && setCommand(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{t('authorization.toggleRole')}</DialogTitle>
+            </DialogHeader>
+            <RoleGraphCrudPanel
+              command={command}
+              onClose={() => setCommand(null)}
+              onCreated={() => setCommand(null)}
+              onUpdated={() => setCommand(null)}
+              onDeleted={() => setCommand(null)}
+              onDenied={() => setCommand(null)}
+              clearQueries={{ queryKey: ['system', 'roles'] }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </>
+  )
+}
+
+function entityIntentMemberCandidate(
+  intent: ReturnType<typeof useEntityIntent>['intent'],
+  searchParams: URLSearchParams,
+): boolean {
+  return Boolean(
+    intent?.relation === 'members' &&
+    intent.focusTargetId &&
+    !searchParams.get('roleId') &&
+    intent.id === intent.focusTargetId,
   )
 }

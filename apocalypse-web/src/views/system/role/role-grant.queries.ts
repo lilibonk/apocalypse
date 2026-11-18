@@ -5,7 +5,7 @@ import type { RoleGrantsBaseline } from './role-grant.model'
 import { canReadRoleWorkspace, type RolePermissionOpening } from './role-permission.model'
 import { privateRoleGraphQuery } from './role-permission.queries'
 
-export const GRANT_PAGE_SIZE = 4
+export const GRANT_PAGE_SIZE = 50
 type GrantOpening = Pick<RolePermissionOpening, 'openId' | 'principalEpoch'> & {
   role: { id: string }
 }

@@ -71,13 +71,13 @@ describe('private business grant sources', () => {
     client.clear()
   })
   it('uses candidate search filters only for the directory page and in its cache identity', async () => {
-    request.mockResolvedValue({ list: [], total: 0, page: 3, size: 4 })
+    request.mockResolvedValue({ list: [], total: 0, page: 3, size: 50 })
     const client = new QueryClient()
     const params = { page: 3, keyword: 'audit', moduleKey: 'calendar', resource: 'day' }
     const source = createGrantCandidatesQuery(opening, params)
     await client.fetchQuery(source.options)
     expect(request.mock.calls[0]![0]).toBe('/system/permissions/page')
-    expect(request.mock.calls[0]![1].query).toEqual({ ...params, size: 4 })
+    expect(request.mock.calls[0]![1].query).toEqual({ ...params, size: 50 })
     expect(source.options.queryKey).not.toEqual(
       createGrantCandidatesQuery(opening, { ...params, page: 4 }).options.queryKey,
     )
