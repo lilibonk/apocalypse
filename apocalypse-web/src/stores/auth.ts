@@ -19,6 +19,8 @@ import {
   authorizationDeadline,
   ExpiredAuthorizationSnapshot,
 } from '@/lib/query/authorization-snapshot'
+import { resetDynaUrlEpochs } from '@/components/dyna/use-dyna-url-state'
+import { useTabsStore } from '@/stores/tabs'
 
 let loginSequence = 0
 let meSequence = 0
@@ -90,6 +92,8 @@ export const useAuthStore = create<AuthState>()(
           }
           if (!current()) return false
           queryClient.clear()
+          useTabsStore.getState().reset()
+          resetDynaUrlEpochs()
           await accessLifecycle.reset(epoch + 1, queryClient)
           if (!current()) return false
           set({
@@ -145,6 +149,8 @@ export const useAuthStore = create<AuthState>()(
           bootstrapped: true,
           sessionEpoch: state.sessionEpoch + 1,
         }))
+        useTabsStore.getState().reset()
+        resetDynaUrlEpochs()
         queryClient.clear()
       },
 
@@ -456,6 +462,7 @@ export function assertAuthorizationCurrent(epoch?: number): void {
 function invalidateAuthorization(): void {
   clearTimeout(authorizationTimer)
   void accessLifecycle.pause(queryClient)
+  useTabsStore.getState().clearSearches()
   useAuthStore.setState((state) => ({
     authorizationEpoch: state.authorizationEpoch + 1,
     meLoaded: false,

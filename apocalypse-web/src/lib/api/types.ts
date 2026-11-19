@@ -142,9 +142,9 @@ export interface UserCreateReq {
   deptId?: SnowflakeId | null
 }
 
-/** 用户更新请求（对应 UserUpdateReq，字段均可选）。 */
+/** 用户更新请求（对应 UserUpdateReq，字段均可选，显式 null 清空可清空字段）。 */
 export interface UserUpdateReq {
-  nickname?: string
+  nickname?: string | null
   status?: number
   deptId?: SnowflakeId | null
 }

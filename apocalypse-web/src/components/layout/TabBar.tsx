@@ -7,15 +7,15 @@
  */
 
 import { X } from 'lucide-react'
-import { useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
+import { useGuardedTabClose } from '@/components/draft/useGuardedTabClose'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
+import { useMotionPreference } from '@/hooks/useMotionPreference'
 import { cn } from '@/lib/utils'
 import { isPinnedTab, useTabsStore } from '@/stores/tabs'
-
-import { useGuardedTabClose } from '@/components/draft/useGuardedTabClose'
 
 import { TabActionsMenu } from './TabActionsMenu'
 
@@ -23,6 +23,7 @@ export function TabBar() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const menuTitle = useMenuTitle()
+  const motionEnabled = useMotionPreference()
   const tabs = useTabsStore((state) => state.tabs)
   const activeKey = useTabsStore((state) => state.activeKey)
   const activate = useTabsStore((state) => state.activate)
@@ -30,8 +31,25 @@ export function TabBar() {
   const close = useTabsStore((state) => state.close)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const guard = useGuardedTabClose()
+  const activeIndex = tabs.findIndex((tab) => tab.key === activeKey)
+
+  useEffect(() => {
+    if (activeIndex < 0) return
+    tabRefs.current[activeIndex]?.scrollIntoView?.({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: motionEnabled ? 'smooth' : 'instant',
+    })
+  }, [activeKey, activeIndex, motionEnabled])
 
   if (tabs.length === 0) return null
+
+  const requestCloseTab = (tabKey: string) => {
+    guard.request([tabKey], () => {
+      const next = close(tabKey)
+      if (next) void navigate(next)
+    })
+  }
 
   return (
     <div className="flex h-11 shrink-0 border-b border-border-subtle bg-background">
@@ -64,6 +82,23 @@ export function TabBar() {
           return (
             <div
               key={tab.key}
+              onMouseDown={
+                !pinned
+                  ? (event) => {
+                      if (event.button === 1) event.preventDefault()
+                    }
+                  : undefined
+              }
+              onAuxClick={
+                !pinned
+                  ? (event) => {
+                      if (event.button !== 1) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      requestCloseTab(tab.key)
+                    }
+                  : undefined
+              }
               className={cn(
                 'group flex h-8 items-center rounded-lg border border-transparent text-xs whitespace-nowrap transition-colors',
                 active
@@ -80,8 +115,10 @@ export function TabBar() {
                 aria-selected={active}
                 tabIndex={active ? 0 : -1}
                 className={cn(
-                  'h-full px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  'relative h-full px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   pinned ? 'rounded-md' : 'rounded-l-md',
+                  active &&
+                    "after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0.5 after:border-b-2 after:border-primary after:content-['']",
                 )}
                 onClick={activateTab}
                 onKeyDown={handleTabKeyDown}
@@ -93,15 +130,12 @@ export function TabBar() {
                   type="button"
                   aria-label={t('common.closeTab', { title })}
                   className={cn(
-                    'mr-0.5 inline-flex size-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
-                    active && 'opacity-60',
+                    'mr-0.5 inline-flex size-7 items-center justify-center rounded-md transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100',
+                    active && '[@media(hover:hover)]:opacity-60',
                   )}
                   onClick={(event) => {
                     event.stopPropagation()
-                    guard.request([tab.key], () => {
-                      const next = close(tab.key)
-                      if (next) navigate(next)
-                    })
+                    requestCloseTab(tab.key)
                   }}
                 >
                   <X className="size-3" />

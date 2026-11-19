@@ -7,6 +7,7 @@ import { useTabsStore } from '@/stores/tabs'
 
 import { createAsyncFieldValidationController } from '../DynaForm'
 import { DynaImportDialog } from '../DynaImportDialog'
+import { DynaPagination } from '../DynaPagination'
 import { DynaSearch } from '../DynaSearch'
 import { DynaTable } from '../DynaTable'
 import {
@@ -19,6 +20,9 @@ import { validatePageSchema, type DynaFormField } from '../schema'
 import {
   expandSearchFieldKeys,
   parseDynaUrlSearch,
+  recordDynaUrlGeneration,
+  resetDynaUrlEpochs,
+  resolveInitialDynaUrlState,
   serializeDynaUrlSearch,
 } from '../use-dyna-url-state'
 
@@ -87,6 +91,67 @@ describe('FE-W3 URL state and tab query snapshot persistence', () => {
 
     store.close('/system/user')
     expect(useTabsStore.getState().getTabSearch('/system/user')).toBe('')
+  })
+
+  it('clears tab searches and discards superseded epoch URL search on remount while preserving same-epoch tab switches', () => {
+    resetDynaUrlEpochs()
+    const store = useTabsStore.getState()
+    store.reset()
+    store.open({ key: '/system/user', title: '用户管理' })
+    store.setTabSearch('/system/user', '?keyword=admin')
+    expect(useTabsStore.getState().getTabSearch('/system/user')).toBe('?keyword=admin')
+
+    recordDynaUrlGeneration('/system/user', '?keyword=admin', '1:1')
+
+    expect(
+      resolveInitialDynaUrlState({
+        pathname: '/system/user',
+        windowSearch: '?keyword=admin',
+        defaultPageSize: 10,
+        searchFieldNames: ['keyword'],
+        generationKey: '1:1',
+      }),
+    ).toEqual({
+      page: 1,
+      pageSize: 10,
+      search: { keyword: 'admin' },
+      sort: null,
+    })
+
+    useTabsStore.getState().clearSearches()
+    expect(useTabsStore.getState().getTabSearch('/system/user')).toBe('')
+    expect(useTabsStore.getState().tabs.some((tab) => tab.key === '/system/user')).toBe(true)
+
+    expect(
+      resolveInitialDynaUrlState({
+        pathname: '/system/user',
+        windowSearch: '?keyword=admin',
+        defaultPageSize: 10,
+        searchFieldNames: ['keyword'],
+        generationKey: '1:2',
+      }),
+    ).toEqual({
+      page: 1,
+      pageSize: 10,
+      search: {},
+      sort: null,
+    })
+
+    resetDynaUrlEpochs()
+    expect(
+      resolveInitialDynaUrlState({
+        pathname: '/system/user',
+        windowSearch: '?keyword=deep-link',
+        defaultPageSize: 10,
+        searchFieldNames: ['keyword'],
+        generationKey: '2:1',
+      }),
+    ).toEqual({
+      page: 1,
+      pageSize: 10,
+      search: { keyword: 'deep-link' },
+      sort: null,
+    })
   })
 })
 
@@ -310,5 +375,34 @@ describe('FE-W2 / FE-W5 / FE-W6 DynaTable pulse, sortable, copyable, selectable,
       />,
     )
     expect(html).toBe('')
+  })
+
+  it('renders pagination jump trigger when multi-page and pending search indicator when draft differs', () => {
+    const multiPageHtml = renderToStaticMarkup(
+      <DynaPagination page={2} size={10} total={30} onPageChange={vi.fn()} />,
+    )
+    expect(multiPageHtml).toContain('data-slot="pagination-jump-trigger"')
+    expect(multiPageHtml).toContain('2 / 3')
+
+    const singlePageHtml = renderToStaticMarkup(
+      <DynaPagination page={1} size={10} total={8} onPageChange={vi.fn()} />,
+    )
+    expect(singlePageHtml).not.toContain('data-slot="pagination-jump-trigger"')
+    expect(singlePageHtml).toContain('1 / 1')
+
+    const pendingSearchHtml = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <DynaSearch
+          fields={[{ name: 'keyword', label: '关键词', type: 'input' }]}
+          values={{ keyword: 'alice' }}
+          appliedValues={{ keyword: '' }}
+          onChange={vi.fn()}
+          onSearch={vi.fn()}
+          onReset={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+    expect(pendingSearchHtml).toContain('data-pending-apply="true"')
+    expect(pendingSearchHtml).toContain('data-slot="search-input-clear"')
   })
 })

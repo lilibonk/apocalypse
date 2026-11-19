@@ -5,8 +5,17 @@
  * 空态、筛选无结果与错误分开表达；授权拒绝时不呈现旧数据。
  */
 
-import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Inbox, SearchX } from 'lucide-react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  Copy,
+  Inbox,
+  SearchX,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { DictTag } from '@/components/DictTag'
@@ -22,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { copyTextToClipboard, dedupeLiveAnnouncement } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
 
@@ -66,6 +76,71 @@ export interface DynaTableProps {
   onRowClick?: (row: Record<string, unknown>, key: string) => void
 }
 
+const COPY_FEEDBACK_RESET_MS = 1800
+
+function CellCopyButton({ rawText }: { rawText: string }) {
+  const t = useDynaText()
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [liveMessage, setLiveMessage] = useState('')
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async () => {
+    const ok = await copyTextToClipboard(rawText)
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+    }
+    const feedback = ok ? t('copied') : t('copyFailed')
+    setStatus(ok ? 'copied' : 'failed')
+    setLiveMessage(dedupeLiveAnnouncement(feedback))
+    if (ok) {
+      toast.success(feedback)
+    } else {
+      toast.error(feedback)
+    }
+    timerRef.current = window.setTimeout(() => {
+      setStatus('idle')
+      setLiveMessage('')
+      timerRef.current = null
+    }, COPY_FEEDBACK_RESET_MS)
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        data-slot="cell-copy-button"
+        data-copied={status === 'copied' ? '' : undefined}
+        data-failed={status === 'failed' ? '' : undefined}
+        aria-label={`${t('copy')} ${rawText}`}
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 data-[copied]:opacity-100 data-[failed]:opacity-100"
+        onClick={(event) => {
+          event.stopPropagation()
+          void handleCopy()
+        }}
+      >
+        {status === 'copied' ? (
+          <Check className="size-3 text-brand-text" aria-hidden="true" />
+        ) : status === 'failed' ? (
+          <AlertCircle className="size-3 text-destructive" aria-hidden="true" />
+        ) : (
+          <Copy className="size-3" aria-hidden="true" />
+        )}
+      </button>
+      <span role="status" className="sr-only">
+        {liveMessage}
+      </span>
+    </>
+  )
+}
+
 function CellValue({ column, row }: { column: DynaColumn; row: Record<string, unknown> }) {
   const t = useDynaText()
   const raw = row[column.key]
@@ -105,21 +180,7 @@ function CellValue({ column, row }: { column: DynaColumn; row: Record<string, un
   return (
     <span className="inline-flex items-center gap-1.5">
       <span>{content}</span>
-      <button
-        type="button"
-        data-slot="cell-copy-button"
-        aria-label={`${t('copy')} ${rawText}`}
-        className="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        onClick={(event) => {
-          event.stopPropagation()
-          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-            void navigator.clipboard.writeText(rawText)
-          }
-          toast.success(t('copied'))
-        }}
-      >
-        <Copy className="size-3" aria-hidden="true" />
-      </button>
+      <CellCopyButton rawText={rawText} />
     </span>
   )
 }
@@ -197,6 +258,7 @@ function frozenEdge(shown: boolean) {
 const DynaTableRow = memo(function DynaTableRow({
   row,
   rowKeyValue,
+  rowIndex,
   columns,
   actions,
   frozenEdgeKey,
@@ -210,6 +272,7 @@ const DynaTableRow = memo(function DynaTableRow({
 }: {
   row: Record<string, unknown>
   rowKeyValue: string
+  rowIndex: number
   columns: DynaColumn[]
   actions: DynaTableProps['actions']
   frozenEdgeKey: string | null
@@ -218,10 +281,11 @@ const DynaTableRow = memo(function DynaTableRow({
   mutated: boolean
   selectable: boolean
   selected: boolean
-  onToggleSelect?: (key: string) => void
+  onToggleSelect?: (key: string, index: number, shiftKey: boolean) => void
   onRowClick?: (row: Record<string, unknown>, key: string) => void
 }) {
   const t = useDynaText()
+  const shiftKeyRef = useRef(false)
   const hasActions = Boolean(actions)
   const actionsFrozen = hasActions ? 0 : null
   return (
@@ -234,13 +298,30 @@ const DynaTableRow = memo(function DynaTableRow({
     >
       {selectable && (
         <TableCell className="w-10" onClick={(event) => event.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={selected}
-            aria-label={`${t('selectRow')} ${rowKeyValue}`}
-            className="size-4 rounded border-border accent-primary"
-            onChange={() => onToggleSelect?.(rowKeyValue)}
-          />
+          <label
+            className="inline-flex size-7 cursor-pointer items-center justify-center rounded"
+            onMouseDown={(event) => {
+              shiftKeyRef.current = event.shiftKey
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              aria-label={`${t('selectRow')} ${rowKeyValue}`}
+              className="size-4 cursor-pointer rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              onKeyDown={(event) => {
+                shiftKeyRef.current = event.shiftKey
+              }}
+              onClick={(event) => {
+                if (event.shiftKey) shiftKeyRef.current = true
+              }}
+              onChange={() => {
+                const shift = shiftKeyRef.current
+                shiftKeyRef.current = false
+                onToggleSelect?.(rowKeyValue, rowIndex, shift)
+              }}
+            />
+          </label>
         </TableCell>
       )}
       {columns.map((column) => (
@@ -288,7 +369,7 @@ const DynaTableCard = memo(function DynaTableCard({
   const t = useDynaText()
   return (
     <article
-      className="space-y-3 p-4"
+      className="group space-y-3 p-4"
       data-origin-active={active ? '' : undefined}
       data-mutated-pulse={mutated ? 'true' : undefined}
       data-just-mutated={mutated ? 'true' : undefined}
@@ -358,19 +439,56 @@ export const DynaTable = memo(function DynaTable({
 
   const selectedSet = new Set(selectedKeys)
   const pageRowKeys = (rows ?? []).map((row, idx) => String(row[rowKey] ?? idx))
+  const pageRowKeysSignature = pageRowKeys.join('\0')
   const allPageSelected = pageRowKeys.length > 0 && pageRowKeys.every((key) => selectedSet.has(key))
+  const somePageSelected = pageRowKeys.some((key) => selectedSet.has(key))
+  const isIndeterminate = somePageSelected && !allPageSelected
 
-  const handleToggleRow = (key: string) => {
+  const headerCheckboxRef = useRef<HTMLInputElement>(null)
+  const lastToggledIndexRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isIndeterminate
+    }
+  }, [isIndeterminate])
+
+  useEffect(() => {
+    lastToggledIndexRef.current = null
+  }, [page, size, pageRowKeysSignature])
+
+  const handleToggleRow = (key: string, index: number, shiftKey: boolean) => {
     if (!onSelectedKeysChange) return
-    if (selectedSet.has(key)) {
+    const shouldSelect = !selectedSet.has(key)
+    const anchor = lastToggledIndexRef.current
+    if (
+      shiftKey &&
+      anchor !== null &&
+      anchor !== index &&
+      pageRowKeys[anchor] !== undefined &&
+      pageRowKeys[index] !== undefined
+    ) {
+      const from = Math.min(anchor, index)
+      const to = Math.max(anchor, index)
+      const rangeKeys = pageRowKeys.slice(from, to + 1)
+      if (shouldSelect) {
+        const merged = new Set([...selectedKeys, ...rangeKeys])
+        onSelectedKeysChange([...merged])
+      } else {
+        const removeSet = new Set(rangeKeys)
+        onSelectedKeysChange(selectedKeys.filter((item) => !removeSet.has(item)))
+      }
+    } else if (selectedSet.has(key)) {
       onSelectedKeysChange(selectedKeys.filter((item) => item !== key))
     } else {
       onSelectedKeysChange([...selectedKeys, key])
     }
+    lastToggledIndexRef.current = index
   }
 
   const handleToggleAll = () => {
     if (!onSelectedKeysChange) return
+    lastToggledIndexRef.current = null
     if (allPageSelected) {
       const pageSet = new Set(pageRowKeys)
       onSelectedKeysChange(selectedKeys.filter((item) => !pageSet.has(item)))
@@ -435,13 +553,16 @@ export const DynaTable = memo(function DynaTable({
                     <TableRow>
                       {selectable && (
                         <TableHead className="w-10 bg-(--table-head)">
-                          <input
-                            type="checkbox"
-                            checked={allPageSelected}
-                            aria-label={t('selectAllRows')}
-                            className="size-4 rounded border-border accent-primary"
-                            onChange={handleToggleAll}
-                          />
+                          <label className="inline-flex size-7 cursor-pointer items-center justify-center rounded">
+                            <input
+                              ref={headerCheckboxRef}
+                              type="checkbox"
+                              checked={allPageSelected}
+                              aria-label={t('selectAllRows')}
+                              className="size-4 cursor-pointer rounded border-border accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                              onChange={handleToggleAll}
+                            />
+                          </label>
                         </TableHead>
                       )}
                       {columns.map((column) => {
@@ -517,6 +638,7 @@ export const DynaTable = memo(function DynaTable({
                           key={keyStr}
                           row={row}
                           rowKeyValue={keyStr}
+                          rowIndex={index}
                           columns={columns}
                           actions={actions}
                           frozenEdgeKey={frozenEdgeKey}

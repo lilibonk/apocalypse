@@ -1,9 +1,46 @@
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 import { useAuthStore } from '@/stores/auth'
 
 export const DEFAULT_REALTIME_SSE_URL = '/api/system/realtime/stream'
+
+export type RealtimeConnectionStatus = 'idle' | 'connecting' | 'live' | 'reconnecting'
+
+const activeStreamStates = new Map<symbol, Exclude<RealtimeConnectionStatus, 'idle'>>()
+const statusListeners = new Set<() => void>()
+
+function notifyStatusListeners(): void {
+  for (const listener of statusListeners) {
+    listener()
+  }
+}
+
+export function getRealtimeConnectionStatus(): RealtimeConnectionStatus {
+  let aggregate: RealtimeConnectionStatus = 'idle'
+  for (const state of activeStreamStates.values()) {
+    if (state === 'live') return 'live'
+    if (state === 'reconnecting') aggregate = 'reconnecting'
+    else if (aggregate === 'idle') aggregate = 'connecting'
+  }
+  return aggregate
+}
+
+export function subscribeRealtimeConnectionStatus(listener: () => void): () => void {
+  statusListeners.add(listener)
+  return () => {
+    statusListeners.delete(listener)
+  }
+}
+
+/** 被动订阅当前页面已建立的实时连接状态，不额外发起任何 SSE 请求。 */
+export function useRealtimeConnectionStatus(): RealtimeConnectionStatus {
+  return useSyncExternalStore(
+    subscribeRealtimeConnectionStatus,
+    getRealtimeConnectionStatus,
+    () => 'idle',
+  )
+}
 
 export interface SseFrame {
   event: string
@@ -17,6 +54,8 @@ export interface RealtimePulseOptions {
   sseUrl?: string
   /** 监听的 SSE 事件名列表（默认 ['message', 'pulse', 'invalidate']）。 */
   eventNames?: readonly string[]
+  /** 仅当 pulse 负载中的 topic 命中该列表时才触发失效；省略时接收全部主题。 */
+  topics?: readonly string[]
   /** 是否启用订阅（默认 true）。 */
   enabled?: boolean
   /** 切回前台标签页时的最小刷新间隔（毫秒，默认 15_000）。 */
@@ -87,6 +126,7 @@ export function startRealtimePulseSubscription({
   queryKeys,
   sseUrl = DEFAULT_REALTIME_SSE_URL,
   eventNames = ['message', 'pulse', 'invalidate'],
+  topics,
   enabled = true,
   minVisibilityIntervalMs = 15_000,
   pollIntervalMs = 0,
@@ -107,6 +147,17 @@ export function startRealtimePulseSubscription({
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null
   let retryAttempt = 0
   let lastPulseAt = performance.now()
+  const subId = Symbol('realtime-pulse')
+
+  const setStreamState = (next: Exclude<RealtimeConnectionStatus, 'idle'> | null) => {
+    if (!sseUrl) return
+    if (disposed && next !== null) return
+    const current = activeStreamStates.get(subId) ?? null
+    if (current === next) return
+    if (next === null) activeStreamStates.delete(subId)
+    else activeStreamStates.set(subId, next)
+    notifyStatusListeners()
+  }
 
   const isSessionValid = () => {
     if (disposed) return false
@@ -146,7 +197,11 @@ export function startRealtimePulseSubscription({
 
   const scheduleReconnect = () => {
     closeSource()
-    if (!isSessionValid()) return
+    if (!isSessionValid()) {
+      setStreamState(null)
+      return
+    }
+    setStreamState('reconnecting')
     const delay = computeBackoffDelay(retryAttempt++, baseRetryMs, maxRetryMs)
     retryTimer = setTimeout(connectSse, delay)
   }
@@ -162,14 +217,32 @@ export function startRealtimePulseSubscription({
         },
         signal: controller.signal,
       })
+      if (controller.signal.aborted || !isSessionValid()) {
+        if (!isSessionValid()) setStreamState(null)
+        return
+      }
+      if (response.status === 401 || response.status === 403) {
+        setStreamState(null)
+        return
+      }
       if (!response.ok || !response.body) {
         scheduleReconnect()
         return
       }
       retryAttempt = 0
+      setStreamState('live')
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      const matchesTopic = (data: string) => {
+        if (!topics || topics.length === 0) return true
+        try {
+          const payload = JSON.parse(data) as { topic?: unknown }
+          return typeof payload?.topic === 'string' && topics.includes(payload.topic)
+        } catch {
+          return false
+        }
+      }
       while (!controller.signal.aborted && isSessionValid()) {
         const { done, value } = await reader.read()
         if (done) break
@@ -177,9 +250,9 @@ export function startRealtimePulseSubscription({
         const parsed = parseSseChunk(buffer, chunk)
         buffer = parsed.remainder
         for (const frame of parsed.events) {
-          if (eventNames.includes(frame.event)) {
-            triggerPulse()
-          }
+          if (!eventNames.includes(frame.event)) continue
+          if (frame.event === 'pulse' && !matchesTopic(frame.data)) continue
+          triggerPulse()
         }
       }
       if (!controller.signal.aborted && isSessionValid()) {
@@ -193,9 +266,13 @@ export function startRealtimePulseSubscription({
   }
 
   const connectSse = () => {
-    if (!sseUrl || !isSessionValid()) return
+    if (!sseUrl || !isSessionValid()) {
+      setStreamState(null)
+      return
+    }
     closeSource()
     if (fetchImpl) {
+      setStreamState(retryAttempt > 0 ? 'reconnecting' : 'connecting')
       const controller = new AbortController()
       abortController = controller
       void connectFetchStream(controller)
@@ -203,10 +280,12 @@ export function startRealtimePulseSubscription({
     }
     if (typeof EventSource !== 'undefined') {
       try {
+        setStreamState(retryAttempt > 0 ? 'reconnecting' : 'connecting')
         const instance = new EventSource(sseUrl, { withCredentials: true })
         source = instance
         instance.onopen = () => {
           retryAttempt = 0
+          setStreamState('live')
         }
         const handleEvent = () => {
           triggerPulse()
@@ -218,6 +297,7 @@ export function startRealtimePulseSubscription({
           scheduleReconnect()
         }
       } catch {
+        setStreamState(null)
         closeSource()
       }
     }
@@ -227,6 +307,7 @@ export function startRealtimePulseSubscription({
 
   const unsubscribeAuth = useAuthStore.subscribe(() => {
     if (!isSessionValid()) {
+      setStreamState(null)
       closeSource()
     }
   })
@@ -252,12 +333,14 @@ export function startRealtimePulseSubscription({
       Math.min(authorizationDeadline - performance.now(), 2_147_483_647),
     )
     deadlineTimer = setTimeout(() => {
+      setStreamState(null)
       closeSource()
     }, remaining)
   }
 
   return () => {
     disposed = true
+    setStreamState(null)
     unsubscribeAuth()
     closeSource()
     if (pollTimer !== null) clearInterval(pollTimer)
@@ -278,6 +361,7 @@ export function useRealtimePulse({
   queryKeys,
   sseUrl = DEFAULT_REALTIME_SSE_URL,
   eventNames = ['message', 'pulse', 'invalidate'],
+  topics,
   enabled = true,
   minVisibilityIntervalMs = 15_000,
   pollIntervalMs = 0,
@@ -300,6 +384,7 @@ export function useRealtimePulse({
         queryKeys,
         sseUrl,
         eventNames,
+        topics,
         enabled,
         minVisibilityIntervalMs,
         pollIntervalMs,
@@ -320,6 +405,7 @@ export function useRealtimePulse({
       queryKeys,
       sessionEpoch,
       sseUrl,
+      topics,
     ],
   )
 }

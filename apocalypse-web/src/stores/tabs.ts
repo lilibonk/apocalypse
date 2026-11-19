@@ -31,6 +31,7 @@ interface TabsState {
   closeAll: () => void
   activate: (key: string) => void
   retainAllowed: (allowedKeys: string[]) => void
+  clearSearches: () => void
   reset: () => void
 }
 
@@ -202,6 +203,12 @@ export const useTabsStore = create<TabsState>()((set, get) => ({
       activeKey: activeKey && allowed.has(activeKey) ? activeKey : DASHBOARD_TAB.key,
       searchByKey: retainSearchMap(get().searchByKey, tabs),
     })
+  },
+
+  clearSearches() {
+    if (Object.keys(get().searchByKey).length > 0) {
+      set({ searchByKey: {} })
+    }
   },
 
   reset() {

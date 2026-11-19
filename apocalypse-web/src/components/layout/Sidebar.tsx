@@ -5,6 +5,7 @@
 
 import { ChevronRight, LayoutDashboard } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation } from 'react-router'
 
 import { MotionCollapse } from '@/components/MotionCollapse'
@@ -12,6 +13,7 @@ import { MenuIcon } from '@/components/layout/MenuIcon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import type { MenuNode } from '@/lib/api/types'
+import { useRealtimeConnectionStatus } from '@/lib/realtime/use-realtime-pulse'
 import { cn } from '@/lib/utils'
 import { resolveMenuPath } from '@/routes/menu-routes'
 
@@ -160,8 +162,10 @@ function MenuGroup({
 }
 
 export function Sidebar({ menus, collapsed }: { menus: MenuNode[]; collapsed: boolean }) {
+  const { t } = useTranslation()
   const { pathname } = useLocation()
   const menuTitle = useMenuTitle()
+  const realtimeStatus = useRealtimeConnectionStatus()
   const topLevel = [...menus]
     .filter((node) => node.menuType !== 'F')
     .sort((a, b) => a.sort - b.sort)
@@ -199,14 +203,28 @@ export function Sidebar({ menus, collapsed }: { menus: MenuNode[]; collapsed: bo
           <MenuGroup key={node.id} node={node} parentPath="" collapsed={collapsed} depth={0} />
         ),
       )}
-      {!collapsed && (
+      {!collapsed && realtimeStatus !== 'idle' && (
         <div
-          aria-hidden="true"
-          data-slot="sidebar-obsidian-pulse"
-          className="obsidian-only mt-4 items-center gap-2 rounded-lg border border-border-subtle bg-card/50 px-3 py-2 text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+          data-slot="sidebar-realtime-status"
+          data-status={realtimeStatus}
+          className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-card/50 px-3 py-2 text-xs text-muted-foreground"
         >
-          <span className="size-2 shrink-0 rounded-full bg-brand shadow-xs" />
-          <span className="truncate font-mono text-[11px] text-brand-text">LIVE STREAM</span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-2 shrink-0 rounded-full shadow-xs',
+              realtimeStatus === 'live' ? 'bg-brand' : 'bg-warning',
+            )}
+          />
+          <span className="truncate font-mono text-[11px] text-foreground">
+            {realtimeStatus === 'live'
+              ? t('common.realtimeLive')
+              : realtimeStatus === 'reconnecting'
+                ? t('common.realtimeReconnecting')
+                : t('common.realtimeConnecting')}
+          </span>
         </div>
       )}
     </nav>

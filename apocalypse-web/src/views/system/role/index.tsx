@@ -81,6 +81,7 @@ const ROLE_PULSE_KEYS = [
   ['system', 'roles'],
   ['system', 'authorization', 'insights'],
 ] as const
+const ROLE_PULSE_TOPICS = ['authorizationChanged'] as const
 
 export default function RolePage() {
   const authorizationEpoch = useAuthStore((state) => state.authorizationEpoch)
@@ -91,7 +92,7 @@ function RolePageContent() {
   const { t } = useTranslation('system')
   const auth = useAuthStore()
   const client = useQueryClient()
-  useRealtimePulse({ queryKeys: ROLE_PULSE_KEYS })
+  useRealtimePulse({ queryKeys: ROLE_PULSE_KEYS, topics: ROLE_PULSE_TOPICS })
 
   const localizedSchema = useMemo(
     () => ({ ...localizeRoleSchema(schema, t), description: undefined }),

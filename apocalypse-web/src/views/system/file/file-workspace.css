@@ -1,0 +1,16 @@
+.file-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@container main (min-width: 68rem) {
+  .file-workspace-layout {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+  }
+
+  .file-workspace-compact-trigger {
+    display: none;
+  }
+}

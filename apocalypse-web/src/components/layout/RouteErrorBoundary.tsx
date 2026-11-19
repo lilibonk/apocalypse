@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/client'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { DASHBOARD_TAB } from '@/stores/tabs'
 
 interface BoundaryProps {
@@ -24,6 +25,7 @@ interface BoundaryProps {
     backToDashboard: string
     copyTrace: string
     copied: string
+    copyFailed: string
   }
 }
 
@@ -87,8 +89,9 @@ class RouteErrorBoundaryInner extends Component<BoundaryProps, BoundaryState> {
                     variant="ghost"
                     size="xs"
                     onClick={() => {
-                      void navigator.clipboard?.writeText(traceId).then(() => {
-                        toast.success(texts.copied)
+                      void copyTextToClipboard(traceId).then((ok) => {
+                        if (ok) toast.success(texts.copied)
+                        else toast.error(texts.copyFailed)
                       })
                     }}
                   >
@@ -133,6 +136,7 @@ export function RouteErrorBoundary({ children }: { children: ReactNode }) {
         backToDashboard: t('route.backToDashboard', { defaultValue: '返回工作台' }),
         copyTrace: t('common.copyTraceId', { defaultValue: '复制 Trace ID' }),
         copied: t('common.copied', { defaultValue: '已复制' }),
+        copyFailed: t('common.copyFailed', { defaultValue: '复制失败，请手动选择复制' }),
       }}
     >
       {children}

@@ -236,6 +236,7 @@ function LoginLogWorkspace() {
           <DynaSearch
             fields={searchFields}
             values={draftSearch}
+            appliedValues={appliedSearch}
             onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
             onSearch={() => {
               setPage(1)

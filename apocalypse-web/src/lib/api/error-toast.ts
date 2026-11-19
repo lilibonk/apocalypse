@@ -1,6 +1,7 @@
 import i18n from 'i18next'
 import { toast } from 'sonner'
 
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { ApiError } from './client'
 
 export function errorText(error: unknown, fallback: string): string {
@@ -25,13 +26,17 @@ export function toastApiError(error: unknown, fallback: string): void {
   const copiedLabel = i18n.isInitialized
     ? i18n.t('common.copied', { defaultValue: '已复制' })
     : '已复制'
+  const copyFailedLabel = i18n.isInitialized
+    ? i18n.t('common.copyFailed', { defaultValue: '复制失败，请手动选择复制' })
+    : '复制失败，请手动选择复制'
   toast.error(message, {
     description: `Trace: ${traceId}`,
     action: {
       label: copyLabel,
       onClick: () => {
-        void navigator.clipboard?.writeText(traceId).then(() => {
-          toast.success(copiedLabel)
+        void copyTextToClipboard(traceId).then((ok) => {
+          if (ok) toast.success(copiedLabel)
+          else toast.error(copyFailedLabel)
         })
       },
     },

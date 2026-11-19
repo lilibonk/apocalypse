@@ -27,6 +27,7 @@ import {
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import { useDesktopViewport } from '@/hooks/useDesktopViewport'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { formatModShortcut, isApplePlatform } from '@/lib/platform'
 import { isResourceDenied } from '@/lib/query/use-resource-denial'
 import { useRealtimePulse } from '@/lib/realtime/use-realtime-pulse'
 import { cn } from '@/lib/utils'
@@ -80,10 +81,11 @@ interface ActivityDetailState {
 }
 
 const DASHBOARD_PULSE_KEYS = [['dashboard']] as const
+const DASHBOARD_PULSE_TOPICS = ['loginSucceeded', 'operationLogged', 'onlineChanged'] as const
 
 export default function DashboardPage() {
   const desktop = useDesktopViewport()
-  useRealtimePulse({ queryKeys: DASHBOARD_PULSE_KEYS })
+  useRealtimePulse({ queryKeys: DASHBOARD_PULSE_KEYS, topics: DASHBOARD_PULSE_TOPICS })
   return desktop ? <DesktopDashboard /> : <MobileDashboard />
 }
 
@@ -209,14 +211,19 @@ function DesktopDashboard() {
                   className="rounded-full border-border-subtle bg-card/85 px-3 shadow-surface"
                   onClick={() =>
                     window.dispatchEvent(
-                      new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
+                      new KeyboardEvent('keydown', {
+                        key: 'k',
+                        metaKey: isApplePlatform(),
+                        ctrlKey: !isApplePlatform(),
+                        bubbles: true,
+                      }),
                     )
                   }
                 >
                   <ApoParticleOrb size={18} />
                   <span>{t('askApo')}</span>
                   <kbd className="rounded-full border border-border-subtle bg-muted/80 px-1.5 font-mono text-[11px] text-muted-foreground">
-                    ⌘K
+                    {formatModShortcut('K')}
                   </kbd>
                 </Button>
                 {(login.allowed || operation.allowed || online.allowed) && (

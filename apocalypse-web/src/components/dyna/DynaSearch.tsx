@@ -3,7 +3,7 @@
  * 只负责受控渲染与事件回调，查询状态由 DynaPage 持有。
  */
 
-import { ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { FieldOption, FieldSelect } from '@/components/ui/field-select'
 
 import type { DynaSearchField } from './schema'
+import { expandSearchFieldKeys } from './use-dyna-url-state'
 import { useDynaText, useFieldOptions } from './use-dyna'
 
 /** 收起态直出的搜索项数量；超出部分折叠到「展开」。 */
@@ -24,6 +25,8 @@ export interface DynaSearchProps {
   presentation?: 'panel' | 'toolbar'
   /** 草稿值（输入态，未生效）；生效查询条件由父组件持有。 */
   values: Record<string, string>
+  /** 已生效的查询条件；与草稿不一致时提醒用户点击查询生效。 */
+  appliedValues?: Readonly<Record<string, string>>
   onChange: (name: string, value: string) => void
   onSearch: () => void
   onReset: () => void
@@ -46,13 +49,26 @@ function SearchControl({
 
   if (field.type === 'input') {
     return (
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(field.name, event.target.value)}
-        placeholder={field.placeholder ? t(field.placeholder) : undefined}
-        className="h-9 w-full sm:w-48"
-      />
+      <div className="relative w-full sm:w-48">
+        <Input
+          id={id}
+          value={value}
+          onChange={(event) => onChange(field.name, event.target.value)}
+          placeholder={field.placeholder ? t(field.placeholder) : undefined}
+          className={cn('h-9 w-full', value.length > 0 && 'pr-7')}
+        />
+        {value.length > 0 && (
+          <button
+            type="button"
+            data-slot="search-input-clear"
+            aria-label={t('clearField')}
+            onClick={() => onChange(field.name, '')}
+            className="absolute top-1/2 right-1.5 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
     )
   }
 
@@ -135,6 +151,7 @@ function SearchControl({
 export function DynaSearch({
   fields,
   values,
+  appliedValues,
   onChange,
   onSearch,
   onReset,
@@ -146,6 +163,11 @@ export function DynaSearch({
 
   const collapsible = fields.length > COLLAPSED_COUNT
   const visible = collapsible && !expanded ? fields.slice(0, COLLAPSED_COUNT) : fields
+  const hasPendingChanges =
+    appliedValues !== undefined &&
+    expandSearchFieldKeys(fields).some(
+      (key) => (values[key] ?? '').trim() !== (appliedValues[key] ?? '').trim(),
+    )
 
   if (fields.length === 0) return null
 
@@ -185,9 +207,17 @@ export function DynaSearch({
         </div>
       ))}
       <div className="col-span-2 flex shrink-0 flex-wrap items-center gap-2 sm:col-auto sm:ml-auto">
-        <Button type="submit" variant="secondary">
-          <Search className="size-4" />
+        <Button
+          type="submit"
+          variant={hasPendingChanges ? 'default' : 'secondary'}
+          data-pending-apply={hasPendingChanges ? 'true' : undefined}
+          title={hasPendingChanges ? t('pendingSearchHint') : undefined}
+        >
+          <Search className="size-4" aria-hidden="true" />
           {t('查询')}
+          {hasPendingChanges && (
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-current opacity-85" />
+          )}
         </Button>
         <Button type="button" variant="ghost" onClick={onReset}>
           {t('重置')}

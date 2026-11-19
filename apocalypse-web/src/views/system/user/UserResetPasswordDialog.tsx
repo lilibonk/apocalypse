@@ -74,6 +74,10 @@ export function UserResetPasswordDialog({
       setValidationError('密码 UTF-8 编码不能超过 72 字节')
       return
     }
+    if (!/\p{L}/u.test(newPassword) || !/\p{N}/u.test(newPassword)) {
+      setValidationError('密码须同时包含字母和数字')
+      return
+    }
     if (newPassword !== confirmPassword) {
       setValidationError('两次输入的新密码不一致')
       return
@@ -108,9 +112,13 @@ export function UserResetPasswordDialog({
                 setNewPassword(event.target.value)
                 setValidationError(null)
               }}
-              placeholder="请输入 8–64 位新密码（含大小写字母与数字）"
+              maxLength={64}
+              placeholder="请输入 8–64 位新密码（需同时包含字母与数字）"
               required
             />
+            <p className="text-xs text-muted-foreground">
+              8–64 个字符，需同时包含字母和数字，UTF-8 编码不超过 72 字节。
+            </p>
           </div>
 
           <div className="space-y-1.5">

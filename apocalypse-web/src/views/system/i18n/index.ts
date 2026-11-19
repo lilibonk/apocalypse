@@ -12,12 +12,13 @@ import { deptChartCopy } from './dept-chart'
 import { panoramaCopy } from './panorama'
 import { operLogCopy } from './oper-log'
 import { listInsightsCopy } from './list-insights'
+import { fileWorkspaceCopy } from './file-workspace'
 
 const systemI18n = {
   namespace: 'system',
   menu: {
-    zh: { 权限目录: '权限目录' },
-    en: { 权限目录: 'Permission catalog' },
+    zh: { 权限目录: '权限目录', 文件管理: '文件管理' },
+    en: { 权限目录: 'Permission catalog', 文件管理: 'File management' },
   },
   resources: {
     zh: {
@@ -32,6 +33,7 @@ const systemI18n = {
       panorama: panoramaCopy.zh,
       operLog: operLogCopy.zh,
       listInsights: listInsightsCopy.zh,
+      fileManage: fileWorkspaceCopy.zh,
       permissionCatalog: permissionCatalogCopy.zh,
       roleManage: roleManagementCopy.zh,
       roleMemberEdit: roleMemberEditorCopy.zh,
@@ -147,7 +149,8 @@ const systemI18n = {
       user: {
         department: '部门',
         createDepartmentHelp: '受限范围新增用户必须选择有效部门；全局管理范围可不指定。',
-        editDepartmentHelp: '只列出本次编辑操作允许的有效部门。不指定时保留原部门。',
+        editDepartmentHelp:
+          '只列出本次编辑操作允许的有效部门；不改动时保留原部门，全局管理范围可清空为未选择。',
         unassigned: '不指定部门',
         unchanged: '保留原部门',
         currentUnavailable: '原部门：{{name}}（保留原值）',
@@ -155,7 +158,8 @@ const systemI18n = {
         optionsFailed: '部门选项加载失败，暂不能保存。',
         optionsEmpty: '当前操作没有可选择的有效部门；这不代表可以创建未挂部门的用户。',
         retryOptions: '重新加载部门选项',
-        passwordHelp: '至少 8 个字符；包含大写、小写字母、数字和符号，UTF-8 编码不超过 72 字节。',
+        passwordHelp:
+          '8–64 个字符，需同时包含字母和数字，UTF-8 编码不超过 72 字节，且不能使用常见弱口令。',
       },
     },
     en: {
@@ -170,6 +174,7 @@ const systemI18n = {
       panorama: panoramaCopy.en,
       operLog: operLogCopy.en,
       listInsights: listInsightsCopy.en,
+      fileManage: fileWorkspaceCopy.en,
       permissionCatalog: permissionCatalogCopy.en,
       roleManage: roleManagementCopy.en,
       roleMemberEdit: roleMemberEditorCopy.en,
@@ -293,7 +298,7 @@ const systemI18n = {
         createDepartmentHelp:
           'A restricted scope must select a valid department. A global management scope may leave it unspecified.',
         editDepartmentHelp:
-          'Only valid departments allowed for this update are listed. Leave unspecified to keep the current department.',
+          'Only valid departments allowed for this update are listed. Leave unchanged to keep the current department; global management scope may clear it.',
         unassigned: 'Unspecified department',
         unchanged: 'Keep current department',
         currentUnavailable: 'Current department: {{name}} (keep unchanged)',
@@ -303,7 +308,7 @@ const systemI18n = {
           'No valid departments are available for this operation. This does not authorize creating an unassigned user.',
         retryOptions: 'Reload department choices',
         passwordHelp:
-          'At least 8 characters with uppercase, lowercase, a digit and a symbol; at most 72 UTF-8 bytes.',
+          '8–64 characters with both letters and digits, at most 72 UTF-8 bytes, and not a common weak password.',
       },
     },
   },

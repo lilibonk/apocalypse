@@ -53,17 +53,30 @@ http.defaults.adapter = async (config) => {
 
 function Controls() {
   const [open, setOpen] = useState<'form' | 'user-create' | 'user-edit' | 'role-edit' | null>(null)
-  const [saved, setSaved] = useState({ count: 0, department: '', dataScope: '', operation: '' })
+  const [saved, setSaved] = useState({
+    count: 0,
+    department: '',
+    dataScope: '',
+    operation: '',
+    body: '',
+  })
   const onSubmit = (body: Record<string, unknown>) => {
     setSaved((current) => ({
       count: current.count + 1,
       department: String(body.deptId ?? ''),
       dataScope: String(body.dataScope ?? ''),
       operation,
+      body: JSON.stringify(body),
     }))
     setOpen(null)
   }
-  const openUser = (mode: 'user-create' | 'user-edit', reject = false, noOptions = false) => {
+  const openUser = (
+    mode: 'user-create' | 'user-edit',
+    reject = false,
+    noOptions = false,
+    allScope = false,
+  ) => {
+    useAuthStore.setState({ allScopePerms: allScope ? ['system:user:edit'] : [] })
     denied = reject
     empty = noOptions
     queryClient.clear()
@@ -84,6 +97,9 @@ function Controls() {
       <button onClick={() => setOpen('form')}>Open form</button>
       <button onClick={() => openUser('user-create')}>Create user</button>
       <button onClick={() => openUser('user-edit')}>Edit user</button>
+      <button onClick={() => openUser('user-edit', false, false, true)}>
+        Edit user with ALL scope
+      </button>
       <button onClick={() => openUser('user-create', true)}>Denied user</button>
       <button onClick={() => openUser('user-create', false, true)}>Empty user</button>
       <button onClick={() => setOpen('role-edit')}>Edit legacy role</button>
@@ -93,6 +109,7 @@ function Controls() {
         data-department={saved.department}
         data-scope={saved.dataScope}
         data-operation={saved.operation}
+        data-body={saved.body}
       >
         Saved {saved.count}
       </output>

@@ -118,13 +118,8 @@ async function navigate(page: Page, path: string): Promise<void> {
       .click()
   await link.click()
   await expect(page).toHaveURL(new RegExp(`${path}(?:\\?.*)?$`))
-  // This authentication rehearsal uses the supported field-list workflow. Object workspaces
-  // have their own selection/edit/paging regressions and are now the initial desktop view.
-  if (path === '/system/online')
-    await page
-      .getByRole('group', { name: '页面视图' })
-      .getByRole('button', { name: '列表', exact: true })
-      .click()
+  // This authentication rehearsal uses the supported dept tree-table workflow and the default
+  // account-grouped online workspace for account-wide kick.
   if (path === '/system/dept')
     await page
       .getByRole('group', { name: '部门展示方式' })
@@ -132,12 +127,20 @@ async function navigate(page: Page, path: string): Promise<void> {
       .click()
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function exactOrCopyableCell(scope: Page | Locator, value: string): Locator {
+  return scope.getByRole('cell', {
+    name: new RegExp(`^${escapeRegExp(value)}(?: 复制 ${escapeRegExp(value)})?$`),
+  })
+}
+
 async function search(page: Page, label: string, keyword: string): Promise<Locator> {
   await page.getByRole('textbox', { name: label, exact: true }).fill(keyword)
   await page.getByRole('button', { name: '查询', exact: true }).click()
-  const row = page
-    .getByRole('row')
-    .filter({ has: page.getByRole('cell', { name: keyword, exact: true }) })
+  const row = page.getByRole('row').filter({ has: exactOrCopyableCell(page, keyword) })
   await expect(row).toBeVisible()
   return row
 }
@@ -175,7 +178,7 @@ function stringIds(value: unknown): string[] {
 
 async function roleList(page: Page): Promise<void> {
   await navigate(page, '/system/role')
-  await page.getByRole('button', { name: '角色列表', exact: true }).click()
+  await returnToRoleList(page)
   await expect(page.getByRole('textbox', { name: '角色名称 / 标识', exact: true })).toBeVisible()
 }
 
@@ -338,7 +341,7 @@ async function assignRoleMember(
   const entry = addDialog
     .getByRole('listitem')
     .filter({ has: page.getByText(username, { exact: true }) })
-  await entry.getByRole('button', { name: '添加授权', exact: true }).click()
+  await entry.getByRole('button', { name: /^添加成员关联：/ }).click()
   await addDialog.getByRole('button', { name: '完成', exact: true }).click()
   await page.getByRole('button', { name: '审核变更', exact: true }).click()
   const saved = page.waitForResponse(
@@ -514,7 +517,7 @@ test('Secure cookie, CSRF rejection, reload and serialized two-tab refresh/logou
     const tab = await invalid.newPage()
     await login(tab)
     await navigate(tab, '/system/user')
-    await expect(tab.getByRole('cell', { name: credentials.username, exact: true })).toBeVisible()
+    await expect(exactOrCopyableCell(tab, credentials.username)).toBeVisible()
     const currentCookie = (await invalid.cookies()).find((cookie) => cookie.name === refresh.name)
     if (!currentCookie) throw new Error('Invalid-cookie fixture lacks initial refresh cookie')
     const marker = 'invalid-refresh-cookie-fixture'
@@ -527,7 +530,7 @@ test('Secure cookie, CSRF rejection, reload and serialized two-tab refresh/logou
       Boolean(denial && typeof denial === 'object' && 'code' in denial && denial.code === 40100),
     ).toBe(true)
     await expect(tab).toHaveURL(/\/login$/)
-    await expect(tab.getByRole('cell', { name: credentials.username, exact: true })).toHaveCount(0)
+    await expect(exactOrCopyableCell(tab, credentials.username)).toHaveCount(0)
     // A failed logout clears this tab only, without a deletion response racing a shared winner.
     expect(
       (await invalid.cookies()).find((cookie) => cookie.name === refresh.name)?.value === marker,
@@ -595,16 +598,30 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
   await saveDialog(page, '新增用户')
   const userRow = await search(page, '用户名 / 昵称', username)
   await expect(userRow.getByRole('cell', { name: department, exact: true })).toBeVisible()
-  const updateOptions = page.waitForResponse(
-    (response) =>
-      endpoint(response, '/system/users/department-options') &&
-      new URL(response.url()).searchParams.get('operation') === 'UPDATE',
-  )
-  await userRow.getByRole('button', { name: '编辑', exact: true }).click()
-  await updateOptions
-  dialog = page.getByRole('dialog', { name: '编辑用户', exact: true })
+  const openEditUser = async () => {
+    const updateOptions = page.waitForResponse(
+      (response) =>
+        endpoint(response, '/system/users/department-options') &&
+        new URL(response.url()).searchParams.get('operation') === 'UPDATE',
+    )
+    await userRow.getByRole('button', { name: '编辑', exact: true }).click()
+    await updateOptions
+    return page.getByRole('dialog', { name: '编辑用户', exact: true })
+  }
+  // Leaving department unchanged omits deptId and preserves the assigned department.
+  await openEditUser()
+  await saveDialog(page, '编辑用户')
+  await expect(userRow.getByRole('cell', { name: department, exact: true })).toBeVisible()
+  // With ALL scope, choosing 未选择 sends explicit deptId: null and clears the department.
+  dialog = await openEditUser()
   await dialog.getByRole('combobox', { name: '部门', exact: true }).click()
   await page.getByRole('option', { name: '未选择', exact: true }).click()
+  await saveDialog(page, '编辑用户')
+  await expect(userRow.getByRole('cell', { name: '-', exact: true })).toBeVisible()
+  // Restore the department assignment before verifying scoped login and revocation flows.
+  dialog = await openEditUser()
+  await dialog.getByRole('combobox', { name: '部门', exact: true }).click()
+  await page.getByRole('option', { name: department, exact: true }).click()
   await saveDialog(page, '编辑用户')
   await expect(userRow.getByRole('cell', { name: department, exact: true })).toBeVisible()
 
@@ -632,7 +649,7 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
   await expect(
     page.getByRole('button', { name: `账户菜单：Browser user ${suffix}`, exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('cell', { name: credentials.username, exact: true })).toHaveCount(0)
+  await expect(exactOrCopyableCell(page, credentials.username)).toHaveCount(0)
   await search(page, '用户名 / 昵称', username)
 
   const administrator = await browser.newContext({
@@ -686,16 +703,17 @@ test('actual department CRUD, missed broadcast recovery, permission withdrawal a
     await expect(page).toHaveURL(/\/system\/user(?:\?.*)?$/)
     await expect(page.getByRole('link', { name: '用户管理', exact: true })).toBeVisible()
     await expect(page.getByRole('alert')).toBeVisible()
-    await expect(page.getByRole('cell', { name: username, exact: true })).toHaveCount(0)
+    await expect(exactOrCopyableCell(page, username)).toHaveCount(0)
 
     await login(second, { username, password })
     await navigate(admin, '/system/online')
-    const onlineRow = admin
-      .getByRole('row')
-      .filter({ has: admin.getByRole('cell', { name: username, exact: true }) })
-      .first()
-    await onlineRow.getByRole('button', { name: '强退', exact: true }).click()
-    const confirmation = admin.getByRole('alertdialog', { name: '确认强退', exact: true })
+    const onlineAccount = admin.locator(`[data-account="${username}"]`)
+    await expect(onlineAccount).toBeVisible()
+    await onlineAccount.getByRole('button', { name: /^强退全部设备/ }).click()
+    const confirmation = admin.getByRole('alertdialog', {
+      name: '确认强退账号全部设备',
+      exact: true,
+    })
     await confirmation.getByRole('button', { name: '确认强退', exact: true }).click()
     await expect(confirmation).toBeHidden()
     const deniedRefresh = second.waitForResponse((response) =>
@@ -814,7 +832,7 @@ test('an actually expired access token refreshes from cookie and a new query gen
   await responseData(await newQuery)
   await expect(page).toHaveURL(/\/system\/user(?:\?.*)?$/)
   await expect(page.getByRole('textbox', { name: '用户名 / 昵称', exact: true })).toHaveValue('')
-  await expect(page.getByRole('cell', { name: credentials.username, exact: true })).toBeVisible()
+  await expect(exactOrCopyableCell(page, credentials.username)).toBeVisible()
   // The old filtered request is cancelled after refresh, never replayed under a new generation.
   expect(oldQueryRequests).toBe(1)
   expect(transitions).toEqual(['old-query-401', 'refresh', 'me', 'new-query'])

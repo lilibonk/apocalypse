@@ -269,6 +269,16 @@ export function DynaToolbarActions({ controller }: DynaToolbarActionsProps) {
       >
         <RefreshCw className="size-4" />
       </Button>
+      {selectedKeys.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => controller.setSelectedKeys([])}
+        >
+          {t('clearSelection')}
+        </Button>
+      )}
       {schema.batchDeletePerm && selectedKeys.length > 0 && (
         <Perm perm={schema.batchDeletePerm}>
           <Button
@@ -322,7 +332,8 @@ export interface DynaToolbarProps {
  * Standalone search bar bound to a headless `DynaController`.
  */
 export function DynaToolbar({ controller, presentation = 'panel' }: DynaToolbarProps) {
-  const { schema, draftSearch, setDraftSearchField, submitDraftSearch, resetFilters } = controller
+  const { schema, filters, draftSearch, setDraftSearchField, submitDraftSearch, resetFilters } =
+    controller
   if (!schema.search || schema.search.length === 0) return null
 
   return (
@@ -330,6 +341,7 @@ export function DynaToolbar({ controller, presentation = 'panel' }: DynaToolbarP
       presentation={presentation}
       fields={schema.search}
       values={draftSearch}
+      appliedValues={filters}
       onChange={setDraftSearchField}
       onSearch={submitDraftSearch}
       onReset={resetFilters}

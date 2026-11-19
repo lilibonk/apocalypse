@@ -10,10 +10,13 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { AppProviders } from '@/app/providers'
 import { PageTransition } from '@/components/PageTransition'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { TabBar } from '@/components/layout/TabBar'
 import { EntityPeekProvider } from '@/components/navigation/EntityPeekSheet'
 import { http } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { useDraftStore } from '@/stores/drafts'
 import { useSettingsStore, type ThemeWorld } from '@/stores/settings'
+import { useTabsStore } from '@/stores/tabs'
 import ProfilePage from '@/views/profile'
 import { ConfigWorkspace } from '@/views/system/config/ConfigWorkspace'
 import { DeptOrgChart } from '@/views/system/dept/DeptOrgChart'
@@ -39,6 +42,7 @@ const permissions = [
   'system:dept:list',
   'system:user:list',
   'system:user:edit',
+  ...(params.has('selectable') ? ['system:user:remove'] : []),
   'system:role:list',
   'system:permission:list',
   'system:online:list',
@@ -87,6 +91,18 @@ useSettingsStore.setState({
   language: 'zh',
   themeWorld,
 })
+
+if (surface === 'tabs') {
+  useTabsStore.setState({
+    tabs: [
+      { key: '/dashboard', title: '工作台' },
+      { key: '/system/user', title: '用户管理' },
+      { key: '/system/config', title: '参数设置' },
+    ],
+    activeKey: '/system/user',
+    searchByKey: {},
+  })
+}
 
 const configs = [
   { id: 'c1', configKey: 'frame.theme', configName: '主题', configValue: 'light', remark: null },
@@ -588,6 +604,25 @@ function PageTransitionFixture() {
   )
 }
 
+function TabsFixture() {
+  const [dirty, setDirty] = useState(false)
+  return (
+    <div className="space-y-4">
+      <TabBar />
+      <button
+        type="button"
+        onClick={() => {
+          const next = !dirty
+          setDirty(next)
+          useDraftStore.getState().put('/system/config', 'config', next ? 2 : 0, {})
+        }}
+      >
+        Mark config dirty
+      </button>
+    </div>
+  )
+}
+
 function Fixture() {
   const location = useLocation()
   const saved = useSyncExternalStore(
@@ -656,6 +691,7 @@ function Fixture() {
         </>
       )}
       {surface === 'page-transition' && <PageTransitionFixture />}
+      {surface === 'tabs' && <TabsFixture />}
       {surface === 'dept' && (
         <DeptOrgChart tree={tree} onCreateChild={() => {}} onEdit={() => {}} onDelete={() => {}} />
       )}

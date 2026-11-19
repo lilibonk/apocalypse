@@ -80,6 +80,39 @@ test('department form uses operation-specific string IDs and preserves missing r
   await dialog.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByTestId('saved')).toHaveAttribute('data-department', '')
   await expect(page.getByTestId('saved')).toHaveAttribute('data-operation', 'UPDATE')
+  expect(
+    Object.prototype.hasOwnProperty.call(
+      JSON.parse((await page.getByTestId('saved').getAttribute('data-body')) ?? '{}'),
+      'deptId',
+    ),
+  ).toBe(false)
+
+  await page.getByRole('button', { name: 'Edit user', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: '编辑用户' })
+  await dialog.getByRole('combobox', { name: /^部门/ }).click()
+  await expect(page.getByRole('option', { name: '未选择', exact: true })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await dialog.getByRole('textbox', { name: '昵称', exact: true }).fill('   ')
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  const restrictedClearBody = JSON.parse(
+    (await page.getByTestId('saved').getAttribute('data-body')) ?? '{}',
+  ) as Record<string, unknown>
+  expect(restrictedClearBody.nickname).toBeNull()
+  expect(Object.prototype.hasOwnProperty.call(restrictedClearBody, 'deptId')).toBe(false)
+
+  await page.getByRole('button', { name: 'Edit user with ALL scope', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: '编辑用户' })
+  await dialog.getByRole('textbox', { name: '昵称', exact: true }).fill('')
+  await dialog.getByRole('combobox', { name: /^部门/ }).click()
+  const unselected = page.getByRole('option', { name: '未选择', exact: true })
+  await expect(unselected).toBeEnabled()
+  await unselected.click()
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  const allClearBody = JSON.parse(
+    (await page.getByTestId('saved').getAttribute('data-body')) ?? '{}',
+  ) as Record<string, unknown>
+  expect(allClearBody.nickname).toBeNull()
+  expect(allClearBody.deptId).toBeNull()
 
   await page.getByRole('button', { name: 'Edit legacy role', exact: true }).click()
   dialog = page.getByRole('dialog', { name: '编辑角色' })

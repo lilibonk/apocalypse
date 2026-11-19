@@ -1,8 +1,10 @@
 import { Eye, RotateCcw, Save } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PulseIndicator } from '@/components/motion'
 import { Button } from '@/components/ui/button'
+import { formatModShortcut } from '@/lib/platform'
 
 import './draft.css'
 
@@ -28,7 +30,23 @@ export function DraftBar({
   onSave: () => void
 }) {
   const { t } = useTranslation()
-  if (count <= 0 && conflictCount <= 0) return null
+  const active = count > 0 || conflictCount > 0
+
+  useEffect(() => {
+    if (!active || saving || typeof window === 'undefined') return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+      if (event.key.toLowerCase() !== 's') return
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+      event.preventDefault()
+      onReview()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [active, onReview, saving])
+
+  if (!active) return null
+
   return (
     <div className="draft-bar-anchor">
       <section
@@ -39,11 +57,23 @@ export function DraftBar({
         className="draft-bar"
       >
         <span className="draft-bar-dot" aria-hidden="true" />
-        <p className="min-w-0 flex-1 text-sm font-medium" aria-live="polite">
-          {t('draft.count', { count })}
-        </p>
+        <div className="flex min-w-0 flex-1 items-center gap-2" aria-live="polite">
+          <p className="truncate text-sm font-medium">{t('draft.count', { count })}</p>
+          <kbd
+            aria-hidden="true"
+            className="hidden shrink-0 rounded border border-border-subtle bg-muted/80 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline-block"
+          >
+            {formatModShortcut('S')}
+          </kbd>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" className="draft-bar-ghost" onClick={onReview}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="draft-bar-ghost"
+            aria-keyshortcuts="Control+S Meta+S"
+            onClick={onReview}
+          >
             <Eye className="size-3.5" aria-hidden="true" />
             {t('draft.review')}
           </Button>

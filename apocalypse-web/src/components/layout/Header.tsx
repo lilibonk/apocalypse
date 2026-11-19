@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMenuTitle } from '@/hooks/useMenuTitle'
 import type { MenuNode } from '@/lib/api/types'
+import { formatModShortcut } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
@@ -131,7 +132,7 @@ export function Header({
           {t('common.问问Apo', { defaultValue: '问问 Apo · 搜索或输入 ? 提问' })}
         </span>
         <kbd className="pointer-events-none hidden rounded-full border border-border-subtle bg-muted/80 px-1.5 py-0.5 font-mono text-[11px] sm:inline">
-          ⌘K
+          {formatModShortcut('K')}
         </kbd>
       </Button>
 

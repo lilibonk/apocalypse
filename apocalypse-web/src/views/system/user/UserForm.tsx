@@ -13,6 +13,7 @@ import { departmentOptionsQuery, flattenDepartmentOptions } from './department-o
 export function UserForm(props: DynaFormProps) {
   const { t } = useTranslation('system')
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
+  const hasAllEditScope = useAuthStore((state) => state.allScopePerms.includes('system:user:edit'))
   const departments = useQuery({
     ...departmentOptionsQuery(props.mode, sessionEpoch),
     enabled: props.open,
@@ -21,7 +22,12 @@ export function UserForm(props: DynaFormProps) {
     () => flattenDepartmentOptions(departments.isError ? [] : (departments.data ?? [])),
     [departments.data, departments.isError],
   )
-  const originalDept = typeof props.initialRow?.deptId === 'string' ? props.initialRow.deptId : ''
+  const originalDept =
+    props.initialRow?.deptId != null && props.initialRow.deptId !== ''
+      ? String(props.initialRow.deptId)
+      : ''
+  const originalNickname =
+    typeof props.initialRow?.nickname === 'string' ? props.initialRow.nickname : ''
   const config = useMemo(() => {
     const deptOptions = [...options]
     if (
@@ -45,6 +51,7 @@ export function UserForm(props: DynaFormProps) {
           name: 'deptId',
           label: t('user.department'),
           type: 'tree-select' as const,
+          required: props.mode === 'edit' && Boolean(originalDept) && !hasAllEditScope,
           translateOptions: false,
           options: deptOptions,
           help: t(
@@ -53,17 +60,32 @@ export function UserForm(props: DynaFormProps) {
         },
       ],
     }
-  }, [options, originalDept, props.config, props.initialRow, props.mode, t])
+  }, [hasAllEditScope, options, originalDept, props.config, props.initialRow, props.mode, t])
   const unavailable = !departments.isSuccess || departments.isFetching
   return (
     <DynaForm
       {...props}
       config={config}
       submitDisabled={unavailable}
-      onSubmit={(body) => {
+      onSubmit={(rawBody) => {
         if (unavailable) return
-        // Unchanged inaccessible/disabled original department uses the existing null/omitted contract.
-        if (props.mode === 'edit' && body.deptId === originalDept) delete body.deptId
+        const body = { ...rawBody }
+        if (typeof body.nickname === 'string') {
+          const trimmed = body.nickname.trim()
+          if (trimmed === '') delete body.nickname
+          else body.nickname = trimmed
+        }
+        if (props.mode === 'edit') {
+          if (originalNickname.trim() !== '' && !('nickname' in body)) {
+            body.nickname = null
+          }
+          // Unchanged original department is omitted to preserve it (including inaccessible departments).
+          if (body.deptId === originalDept) {
+            delete body.deptId
+          } else if (Boolean(originalDept) && !('deptId' in body) && hasAllEditScope) {
+            body.deptId = null
+          }
+        }
         props.onSubmit(body)
       }}
       feedback={

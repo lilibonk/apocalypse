@@ -50,6 +50,7 @@ import {
 
 const QUERY_KEY = ['system', 'online-users'] as const
 const ONLINE_PULSE_KEYS = [QUERY_KEY] as const
+const ONLINE_PULSE_TOPICS = ['onlineChanged', 'loginSucceeded'] as const
 
 const ONLINE_VIEWS = ['overview', 'list'] as const
 const noPageChange = () => {}
@@ -74,7 +75,7 @@ function OnlineUserWorkspace() {
   const desktop = useDesktopViewport()
   const [requestedView, setView] = usePageView(ONLINE_VIEWS)
   const view = desktop ? requestedView : 'list'
-  useRealtimePulse({ queryKeys: ONLINE_PULSE_KEYS })
+  useRealtimePulse({ queryKeys: ONLINE_PULSE_KEYS, topics: ONLINE_PULSE_TOPICS })
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: QUERY_KEY,

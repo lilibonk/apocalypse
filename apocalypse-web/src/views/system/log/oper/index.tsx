@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useMotionPreference } from '@/hooks/useMotionPreference'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -89,14 +90,9 @@ function DetailBlock({ label, value }: { label: string; value: string | null }) 
   }, [copied])
 
   const copy = async () => {
-    try {
-      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
-      await navigator.clipboard.writeText(value ?? '')
-      setCopied(true)
-      setCopyFailed(false)
-    } catch {
-      setCopyFailed(true)
-    }
+    const ok = await copyTextToClipboard(value ?? '')
+    setCopied(ok)
+    setCopyFailed(!ok)
   }
 
   return (
@@ -420,6 +416,7 @@ function OperLogWorkspace() {
         <DynaSearch
           fields={searchFields}
           values={draftSearch}
+          appliedValues={appliedSearch}
           onChange={(name, value) => setDraftSearch((draft) => ({ ...draft, [name]: value }))}
           onSearch={() => {
             setPage(1)

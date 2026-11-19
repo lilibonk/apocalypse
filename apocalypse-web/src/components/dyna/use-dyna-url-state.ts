@@ -1,8 +1,57 @@
 import { useCallback, useLayoutEffect, useState } from 'react'
 
-import { useTabsStore } from '@/stores/tabs'
+import { normalizeTabKey, useTabsStore } from '@/stores/tabs'
 
 import type { DynaSearchField } from './schema'
+
+const recordedUrlByPath = new Map<string, { epoch: string; search: string }>()
+
+/** 认证会话清空或跨身份切换时清除已记录的 URL 查询代数。 */
+export function resetDynaUrlEpochs(): void {
+  recordedUrlByPath.clear()
+}
+
+export function resolveInitialDynaUrlState(options: {
+  pathname: string
+  windowSearch: string
+  defaultPageSize: number
+  searchFieldNames: readonly string[]
+  entryFilters?: Record<string, string>
+  generationKey?: string
+}): ParsedDynaUrlState {
+  const normalizedPath = normalizeTabKey(options.pathname)
+  const recorded =
+    options.generationKey !== undefined ? recordedUrlByPath.get(normalizedPath) : undefined
+  if (
+    recorded &&
+    recorded.epoch !== options.generationKey &&
+    options.windowSearch === recorded.search
+  ) {
+    return parseDynaUrlSearch(
+      '',
+      options.defaultPageSize,
+      options.searchFieldNames,
+      options.entryFilters,
+    )
+  }
+  const rawSearch =
+    options.windowSearch || useTabsStore.getState().getTabSearch(normalizedPath) || ''
+  return parseDynaUrlSearch(
+    rawSearch,
+    options.defaultPageSize,
+    options.searchFieldNames,
+    options.entryFilters,
+  )
+}
+
+export function recordDynaUrlGeneration(
+  pathname: string,
+  search: string,
+  generationKey?: string,
+): void {
+  if (generationKey === undefined) return
+  recordedUrlByPath.set(normalizeTabKey(pathname), { epoch: generationKey, search })
+}
 
 export interface DynaSortState {
   field: string
@@ -124,8 +173,9 @@ export function useDynaUrlState(options: {
   defaultPageSize: number
   searchFieldNames: readonly string[]
   entryFilters?: Record<string, string>
+  generationKey?: string
 }) {
-  const { embedded, defaultPageSize, searchFieldNames, entryFilters } = options
+  const { embedded, defaultPageSize, searchFieldNames, entryFilters, generationKey } = options
 
   const readInitial = (): ParsedDynaUrlState => {
     if (embedded || typeof window === 'undefined') {
@@ -136,9 +186,14 @@ export function useDynaUrlState(options: {
         sort: null,
       }
     }
-    const pathname = window.location.pathname
-    const rawSearch = window.location.search || useTabsStore.getState().getTabSearch(pathname) || ''
-    return parseDynaUrlSearch(rawSearch, defaultPageSize, searchFieldNames, entryFilters)
+    return resolveInitialDynaUrlState({
+      pathname: window.location.pathname,
+      windowSearch: window.location.search,
+      defaultPageSize,
+      searchFieldNames,
+      entryFilters,
+      generationKey,
+    })
   }
 
   const [initial] = useState<ParsedDynaUrlState>(readInitial)
@@ -157,6 +212,7 @@ export function useDynaUrlState(options: {
       defaultPageSize,
       searchFieldNames,
     )
+    recordDynaUrlGeneration(pathname, nextSearch, generationKey)
     useTabsStore.getState().setTabSearch(pathname, nextSearch)
     if (
       window.location.search !== nextSearch &&
@@ -165,7 +221,16 @@ export function useDynaUrlState(options: {
       const nextUrl = `${pathname}${nextSearch}${window.location.hash ?? ''}`
       window.history.replaceState(window.history.state, '', nextUrl)
     }
-  }, [embedded, page, pageSize, appliedSearch, sort, defaultPageSize, searchFieldNames])
+  }, [
+    embedded,
+    page,
+    pageSize,
+    appliedSearch,
+    sort,
+    defaultPageSize,
+    searchFieldNames,
+    generationKey,
+  ])
 
   const toggleSort = useCallback((field: string) => {
     setPage(1)

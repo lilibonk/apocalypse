@@ -45,6 +45,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTabsStore } from '@/stores/tabs'
 
 const SELF_SESSIONS_QUERY_KEY = ['system', 'self-sessions'] as const
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).length
 
 export default function ProfilePage() {
   const { t } = useTranslation()
@@ -106,6 +107,19 @@ export default function ProfilePage() {
   const handleSavePassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!oldPassword || !newPassword || savingPassword) return
+    if (
+      newPassword.length < 8 ||
+      newPassword.length > 64 ||
+      !/\p{L}/u.test(newPassword) ||
+      !/\p{N}/u.test(newPassword)
+    ) {
+      toast.error(t('common.passwordPolicyInvalid'))
+      return
+    }
+    if (utf8Bytes(newPassword) > 72) {
+      toast.error(t('common.passwordTooLongBytes'))
+      return
+    }
     if (newPassword !== confirmPassword) {
       toast.error(t('common.两次输入的新密码不一致', { defaultValue: '两次输入的新密码不一致' }))
       return
@@ -291,6 +305,7 @@ export default function ProfilePage() {
                     id={newPasswordId}
                     type="password"
                     autoComplete="new-password"
+                    maxLength={64}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     required
@@ -304,12 +319,14 @@ export default function ProfilePage() {
                     id={confirmPasswordId}
                     type="password"
                     autoComplete="new-password"
+                    maxLength={64}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     required
                   />
                 </div>
-                <div className="sm:col-span-3 flex justify-end">
+                <div className="sm:col-span-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">{t('common.passwordPolicyHint')}</p>
                   <Button
                     type="submit"
                     variant="secondary"

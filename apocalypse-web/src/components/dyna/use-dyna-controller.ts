@@ -186,6 +186,10 @@ export function useDynaController(
   const queryClient = useQueryClient()
   const perms = useAuthStore((state) => state.perms)
   const allScopePerms = useAuthStore((state) => state.allScopePerms)
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch ?? 0)
+  const authorizationEpoch = useAuthStore(
+    (state) => (state as { authorizationEpoch?: number }).authorizationEpoch ?? 0,
+  )
 
   const queries = useMemo(
     () => providedQueries ?? createDynaQueries(schema, queryScope),
@@ -229,6 +233,7 @@ export function useDynaController(
     defaultPageSize,
     searchFieldNames,
     entryFilters: derivedEntryFilters,
+    generationKey: `${sessionEpoch}:${authorizationEpoch}`,
   })
 
   const [dialog, setDialog] = useState<DynaDialogModeState | null>(null)
