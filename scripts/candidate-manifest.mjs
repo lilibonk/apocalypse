@@ -378,7 +378,7 @@ async function build(review = false) {
   const frontendPackage = JSON.parse(
     await readFile(join(web, "package.json"), "utf8"),
   );
-  const pnpmVersion = run("pnpm", ["--version"]);
+  const pnpmVersion = run("pnpm", ["--version"], web);
   if (frontendPackage.packageManager !== `pnpm@${pnpmVersion}`) {
     throw new Error(
       `Expected ${frontendPackage.packageManager}; found pnpm@${pnpmVersion}`,

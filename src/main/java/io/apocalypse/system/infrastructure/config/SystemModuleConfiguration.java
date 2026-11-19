@@ -7,10 +7,13 @@ import io.apocalypse.system.authorization.service.SystemPermissionActions;
 import io.apocalypse.system.dict.dto.response.DictDataResp;
 import io.apocalypse.system.log.dto.response.LoginHeatmapResp;
 import io.apocalypse.system.log.dto.response.LoginInsightResp;
+import io.apocalypse.system.log.dto.response.OperInsightResp;
+import io.apocalypse.system.realtime.service.RealtimeProperties;
 import io.apocalypse.system.user.dto.response.UserResp;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.context.TypeExcludeFilter;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +21,7 @@ import org.springframework.context.annotation.FilterType;
 
 /** 核心模块始终装配；生成的 MapStruct 组件仍由模块内扫描发现。 */
 @ModuleConfiguration
+@EnableConfigurationProperties(RealtimeProperties.class)
 @ComponentScan(
     basePackages = "io.apocalypse.system",
     excludeFilters = {
@@ -38,6 +42,7 @@ public class SystemModuleConfiguration {
         .list("dict-data-list", DictDataResp.class)
         .single("login-insight", LoginInsightResp.class)
         .single("login-heatmap", LoginHeatmapResp.class)
+        .single("oper-insight", OperInsightResp.class)
         .build();
   }
 }

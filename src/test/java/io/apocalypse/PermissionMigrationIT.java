@@ -118,7 +118,7 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
             + schema;
     var source = new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword());
     try {
-      // 1. 下游项目初始化平台 V1 并应用自己的业务迁移 V100_1
+      // 1. 下游项目初始化平台 V1.x（V1 + V1.1）并应用自己的业务迁移 V100_1
       Flyway initial =
           Flyway.configure()
               .dataSource(source)
@@ -127,12 +127,12 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
               .locations("classpath:db/migration", "filesystem:" + extraDir)
               .outOfOrder(true)
               .load();
-      assertThat(initial.migrate().migrationsExecuted).isEqualTo(2);
+      assertThat(initial.migrate().migrationsExecuted).isEqualTo(3);
 
-      // 2. 上游平台后续发布 V1_1 平台补丁，下游同步后无冲突应用
-      Path v1Patch = extraDir.resolve("V1_1__platform_audit_comment.sql");
+      // 2. 上游平台后续发布 V1_99 平台补丁，下游同步后无冲突应用
+      Path v1Patch = extraDir.resolve("V1_99__platform_audit_comment.sql");
       Files.writeString(
-          v1Patch, "COMMENT ON TABLE sys_permission IS 'Verified V1.1 upstream patch';");
+          v1Patch, "COMMENT ON TABLE sys_permission IS 'Verified V1.99 upstream patch';");
 
       Flyway upgraded =
           Flyway.configure()
@@ -150,7 +150,7 @@ class PermissionMigrationIT extends AbstractIntegrationTest {
               jdbc.queryForList(
                   "SELECT version FROM flyway_schema_history WHERE success AND type = 'SQL' ORDER BY installed_rank",
                   String.class))
-          .containsExactly("1", "100.1", "1.1");
+          .containsExactly("1", "1.1", "100.1", "1.99");
     } finally {
       jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
     }

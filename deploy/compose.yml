@@ -86,8 +86,12 @@ services:
       DB_USERNAME: apocalypse
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES: "${APOCALYPSE_NGINX_PROXY_IP:-172.29.249.2}/32"
+      SERVER_TOMCAT_REMOTEIP_REMOTE_IP_HEADER: X-Forwarded-For
+      SERVER_TOMCAT_REMOTEIP_PROTOCOL_HEADER: X-Forwarded-Proto
       APOCALYPSE_CAPABILITIES_CALENDAR_ENABLED: "false"
+      APOCALYPSE_STORAGE_LOCAL_ROOT: /var/lib/apocalypse/storage
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the exact HTTPS frontend origin}
     secrets:
@@ -110,6 +114,12 @@ services:
         source: ./backend-health.sh
         target: /opt/apocalypse/backend-health.sh
         read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DEPLOY_RUNTIME_DIR:?Set DEPLOY_RUNTIME_DIR}/storage
+        target: /var/lib/apocalypse/storage
+        read_only: false
         bind:
           create_host_path: false
     tmpfs: ["/tmp:mode=1777,size=128m"]
@@ -167,7 +177,10 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    networks: [ingress, application]
+    networks:
+      ingress: {}
+      application:
+        ipv4_address: "${APOCALYPSE_NGINX_PROXY_IP:-172.29.249.2}"
     healthcheck:
       # Process/static readiness only. External TLS + API checks are separate.
       test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8081/ready"]
@@ -192,6 +205,10 @@ networks:
   ingress: {}
   application:
     internal: true
+    ipam:
+      config:
+        - subnet: "${APOCALYPSE_APPLICATION_SUBNET:-172.29.249.0/24}"
+          ip_range: "${APOCALYPSE_APPLICATION_IP_RANGE:-172.29.249.128/25}"
   data:
     internal: true
 

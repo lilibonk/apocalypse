@@ -7,8 +7,12 @@ import io.apocalypse.system.log.mapper.SysLoginLogMapper;
 import io.apocalypse.system.log.mapper.SysOperLogMapper;
 import io.apocalypse.system.log.service.AuditLogCleanup;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -17,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 /** 审计消费幂等与失败传播回归。 */
 class AuditEventIT extends AbstractIntegrationTest {
@@ -26,6 +31,8 @@ class AuditEventIT extends AbstractIntegrationTest {
   @Autowired private SysOperLogMapper operLogMapper;
 
   @Autowired private AuditLogCleanup auditLogCleanup;
+
+  @Autowired private DataSource dataSource;
 
   @Test
   void duplicateDeliveryCreatesOnlyOneAuditRow() {
@@ -134,7 +141,7 @@ class AuditEventIT extends AbstractIntegrationTest {
               .defaultSchema(schema)
               .locations("classpath:db/migration")
               .load();
-      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
       UUID eventId = UUID.randomUUID();
       jdbcTemplate.update(
           "INSERT INTO "
@@ -193,5 +200,50 @@ class AuditEventIT extends AbstractIntegrationTest {
                 Integer.class,
                 recentEventId))
         .isEqualTo(1);
+  }
+
+  @Test
+  void cleanupCommitsFirstBatchWhileRetainingTheSessionLock() throws Exception {
+    long lastId = -950_001L;
+    String username = "audit_batch_" + UUID.randomUUID().toString().substring(0, 8);
+    jdbcTemplate.update(
+        """
+        INSERT INTO sys_login_log(id, event_id, username, login_time)
+        SELECT -945000 - i, gen_random_uuid(), ?, TIMESTAMP '2000-01-01' + i * interval '1 second'
+        FROM generate_series(1, 5001) AS i
+        """,
+        username);
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor();
+        var blockingConnection = dataSource.getConnection()) {
+      blockingConnection.setAutoCommit(false);
+      try (var lock =
+          blockingConnection.prepareStatement(
+              "SELECT id FROM sys_login_log WHERE id = ? FOR UPDATE")) {
+        lock.setLong(1, lastId);
+        try (var result = lock.executeQuery()) {
+          assertThat(result.next()).isTrue();
+        }
+
+        var firstRun = executor.submit(auditLogCleanup::cleanup);
+        try {
+          await().atMost(Duration.ofSeconds(8)).until(() -> cleanupFixtureCount(username) == 1);
+          // 当前批被另一连接锁住，第二个实例仍须立即跳过。
+          executor.submit(auditLogCleanup::cleanup).get(2, TimeUnit.SECONDS);
+          assertThat(firstRun.isDone()).isFalse();
+          assertThat(cleanupFixtureCount(username)).isEqualTo(1);
+        } finally {
+          blockingConnection.rollback();
+        }
+        firstRun.get(8, TimeUnit.SECONDS);
+      }
+      assertThat(cleanupFixtureCount(username)).isZero();
+    } finally {
+      jdbcTemplate.update("DELETE FROM sys_login_log WHERE username = ?", username);
+    }
+  }
+
+  private int cleanupFixtureCount(String username) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM sys_login_log WHERE username = ?", Integer.class, username);
   }
 }

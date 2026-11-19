@@ -36,6 +36,8 @@ logging:
     root: info
 
 apocalypse:
+  storage:
+    local-root: ${APOCALYPSE_STORAGE_LOCAL_ROOT:/var/lib/apocalypse/storage}
   security:
     jwt:
       secret: ${JWT_SECRET}

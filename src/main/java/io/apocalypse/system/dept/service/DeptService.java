@@ -122,8 +122,7 @@ public class DeptService {
   }
 
   public void requireActiveId(Long id) {
-    if (id != null
-        && sysDeptMapper.selectActiveTree().stream().noneMatch(dept -> id.equals(dept.getId()))) {
+    if (id != null && !sysDeptMapper.existsInActiveTree(id)) {
       throw new BizException(ErrorCode.NOT_FOUND.getCode(), "部门不存在或已停用");
     }
   }

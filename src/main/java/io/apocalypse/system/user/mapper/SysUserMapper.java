@@ -120,8 +120,8 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
   @Update(
       """
       <script>
-      UPDATE sys_user SET nickname = #{entity.nickname}, status = #{entity.status},
-        password = #{entity.password}, dept_id = #{entity.deptId},
+      UPDATE sys_user SET nickname = #{entity.nickname,jdbcType=VARCHAR}, status = #{entity.status},
+        password = #{entity.password}, dept_id = #{entity.deptId,jdbcType=BIGINT},
         update_time = now(), update_by = #{entity.updateBy}, version = version + 1
       WHERE id = #{entity.id} AND deleted = 0 AND version = #{originalVersion}
         AND dept_id IS NOT DISTINCT FROM #{originalDeptId,jdbcType=BIGINT}
@@ -168,6 +168,17 @@ public interface SysUserMapper extends BaseMapper<SysUserEntity> {
             new LambdaQueryWrapper<SysUserEntity>().eq(SysUserEntity::getUsername, username))
         > 0;
   }
+
+  /** 与逻辑删除用户名唯一索引保持一致；MyBatis-Plus 仍填充雪花主键及审计字段。 */
+  @Insert(
+      """
+      INSERT INTO sys_user (id, username, password, nickname, dept_id, status,
+        create_time, update_time, create_by, update_by, version, deleted)
+      VALUES (#{id}, #{username}, #{password}, #{nickname}, #{deptId}, #{status},
+        #{createTime}, #{updateTime}, #{createBy}, #{updateBy}, #{version}, #{deleted})
+      ON CONFLICT (username) WHERE deleted = 0 DO NOTHING
+      """)
+  int insertIgnoringDuplicateUsername(SysUserEntity entity);
 
   /** 写入用户-角色关联。 */
   @Insert("INSERT INTO sys_user_role (user_id, role_id) VALUES (#{userId}, #{roleId})")

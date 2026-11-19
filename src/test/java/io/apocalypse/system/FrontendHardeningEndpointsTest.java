@@ -15,6 +15,8 @@ import io.apocalypse.system.authorization.service.DataScopeService;
 import io.apocalypse.system.dept.service.DeptService;
 import io.apocalypse.system.file.controller.SystemFileController;
 import io.apocalypse.system.file.dto.response.UploadedFileResp;
+import io.apocalypse.system.file.entity.SysFile;
+import io.apocalypse.system.file.mapper.SysFileMapper;
 import io.apocalypse.system.file.service.SystemFileService;
 import io.apocalypse.system.listener.AuthorizationAuditListener;
 import io.apocalypse.system.listener.LogPersistListener;
@@ -29,12 +31,10 @@ import io.apocalypse.system.user.controller.UserController;
 import io.apocalypse.system.user.dto.request.UserBatchDeleteReq;
 import io.apocalypse.system.user.dto.request.UserCreateReq;
 import io.apocalypse.system.user.dto.response.CsvImportResultResp;
-import io.apocalypse.system.user.dto.response.UserResp;
 import io.apocalypse.system.user.mapper.SysUserMapper;
 import io.apocalypse.system.user.service.UserConvert;
 import io.apocalypse.system.user.service.UserService;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -95,30 +95,46 @@ class FrontendHardeningEndpointsTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<Clock> clockProvider = mock(ObjectProvider.class);
     when(clockProvider.getIfAvailable(any()))
-        .thenReturn(Clock.fixed(Instant.parse("2026-11-09T12:00:00Z"), ZoneOffset.UTC));
+        .thenReturn(Clock.fixed(Instant.parse("2026-11-09T00:30:00Z"), ZoneOffset.UTC));
 
     LocalFileStorageAdapter adapter = new LocalFileStorageAdapter(props, clockProvider);
-    SystemFileService service = new SystemFileService(adapter);
+    SysFileMapper sysFileMapper = mock(SysFileMapper.class);
+    DataScopeService dataScopeService = mock(DataScopeService.class);
+    UserService userService = mock(UserService.class);
+    when(userService.findActiveDeptId(1L)).thenReturn(1L);
+    when(sysFileMapper.sumActiveBytes()).thenReturn(0L);
+    when(sysFileMapper.sumActiveBytesByOwner(1L)).thenReturn(0L);
+    doAnswer(
+            invocation -> {
+              SysFile saved = invocation.getArgument(0);
+              saved.setId(1001L);
+              return 1;
+            })
+        .when(sysFileMapper)
+        .insert(any(SysFile.class));
+
+    SystemFileService service =
+        new SystemFileService(adapter, props, sysFileMapper, dataScopeService, userService);
     SystemFileController controller = new SystemFileController(service);
 
-    MockMultipartFile file =
-        new MockMultipartFile(
-            "file", "avatar.png", "image/png", "png-binary".getBytes(StandardCharsets.UTF_8));
+    byte[] validPng =
+        new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01};
+    MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", validPng);
 
     // 未登录拒绝
-    assertThatThrownBy(() -> controller.upload(file, "general"))
+    assertThatThrownBy(() -> controller.upload(file, "general", null))
         .isInstanceOf(BizException.class)
         .extracting(ex -> ((BizException) ex).getCode())
         .isEqualTo(ErrorCode.UNAUTHORIZED.getCode());
 
     authenticateAsUser(1L, "admin");
-    UploadedFileResp uploaded = controller.upload(file, "general");
+    UploadedFileResp uploaded = controller.upload(file, "general", "avatar");
+    assertThat(uploaded.id()).isEqualTo(1001L);
     assertThat(uploaded.key()).startsWith("general/");
     assertThat(uploaded.originalFilename()).isEqualTo("avatar.png");
     assertThat(uploaded.contentType()).isEqualTo("image/png");
-    assertThat(uploaded.size()).isEqualTo(10L);
-    assertThat(adapter.read(uploaded.key()))
-        .isEqualTo("png-binary".getBytes(StandardCharsets.UTF_8));
+    assertThat(uploaded.size()).isEqualTo(validPng.length);
+    assertThat(adapter.read(uploaded.key())).isEqualTo(validPng);
   }
 
   @Test
@@ -178,19 +194,10 @@ class FrontendHardeningEndpointsTest {
               if ("existing_user".equals(req.username())) {
                 throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "用户名已存在");
               }
-              return new UserResp(
-                  100L,
-                  req.username(),
-                  req.nickname(),
-                  1,
-                  req.deptId(),
-                  null,
-                  List.of(),
-                  List.of(),
-                  LocalDateTime.now());
+              return null;
             })
         .when(proxy)
-        .create(any(UserCreateReq.class));
+        .insertCsvRow(any(UserCreateReq.class), any(), any());
 
     byte[] importBytes =
         SafeCsvSupport.writeUtf8BomCsv(
@@ -230,7 +237,7 @@ class FrontendHardeningEndpointsTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<Clock> clockProvider = mock(ObjectProvider.class);
     when(clockProvider.getIfAvailable(any()))
-        .thenReturn(Clock.fixed(Instant.parse("2026-11-09T12:00:00Z"), ZoneOffset.UTC));
+        .thenReturn(Clock.fixed(Instant.parse("2026-11-09T00:30:00Z"), ZoneOffset.UTC));
 
     RealtimePulseHub hub = new RealtimePulseHub(clockProvider);
     RealtimeStreamController streamController = new RealtimeStreamController(hub);

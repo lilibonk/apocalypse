@@ -26,7 +26,12 @@ import tools.jackson.databind.JsonNode;
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"apocalypse.ratelimit.limits.login=2"})
+    properties = {
+      "apocalypse.ratelimit.limits.login=2",
+      "server.forward-headers-strategy=NATIVE",
+      "server.tomcat.remoteip.internal-proxies=127.0.0.1/32,::1/128",
+      "server.tomcat.remoteip.remote-ip-header=X-Forwarded-For"
+    })
 @AutoConfigureTestRestTemplate
 class RateLimitIT extends AbstractIntegrationTest {
 

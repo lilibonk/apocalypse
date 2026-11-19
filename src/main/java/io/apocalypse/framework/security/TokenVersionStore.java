@@ -4,10 +4,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
 
 /**
  * JWT 持久化版本存储：全局授权版本用于角色/菜单变更，用户授权版本用于单用户角色变更，凭证版本用于禁用、删除与改密。
@@ -15,7 +16,6 @@ import lombok.RequiredArgsConstructor;
  * <p>PostgreSQL 是安全版本的唯一真源。失效递增直接加入调用方业务事务，数据库写失败会让权限/凭证变更一并回滚；Redis 丢失、回退或清空不会让已撤销 JWT 重新有效。
  */
 @Component
-@RequiredArgsConstructor
 public class TokenVersionStore {
 
   private static final String TABLE = "security_token_version";
@@ -27,6 +27,19 @@ public class TokenVersionStore {
   private static final String CREDENTIAL_PREFIX = "credential:user:";
 
   private final JdbcTemplate jdbcTemplate;
+
+  private final ObjectProvider<ApplicationEventPublisher> eventPublisherProvider;
+
+  public TokenVersionStore(JdbcTemplate jdbcTemplate) {
+    this(jdbcTemplate, null);
+  }
+
+  @Autowired
+  public TokenVersionStore(
+      JdbcTemplate jdbcTemplate, ObjectProvider<ApplicationEventPublisher> eventPublisherProvider) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.eventPublisherProvider = eventPublisherProvider;
+  }
 
   /** 当前用户令牌需要携带并逐请求核验的版本快照。 */
   public record VersionSnapshot(
@@ -54,16 +67,29 @@ public class TokenVersionStore {
   /** 角色、菜单定义或角色关联变化：在业务事务内让全部旧 access token 失效，refresh 仍可换取新权限。 */
   public void invalidateGlobalAuthorization() {
     increment(GLOBAL_AUTHORIZATION_FIELD);
+    publishSessionInvalidated(SessionInvalidatedEvent.forGlobal());
   }
 
   /** 单个用户的角色变化：在业务事务内只让该用户的旧 access token 失效。 */
   public void invalidateUserAuthorization(String username) {
     increment(USER_AUTHORIZATION_PREFIX + username);
+    publishSessionInvalidated(SessionInvalidatedEvent.forUser(username));
   }
 
   /** 用户禁用、删除或改密：在业务事务内同时废止该用户的 access 与 refresh token。 */
   public void invalidateCredential(String username) {
     increment(CREDENTIAL_PREFIX + username);
+    publishSessionInvalidated(SessionInvalidatedEvent.forUser(username));
+  }
+
+  private void publishSessionInvalidated(SessionInvalidatedEvent event) {
+    if (eventPublisherProvider == null) {
+      return;
+    }
+    ApplicationEventPublisher publisher = eventPublisherProvider.getIfAvailable();
+    if (publisher != null) {
+      publisher.publishEvent(event);
+    }
   }
 
   private void increment(String field) {

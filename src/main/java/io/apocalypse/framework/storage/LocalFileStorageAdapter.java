@@ -67,6 +67,7 @@ public class LocalFileStorageAdapter implements FileStoragePort {
     }
 
     String safeName = sanitizeFilename(originalFilename);
+    FileContentVerifier.verify(normalizedMime, safeName, content);
     String sha256 = sha256Hex(content);
     String storageKey =
         category + "/" + sha256.substring(0, 12) + "_" + UUID.randomUUID() + "_" + safeName;

@@ -6,7 +6,6 @@ import io.apocalypse.system.log.entity.SysOperLogEntity;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -43,21 +42,6 @@ public interface SysOperLogMapper extends BaseMapper<SysOperLogEntity> {
       ON CONFLICT (event_id) DO NOTHING
       """)
   int insertIgnoringDuplicateEvent(SysOperLogEntity entity);
-
-  @Delete("DELETE FROM sys_oper_log WHERE oper_time < #{cutoff}")
-  int deleteBefore(java.time.LocalDateTime cutoff);
-
-  @Delete(
-      """
-      DELETE FROM sys_oper_log
-      WHERE id IN (
-        SELECT id FROM sys_oper_log
-        WHERE oper_time < #{cutoff}
-        ORDER BY oper_time ASC
-        LIMIT #{limit}
-      )
-      """)
-  int deleteBatchBefore(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
 
   /** 按操作人关键字分页（按操作时间倒序）。 */
   default PageResult<SysOperLogEntity> pageByKeyword(int page, int size, String keyword) {

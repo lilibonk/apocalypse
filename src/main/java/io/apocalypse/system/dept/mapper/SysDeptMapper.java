@@ -35,7 +35,7 @@ public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
   List<SysDeptEntity> selectTree();
 
   /** 只有从有效根经全有效祖先到达的部门可以作为用户部门目标。 */
-  @Select(
+  String ACTIVE_TREE =
       """
       WITH RECURSIVE dept_tree AS (
         SELECT * FROM sys_dept WHERE parent_id = 0 AND deleted = 0 AND status = 1
@@ -43,9 +43,13 @@ public interface SysDeptMapper extends BaseMapper<SysDeptEntity> {
         SELECT d.* FROM sys_dept d JOIN dept_tree t ON d.parent_id = t.id
         WHERE d.deleted = 0 AND d.status = 1
       )
-      SELECT * FROM dept_tree ORDER BY sort, id
-      """)
+      """;
+
+  @Select(ACTIVE_TREE + "SELECT * FROM dept_tree ORDER BY sort, id")
   List<SysDeptEntity> selectActiveTree();
+
+  @Select(ACTIVE_TREE + "SELECT EXISTS (SELECT 1 FROM dept_tree WHERE id = #{id})")
+  boolean existsInActiveTree(@Param("id") Long id);
 
   /** 以 rootId 为根的子树（含 rootId 自身）；UNION 对完整行去重，使历史循环数据也能有限返回。 */
   @Select(

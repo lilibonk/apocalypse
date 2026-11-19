@@ -59,7 +59,7 @@ export async function prepare(
   await rejectLinks(frontend);
   // Exclusive directory creation: never overwrite an existing deployment or secrets.
   await mkdir(runtime, { mode: 0o700 });
-  for (const directory of ["secrets", "tls", "artifacts"]) {
+  for (const directory of ["secrets", "tls", "artifacts", "storage"]) {
     await mkdir(join(runtime, directory), { mode: 0o700 });
   }
   for (const name of [

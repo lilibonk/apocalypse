@@ -93,6 +93,15 @@ public class UserService implements UserApi, LoginUserQuery {
    */
   private final ObjectProvider<UserService> self;
 
+  /** 查询未删除用户的当前所属部门（跨子域只读契约）。 */
+  public Long findActiveDeptId(Long userId) {
+    if (userId == null) {
+      return null;
+    }
+    SysUserEntity entity = sysUserMapper.selectById(userId);
+    return entity == null ? null : entity.getDeptId();
+  }
+
   /** 跨模块 facade：不存在时抛 {@code BizException(40400)}。 */
   @Override
   public UserSummary getById(Long id) {
@@ -301,10 +310,18 @@ public class UserService implements UserApi, LoginUserQuery {
             throw new BizException(ErrorCode.PARAM_INVALID.getCode(), "部门ID格式非法: " + deptIdText);
           }
         }
-        self.getObject()
-            .create(
-                new UserCreateReq(
-                    username, password, StringUtils.hasText(nickname) ? nickname : null, deptId));
+        UserCreateReq request =
+            new UserCreateReq(
+                username, password, StringUtils.hasText(nickname) ? nickname : null, deptId);
+        String encodedPassword = null;
+        BizException invalidPassword = null;
+        try {
+          PasswordPolicy.validate(password);
+          encodedPassword = passwordEncoder.encode(password);
+        } catch (BizException ex) {
+          invalidPassword = ex;
+        }
+        self.getObject().insertCsvRow(request, encodedPassword, invalidPassword);
         successCount++;
       } catch (BizException ex) {
         if (ex.getCode() == ErrorCode.FORBIDDEN.getCode()
@@ -337,41 +354,65 @@ public class UserService implements UserApi, LoginUserQuery {
       throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "用户名已存在");
     }
     PasswordPolicy.validate(req.password());
-    SysUserEntity entity = new SysUserEntity();
-    entity.setUsername(req.username());
-    entity.setPassword(passwordEncoder.encode(req.password()));
-    entity.setNickname(req.nickname());
-    entity.setDeptId(requireDept(req.deptId()));
-    entity.setStatus(SysUserEntity.STATUS_ENABLED);
+    SysUserEntity entity = newUser(req, passwordEncoder.encode(req.password()));
     sysUserMapper.insert(entity);
     return withDeptName(userConvert.toResp(entity));
   }
 
-  /** 更新用户（仅更新非空字段）。 */
+  /** 每行独立提交；持写锁期间重新核验授权和部门，重名由唯一索引判定。 */
+  @Transactional
+  public void insertCsvRow(
+      UserCreateReq req, String encodedPassword, BizException invalidPassword) {
+    dataScopeService.lockForWrite();
+    DataScopeResp scope = dataScopeService.resolve("system:user:add");
+    requireTargetDepartment(scope, req.deptId(), true);
+    if (invalidPassword != null) {
+      if (sysUserMapper.existsByUsername(req.username())) {
+        throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "用户名已存在");
+      }
+      throw invalidPassword;
+    }
+    if (sysUserMapper.insertIgnoringDuplicateUsername(newUser(req, encodedPassword)) == 0) {
+      throw new BizException(ErrorCode.BIZ_ERROR.getCode(), "用户名已存在");
+    }
+  }
+
+  private static SysUserEntity newUser(UserCreateReq req, String encodedPassword) {
+    SysUserEntity entity = new SysUserEntity();
+    entity.setUsername(req.username());
+    entity.setPassword(encodedPassword);
+    entity.setNickname(req.nickname());
+    entity.setDeptId(req.deptId());
+    entity.setStatus(SysUserEntity.STATUS_ENABLED);
+    return entity;
+  }
+
+  /** 更新显式提交的用户字段，部门清空要求全部数据范围。 */
   @Transactional
   @CacheEvict(cacheNames = "user", key = "#id")
   public UserResp update(Long id, UserUpdateReq req) {
     dataScopeService.lockForWrite();
     DataScopeResp scope = dataScopeService.resolve("system:user:edit");
+    if (req.deptIdPresent() && req.deptId() == null && !scope.all()) {
+      throw new BizException(ErrorCode.FORBIDDEN.getCode(), "清空用户部门需要全部数据范围");
+    }
     SysUserEntity entity = requireById(id);
     dataScopeService.requireWritableTarget(scope, id, entity.getDeptId());
     Long originalDeptId = entity.getDeptId();
     Integer originalVersion = entity.getVersion();
     boolean departmentChanged =
-        req.deptId() != null && !Objects.equals(req.deptId(), originalDeptId);
-    if (req.deptId() != null) {
+        req.deptIdPresent() && !Objects.equals(req.deptId(), originalDeptId);
+    if (req.deptIdPresent()) {
       requireTargetDepartment(scope, req.deptId(), false);
+      entity.setDeptId(requireDept(req.deptId()));
     }
     boolean credentialChanged =
         req.status() != null && !Objects.equals(req.status(), entity.getStatus());
-    if (StringUtils.hasText(req.nickname())) {
+    if (req.nicknamePresent()) {
       entity.setNickname(req.nickname());
     }
     if (req.status() != null) {
       entity.setStatus(req.status());
-    }
-    if (req.deptId() != null) {
-      entity.setDeptId(requireDept(req.deptId()));
     }
     entity.setUpdateBy(SecurityUtils.currentUsername().orElse(null));
     ConcurrencyGuard.requireSingleRow(

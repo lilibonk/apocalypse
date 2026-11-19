@@ -32,6 +32,9 @@ public final class SystemPermissionActions {
       actions.add(Action.business(code, null, false));
     }
     actions.add(Action.business("system:permission:edit", null, true));
+    actions.add(Action.business("system:file:list", null, true));
+    actions.add(Action.business("system:file:upload", null, false));
+    actions.add(Action.business("system:file:remove", null, true));
     // 退役 Order 仅保留兼容投影；没有业务方法可以凭这些记录获得执行能力。
     for (String code :
         List.of("order:create", "order:read", "order:read:any", "order:list", "order:list:any")) {

@@ -54,9 +54,9 @@ dc up -d --force-recreate --wait --wait-timeout 180 backend
 | 密钥       | Spring Boot `configtree` 挂载 DB/JWT/Redis/bootstrap 文件；Compose 输出不包含密钥值                                                    |
 | 数据库     | 管理凭据仅供 PostgreSQL 初始化；应用使用非 superuser、无创建角色/数据库权限的 `apocalypse` 角色，由它拥有应用库                        |
 | Redis      | 单独随机密码、AOF 持久化；不发布宿主机端口                                                                                             |
-| 应用权限   | 以生成文件的部署 UID/GID 非 root 运行、只读根文件系统、临时目录在 tmpfs                                                                |
+| 应用权限   | 以生成文件的部署 UID/GID 非 root 运行、只读根文件系统、持久上传目录单独挂载 `${DEPLOY_RUNTIME_DIR}/storage`、临时目录在 tmpfs |
 | 网络       | 仅 nginx 发布 HTTPS；后端/数据库/Redis 无宿主机端口；应用和数据网络设置为 internal                                                     |
-| 代理       | `/api/` 剥去前缀后转发；SPA 深链回到 `index.html`；缺失的 `/assets/` 返回 404                                                          |
+| 代理       | `/api/` 剥去前缀后转发；`/api/system/realtime/stream` 单独关闭代理缓冲并将读超时设为 `330s` 以适配单机心跳；SPA 深链回退 `index.html`；缺失 `/assets/` 返回 404 |
 | 健康与文档 | 生产 OpenAPI 和后端默认静态映射关闭；代理另拒绝 Swagger UI/WebJar/文档入口，仅放行 `/api/actuator/health` 的摘要，其余 Actuator 被拒绝 |
 | 可选能力   | Calendar 默认关闭，但代码和 Schema 迁移仍随 JAR 发布，关闭不删除历史数据                                                               |
 
@@ -66,7 +66,9 @@ dc up -d --force-recreate --wait --wait-timeout 180 backend
 
 `deployment.env` 只保存非秘密路径与 UID/端口。Compose secrets 在这里是受限的宿主机文件挂载，不是加密秘密管理服务。不要修改 `APP_UID` 后忘记同步文件所有者；否则应用无法读取 `0600` 密钥。移动部署时要同时保全权限、证书和受控凭据记录。
 
-nginx 覆盖外来 `Forwarded`/`X-Forwarded-*`，由后端识别代理后的 HTTPS 来源。若前面再加网关/CDN，需重新定义可信代理和真实客户端 IP，不能直接把客户端提供的转发链视为可信。此参考不需要应用运行期外网；要接第三方服务须审阅新增的出站网络范围。
+后端默认使用连接对端作为客户端地址。参考 Compose 启用 Tomcat 原生代理识别，仅信任 `application` 网络上的 Nginx 地址（默认 `172.29.249.2/32`）。Nginx 丢弃外来的 `Forwarded` 和 `X-Forwarded-By`，并用连接对端重写 `X-Forwarded-For`。登录与操作审计和 IP 限流使用 Tomcat 解析后的同一地址。
+
+网络冲突时，在 Compose 的环境文件中设置 `APOCALYPSE_APPLICATION_SUBNET`、子网内的动态分配范围 `APOCALYPSE_APPLICATION_IP_RANGE`，以及动态范围外的 `APOCALYPSE_NGINX_PROXY_IP`。代理地址和 Tomcat 的信任范围由同一变量生成。其他反向代理拓扑需显式配置 Tomcat 的代理地址和转发头，并由边缘代理覆盖客户端提交的这些头。前置网关或 CDN 改变时需要重新核验地址来源。此参考部署无需运行期外网。接入第三方服务时须审阅新增的出站网络范围。
 
 ## 健康、业务失败与日志
 
@@ -87,8 +89,9 @@ umask 077
 dc stop backend
 dc exec -T postgres pg_dump -U postgres -d apocalypse \
   -Fc --no-owner --no-acl > /secure-backups/apocalypse.dump
-# 在恢复主机上使用同一 SHA-256 工具核验该文件。
-sha256sum /secure-backups/apocalypse.dump
+tar -C /srv/apocalypse -cf /secure-backups/apocalypse-storage.tar storage
+# 在恢复主机上使用同一 SHA-256 工具核验数据库 dump 与成对文件存储归档。
+sha256sum /secure-backups/apocalypse.dump /secure-backups/apocalypse-storage.tar
 dc up -d --wait --wait-timeout 180 backend
 ```
 
@@ -98,10 +101,11 @@ dc up -d --wait --wait-timeout 180 backend
 node deploy/prepare.mjs /srv/apocalypse-restore backend/apocalypse-0.1.0-rc.2.jar apocalypse-web/dist
 ```
 
-为恢复实例安装适配的 TLS 文件，在其 `deployment.env` 配置不冲突的 HTTPS 端口；保留新生成的 JWT/DB/Redis 密钥，并清空恢复实例的 bootstrap 文件。数据库备份中的现有管理员密码哈希会被恢复，新生成的 bootstrap 口令不适用于这些账号。
+为恢复实例安装适配的 TLS 文件，在其 `deployment.env` 配置不冲突的 HTTPS 端口；保留新生成的 JWT/DB/Redis 密钥，并清空恢复实例的 bootstrap 文件。数据库备份中的现有管理员密码哈希会被恢复，新生成的 bootstrap 口令不适用于这些账号。启动后端前需把成对的文件存储归档解包回新实例的 `storage` 目录。
 
 ```bash
 : > /srv/apocalypse-restore/secrets/bootstrap-admin-password
+tar -C /srv/apocalypse-restore -xf /secure-backups/apocalypse-storage.tar storage
 restore_dc() {
   docker compose --project-name apocalypse-restore \
     --env-file /srv/apocalypse-restore/deployment.env -f deploy/compose.yml "$@"

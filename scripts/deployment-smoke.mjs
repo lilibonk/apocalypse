@@ -4,8 +4,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
+  appendFile,
   chmod,
   copyFile,
+  cp,
   mkdir,
   readFile,
   readdir,
@@ -224,6 +226,9 @@ function compose(project, args, options = {}) {
           "HTTPS_BIND",
           "HTTPS_PORT",
           "PUBLIC_ORIGIN",
+          "APOCALYPSE_APPLICATION_SUBNET",
+          "APOCALYPSE_APPLICATION_IP_RANGE",
+          "APOCALYPSE_NGINX_PROXY_IP",
         ].includes(name),
     ),
   );
@@ -264,6 +269,36 @@ function sql(project, query) {
     { input: query },
   ).stdout.trim();
 }
+function availableProxyNetworks(count) {
+  const ids = run("docker", ["network", "ls", "-q"]).stdout.trim().split(/\s+/);
+  const networks = JSON.parse(run("docker", ["network", "inspect", ...ids]).stdout);
+  const used = networks.flatMap(({ IPAM }) =>
+    (IPAM?.Config ?? []).flatMap(({ Subnet }) => {
+      if (!Subnet || Subnet.includes(":")) return [];
+      const [address, prefix] = Subnet.split("/");
+      const ip = address.split(".").reduce((value, byte) => value * 256 + Number(byte), 0);
+      const size = 2 ** (32 - Number(prefix));
+      const start = Math.floor(ip / size) * size;
+      return [[start, start + size - 1]];
+    }),
+  );
+  const choices = [];
+  const offset = randomBytes(1)[0];
+  for (let index = 0; index < 256 && choices.length < count; index++) {
+    const octet = (offset + index) % 256;
+    const start = ((172 * 256 + 29) * 256 + octet) * 256;
+    if (!used.some(([first, last]) => first <= start + 255 && last >= start)) {
+      choices.push({
+        subnet: `172.29.${octet}.0/24`,
+        ipRange: `172.29.${octet}.128/25`,
+        proxyIp: `172.29.${octet}.2`,
+      });
+    }
+  }
+  if (choices.length !== count) throw new Error("No isolated proxy subnets available.");
+  return choices;
+}
+
 async function availablePort() {
   const server = createServer();
   await new Promise((resolveListen, reject) => {
@@ -277,9 +312,21 @@ async function availablePort() {
 async function request(
   project,
   path,
-  { method = "GET", body, token, trusted = true, headers = {} } = {},
+  {
+    method = "GET",
+    body,
+    token,
+    trusted = true,
+    headers = {},
+    timeoutMs = 5000,
+  } = {},
 ) {
-  const bytes = body === undefined ? undefined : JSON.stringify(body);
+  const bytes =
+    body === undefined
+      ? undefined
+      : Buffer.isBuffer(body)
+        ? body
+        : JSON.stringify(body);
   return new Promise((resolveRequest, reject) => {
     const req = httpsRequest(
       {
@@ -288,13 +335,15 @@ async function request(
         path,
         method,
         ca: trusted ? ca : undefined,
-        timeout: 5000,
+        timeout: timeoutMs,
         headers: {
+          ...(bytes !== undefined && !Buffer.isBuffer(body)
+            ? { "Content-Type": "application/json" }
+            : {}),
           ...headers,
           ...(bytes === undefined
             ? {}
             : {
-                "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(bytes),
               }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -304,16 +353,18 @@ async function request(
         const chunks = [];
         response.on("data", (chunk) => chunks.push(chunk));
         response.on("end", () => {
-          const text = Buffer.concat(chunks).toString("utf8");
+          const buffer = Buffer.concat(chunks);
+          const text = buffer.toString("utf8");
           let json;
           try {
             json = JSON.parse(text);
           } catch {
-            /* Static content is not JSON. */
+            /* Binary or static content is not JSON. */
           }
           resolveRequest({
             status: response.statusCode,
             headers: response.headers,
+            buffer,
             text,
             json,
           });
@@ -323,6 +374,136 @@ async function request(
     req.on("error", reject);
     req.on("timeout", () => req.destroy(new Error("request timeout")));
     if (bytes !== undefined) req.write(bytes);
+    req.end();
+  });
+}
+
+function buildMultipart(fields, filePart) {
+  const boundary = `----ApocalypseSmoke${randomBytes(8).toString("hex")}`;
+  const chunks = [];
+  for (const [name, value] of Object.entries(fields)) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+        "utf8",
+      ),
+    );
+  }
+  if (filePart) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${filePart.field}"; filename="${filePart.filename}"\r\nContent-Type: ${filePart.contentType}\r\n\r\n`,
+        "utf8",
+      ),
+    );
+    chunks.push(filePart.data);
+    chunks.push(Buffer.from("\r\n", "utf8"));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"));
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    body: Buffer.concat(chunks),
+  };
+}
+
+async function openSseStream(project, token) {
+  return new Promise((resolveStream, rejectStream) => {
+    let buffer = "";
+    let closed = false;
+    const waiters = new Set();
+    const closeWaiters = new Set();
+
+    const notifyWaiters = () => {
+      for (const waiter of [...waiters]) {
+        if (buffer.includes(waiter.needle)) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.resolve(true);
+        } else if (closed) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.resolve(false);
+        }
+      }
+      if (closed) {
+        for (const closeWaiter of [...closeWaiters]) {
+          closeWaiters.delete(closeWaiter);
+          clearTimeout(closeWaiter.timer);
+          closeWaiter.resolve(true);
+        }
+      }
+    };
+
+    const req = httpsRequest(
+      {
+        hostname: "127.0.0.1",
+        port: project.port,
+        path: "/api/system/realtime/stream",
+        method: "GET",
+        ca,
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      (response) => {
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          buffer += chunk;
+          notifyWaiters();
+        });
+        response.on("end", () => {
+          closed = true;
+          notifyWaiters();
+        });
+        response.on("close", () => {
+          closed = true;
+          notifyWaiters();
+        });
+        resolveStream({
+          status: response.statusCode,
+          headers: response.headers,
+          awaitMatch(needle, timeoutMs = 5000) {
+            if (buffer.includes(needle)) return Promise.resolve(true);
+            if (closed) return Promise.resolve(false);
+            return new Promise((resolveWait) => {
+              const waiter = {
+                needle,
+                resolve: resolveWait,
+                timer: setTimeout(() => {
+                  waiters.delete(waiter);
+                  resolveWait(false);
+                }, timeoutMs),
+              };
+              waiters.add(waiter);
+            });
+          },
+          awaitClose(timeoutMs = 5000) {
+            if (closed) return Promise.resolve(true);
+            return new Promise((resolveClose) => {
+              const closeWaiter = {
+                resolve: resolveClose,
+                timer: setTimeout(() => {
+                  closeWaiters.delete(closeWaiter);
+                  resolveClose(false);
+                }, timeoutMs),
+              };
+              closeWaiters.add(closeWaiter);
+            });
+          },
+          close() {
+            req.destroy();
+          },
+        });
+      },
+    );
+    req.on("error", (err) => {
+      if (!closed) {
+        closed = true;
+        notifyWaiters();
+      }
+      rejectStream(err);
+    });
     req.end();
   });
 }
@@ -579,6 +760,7 @@ try {
         "Only the two disposable browser-checkpoint projects; production defaults unchanged.",
     };
   }
+  const proxyNetworks = availableProxyNetworks(projects.length);
   for (const [index, project] of projects.entries()) {
     project.port = await availablePort();
     project.origin = new URL(`https://127.0.0.1:${project.port}`).origin;
@@ -592,6 +774,16 @@ try {
         : join(projects[0].runtime, "artifacts/frontend"),
       project.port,
       project.origin,
+    );
+    const { subnet, ipRange, proxyIp } = proxyNetworks[index];
+    await appendFile(
+      join(project.runtime, "deployment.env"),
+      [
+        `APOCALYPSE_APPLICATION_SUBNET=${subnet}`,
+        `APOCALYPSE_APPLICATION_IP_RANGE=${ipRange}`,
+        `APOCALYPSE_NGINX_PROXY_IP=${proxyIp}`,
+        "",
+      ].join("\n"),
     );
     for (const file of await readdir(join(project.runtime, "secrets"))) {
       const path = join(project.runtime, "secrets", file);
@@ -666,6 +858,12 @@ try {
   check(
     model.networks.application.internal && model.networks.data.internal,
     "application and data networks are internal",
+  );
+  check(
+    model.services.backend.environment.SERVER_FORWARD_HEADERS_STRATEGY === "native" &&
+      model.services.backend.environment.SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES ===
+        `${model.services.frontend.networks.application.ipv4_address}/32`,
+    "Tomcat trusts only the Nginx application-network address",
   );
   check(
     model.services.backend.user.split(":")[0] !== "0",
@@ -883,7 +1081,9 @@ try {
     if (!auditedIp) await pause(500);
   }
   check(
-    Boolean(auditedIp) && auditedIp !== "203.0.113.10",
+    Boolean(auditedIp) &&
+      auditedIp !== "203.0.113.10" &&
+      auditedIp !== proxyNetworks[0].proxyIp,
     "untrusted forwarding headers do not replace the audited client address",
   );
   const calendar = await request(primary, "/api/calendar/days/2026-09-27", {
@@ -925,6 +1125,134 @@ try {
     created.json?.code === 0 && typeof created.json.data === "string",
     "synthetic business write succeeds",
   );
+
+  // Live HTTPS SSE stream through Nginx + session revocation disconnect + general file storage persistence
+  const sseSession = await loginPair(primary, password);
+  const sseStream = await openSseStream(primary, sseSession.accessToken);
+  let validPngBytes;
+  let uploadedFileId;
+  let spoofUpload;
+  try {
+    check(
+      sseStream.status === 200 &&
+        String(sseStream.headers["content-type"] ?? "").startsWith(
+          "text/event-stream",
+        ) &&
+        String(sseStream.headers["cache-control"] ?? "").includes("no-store"),
+      "HTTPS gateway proxies SSE stream with event-stream and no-store headers",
+    );
+    check(
+      await sseStream.awaitMatch('"topic":"connected"', 5000),
+      "HTTPS SSE stream delivers connected event immediately without proxy buffering",
+    );
+
+    const spoofedPng = buildMultipart(
+      { category: "attachment", remark: "spoof test" },
+      {
+        field: "file",
+        filename: "spoof.png",
+        contentType: "image/png",
+        data: Buffer.from("not-a-valid-png-header", "utf8"),
+      },
+    );
+    spoofUpload = await request(primary, "/api/system/files/upload", {
+      method: "POST",
+      token,
+      body: spoofedPng.body,
+      headers: { "Content-Type": spoofedPng.contentType },
+    });
+    check(
+      spoofUpload.status === 200 && spoofUpload.json?.code === 40000,
+      "HTTPS file upload rejects spoofed PNG without magic bytes",
+    );
+
+    validPngBytes = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from(`apocalypse-smoke-${id}`, "utf8"),
+    ]);
+    const validPngForm = buildMultipart(
+      { category: "attachment", remark: "smoke persistent file" },
+      {
+        field: "file",
+        filename: `smoke-${id}.png`,
+        contentType: "image/png",
+        data: validPngBytes,
+      },
+    );
+    const fileUpload = await request(primary, "/api/system/files/upload", {
+      method: "POST",
+      token,
+      body: validPngForm.body,
+      headers: { "Content-Type": validPngForm.contentType },
+    });
+    check(
+      fileUpload.status === 200 &&
+        fileUpload.json?.code === 0 &&
+        Boolean(fileUpload.json.data?.id) &&
+        Boolean(fileUpload.json.data?.key),
+      "HTTPS file upload persists verified PNG",
+    );
+    uploadedFileId = fileUpload.json.data.id;
+    const uploadedStorageKey = fileUpload.json.data.key;
+    await stat(
+      join(primary.runtime, "storage", ...uploadedStorageKey.split("/")),
+    );
+    check(
+      true,
+      "uploaded file resides in host persistent storage volume rather than ephemeral /tmp tmpfs",
+    );
+    check(
+      await sseStream.awaitMatch('"topic":"operationLogged"', 5000),
+      "HTTPS SSE stream receives live operationLogged pulse after audited upload",
+    );
+
+    const listedFiles = await request(
+      primary,
+      `/api/system/files/page?page=1&size=10&keyword=smoke-${id}.png`,
+      { token },
+    );
+    check(
+      listedFiles.json?.code === 0 &&
+        Array.isArray(listedFiles.json.data?.list) &&
+        listedFiles.json.data.list.some((item) => item.id === uploadedFileId),
+      "HTTPS file page lists the uploaded object",
+    );
+    const downloadedFile = await request(
+      primary,
+      `/api/system/files/${uploadedFileId}/download`,
+      { token },
+    );
+    check(
+      downloadedFile.status === 200 &&
+        String(downloadedFile.headers["content-disposition"] ?? "").startsWith(
+          "attachment",
+        ) &&
+        downloadedFile.headers["x-content-type-options"] === "nosniff" &&
+        downloadedFile.headers["content-security-policy"] ===
+          "default-src 'none'; sandbox" &&
+        Buffer.compare(downloadedFile.buffer, validPngBytes) === 0,
+      "HTTPS file download enforces hardened attachment headers and byte integrity",
+    );
+
+    const sseLogout = await request(primary, "/api/auth/logout", {
+      method: "POST",
+      token: sseSession.accessToken,
+    });
+    check(sseLogout.json?.code === 0, "SSE holder session logs out cleanly");
+    check(
+      await sseStream.awaitClose(5000),
+      "HTTPS SSE stream disconnects promptly after holder logout",
+    );
+    report.realtimeSse = {
+      contentType: sseStream.headers["content-type"],
+      cacheControl: sseStream.headers["cache-control"],
+      connectedDelivered: true,
+      operationLoggedDelivered: true,
+      closedOnLogout: true,
+    };
+  } finally {
+    sseStream.close();
+  }
 
   // Remove the one-time bootstrap value without changing the inode of its bind mount.
   await writeFile(
@@ -968,10 +1296,14 @@ try {
     { binary: true },
   ).stdout;
   await writeFile(backupPath, dump, { mode: 0o600, flag: "wx" });
+  const storageBackupDir = join(output, "storage-backup");
+  await cp(join(primary.runtime, "storage"), storageBackupDir, {
+    recursive: true,
+  });
   report.backup = {
     sha256: sha256(dump),
     bytes: dump.length,
-    format: "PostgreSQL custom",
+    format: "PostgreSQL custom + paired persistent storage snapshot",
     writesPaused: true,
   };
   compose(primary, ["up", "-d", "--wait", "--wait-timeout", "180", "backend"]);
@@ -984,6 +1316,15 @@ try {
   check(
     changed.json?.code === 0,
     "post-backup mutation differs from recovery point",
+  );
+  const deletedPostBackup = await request(
+    primary,
+    `/api/system/files/${uploadedFileId}`,
+    { method: "DELETE", token },
+  );
+  check(
+    deletedPostBackup.json?.code === 0,
+    "post-backup file removal diverges from saved storage snapshot",
   );
 
   console.log(
@@ -1028,6 +1369,10 @@ try {
     ],
     { input: dump, binary: true },
   );
+  await cp(storageBackupDir, join(restored.runtime, "storage"), {
+    recursive: true,
+    force: true,
+  });
   compose(restored, ["up", "-d", "--wait", "--wait-timeout", "240"]);
   await healthy(restored);
   const oldSession = await request(restored, "/api/system/users/me", { token });
@@ -1061,6 +1406,21 @@ try {
       recovered.json.data?.configValue === record.configValue,
     "restored database returns the backed-up business value",
   );
+  const recoveredFile = await request(
+    restored,
+    `/api/system/files/${uploadedFileId}/download`,
+    { token: restoredToken },
+  );
+  check(
+    recoveredFile.status === 200 &&
+      Buffer.compare(recoveredFile.buffer, validPngBytes) === 0,
+    "paired storage restore serves the backed-up file identically after post-backup primary deletion",
+  );
+  report.fileStorage = {
+    spoofRejectedCode: spoofUpload.json?.code,
+    restoredFileSha256: sha256(recoveredFile.buffer),
+    pairedStorageVerified: true,
+  };
 
   console.log(
     "Injecting a failed artifact startup, then restoring the checked JAR...",
@@ -1079,14 +1439,17 @@ try {
     failedStart.status !== 0,
     "invalid replacement artifact cannot pass startup gate",
   );
-  const broken = await request(restored, "/api/actuator/health");
+  // Stabilize the failed state after proving the invalid artifact cannot start.
+  compose(restored, ["stop", "backend"]);
+  const broken = await request(restored, "/api/actuator/health", {
+    timeoutMs: 15000,
+  });
   const staticDuringFailure = await request(restored, "/");
   check(
     broken.status === 502 && staticDuringFailure.status === 200,
     "static readiness does not hide backend unavailability",
     { healthStatus: broken.status, staticStatus: staticDuringFailure.status },
   );
-  compose(restored, ["stop", "backend"]);
   await copyFile(
     join(primary.runtime, "artifacts/backend.jar"),
     join(restored.runtime, "artifacts/backend.jar"),
@@ -1274,9 +1637,10 @@ try {
     "server.csr",
     "server.extensions",
     "database.dump",
+    "storage-backup",
     "browser-credentials.json",
   ])
-    await rm(join(output, name), { force: true });
+    await rm(join(output, name), { recursive: true, force: true });
   report.finishedAt = new Date().toISOString();
   report.secretRetention = cleanupComplete
     ? "Generated credentials, tokens, TLS private keys and synthetic database dump deleted; redacted logs and content hashes retained."

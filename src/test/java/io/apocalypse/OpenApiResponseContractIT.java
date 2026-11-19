@@ -191,6 +191,31 @@ class OpenApiResponseContractIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void userUpdateSchemaKeepsOptionalNullableScalarsAndHidesPresenceFlags() {
+    JsonNode docs = docs();
+    assertThat(
+            docs.path("paths")
+                .path("/system/users/{id}")
+                .path("put")
+                .at("/requestBody/content/application~1json/schema/$ref")
+                .asText())
+        .isEqualTo("#/components/schemas/UserUpdateReq");
+    JsonNode input = docs.at("/components/schemas/UserUpdateReq");
+    assertThat(input.path("required").size()).isZero();
+    JsonNode properties = input.path("properties");
+    assertThat(properties.propertyNames())
+        .containsExactlyInAnyOrder("nickname", "status", "deptId");
+    assertThat(properties.at("/nickname/anyOf/0/type").asText()).isEqualTo("string");
+    assertThat(properties.at("/nickname/anyOf/0/maxLength").asInt()).isEqualTo(64);
+    assertThat(properties.at("/nickname/anyOf/1/type").asText()).isEqualTo("null");
+    assertThat(properties.at("/deptId/anyOf/0/anyOf/0/type").asText()).isEqualTo("string");
+    assertThat(properties.at("/deptId/anyOf/0/anyOf/1/type").asText()).isEqualTo("integer");
+    assertThat(properties.at("/deptId/anyOf/1/type").asText()).isEqualTo("null");
+    assertThat(properties.at("/status/anyOf/0/type").asText()).isEqualTo("integer");
+    assertThat(properties.at("/status/anyOf/1/type").asText()).isEqualTo("null");
+  }
+
+  @Test
   void outputIdsAreStringsWhilePageCountsAndRequiredInputsKeepTheirConstraints() {
     JsonNode schemas = docs().at("/components/schemas");
     assertThat(schemas.at("/UserResp/properties/id/type").asText()).isEqualTo("string");

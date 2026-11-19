@@ -38,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class LogInsightService {
 
-  /** 登录统计/热力图结果缓存名；最大年龄由 {@code apocalypse.cache.caches.log-insight} 配置。 */
+  /** 登录/操作统计与登录热力图缓存名；最大年龄由 {@code apocalypse.cache.caches.log-insight} 配置。 */
   public static final String INSIGHT_CACHE = "log-insight";
 
   private final SysLoginLogMapper sysLoginLogMapper;
@@ -148,7 +148,12 @@ public class LogInsightService {
         cells);
   }
 
-  /** 操作周期统计。 */
+  /** 操作周期统计；近 7/30 天最多滞后 60 秒，24 小时档实时计算。 */
+  @Cacheable(
+      cacheNames = INSIGHT_CACHE,
+      key = "'oper:' + #range.name()",
+      condition = "#range != T(io.apocalypse.system.log.service.LogInsightRange).DAY",
+      sync = true)
   public OperInsightResp operInsights(LogInsightRange range) {
     Window window = window(range);
     List<LogBucketResp> buckets =

@@ -1,5 +1,8 @@
 package io.apocalypse;
 
+import io.apocalypse.framework.cache.TwoLevelCache;
+import io.apocalypse.system.log.dto.response.OperInsightResp;
+import io.apocalypse.system.log.service.LogInsightRange;
 import io.apocalypse.system.log.service.LogInsightService;
 
 import java.sql.Timestamp;
@@ -10,11 +13,15 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpMethod;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,6 +36,8 @@ class LogInsightIT extends AbstractIntegrationTest {
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   @Autowired private CacheManager cacheManager;
+
+  @Autowired private RedisTemplate<String, Object> redisTemplate;
 
   private String token;
 
@@ -163,6 +172,7 @@ class LogInsightIT extends AbstractIntegrationTest {
     insertOper(type, 0, yesterday.plusMinutes(1));
     insertOper("  ", 1, yesterday.plusMinutes(2));
 
+    clearInsightCache();
     JsonNode after = getForData("/system/logs/oper/insights?range=MONTH", token);
 
     assertThat(after.get("buckets")).hasSize(30);
@@ -179,6 +189,37 @@ class LogInsightIT extends AbstractIntegrationTest {
     assertThat(types).containsKey(null);
     assertThat(after.get("previousCovered").asBoolean()).isTrue();
     assertThat(after.get("previousTotal").isNumber()).isTrue();
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = LogInsightRange.class,
+      names = {"WEEK", "MONTH"})
+  void operInsightsRoundTripThroughRedisWhileDayStaysLive(LogInsightRange range) {
+    String path = "/system/logs/oper/insights?range=";
+    LocalDateTime bucket = LocalDateTime.now().minusHours(3).truncatedTo(ChronoUnit.HOURS);
+    String type = "CACHE_" + UUID.randomUUID().toString().substring(0, 8);
+    insertOper(type, 1, bucket.plusMinutes(1));
+    JsonNode baseline = getForData(path + range.name(), token);
+    JsonNode day = getForData(path + "DAY", token);
+
+    String key = "apoc:v2:log-insight:oper:" + range.name();
+    assertThat(redisTemplate.opsForValue().get(key))
+        .isInstanceOfSatisfying(
+            OperInsightResp.class,
+            stored -> {
+              assertThat(stored.range()).isEqualTo(range.name());
+              assertThat(stored.buckets()).hasSize(range.buckets());
+              assertThat(stored.byBusinessType()).anyMatch(row -> type.equals(row.type()));
+            });
+    assertThat(redisTemplate.getExpire(key, TimeUnit.SECONDS)).isBetween(1L, 60L);
+    assertThat(redisTemplate.hasKey("apoc:v2:log-insight:oper:DAY")).isFalse();
+
+    insertOper(type, 0, bucket.plusMinutes(2));
+    ((TwoLevelCache) cacheManager.getCache(LogInsightService.INSIGHT_CACHE)).clearLocal();
+    assertThat(getForData(path + range.name(), token)).isEqualTo(baseline);
+    JsonNode live = getForData(path + "DAY", token);
+    assertThat(delta(byStart(live), byStart(day), FORMAT.format(bucket), "failed")).isEqualTo(1);
   }
 
   @Test

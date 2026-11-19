@@ -5,6 +5,8 @@ import io.apocalypse.common.exception.ConcurrencyGuard;
 import io.apocalypse.system.user.entity.SysUserEntity;
 import io.apocalypse.system.user.mapper.SysUserMapper;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import org.springframework.http.HttpMethod;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import tools.jackson.databind.JsonNode;
 
@@ -73,6 +76,76 @@ class UserCrudIT extends AbstractIntegrationTest {
     deleteForData("/system/users/" + userId, token);
     JsonNode afterDelete = exchangeRaw("/system/users/" + userId, HttpMethod.GET, null, token);
     assertThat(afterDelete.get("code").asInt()).isEqualTo(40400);
+  }
+
+  @Test
+  void partialUserUpdateHandlesTrimmingClearingAndAuditWithoutPresenceFlags() {
+    String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    JsonNode created =
+        postForData(
+            "/system/users",
+            Map.of(
+                "username",
+                "it_user_update_patch",
+                "password",
+                "UpdateFixture2026",
+                "nickname",
+                "初始昵称",
+                "deptId",
+                11),
+            token);
+    long id = created.path("id").asLong();
+    String path = "/system/users/" + id;
+    try {
+      JsonNode kept = putForData(path, Map.of(), token);
+      assertThat(kept.path("nickname").asText()).isEqualTo("初始昵称");
+      assertThat(kept.path("deptId").asLong()).isEqualTo(11L);
+      assertThat(kept.path("status").asInt()).isEqualTo(1);
+
+      String fullLength = "n".repeat(64);
+      assertThat(
+              putForData(path, Map.of("nickname", "  " + fullLength + "  "), token)
+                  .path("nickname")
+                  .asText())
+          .isEqualTo(fullLength);
+      assertThat(
+              exchangeRaw(path, HttpMethod.PUT, Map.of("nickname", fullLength + "x"), token)
+                  .path("code")
+                  .asInt())
+          .isEqualTo(40000);
+      assertThat(sysUserMapper.selectById(id).getNickname()).isEqualTo(fullLength);
+
+      for (String nickname : List.of("null", "\"\"", "\"   \"")) {
+        putForData(path, Map.of("nickname", "恢复"), token);
+        JsonNode cleared =
+            putForData(
+                path,
+                objectMapper.readTree("{\"nickname\":" + nickname + ",\"status\":null}"),
+                token);
+        assertThat(cleared.path("nickname").isNull()).isTrue();
+        assertThat(cleared.path("deptId").asLong()).isEqualTo(11L);
+        assertThat(cleared.path("status").asInt()).isEqualTo(1);
+        assertThat(sysUserMapper.selectById(id).getNickname()).isNull();
+      }
+
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .untilAsserted(
+              () ->
+                  assertThat(
+                          jdbcTemplate.queryForList(
+                              """
+              SELECT oper_param FROM sys_oper_log
+              WHERE method LIKE '%.UserController.update' AND oper_param LIKE ?
+              """,
+                              String.class, "%" + id + "%"))
+                      .extracting(log -> objectMapper.readTree(log).path("req"))
+                      .contains(
+                          objectMapper.readTree("{}"),
+                          objectMapper.readTree("{\"nickname\":null}")));
+    } finally {
+      deleteForData(path, token);
+    }
   }
 
   @Test

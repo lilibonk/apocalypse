@@ -4,6 +4,7 @@ import io.apocalypse.common.exception.BizException;
 import io.apocalypse.common.response.ErrorCode;
 import io.apocalypse.common.response.PageResult;
 import io.apocalypse.framework.log.OperLog;
+import io.apocalypse.framework.security.LiveAuthorizationService;
 import io.apocalypse.framework.security.SecurityUtils;
 import io.apocalypse.system.dept.dto.response.DeptTreeNode;
 import io.apocalypse.system.user.dto.request.ResetPasswordReq;
@@ -31,6 +32,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,8 +62,7 @@ public class UserController {
   /** 当前登录用户视图（用户/角色/权限/菜单树），仅需认证。 */
   @GetMapping("/me")
   public CurrentUserResp me() {
-    Long userId =
-        SecurityUtils.currentUserId().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    Long userId = requireCurrentUserId();
     return userService.currentUser(userId);
   }
 
@@ -68,8 +70,7 @@ public class UserController {
   @PutMapping("/me/profile")
   @OperLog(title = "个人中心", businessType = "UPDATE")
   public UserResp updateMyProfile(@Validated @RequestBody SelfProfileUpdateReq req) {
-    Long userId =
-        SecurityUtils.currentUserId().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    Long userId = requireCurrentUserId();
     return userService.updateSelfProfile(userId, req);
   }
 
@@ -77,36 +78,42 @@ public class UserController {
   @PutMapping("/me/password")
   @OperLog(title = "个人中心", businessType = "UPDATE")
   public void updateMyPassword(@Validated @RequestBody SelfPasswordUpdateReq req) {
-    Long userId =
-        SecurityUtils.currentUserId().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+    Long userId = requireCurrentUserId();
     userService.changeSelfPassword(userId, req);
   }
 
   /** 当前登录用户的活跃在线设备会话列表。 */
   @GetMapping("/me/sessions")
   public List<SelfSessionResp> mySessions() {
-    String username =
-        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
-    String currentJti = SecurityUtils.currentSessionJti().orElse(null);
-    return userService.listSelfSessions(username, currentJti);
+    Jwt jwt = requireCurrentUserToken();
+    return userService.listSelfSessions(jwt.getSubject(), jwt.getId());
   }
 
   /** 当前登录用户自助下线指定设备会话。 */
   @DeleteMapping("/me/sessions/{jti}")
   @OperLog(title = "个人中心", businessType = "FORCE")
   public void revokeMySession(@PathVariable String jti) {
-    String username =
-        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
-    userService.revokeSelfSession(username, jti);
+    Jwt jwt = requireCurrentUserToken();
+    userService.revokeSelfSession(jwt.getSubject(), jti);
   }
 
   /** 当前登录用户自助注销全部设备会话。 */
   @DeleteMapping("/me/sessions")
   @OperLog(title = "个人中心", businessType = "FORCE")
   public void revokeAllMySessions() {
-    String username =
-        SecurityUtils.currentUsername().orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
-    userService.revokeAllSelfSessions(username);
+    Jwt jwt = requireCurrentUserToken();
+    userService.revokeAllSelfSessions(jwt.getSubject());
+  }
+
+  private static Long requireCurrentUserId() {
+    requireCurrentUserToken();
+    return SecurityUtils.currentUserId()
+        .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED));
+  }
+
+  private static Jwt requireCurrentUserToken() {
+    return LiveAuthorizationService.requireUserToken(
+        SecurityContextHolder.getContext().getAuthentication());
   }
 
   /** 分页查询。 */

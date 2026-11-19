@@ -1,7 +1,11 @@
 # 环境无关配置。环境相关项见 application-{dev,test,prod}.yml。
 # 默认激活 dev，可用 SPRING_PROFILES_ACTIVE 环境变量覆盖。
 server:
-  forward-headers-strategy: NATIVE
+  forward-headers-strategy: NONE
+  tomcat:
+    remoteip:
+      # 启用 NATIVE 的部署必须显式声明可信代理。
+      internal-proxies: ""
 
 spring:
   application:
@@ -87,7 +91,7 @@ apocalypse:
     ttl-jitter-ratio: 0.2
     allow-null-values: true
     caches:
-      # 登录 7d/30d 统计与热力图：全局统计，任一层最多返回 60 秒前的结果（A-PERF-5）。
+      # 登录/操作 7d/30d 统计与登录热力图：全局统计，任一层最多返回 60 秒前的结果（A-PERF-5）。
       log-insight:
         max-age-seconds: 60
   events:
@@ -107,3 +111,13 @@ apocalypse:
   audit:
     retention-days: 180
     cleanup-cron: "0 30 3 * * *"
+  storage:
+    local-root: ${APOCALYPSE_STORAGE_LOCAL_ROOT:${java.io.tmpdir}/apocalypse-storage}
+    max-file-size-bytes: ${APOCALYPSE_STORAGE_MAX_FILE_SIZE_BYTES:10485760}
+    total-quota-bytes: ${APOCALYPSE_STORAGE_TOTAL_QUOTA_BYTES:536870912}
+    user-quota-bytes: ${APOCALYPSE_STORAGE_USER_QUOTA_BYTES:67108864}
+  realtime:
+    timeout-ms: ${APOCALYPSE_REALTIME_TIMEOUT_MS:300000}
+    heartbeat-ms: ${APOCALYPSE_REALTIME_HEARTBEAT_MS:25000}
+    max-connections-per-user: ${APOCALYPSE_REALTIME_MAX_CONNECTIONS_PER_USER:5}
+    max-total-connections: ${APOCALYPSE_REALTIME_MAX_TOTAL_CONNECTIONS:500}

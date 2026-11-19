@@ -20,7 +20,12 @@
 
 ## 数据库与升级
 
-Flyway 是唯一 DDL 所有者，启动时执行 `db/migration`，`baseline-on-migrate=false`、`out-of-order=true`。空库直接应用统一的 `V1__init.sql` 基线及后续迁移；平台级演进固定在 `V1.x`（`V1_<n>__*.sql`），下游业务模块迁移固定在 `V100.x+`（`V<100+>_<n>__<module>_*.sql`），使上游平台补丁可在业务模块迁移之后无冲突合入。更早开发期零散迁移的旧开发库不支持直接套用，可丢弃的旧开发库须重建。已应用的发行脚本不可修改；已有非 Flyway 业务库的接入属于单独迁移工作，须核对实际结构和数据，不能用自动 baseline 或 repair 掩盖差异。
+Flyway 是唯一 DDL 所有者，启动时执行 `db/migration`，`baseline-on-migrate=false`、`out-of-order=true`。空库直接应用统一的 `V1__init.sql` 基线及 `V1_1__sys_file_storage.sql` 等平台演进迁移；平台级演进固定在 `V1.x`（`V1_<n>__*.sql`），下游业务模块迁移固定在 `V100.x+`（`V<100+>_<n>__<module>_*.sql`），使上游平台补丁可在业务模块迁移之后无冲突合入。更早开发期零散迁移的旧开发库不支持直接套用，可丢弃的旧开发库须重建。已应用的发行脚本不可修改；已有非 Flyway 业务库的接入属于单独迁移工作，须核对实际结构和数据，不能用自动 baseline 或 repair 掩盖差异。
+
+### 通用文件存储与单实例实时通道
+
+- 通用文件台账（`sys_file`）与本地存储根目录（生产环境变量 `APOCALYPSE_STORAGE_LOCAL_ROOT`，参考部署固定为持久卷 `/var/lib/apocalypse/storage`）需成对备份与恢复；禁止把持久文件写进只读容器的 `/tmp` 内存 `tmpfs`。文件上传经魔数与结构核验、限流和 PostgreSQL 事务锁配额核算，下载强制输出附件安全响应头。
+- `/system/realtime/stream` 定位为单实例受控 SSE 通道（默认每用户最多 5 条、全局最多 500 条连接，每 25 秒发送 `:keepalive` 心跳并驱逐过期令牌，登出、踢出与权限版本递增提交后立即断流，按订阅者实时权限过滤脉冲主题）；跨实例实时广播需另行经共享总线方案评审。
 
 默认关闭的 Calendar **仍随同一制品发布代码与初始基线中的 Schema**；关闭只收起 HTTP、菜单、权限、facade 运行入口及任务，不删除 Schema、已有数据或角色关系。早期 Order HTTP 已退役，但 `order_info` 兼容表、隐藏权限种子和事件桥仍在。详见[Calendar 手册](calendar/README.md)。
 

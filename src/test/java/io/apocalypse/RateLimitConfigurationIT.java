@@ -33,6 +33,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -172,6 +173,48 @@ class RateLimitConfigurationIT extends AbstractIntegrationTest {
     } finally {
       second.shutdown();
     }
+  }
+
+  @Test
+  void keepsAllThreeKeysAliveForActiveTrafficAndExpiresIdleQuota() throws Throwable {
+    assertThat(invokeShort(aspect(redissonClient, 2))).isEqualTo("accepted");
+    assertThat(stateKeys()).allSatisfy(key -> assertThat(ttl(key)).isBetween(2000L, 4000L));
+    await().atMost(Duration.ofSeconds(2)).until(() -> ttl(KEY) < 3300L);
+    assertThat(invokeShort(aspect(redissonClient, 2))).isEqualTo("accepted");
+    assertThat(stateKeys()).allSatisfy(key -> assertThat(ttl(key)).isBetween(3500L, 4000L));
+    assertThatThrownBy(() -> invokeShort(aspect(redissonClient, 2)))
+        .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(42900));
+
+    await()
+        .atMost(Duration.ofSeconds(6))
+        .untilAsserted(
+            () -> assertThat(stateKeys()).allSatisfy(key -> assertThat(ttl(key)).isEqualTo(-2)));
+    assertThat(resetIdle(2000, stateKeys())).isZero();
+    assertThat(invokeShort(aspect(redissonClient, 3))).isEqualTo("accepted");
+    assertThat(limiter().getConfig().getRate()).isEqualTo(3);
+  }
+
+  @Test
+  void noTtlLegacyStateSharesQuotaWithNativeClientAndRemainsMigratable() throws Throwable {
+    limiter().trySetRate(RateType.OVERALL, 3, Duration.ofSeconds(2));
+    redissonClient.getMap(KEY, StringCodec.INSTANCE).remove("keepAliveTime");
+    assertThat(limiter().tryAcquire(2)).isTrue();
+    assertThat(invokeShort(aspect(redissonClient, 3))).isEqualTo("accepted");
+    assertThat(limiter().tryAcquire()).isFalse();
+    assertThat(stateKeys()).allSatisfy(key -> assertThat(ttl(key)).isEqualTo(-1));
+    assertThatThrownBy(() -> resetIdle(2000, stateKeys()))
+        .isInstanceOf(RedisException.class)
+        .hasMessageContaining("Limiter has recent permits");
+    await()
+        .atMost(Duration.ofSeconds(4))
+        .ignoreException(RedisException.class)
+        .until(() -> resetIdle(2000, stateKeys()) == 3);
+    assertThat(invokeShort(aspect(redissonClient, 2))).isEqualTo("accepted");
+    assertThat(stateKeys()).allSatisfy(key -> assertThat(ttl(key)).isPositive());
+  }
+
+  private long ttl(Object key) {
+    return redissonClient.getBucket(key.toString()).remainTimeToLive();
   }
 
   @Test

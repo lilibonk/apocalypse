@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -88,6 +89,8 @@ public class AuthService {
   private final OnlineUserRegistry onlineUserRegistry;
 
   private final TokenVersionStore tokenVersionStore;
+
+  private final ObjectProvider<ApplicationEventPublisher> eventPublisherProvider;
 
   /** 登录响应（refreshToken 仅账密登录签发，client 令牌为 null）。 */
   public record TokenResponse(
@@ -220,6 +223,7 @@ public class AuthService {
         .find(jti)
         .orElseThrow(() -> new BizException(ErrorCode.NOT_FOUND.getCode(), "在线条目已失效，请刷新列表后重试"));
     onlineUserRegistry.kick(jti);
+    publishSessionInvalidated(SessionInvalidatedEvent.forJti(jti));
   }
 
   /** 当前会话主动注销：仅吊销当前会话的 access/refresh 令牌对并移除其在线条目，不影响同一账号在其他设备的会话。 */
@@ -302,12 +306,23 @@ public class AuthService {
               ? accessExpiresAt
               : now.plusSeconds(securityProperties.getJwt().getTtlMinutes() * 60L);
       onlineUserRegistry.blacklist(accessJti, Duration.between(now, effectiveAccessExpiry));
+      publishSessionInvalidated(SessionInvalidatedEvent.forJti(accessJti));
     }
     if (StringUtils.hasText(refreshJti)) {
       Instant base = issuedAt != null ? issuedAt : now;
       Instant refreshExpiresAt =
           base.plus(Duration.ofDays(securityProperties.getJwt().getRefreshTtlDays()));
       onlineUserRegistry.blacklist(refreshJti, Duration.between(now, refreshExpiresAt));
+    }
+  }
+
+  private void publishSessionInvalidated(SessionInvalidatedEvent event) {
+    if (eventPublisherProvider == null) {
+      return;
+    }
+    ApplicationEventPublisher publisher = eventPublisherProvider.getIfAvailable();
+    if (publisher != null) {
+      publisher.publishEvent(event);
     }
   }
 

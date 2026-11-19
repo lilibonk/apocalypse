@@ -468,6 +468,53 @@ class DepartmentDataScopeIT extends AbstractIntegrationTest {
     assertCode(
         "/system/users/" + SAME_USER, HttpMethod.PUT, Map.of("deptId", DELETED), token, 40400);
     putForData("/system/users/" + PROTECTED_USER, Map.of("nickname", "global may edit"), token);
+    jdbcTemplate.update("UPDATE sys_user SET dept_id = ? WHERE id = ?", INACTIVE, SAME_USER);
+    JsonNode edited = putForData("/system/users/" + SAME_USER, Map.of("nickname", "保留停用部门"), token);
+    assertThat(edited.path("deptId").asLong()).isEqualTo(INACTIVE);
+    assertThat(userMapper.selectById(SAME_USER).getDeptId()).isEqualTo(INACTIVE);
+  }
+
+  @Test
+  void clearingDepartmentRequiresAllEditScopeEvenForUnassignedTarget() {
+    assign(OPERATOR, UNRELATED_ALL_ROLE);
+    String token = operatorToken();
+    var clear =
+        objectMapper.readTree(
+            """
+        {"deptId": null, "nickname": "must not persist"}
+        """);
+    long before = tokenVersionStore.current(PREFIX + "same").userAuthorization();
+    assertCode("/system/users/" + SAME_USER, HttpMethod.PUT, clear, token, 40300);
+    assertCode("/system/users/" + NO_DEPT_USER, HttpMethod.PUT, clear, token, 40300);
+    SysUserEntity unchanged = userMapper.selectById(SAME_USER);
+    assertThat(unchanged.getDeptId()).isEqualTo(ROOT);
+    assertThat(unchanged.getNickname()).isEqualTo(PREFIX + "same");
+    assertThat(tokenVersionStore.current(PREFIX + "same").userAuthorization()).isEqualTo(before);
+
+    JsonNode edited = putForData("/system/users/" + SAME_USER, Map.of("nickname", "保留部门"), token);
+    assertThat(edited.path("deptId").asLong()).isEqualTo(ROOT);
+  }
+
+  @Test
+  void allEditorClearsDepartmentAndRevokesTheOldUserAuthorizationVersion() {
+    String admin = adminToken();
+    String oldOperator = operatorToken();
+    getForData("/system/users/me", oldOperator);
+    long before = tokenVersionStore.current(PREFIX + "operator").userAuthorization();
+
+    JsonNode cleared =
+        putForData("/system/users/" + OPERATOR, objectMapper.readTree("{\"deptId\":null}"), admin);
+    assertThat(cleared.path("deptId").isNull()).isTrue();
+    assertThat(cleared.path("nickname").asText()).isEqualTo(PREFIX + "operator");
+    assertThat(userMapper.selectById(OPERATOR).getDeptId()).isNull();
+    assertThat(tokenVersionStore.current(PREFIX + "operator").userAuthorization())
+        .isEqualTo(before + 1);
+    assertCode("/system/users/me", HttpMethod.GET, null, oldOperator, 40100);
+    getForData("/system/users/me", operatorToken());
+
+    putForData("/system/users/" + OPERATOR, objectMapper.readTree("{\"deptId\":null}"), admin);
+    assertThat(tokenVersionStore.current(PREFIX + "operator").userAuthorization())
+        .isEqualTo(before + 1);
   }
 
   @Test

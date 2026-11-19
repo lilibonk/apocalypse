@@ -6,6 +6,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +18,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import tools.jackson.databind.JsonNode;
 
 /** 登录失败锁定集成测试：同一账号+来源 IP 连续 5 次错误密码后第 6 次直接返回 42901（账号临时锁定）； 不同来源 IP 互不锁死，防止攻击者跨 IP DoS 锁死合法用户。 */
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = {
+      "server.forward-headers-strategy=NATIVE",
+      "server.tomcat.remoteip.internal-proxies=127.0.0.1/32,::1/128",
+      "server.tomcat.remoteip.remote-ip-header=X-Forwarded-For"
+    })
 class LoginSecurityIT extends AbstractIntegrationTest {
 
   private static final String LOCK_USER = "lockit";
