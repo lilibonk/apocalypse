@@ -13,7 +13,7 @@
 
   <groupId>io.apocalypse</groupId>
   <artifactId>apocalypse</artifactId>
-  <version>0.1.0-rc.2</version>
+  <version>0.1.0</version>
   <name>apocalypse</name>
   <description>Apocalypse - Spring Boot 4 modular monolith scaffold (Java 25, Modulith, MyBatis-Plus)</description>
   <licenses>

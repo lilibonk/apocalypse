@@ -2,7 +2,7 @@
 
 本参考把同一发行版本的 JAR 和前端静态目录部署到单机 Linux Docker：nginx 提供 HTTPS 和 `/api/` 代理，Temurin 25 运行后端，PostgreSQL 18.6 保存数据，Redis 8.10.1 保存缓存与会话辅助状态。根目录的 `docker-compose.yml` 仍仅用于本地开发。
 
-参考配置在 [deploy/compose.yml](../deploy/compose.yml)，运行时配置和密钥放在仓库之外。首版支持范围限定为已测的 Linux arm64 单机环境（本机 Linux VM）；最新预发布记录见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2)（`v0.1.0-rc.1` 提供首版二进制包与校验值）。官方镜像也提供 amd64，但未把本轮 arm64 结果当作 amd64、HA、压力测试或公网生产环境验收。没有前一正式版本，因此不承诺从任意开发库原地升级。
+参考配置在 [deploy/compose.yml](../deploy/compose.yml)，运行时配置和密钥放在仓库之外。首版支持范围限定为已测的 Linux arm64 单机环境（本机 Linux VM）；正式发行归档与校验值见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0)。官方镜像也提供 amd64，但未把本轮 arm64 结果当作 amd64、HA、压力测试或公网生产环境验收。没有前一正式版本，因此不承诺从任意开发库原地升级。
 
 ## 准备与首次启动
 
@@ -12,7 +12,7 @@
 
 ```bash
 # 从解压并校验后的发行包根目录执行；替换成包中实际的 JAR 文件名。
-node deploy/prepare.mjs /srv/apocalypse backend/apocalypse-0.1.0-rc.2.jar apocalypse-web/dist
+node deploy/prepare.mjs /srv/apocalypse backend/apocalypse-0.1.0.jar apocalypse-web/dist
 
 # 保持这一函数的项目名、运行目录、Compose 文件三个目标一致。
 dc() {
@@ -98,7 +98,7 @@ dc up -d --wait --wait-timeout 180 backend
 不要对仍接收写入的实例直接覆盖还原。保留原实例，以不同的 Compose 项目名和全新运行目录/数据卷恢复；恢复失败时原实例仍可供分析或回切。
 
 ```bash
-node deploy/prepare.mjs /srv/apocalypse-restore backend/apocalypse-0.1.0-rc.2.jar apocalypse-web/dist
+node deploy/prepare.mjs /srv/apocalypse-restore backend/apocalypse-0.1.0.jar apocalypse-web/dist
 ```
 
 为恢复实例安装适配的 TLS 文件，在其 `deployment.env` 配置不冲突的 HTTPS 端口；保留新生成的 JWT/DB/Redis 密钥，并清空恢复实例的 bootstrap 文件。数据库备份中的现有管理员密码哈希会被恢复，新生成的 bootstrap 口令不适用于这些账号。启动后端前需把成对的文件存储归档解包回新实例的 `storage` 目录。

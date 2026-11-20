@@ -1,5 +1,16 @@
 # 变更记录
 
+## 0.1.0（2026-11-20）
+
+在 `0.1.0-rc.2` 基础上完成首版发行收口加固、前后端契约对齐与页面排版打磨，前后端版本统一为 `0.1.0` 正式版。
+
+- **通用文件管理与全仓授权门禁**：新增 `V1_1__sys_file_storage.sql` 落地 `sys_file` 台账与权限/导航定义，补齐 `FileContentVerifier`（字节魔数、严格 UTF-8、HTML/SVG/Script 活跃标记拦截与严格 JSON 核验，移除高危通配类型）、PostgreSQL 事务级并发配额锁（单人 64 MiB / 全站 512 MiB）、上传限流与 `attachment` 安全下载头，以及前端 `/system/file` 工作区与右侧滑出元数据检查器；`AuthorizationRulesTest` 全量覆盖业务端点 `@PreAuthorize` 门禁，参考部署改为挂载独立持久 `storage/` 卷而非容器 `tmpfs`。
+- **单实例 SSE 实时通道与后端运行加固**：为 `/system/realtime/stream` 增加 25 秒 `:keepalive` 心跳、连接上限、过期令牌驱逐、注销/撤销即时断流与 Nginx `proxy_buffering off` 无缓冲转发；基于 Redisson `4.7.0` 落地限流键 `keepAliveTime` 空闲淘汰与 1-RTT 原子 Lua 准入；将登录/操作与授权审计清理收敛为 `AuditRetention` 单连接会话级 advisory lock 配合每批 5,000 行自动提交；将用户 CSV 批量导入高耗时 BCrypt 移出共享写锁并改由数据库部分唯一索引判重。
+- **用户编辑显式清空契约、反代信任收窄与统计缓存**：`PUT /system/users/{id}` 经定制 Jackson 3 适配器 `UserUpdateReqJson` 明确区分“JSON 省略保留”与“显式 `null` 清空”（`deptId` 清空仅限 `ALL` 范围，由非空清空时同步递增账号授权版本失效旧令牌），前端 `UserForm.tsx` 同步对齐；应用默认 `server.forward-headers-strategy: NONE` 且仅在隔离 Compose 内网信任固定 Nginx `/32` 地址；`LogInsightService#operInsights` 的周/月窗口接入 60 秒缓存（`DAY` 实时）。
+- **管理台 UX 与排版完善**：统一表格复制到剪贴板容错及读屏播报、半选与 `Shift+Click` 范围连选、点击切换 IME 安全跳转分页、待查询状态圆点、页签中键草稿守卫关闭、平台自适应快捷键提示、只读实时状态指示、强密码规则对齐，并修复字典管理列表切换页头错位与文件管理页边距、配额条及分页对齐。
+
+发布包、源码 tag 与 SHA-256 校验值见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0)。支持范围、安装恢复及迁移约束见[发行与兼容契约](docs/release.md)。
+
 ## 0.1.0-rc.2（2026-11-18，预发布）
 
 在 `0.1.0-rc.1` 基础上完成后端基线巩固与 V2 管理台架构及交互体验全面重构，前后端版本保持同步。

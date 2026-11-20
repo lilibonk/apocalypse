@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="Version: 0.1.0-rc.2" height="24"></a>
+  <a href="docs/release.md"><img src=".github/assets/readme/version.svg" alt="Version: 0.1.0" height="24"></a>
   <a href="https://github.com/lilibonk/apocalypse/actions/workflows/ci.yml"><img src=".github/assets/readme/checks.svg" alt="CI: GitHub Actions workflow" height="24"></a>
   <a href="LICENSE"><img src=".github/assets/readme/license.svg" alt="License: Apache 2.0" height="24"></a>
 </p>
@@ -166,7 +166,7 @@ pnpm test:browser
 
 ## 版本状态与许可
 
-当前版本为 **`0.1.0-rc.2` 预发布**，稳定版尚未发布，详见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0-rc.2) 与[发行契约](docs/release.md)。
+当前版本为 **`0.1.0` 正式版**，发行归档与校验信息见 [GitHub Release](https://github.com/lilibonk/apocalypse/releases/tag/v0.1.0) 与[发行契约](docs/release.md)。
 
 本版本不包含代码生成器、在线任务调度管理平台、公告与多租户；通用文件管理与单实例受控 SSE 实时通道已随首版纳入。Calendar 为默认关闭的可选试验域；早期 Order 运行接口已退役，仅保留兼容表结构与事件桥。
 
