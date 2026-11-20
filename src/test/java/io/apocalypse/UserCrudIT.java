@@ -8,6 +8,7 @@ import io.apocalypse.system.user.mapper.SysUserMapper;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,13 +32,15 @@ class UserCrudIT extends AbstractIntegrationTest {
   @Test
   void userCrudAndCacheLifecycle() {
     String token = loginAndGetToken("admin", ADMIN_PASSWORD);
+    String keyword = UUID.randomUUID().toString();
+    String username = "crud-test-" + keyword;
 
     // 创建：响应中装箱 Long 主键应序列化为 String（JacksonConfig 生效验证）
     JsonNode created =
         postForData(
             "/system/users",
             Map.of(
-                "username", "ituser", "password", "ituser123", "nickname", "集成测试用户", "deptId", 11),
+                "username", username, "password", "ituser123", "nickname", "集成测试用户", "deptId", 11),
             token);
     assertThat(created.get("id").isTextual()).as("id 应为 String 类型").isTrue();
     long userId = Long.parseLong(created.get("id").asText());
@@ -50,7 +53,7 @@ class UserCrudIT extends AbstractIntegrationTest {
 
     // 详情：触发 user 缓存写入
     JsonNode detail = getForData("/system/users/" + userId, token);
-    assertThat(detail.get("username").asText()).isEqualTo("ituser");
+    assertThat(detail.get("username").asText()).isEqualTo(username);
     assertThat(detail.get("id").isTextual()).isTrue();
     assertThat(detail.get("deptPath")).hasSize(2);
     assertThat(detail.get("roles")).isEmpty();
@@ -63,14 +66,26 @@ class UserCrudIT extends AbstractIntegrationTest {
     assertThat(updated.get("nickname").asText()).isEqualTo("集成测试用户2");
     assertThat(userCache.get(userId)).as("update 后缓存应被 evict").isNull();
 
-    // 分页：按关键字能查到，且包含管理员的 deptPath 与 roles 摘要
-    JsonNode page = getForData("/system/users/page?page=1&size=10&keyword=admin", token);
-    assertThat(page.get("total").asLong()).isGreaterThanOrEqualTo(1);
-    assertThat(page.at("/list/0/username").asText()).isEqualTo("admin");
-    assertThat(page.at("/list/0/deptPath")).hasSize(2);
-    assertThat(page.at("/list/0/roles")).hasSize(1);
-    assertThat(page.at("/list/0/roles/0/roleKey").asText()).isEqualTo("admin");
-    assertThat(page.at("/list/0/roles/0/dataScope").asText()).isEqualTo("ALL");
+    // 为当前测试用户临时挂接种子角色，验证分页的部门路径和角色摘要。
+    JsonNode page;
+    sysUserMapper.insertUserRole(userId, 1L);
+    try {
+      page = getForData("/system/users/page?page=1&size=10&keyword=" + keyword, token);
+    } finally {
+      sysUserMapper.deleteRolesByUserId(userId);
+    }
+    assertThat(page.path("total").asLong()).isEqualTo(1);
+    assertThat(page.path("list"))
+        .singleElement()
+        .satisfies(
+            user -> {
+              assertThat(user.path("id").asText()).isEqualTo(created.path("id").asText());
+              assertThat(user.path("username").asText()).isEqualTo(username);
+              assertThat(user.path("deptPath")).hasSize(2);
+              assertThat(user.path("roles")).hasSize(1);
+              assertThat(user.at("/roles/0/roleKey").asText()).isEqualTo("admin");
+              assertThat(user.at("/roles/0/dataScope").asText()).isEqualTo("ALL");
+            });
 
     // 逻辑删除：删除后再查应报 40400
     deleteForData("/system/users/" + userId, token);
