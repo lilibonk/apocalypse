@@ -64,3 +64,32 @@ test('the final type page can be reached, resized, and deletion returns to a val
   await expect(pager).toContainText('1 / 1')
   await expect(page.locator('.dict-card')).toHaveCount(12)
 })
+
+test('switching to the list view keeps actions in the header with no blank gap above filters', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/test-fixtures/dict-book.html')
+
+  await page.getByRole('button', { name: '列表', exact: true }).click()
+
+  const header = page.locator('[data-slot="page-header"]')
+  const addType = header.getByRole('button', { name: '新增字典类型', exact: true })
+  const refresh = header.getByRole('button', { name: '刷新数据', exact: true })
+  await expect(addType).toBeVisible()
+  await expect(refresh).toBeVisible()
+
+  const tabs = page.getByRole('tablist')
+  const searchForm = page.getByRole('form', { name: '筛选条件' })
+  await expect(tabs).toBeVisible()
+  await expect(searchForm).toBeVisible()
+  await expect(page.getByRole('cell', { name: '类型 1', exact: true })).toBeVisible()
+
+  const tabsBox = (await tabs.boundingBox())!
+  const searchBox = (await searchForm.boundingBox())!
+  expect(searchBox.y - (tabsBox.y + tabsBox.height)).toBeLessThanOrEqual(28)
+
+  await page.getByRole('tab', { name: '字典数据', exact: true }).click()
+  await expect(header.getByRole('button', { name: '新增字典数据', exact: true })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '标签 / 键值', exact: true })).toBeVisible()
+})

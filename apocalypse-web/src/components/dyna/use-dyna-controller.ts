@@ -66,6 +66,8 @@ export interface UseDynaControllerOptions {
   queryScope?: ModuleScope
   /** Pre-created dyna queries instance (created automatically when omitted). */
   queries?: ReturnType<typeof createDynaQueries>
+  /** Controls whether the list query runs automatically (defaults to true). */
+  enabled?: boolean
   /** Embedded mode disables URL search-param synchronization. */
   embedded?: boolean
   /** Legacy entryContext search/selection hint. */
@@ -173,6 +175,7 @@ export function useDynaController(
   const {
     queryScope,
     queries: providedQueries,
+    enabled = true,
     embedded = false,
     entryContext,
     entityIntent,
@@ -264,7 +267,7 @@ export function useDynaController(
         size: pageSize,
         search: effectiveSearch,
       },
-      validation.success,
+      validation.success && enabled,
     ),
   )
 

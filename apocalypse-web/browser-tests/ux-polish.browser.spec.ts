@@ -135,3 +135,53 @@ test('middle-clicking tabs respects pinned tabs and unsaved draft close guard', 
   await expect(tabs).toHaveCount(1)
   await expect(page.getByRole('tab', { name: '工作台' })).toHaveAttribute('aria-selected', 'true')
 })
+
+test('file management stacks quota strip, full-width table, and pagination vertically without dropdown duplication', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/test-fixtures/video-surfaces.html?surface=file&empty=1')
+
+  await expect(page.getByRole('heading', { name: '文件管理', exact: true })).toBeVisible()
+  await expect(page.getByText('当前账户仅可管理本人上传或授权范围内的文件')).toHaveCount(0)
+  await expect(page.locator('[data-slot="file-quota-strip"]')).toBeVisible()
+
+  await page.getByRole('combobox', { name: '分类', exact: true }).click()
+  await expect(page.getByRole('option', { name: '全部全部分类' })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: '全部', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('combobox', { name: '类型', exact: true }).click()
+  await expect(page.getByRole('option', { name: '全部全部类型' })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: '全部', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  const emptyState = page.getByText('暂无符合条件的文件记录', { exact: true })
+  const emptyCard = page
+    .getByRole('status')
+    .filter({ hasText: '暂无符合条件的文件记录' })
+    .locator('..')
+  const pager = page.getByText('第 0-0 条，共 0 条', { exact: true }).locator('..')
+  await expect(emptyState).toBeVisible()
+  await expect(pager).toBeVisible()
+  await expect(page.getByText('选择表格行，查看存储键')).toHaveCount(0)
+
+  const headerRootPadding = await page
+    .locator('[data-slot="page-header"]')
+    .evaluate((el) => Number.parseFloat(getComputedStyle(el.parentElement!).paddingLeft))
+  expect(headerRootPadding).toBeGreaterThanOrEqual(16)
+
+  const tableBox = (await emptyCard.boundingBox())!
+  const pagerBox = (await pager.boundingBox())!
+  expect(pagerBox.y).toBeGreaterThanOrEqual(tableBox.y + tableBox.height - 2)
+  expect(Math.abs(pagerBox.x - tableBox.x)).toBeLessThanOrEqual(4)
+  expect(tableBox.width).toBeGreaterThan(1000)
+
+  await page.goto('/test-fixtures/video-surfaces.html?surface=file')
+  const row = page.getByRole('row').filter({ hasText: 'quarterly-report.pdf' })
+  await expect(row).toBeVisible()
+  await row.click()
+  const sheet = page.getByRole('dialog', { name: '文件元数据检查器' })
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toContainText('document/20261119/abc12345.pdf')
+})

@@ -25,6 +25,7 @@ import OperLogPage from '@/views/system/log/oper'
 import LoginLogPage from '@/views/system/log/login'
 import OnlineUserPage from '@/views/system/online'
 import PermissionPage from '@/views/system/permission'
+import FilePage from '@/views/system/file'
 import UserPage from '@/views/system/user'
 import '@/index.css'
 
@@ -45,6 +46,9 @@ const permissions = [
   ...(params.has('selectable') ? ['system:user:remove'] : []),
   'system:role:list',
   'system:permission:list',
+  'system:file:list',
+  'system:file:upload',
+  'system:file:remove',
   'system:online:list',
   'system:online:kick',
 ]
@@ -540,6 +544,66 @@ http.defaults.adapter = async (config) => {
     }
     notify()
     data = null
+  } else if (path === '/system/files/quota') {
+    const emptyFiles = params.has('empty')
+    data = emptyFiles
+      ? {
+          usedUserBytes: 0,
+          userQuotaBytes: 67_108_864,
+          usedTotalBytes: 0,
+          totalQuotaBytes: 536_870_912,
+          maxFileSizeBytes: 10_485_760,
+          activeFileCount: 0,
+        }
+      : {
+          usedUserBytes: 1_572_864,
+          userQuotaBytes: 67_108_864,
+          usedTotalBytes: 4_194_304,
+          totalQuotaBytes: 536_870_912,
+          maxFileSizeBytes: 10_485_760,
+          activeFileCount: 2,
+        }
+  } else if (path === '/system/files/page') {
+    const emptyFiles = params.has('empty')
+    const queryParams = (config.params ?? {}) as Record<string, unknown>
+    const rows = emptyFiles
+      ? []
+      : [
+          {
+            id: '9001',
+            key: 'document/20261119/abc12345.pdf',
+            category: 'document',
+            originalFilename: 'quarterly-report.pdf',
+            contentType: 'application/pdf',
+            size: 1_048_576,
+            sha256: 'deadbeef0123456789abcdefdeadbeef0123456789abcdefdeadbeef01234567',
+            ownerId: '1',
+            ownerUsername: 'admin',
+            deptId: '100',
+            remark: 'Q4 audit report',
+            createTime: '2026-11-19T10:15:30',
+          },
+          {
+            id: '9002',
+            key: 'avatar/20261119/def67890.png',
+            category: 'avatar',
+            originalFilename: 'avatar.png',
+            contentType: 'image/png',
+            size: 524_288,
+            sha256: 'cafebabe0123456789abcdefcafebabe0123456789abcdefcafebabe01234567',
+            ownerId: '2',
+            ownerUsername: 'alice',
+            deptId: '101',
+            remark: null,
+            createTime: '2026-11-19T11:00:00',
+          },
+        ]
+    data = {
+      list: rows,
+      total: rows.length,
+      page: Number(queryParams.page ?? 1),
+      size: Number(queryParams.size ?? 10),
+    }
   } else if (path.startsWith('/system/dicts')) data = []
   else throw new Error(`Unexpected fixture request: ${path}`)
   return { status: 200, statusText: 'OK', headers: {}, config, data: { code: 0, data } }
@@ -677,6 +741,7 @@ function Fixture() {
         </>
       )}
       {surface === 'permission' && <PermissionPage />}
+      {surface === 'file' && <FilePage />}
       {surface === 'user' && (
         <>
           <button

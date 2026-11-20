@@ -7,7 +7,6 @@ import {
   Download,
   Eye,
   FileText,
-  FolderOpen,
   HardDrive,
   RefreshCw,
   Trash2,
@@ -46,6 +45,7 @@ import { FieldOption, FieldSelect } from '@/components/ui/field-select'
 import { FileUpload, type UploadedFileResult } from '@/components/ui/file-upload'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { toastApiError } from '@/lib/api/error-toast'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { useResourceDenial } from '@/lib/query/use-resource-denial'
@@ -110,6 +110,139 @@ function contentTypeBadgeLabel(contentType: string): string {
     default:
       return contentType
   }
+}
+
+export interface FileInspectorContentProps {
+  file: SystemFileRow
+  downloading: boolean
+  copiedField: string | null
+  categoryLabel: string
+  onCopy: (field: string, value: string) => void
+  onDownload: (file: SystemFileRow) => void
+  onRequestDelete: (file: SystemFileRow) => void
+}
+
+export function FileInspectorContent({
+  file,
+  downloading,
+  copiedField,
+  categoryLabel,
+  onCopy,
+  onDownload,
+  onRequestDelete,
+}: FileInspectorContentProps) {
+  const { t } = useTranslation('system')
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="space-y-1.5">
+        <div className="font-medium break-all text-foreground">{file.originalFilename}</div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline" className="font-mono text-[11px]">
+            {file.contentType}
+          </Badge>
+          <Badge variant="secondary">{categoryLabel}</Badge>
+        </div>
+      </div>
+
+      <dl className="space-y-3 border-t border-border-subtle pt-3 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted-foreground">{t('fileManage.size')}</dt>
+          <dd className="font-mono text-foreground tabular-nums">
+            {formatByteSize(file.size)} ({file.size} B)
+          </dd>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted-foreground">{t('fileManage.storageKey')}</dt>
+            <Button type="button" size="xs" variant="ghost" onClick={() => onCopy('key', file.key)}>
+              {copiedField === 'key' ? (
+                <Check className="size-3 text-success" aria-hidden="true" />
+              ) : (
+                <Copy className="size-3" aria-hidden="true" />
+              )}
+              <span>{copiedField === 'key' ? t('fileManage.copied') : t('fileManage.copy')}</span>
+            </Button>
+          </div>
+          <dd className="rounded-control bg-muted px-2 py-1 font-mono text-[11px] break-all text-foreground">
+            {file.key}
+          </dd>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted-foreground">{t('fileManage.sha256')}</dt>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              onClick={() => onCopy('sha256', file.sha256)}
+            >
+              {copiedField === 'sha256' ? (
+                <Check className="size-3 text-success" aria-hidden="true" />
+              ) : (
+                <Copy className="size-3" aria-hidden="true" />
+              )}
+              <span>
+                {copiedField === 'sha256' ? t('fileManage.copied') : t('fileManage.copy')}
+              </span>
+            </Button>
+          </div>
+          <dd className="rounded-control bg-muted px-2 py-1 font-mono text-[11px] break-all text-foreground">
+            {file.sha256}
+          </dd>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted-foreground">{t('fileManage.owner')}</dt>
+          <dd>
+            <EntityPeekLink kind="user" id={file.ownerId} label={file.ownerUsername} />
+          </dd>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted-foreground">{t('fileManage.deptId')}</dt>
+          <dd className="font-mono text-foreground">
+            {file.deptId ?? t('fileManage.noDepartment')}
+          </dd>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted-foreground">{t('fileManage.createdAt')}</dt>
+          <dd className="font-mono text-foreground tabular-nums">
+            {file.createTime.replace('T', ' ').slice(0, 19)}
+          </dd>
+        </div>
+
+        <div className="space-y-1">
+          <dt className="text-muted-foreground">{t('fileManage.remark')}</dt>
+          <dd className="rounded-control bg-muted/60 px-2.5 py-1.5 text-foreground">
+            {file.remark || t('fileManage.emptyRemark')}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+        <Button
+          type="button"
+          size="sm"
+          className="flex-1"
+          disabled={downloading}
+          onClick={() => onDownload(file)}
+        >
+          <Download className="size-3.5" aria-hidden="true" />
+          <span>{t('fileManage.download')}</span>
+        </Button>
+        <Perm perm="system:file:remove">
+          <Button type="button" size="sm" variant="outline" onClick={() => onRequestDelete(file)}>
+            <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+            <span>{t('fileManage.delete')}</span>
+          </Button>
+        </Perm>
+      </div>
+    </div>
+  )
 }
 
 export default function FilePage() {
@@ -182,6 +315,7 @@ function FilePageContent() {
     clear: { queryKey: ['system', 'files'] },
     reset: () => {
       setSelectedId(null)
+      setInspectorOpen(false)
       setSelectedKeys([])
       setDeleteTarget(null)
       setBatchDeleteOpen(false)
@@ -193,11 +327,12 @@ function FilePageContent() {
   const records = useMemo(() => filesQuery.data?.list ?? [], [filesQuery.data?.list])
   const total = filesQuery.data?.total ?? 0
 
-  const selectedFile = useMemo(
-    () => records.find((row) => row.id === selectedId) ?? records[0] ?? null,
-    [records, selectedId],
+  const inspectedFile = useMemo(
+    () =>
+      inspectorOpen && selectedId ? (records.find((row) => row.id === selectedId) ?? null) : null,
+    [inspectorOpen, records, selectedId],
   )
-  const activeRowKey = selectedFile?.id ?? null
+  const activeRowKey = inspectedFile?.id ?? null
 
   useEffect(() => {
     if (!copiedField) return
@@ -218,6 +353,7 @@ function FilePageContent() {
         setSelectedKeys((prev) => prev.filter((item) => item !== removedId))
         if (selectedId === removedId) {
           setSelectedId(null)
+          setInspectorOpen(false)
         }
       }
       toast.success(t('fileManage.deleteSuccess'))
@@ -235,6 +371,7 @@ function FilePageContent() {
       setSelectedKeys([])
       if (selectedId && ids.includes(selectedId)) {
         setSelectedId(null)
+        setInspectorOpen(false)
       }
       toast.success(t('fileManage.batchDeleteSuccess', { count: ids.length }))
       await refreshFiles()
@@ -296,23 +433,17 @@ function FilePageContent() {
         label: t('fileManage.category'),
         type: 'select',
         placeholder: t('fileManage.allCategories'),
-        options: [
-          { value: '', label: t('fileManage.allCategories') },
-          ...CATEGORY_OPTIONS.map((item) => ({ value: item.value, label: t(item.labelKey) })),
-        ],
+        options: CATEGORY_OPTIONS.map((item) => ({ value: item.value, label: t(item.labelKey) })),
       },
       {
         name: 'contentType',
         label: t('fileManage.contentType'),
         type: 'select',
         placeholder: t('fileManage.allTypes'),
-        options: [
-          { value: '', label: t('fileManage.allTypes') },
-          ...CONTENT_TYPE_OPTIONS.map((item) => ({
-            value: item.value,
-            label: 'labelKey' in item ? t(item.labelKey) : item.label,
-          })),
-        ],
+        options: CONTENT_TYPE_OPTIONS.map((item) => ({
+          value: item.value,
+          label: 'labelKey' in item ? t(item.labelKey) : item.label,
+        })),
       },
     ],
     [t],
@@ -392,12 +523,44 @@ function FilePageContent() {
       : 0
 
   return (
-    <div className="space-y-5">
+    <div className="w-full min-w-0 space-y-5 p-4 sm:p-6">
       <PageHeader
         title={t('fileManage.title')}
-        description={t('fileManage.readOnlyHint')}
         actions={
           <>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={t('fileManage.refresh')}
+              disabled={filesQuery.isFetching || quotaQuery.isFetching}
+              onClick={() => void refreshFiles()}
+            >
+              <RefreshCw
+                className={cn(
+                  'size-4',
+                  (filesQuery.isFetching || quotaQuery.isFetching) && 'animate-spin',
+                )}
+                aria-hidden="true"
+              />
+            </Button>
+            {canRemove && selectedKeys.length > 0 && (
+              <>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedKeys([])}>
+                  {t('fileManage.clearSelection')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={batchDeleteMutation.isPending}
+                  onClick={() => setBatchDeleteOpen(true)}
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                  <span>{t('fileManage.batchDelete', { count: selectedKeys.length })}</span>
+                </Button>
+              </>
+            )}
             <Perm perm="system:file:upload">
               <Button
                 type="button"
@@ -410,32 +573,6 @@ function FilePageContent() {
                 <span>{t('fileManage.upload')}</span>
               </Button>
             </Perm>
-            {selectedFile && canList && (
-              <Button
-                type="button"
-                variant="outline"
-                className="file-workspace-compact-trigger"
-                onClick={() => setInspectorOpen(true)}
-              >
-                <Eye className="size-4" aria-hidden="true" />
-                <span>{t('fileManage.openDetails')}</span>
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={filesQuery.isFetching || quotaQuery.isFetching}
-              onClick={() => void refreshFiles()}
-            >
-              <RefreshCw
-                className={cn(
-                  'size-4',
-                  (filesQuery.isFetching || quotaQuery.isFetching) && 'animate-spin',
-                )}
-                aria-hidden="true"
-              />
-              <span>{t('fileManage.refresh')}</span>
-            </Button>
           </>
         }
       />
@@ -443,19 +580,21 @@ function FilePageContent() {
       {quota && (
         <section
           aria-label={t('fileManage.quotaPersonal')}
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          data-slot="file-quota-strip"
+          data-columns={canList ? '4' : '2'}
+          className="file-quota-strip rounded-panel border border-border-subtle bg-card shadow-surface"
         >
-          <div className="rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
+          <div className="file-quota-cell">
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <HardDrive className="size-3.5" aria-hidden="true" />
                 {t('fileManage.quotaPersonal')}
               </span>
-              <span className="font-mono tabular-nums">
+              <span className="font-mono text-foreground tabular-nums">
                 {formatByteSize(quota.usedUserBytes)} / {formatByteSize(quota.userQuotaBytes)}
               </span>
             </div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className={cn('h-full rounded-full transition-all', quotaBarClass(userRatio))}
                 style={{ width: `${Math.round(userRatio * 100)}%` }}
@@ -464,17 +603,17 @@ function FilePageContent() {
           </div>
 
           {canList && (
-            <div className="rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
+            <div className="file-quota-cell">
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
                   <HardDrive className="size-3.5" aria-hidden="true" />
                   {t('fileManage.quotaGlobal')}
                 </span>
-                <span className="font-mono tabular-nums">
+                <span className="font-mono text-foreground tabular-nums">
                   {formatByteSize(quota.usedTotalBytes)} / {formatByteSize(quota.totalQuotaBytes)}
                 </span>
               </div>
-              <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn('h-full rounded-full transition-all', quotaBarClass(totalRatio))}
                   style={{ width: `${Math.round(totalRatio * 100)}%` }}
@@ -483,18 +622,22 @@ function FilePageContent() {
             </div>
           )}
 
-          <div className="rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
-            <div className="text-xs text-muted-foreground">{t('fileManage.quotaMaxSingle')}</div>
-            <div className="mt-1.5 font-mono text-lg font-semibold text-foreground tabular-nums">
-              {formatByteSize(quota.maxFileSizeBytes)}
+          <div className="file-quota-cell">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-muted-foreground">{t('fileManage.quotaMaxSingle')}</span>
+              <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+                {formatByteSize(quota.maxFileSizeBytes)}
+              </span>
             </div>
           </div>
 
           {canList && (
-            <div className="rounded-panel border border-border-subtle bg-card p-3.5 shadow-surface">
-              <div className="text-xs text-muted-foreground">{t('fileManage.quotaFiles')}</div>
-              <div className="mt-1.5 font-mono text-lg font-semibold text-foreground tabular-nums">
-                {quota.activeFileCount}
+            <div className="file-quota-cell">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">{t('fileManage.quotaFiles')}</span>
+                <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+                  {quota.activeFileCount}
+                </span>
               </div>
             </div>
           )}
@@ -522,259 +665,124 @@ function FilePageContent() {
             }}
           />
 
-          {canRemove && selectedKeys.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border-subtle bg-card px-4 py-2.5 shadow-surface">
-              <span className="text-sm text-foreground">
-                {t('fileManage.batchDelete', { count: selectedKeys.length })}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedKeys([])}>
-                  {t('fileManage.clearSelection')}
-                </Button>
-                <Perm perm="system:file:remove">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    disabled={batchDeleteMutation.isPending}
-                    onClick={() => setBatchDeleteOpen(true)}
-                  >
-                    <Trash2 className="size-3.5" aria-hidden="true" />
-                    <span>{t('fileManage.batchDelete', { count: selectedKeys.length })}</span>
-                  </Button>
-                </Perm>
-              </div>
-            </div>
-          )}
-
-          <div className="file-workspace-layout">
-            <DynaTable
-              columns={columns}
-              rows={tableRows}
-              loading={filesQuery.isLoading}
-              error={filesQuery.error}
-              refreshing={filesQuery.isFetching}
-              onRetry={() => void filesQuery.refetch()}
-              filtered={filtered}
-              onResetFilters={() => {
-                const empty = { keyword: '', category: '', contentType: '' }
-                setDraftSearch(empty)
-                setAppliedSearch(empty)
-                setPage(1)
-              }}
-              emptyText={t('fileManage.empty')}
-              rowKey="id"
-              page={page}
-              size={size}
-              total={total}
-              onPageChange={(nextPage) => setPage(nextPage)}
-              onPageSizeChange={(nextSize) => {
-                setSize(nextSize)
-                setPage(1)
-              }}
-              selectable={canRemove}
-              selectedKeys={selectedKeys}
-              onSelectedKeysChange={setSelectedKeys}
-              activeRowKey={activeRowKey}
-              onRowClick={(_row, key) => {
-                setSelectedId(key)
-                setInspectorOpen(true)
-              }}
-              actions={(rawRow) => {
-                const row = rawRow as unknown as SystemFileRow
-                return (
-                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      disabled={downloadingId === row.id}
-                      aria-label={`${t('fileManage.download')}: ${row.originalFilename}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void handleDownload(row)
-                      }}
-                    >
-                      <Download className="size-3.5" aria-hidden="true" />
-                      <span>{t('fileManage.download')}</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      aria-label={`${t('fileManage.inspect')}: ${row.originalFilename}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setSelectedId(row.id)
-                        setInspectorOpen(true)
-                      }}
-                    >
-                      <Eye className="size-3.5" aria-hidden="true" />
-                      <span>{t('fileManage.inspect')}</span>
-                    </Button>
-                    <Perm perm="system:file:remove">
+          <DynaTable
+            columns={columns}
+            rows={tableRows}
+            loading={filesQuery.isLoading}
+            error={filesQuery.error}
+            refreshing={filesQuery.isFetching}
+            onRetry={() => void filesQuery.refetch()}
+            filtered={filtered}
+            onResetFilters={() => {
+              const empty = { keyword: '', category: '', contentType: '' }
+              setDraftSearch(empty)
+              setAppliedSearch(empty)
+              setPage(1)
+            }}
+            emptyText={t('fileManage.empty')}
+            rowKey="id"
+            page={page}
+            size={size}
+            total={total}
+            onPageChange={(nextPage) => setPage(nextPage)}
+            onPageSizeChange={(nextSize) => {
+              setSize(nextSize)
+              setPage(1)
+            }}
+            selectable={canRemove}
+            selectedKeys={selectedKeys}
+            onSelectedKeysChange={setSelectedKeys}
+            activeRowKey={activeRowKey}
+            onRowClick={(_row, key) => {
+              setSelectedId(key)
+              setInspectorOpen(true)
+            }}
+            actions={(rawRow) => {
+              const row = rawRow as unknown as SystemFileRow
+              return (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <Button
                         type="button"
-                        size="xs"
+                        size="icon"
                         variant="ghost"
-                        aria-label={`${t('fileManage.delete')}: ${row.originalFilename}`}
+                        aria-label={`${t('fileManage.inspect')}: ${row.originalFilename}`}
                         onClick={(event) => {
                           event.stopPropagation()
-                          setDeleteTarget(row)
+                          setSelectedId(row.id)
+                          setInspectorOpen(true)
                         }}
                       >
-                        <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+                        <Eye className="size-3.5" aria-hidden="true" />
                       </Button>
-                    </Perm>
-                  </div>
-                )
-              }}
-            />
-
-            <ResponsiveInspector
-              mode="auto"
-              title={t('fileManage.inspectorTitle')}
-              context={selectedFile?.originalFilename}
-              open={inspectorOpen}
-              onOpenChange={setInspectorOpen}
-            >
-              {selectedFile ? (
-                <div className="space-y-4 text-sm">
-                  <div className="space-y-1">
-                    <div className="font-medium break-all text-foreground">
-                      {selectedFile.originalFilename}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="font-mono text-[11px]">
-                        {selectedFile.contentType}
-                      </Badge>
-                      <Badge variant="secondary">{categoryLabel(selectedFile.category)}</Badge>
-                    </div>
-                  </div>
-
-                  <dl className="space-y-3 border-t border-border-subtle pt-3 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-muted-foreground">{t('fileManage.size')}</dt>
-                      <dd className="font-mono text-foreground tabular-nums">
-                        {formatByteSize(selectedFile.size)} ({selectedFile.size} B)
-                      </dd>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-muted-foreground">{t('fileManage.storageKey')}</dt>
-                        <Button
-                          type="button"
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => void handleCopy('key', selectedFile.key)}
-                        >
-                          {copiedField === 'key' ? (
-                            <Check className="size-3 text-success" aria-hidden="true" />
-                          ) : (
-                            <Copy className="size-3" aria-hidden="true" />
-                          )}
-                          <span>
-                            {copiedField === 'key' ? t('fileManage.copied') : t('fileManage.copy')}
-                          </span>
-                        </Button>
-                      </div>
-                      <dd className="rounded-control bg-muted px-2 py-1 font-mono text-[11px] break-all text-foreground">
-                        {selectedFile.key}
-                      </dd>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <dt className="text-muted-foreground">{t('fileManage.sha256')}</dt>
-                        <Button
-                          type="button"
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => void handleCopy('sha256', selectedFile.sha256)}
-                        >
-                          {copiedField === 'sha256' ? (
-                            <Check className="size-3 text-success" aria-hidden="true" />
-                          ) : (
-                            <Copy className="size-3" aria-hidden="true" />
-                          )}
-                          <span>
-                            {copiedField === 'sha256'
-                              ? t('fileManage.copied')
-                              : t('fileManage.copy')}
-                          </span>
-                        </Button>
-                      </div>
-                      <dd className="rounded-control bg-muted px-2 py-1 font-mono text-[11px] break-all text-foreground">
-                        {selectedFile.sha256}
-                      </dd>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-muted-foreground">{t('fileManage.owner')}</dt>
-                      <dd>
-                        <EntityPeekLink
-                          kind="user"
-                          id={selectedFile.ownerId}
-                          label={selectedFile.ownerUsername}
-                        />
-                      </dd>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-muted-foreground">{t('fileManage.deptId')}</dt>
-                      <dd className="font-mono text-foreground">
-                        {selectedFile.deptId ?? t('fileManage.noDepartment')}
-                      </dd>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-muted-foreground">{t('fileManage.createdAt')}</dt>
-                      <dd className="font-mono text-foreground tabular-nums">
-                        {selectedFile.createTime.replace('T', ' ').slice(0, 19)}
-                      </dd>
-                    </div>
-
-                    <div className="space-y-1">
-                      <dt className="text-muted-foreground">{t('fileManage.remark')}</dt>
-                      <dd className="rounded-control bg-muted/60 px-2.5 py-1.5 text-foreground">
-                        {selectedFile.remark || t('fileManage.emptyRemark')}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="flex-1"
-                      disabled={downloadingId === selectedFile.id}
-                      onClick={() => void handleDownload(selectedFile)}
-                    >
-                      <Download className="size-3.5" aria-hidden="true" />
-                      <span>{t('fileManage.download')}</span>
-                    </Button>
-                    <Perm perm="system:file:remove">
+                    </TooltipTrigger>
+                    <TooltipContent>{t('fileManage.inspect')}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <Button
                         type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDeleteTarget(selectedFile)}
+                        size="icon"
+                        variant="ghost"
+                        disabled={downloadingId === row.id}
+                        aria-label={`${t('fileManage.download')}: ${row.originalFilename}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDownload(row)
+                        }}
                       >
-                        <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
-                        <span>{t('fileManage.delete')}</span>
+                        <Download className="size-3.5" aria-hidden="true" />
                       </Button>
-                    </Perm>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-8 text-center text-xs text-muted-foreground">
-                  <FolderOpen className="size-8 opacity-60" aria-hidden="true" />
-                  <p>{t('fileManage.selectRowHint')}</p>
-                </div>
-              )}
-            </ResponsiveInspector>
-          </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('fileManage.download')}</TooltipContent>
+                  </Tooltip>
+                  <Perm perm="system:file:remove">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`${t('fileManage.delete')}: ${row.originalFilename}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setDeleteTarget(row)
+                          }}
+                        >
+                          <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('fileManage.delete')}</TooltipContent>
+                    </Tooltip>
+                  </Perm>
+                </>
+              )
+            }}
+          />
+
+          <ResponsiveInspector
+            mode="sheet"
+            title={t('fileManage.inspectorTitle')}
+            context={inspectedFile?.originalFilename}
+            open={inspectedFile !== null && inspectorOpen}
+            onOpenChange={(nextOpen) => {
+              setInspectorOpen(nextOpen)
+              if (!nextOpen) setSelectedId(null)
+            }}
+          >
+            {inspectedFile && (
+              <FileInspectorContent
+                file={inspectedFile}
+                downloading={downloadingId === inspectedFile.id}
+                copiedField={copiedField}
+                categoryLabel={categoryLabel(inspectedFile.category)}
+                onCopy={(field, value) => void handleCopy(field, value)}
+                onDownload={(file) => void handleDownload(file)}
+                onRequestDelete={(file) => setDeleteTarget(file)}
+              />
+            )}
+          </ResponsiveInspector>
         </>
       )}
 

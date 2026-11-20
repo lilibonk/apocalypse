@@ -48,8 +48,6 @@ export const fileWorkspaceCopy = {
     deleteSuccess: '文件已删除',
     batchDeleteSuccess: '已删除 {{count}} 个文件',
     inspectorTitle: '文件元数据检查器',
-    openDetails: '查看选中详情',
-    selectRowHint: '选择表格行，查看存储键、SHA-256 摘要与归属部门详情。',
     storageKey: '存储键',
     sha256: 'SHA-256 摘要',
     exactBytes: '精确字节',
@@ -63,7 +61,6 @@ export const fileWorkspaceCopy = {
     close: '关闭',
     cancel: '取消',
     confirmDelete: '确认删除',
-    readOnlyHint: '当前账户仅可管理本人上传或授权范围内的文件。',
   },
   en: {
     title: 'File management',
@@ -113,9 +110,6 @@ export const fileWorkspaceCopy = {
     deleteSuccess: 'File deleted',
     batchDeleteSuccess: 'Deleted {{count}} file(s)',
     inspectorTitle: 'File metadata inspector',
-    openDetails: 'Inspect selected file',
-    selectRowHint:
-      'Select a file row to inspect its storage key, SHA-256 digest and department scope.',
     storageKey: 'Storage key',
     sha256: 'SHA-256 digest',
     exactBytes: 'Exact bytes',
@@ -129,6 +123,5 @@ export const fileWorkspaceCopy = {
     close: 'Close',
     cancel: 'Cancel',
     confirmDelete: 'Delete',
-    readOnlyHint: 'Files are scoped to your own uploads or permitted departments.',
   },
 } as const

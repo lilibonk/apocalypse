@@ -1,16 +1,46 @@
-.file-workspace-layout {
+.file-quota-strip {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
-  align-items: start;
 }
 
-@container main (min-width: 68rem) {
-  .file-workspace-layout {
-    grid-template-columns: minmax(0, 1fr) 21rem;
+.file-quota-cell {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+}
+
+.file-quota-cell + .file-quota-cell {
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+@container main (min-width: 36rem) {
+  .file-quota-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .file-workspace-compact-trigger {
-    display: none;
+  .file-quota-cell + .file-quota-cell {
+    border-block-start: none;
+  }
+
+  .file-quota-cell:nth-child(2n) {
+    border-inline-start: 1px solid var(--border-subtle);
+  }
+
+  .file-quota-cell:nth-child(n + 3) {
+    border-block-start: 1px solid var(--border-subtle);
+  }
+}
+
+@container main (min-width: 60rem) {
+  .file-quota-strip[data-columns='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .file-quota-strip[data-columns='4'] .file-quota-cell + .file-quota-cell {
+    border-block-start: none;
+    border-inline-start: 1px solid var(--border-subtle);
   }
 }

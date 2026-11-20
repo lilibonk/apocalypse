@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '@/i18n'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import * as apiClient from '@/lib/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
@@ -19,7 +20,7 @@ import {
   type FileQuotaSummary,
   type SystemFileRow,
 } from './file.api'
-import FilePage from './index'
+import FilePage, { FileInspectorContent } from './index'
 
 const SAMPLE_QUOTA: FileQuotaSummary = {
   usedUserBytes: 1_572_864,
@@ -86,11 +87,13 @@ function seedFileQueries(): QueryClient {
 
 function renderFilePage(queryClient: QueryClient): string {
   return renderToStaticMarkup(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <FilePage />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <TooltipProvider>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <FilePage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </TooltipProvider>,
   )
 }
 
@@ -123,20 +126,50 @@ describe('System file management workspace', () => {
     ])
   })
 
-  it('renders quota summary, file table rows, inspector details and authorized controls', () => {
+  it('renders unified quota strip, file table rows and authorized controls without cluttered chrome', () => {
     const html = renderFilePage(seedFileQueries())
 
     expect(html).toContain('文件管理')
     expect(html).toContain('上传文件')
+    expect(html).toContain('p-4 sm:p-6')
+    expect(html).toContain('data-slot="file-quota-strip"')
     expect(html).toContain('1.5 MB / 64.0 MB')
     expect(html).toContain('4.0 MB / 512 MB')
     expect(html).toContain('quarterly-report.pdf')
     expect(html).toContain('avatar.png')
+    expect(html).toContain('详情: quarterly-report.pdf')
+    expect(html).toContain('下载: quarterly-report.pdf')
+    expect(html).toContain('删除: quarterly-report.pdf')
+
+    expect(html).not.toContain('当前账户仅可管理本人上传或授权范围内的文件')
+    expect(html).not.toContain('file-workspace-layout')
+    expect(html).not.toContain('全部全部分类')
+    expect(html).not.toContain('全部全部类型')
+    expect(html).not.toContain('选择表格行，查看存储键')
+  })
+
+  it('renders file inspector metadata, digest and action controls cleanly', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <FileInspectorContent
+          file={SAMPLE_FILES[0]}
+          downloading={false}
+          copiedField={null}
+          categoryLabel="文档资料"
+          onCopy={vi.fn()}
+          onDownload={vi.fn()}
+          onRequestDelete={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(html).toContain('quarterly-report.pdf')
     expect(html).toContain('document/20261119/abc12345.pdf')
     expect(html).toContain('deadbeef0123456789abcdefdeadbeef0123456789abcdefdeadbeef01234567')
     expect(html).toContain('Q4 audit report')
-    expect(html).toContain('下载: quarterly-report.pdf')
-    expect(html).toContain('删除: quarterly-report.pdf')
+    expect(html).toContain('文档资料')
+    expect(html).toContain('下载')
+    expect(html).toContain('删除')
   })
 
   it('hides upload and delete controls when user lacks write permissions', () => {
@@ -154,6 +187,7 @@ describe('System file management workspace', () => {
     const html = renderFilePage(seedFileQueries())
 
     expect(html).toContain('上传文件')
+    expect(html).toContain('data-columns="2"')
     expect(html).toContain('1.5 MB / 64.0 MB')
     expect(html).not.toContain('4.0 MB / 512 MB')
     expect(html).not.toContain('quarterly-report.pdf')
